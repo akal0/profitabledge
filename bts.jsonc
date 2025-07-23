@@ -1,0 +1,26 @@
+// Better-T-Stack configuration file
+// safe to delete
+
+{
+  "$schema": "https://better-t-stack.dev/schema.json",
+  "version": "2.26.5",
+  "createdAt": "2025-07-23T15:06:53.562Z",
+  "database": "postgres",
+  "orm": "drizzle",
+  "backend": "next",
+  "runtime": "bun",
+  "frontend": [
+    "next"
+  ],
+  "addons": [
+    "turborepo"
+  ],
+  "examples": [
+    "ai"
+  ],
+  "auth": true,
+  "packageManager": "bun",
+  "dbSetup": "neon",
+  "api": "trpc",
+  "webDeploy": "none"
+}

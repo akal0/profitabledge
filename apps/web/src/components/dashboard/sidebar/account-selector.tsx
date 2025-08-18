@@ -72,7 +72,7 @@ const AccountSwitcher = ({
         <SidebarMenuItem>
           <SidebarMenuButton
             size="lg"
-            className="px-3 bg-white border cursor-default"
+            className="px-4 bg-sidebar-accent border cursor-default"
           >
             <span className="text-xs font-semibold text-secondary">
               No accounts added yet
@@ -91,9 +91,9 @@ const AccountSwitcher = ({
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
                 size="lg"
-                className="px-3 flex gap-3 cursor-pointer bg-white border hover:bg-white focus:bg-white"
+                className="shadow-sidebar-button cursor-pointer rounded-[6px] gap-3 h-max transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-[#A0A0A6]/75 duration-250 px-4 py-3"
               >
-                <div className="size-4 relative">
+                <div className="size-3 relative">
                   <Image
                     src={items[selectedIndex]?.image}
                     alt="broker"
@@ -107,19 +107,17 @@ const AccountSwitcher = ({
                     {items[selectedIndex]?.name}
                   </span>
                 </div>
-                <ChevronsUpDown className="ml-auto stroke-1" />
+                <ChevronsUpDown className="ml-auto stroke-[0.5px]" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
 
             <DropdownMenuContent
-              className="w-(--radix-dropdown-menu-trigger-width)"
+              className="w-(--radix-dropdown-menu-trigger-width) border border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20]"
               align="start"
             >
               {items.map((account, idx) => (
                 <DropdownMenuItem
-                  className={`text-xs ${
-                    idx === selectedIndex && "font-semibold"
-                  }`}
+                  className={`text-xs ${idx === selectedIndex && "font-bold"}`}
                   key={account.id}
                   onSelect={() => handleSelect(idx)}
                 >
@@ -136,7 +134,11 @@ const AccountSwitcher = ({
                 </DropdownMenuItem>
               ))}
 
-              <DropdownMenuSeparator />
+              {/* Separator */}
+
+              <div className="flex flex-col mx-2 my-2">
+                <div className="w-full h-[2px] bg-[#161618] border-b border-[#222225]" />
+              </div>
 
               <div className="p-1">
                 <AddAccountSheet onAccountCreated={handleAccountCreated} />

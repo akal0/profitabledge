@@ -3,6 +3,24 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+@keyframes slideInLeft {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes slideInLeftConstrained {
+  from {
+    width: 0;
+  }
+  to {
+    width: calc(100% - 8px);
+  }
+}
+
 @theme {
   --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
@@ -15,21 +33,28 @@ body {
   -webkit-color-scheme: light;
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
 /* Default light theme */
 html:not(.dark),
 html:not(.dark) body {
-  @apply bg-[#f9f9f9] text-black;
+  @apply bg-[#ffffff] text-black;
 }
 
 /* Dark theme when .dark class is applied */
 html.dark,
 html.dark body {
-  @apply bg-black text-white;
+  @apply bg-sidebar text-white;
 }
 
 :root {
   --radius: 0.625rem;
-  --background: #f9f9f9;
+  --dashboard-background: oklch(1 0 0);
+  --background: oklch(0.9553 0.0029 84.56);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -37,7 +62,7 @@ html.dark body {
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: #8B8B97;
+  --secondary: #8b8b97;
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
@@ -52,17 +77,19 @@ html.dark body {
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.9553 0.0029 84.56);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.9789 0.0029 264.54);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent: oklch(0.9247 0.0013 106.43);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+  --card: oklch(0.922 0 0);
 }
 
 .dark {
+  --dashboard-background: oklch(0.232 0.0057 285.95);
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -71,7 +98,7 @@ html.dark body {
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.922 0 0);
   --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
+  --secondary: oklch(0.5555 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
@@ -86,17 +113,19 @@ html.dark body {
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: oklch(0.2011 0.0039 286.04);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent: oklch(0.232 0.0057 285.95);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --card: oklch(0.2739 0.0055 286.03);
 }
 
 @theme inline {
+  --color-dashboard-background: var(--dashboard-background);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -145,26 +174,25 @@ html.dark body {
 
 /* Custom utility classes */
 @layer utilities {
-  /* Custom text color - override default secondary */
-  .text-secondary {
-    color: #8B8B97 !important;
+  .shadow-primary-button {
+    box-shadow: rgb(22, 22, 24) 0px 0px 0px 1px, rgb(22, 22, 24) 0px 1px 2px,
+      rgba(232, 232, 255, 0.12) 0px 0.75px 0.5px inset;
   }
-  
-  /* Custom text color with opacity variants */
-  .text-secondary\/10 {
-    color: rgba(139, 139, 151, 0.1) !important;
+
+  .shadow-secondary-button {
+    box-shadow: 0 0 0 1px #161618, 0 1px 2px #161618,
+      0 0.75px 0.75px #fff3 inset;
   }
-  
-  .text-secondary\/30 {
-    color: rgba(139, 139, 151, 0.3) !important;
+
+  .shadow-sidebar-button {
+    box-shadow: rgb(22, 22, 24) 0px 0px 0px 1px, rgb(0, 0, 0) 0px 1px 3px,
+      rgba(232, 232, 255, 0.12) 0px 0.75px 0.5px inset;
   }
-  
-  .text-secondary\/60 {
-    color: rgba(139, 139, 151, 0.6) !important;
-  }
-  
-  .text-secondary\/80 {
-    color: rgba(139, 139, 151, 0.8) !important;
+
+  .shadow-upload-button {
+    box-shadow: rgb(22, 22, 24) 0px 0px 0px 1px, rgb(0, 0, 0) 0px 0px 6px,
+      rgba(232, 232, 255, 0.12) -0.25px 0.75px 0.5px inset,
+      rgba(232, 232, 255, 0.12) 0.25px -0.25px 0.5px inset;
   }
 }
 
@@ -175,63 +203,150 @@ html.dark body {
     -webkit-background-clip: text;
     background-clip: text;
   }
-  
+
   /* Force Safari to respect padding/margin */
   * {
     -webkit-box-sizing: border-box;
     box-sizing: border-box;
   }
-  
+
   /* Safari padding fix */
   .safari-padding-fix {
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
   }
-  
+
   /* Fix for text-shadow in Safari */
   .text-shadow-sm {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   }
-  
+
   .text-shadow-md {
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   }
-  
+
   .text-shadow-none {
     text-shadow: none;
   }
-  
+
   /* Fix for gradient backgrounds in Safari */
   .safari-gradient-fix {
     -webkit-background-size: 100% 100%;
     background-size: 100% 100%;
   }
-  
+
   /* Theme switching support for Safari */
   html.dark {
     color-scheme: dark;
     -webkit-color-scheme: dark;
   }
-  
+
   html:not(.dark) {
     color-scheme: light;
     -webkit-color-scheme: light;
   }
-  
+
   /* Ensure form elements follow theme */
-  html:not(.dark) button, 
-  html:not(.dark) input, 
-  html:not(.dark) select, 
+  html:not(.dark) button,
+  html:not(.dark) input,
+  html:not(.dark) select,
   html:not(.dark) textarea {
     color-scheme: light;
     -webkit-color-scheme: light;
   }
-  
-  html.dark button, 
-  html.dark input, 
-  html.dark select, 
+
+  html.dark button,
+  html.dark input,
+  html.dark select,
   html.dark textarea {
     color-scheme: dark;
     -webkit-color-scheme: dark;
+  }
+}
+
+.animate-circle-line {
+  animation: animate-circle-line 2s linear infinite;
+}
+
+@keyframes animate-circle-line {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes addFillCycle {
+  0%,
+  100% {
+    fill: #272727;
+    stroke: white;
+  }
+  50% {
+    fill: white;
+    stroke: #272727;
+  }
+}
+
+@keyframes completeFillCycle {
+  0%,
+  100% {
+    fill: #272727;
+  }
+  50% {
+    fill: white;
+  }
+}
+
+@keyframes tickStrokeCycle {
+  0%,
+  100% {
+    stroke: #ffffff;
+  }
+  50% {
+    stroke: #272727;
+  }
+}
+
+@keyframes formFillCycle {
+  0%,
+  100% {
+    fill: #272727;
+    stroke: white;
+  }
+  50% {
+    fill: white;
+  }
+}
+
+@keyframes fillRise {
+  0% {
+    height: 0%;
+  }
+  100% {
+    height: 100%;
+  }
+}
+
+@layer utilities {
+  .add-fill-illusion {
+    position: relative;
+  }
+  .add-fill-illusion::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0%;
+    background: currentColor;
+    /* Mask with the rounded-rect from AddTopLayer's add group */
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 178 108'><path d='M102.134 41.5625C103.374 41.5625 104.379 42.1429 104.379 42.8589L104.379 58.1411C104.379 58.857 103.374 59.4375 102.134 59.4375L75.6641 59.4375C74.4238 59.4375 73.4186 58.8572 73.4186 58.1411L73.4188 42.8589C73.4186 42.1428 74.424 41.5624 75.6641 41.5625L102.134 41.5625Z' fill='white'/></svg>")
+      center / contain no-repeat;
+    mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 178 108'><path d='M102.134 41.5625C103.374 41.5625 104.379 42.1429 104.379 42.8589L104.379 58.1411C104.379 58.857 103.374 59.4375 102.134 59.4375L75.6641 59.4375C74.4238 59.4375 73.4186 58.8572 73.4186 58.1411L73.4188 42.8589C73.4186 42.1428 74.424 41.5624 75.6641 41.5625L102.134 41.5625Z' fill='white'/></svg>")
+      center / contain no-repeat;
+    animation: fillRise 2000ms ease-in-out infinite alternate;
+    pointer-events: none;
   }
 }

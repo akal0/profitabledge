@@ -1,0 +1,31 @@
+<svg width="178" height="108" viewBox="0 0 178 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+<foreignObject x="-177.705" y="-179.5" width="533.205" height="460"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(90px);clip-path:url(#bgblur_0_996_1369_clip_path);height:100%;width:100%"></div></foreignObject><g filter="url(#filter0_di_996_1369)" data-figma-bg-blur-radius="180">
+<g data-part="bg">
+<rect width="100" height="100" rx="4" transform="matrix(0.866025 0.5 0.866025 -0.5 2.29492 50.5)" fill="currentColor" shape-rendering="crispEdges"/>
+<rect width="100" height="100" rx="4" transform="matrix(0.866025 0.5 0.866025 -0.5 2.29492 50.5)" stroke="white" stroke-opacity="0.15" stroke-width="0.5" shape-rendering="crispEdges"/>
+</g>
+<g data-part="complete">
+<path data-part="tick" d="M89.6922 45.4583L91.2799 54.625L84.9291 54.625" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path data-part="ring" d="M103.582 42.0208C111.693 46.7037 111.693 54.2963 103.582 58.9792C95.4714 63.6621 82.3208 63.6621 74.2098 58.9792C66.0987 54.2963 66.0987 46.7037 74.2098 42.0208C82.3208 37.338 95.4714 37.3379 103.582 42.0208Z" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_di_996_1369" x="-177.705" y="-179.5" width="533.205" height="460" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="2"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_996_1369"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_996_1369" result="shape"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="-6"/>
+<feGaussianBlur stdDeviation="1"/>
+<feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.111704 0 0 0 0 0.111704 0 0 0 0 0.111704 0 0 0 0.6 0"/>
+<feBlend mode="normal" in2="shape" result="effect2_innerShadow_996_1369"/>
+</filter>
+<clipPath id="bgblur_0_996_1369_clip_path" transform="translate(177.705 179.5)"><rect width="100" height="100" rx="4" transform="matrix(0.866025 0.5 0.866025 -0.5 2.29492 50.5)"/>
+</clipPath></defs>
+</svg>

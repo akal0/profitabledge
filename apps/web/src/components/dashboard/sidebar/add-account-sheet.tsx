@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
+import { cn } from "@/lib/utils";
+import CsvUpload from "@/components/upload/CsvUpload";
 
 export type AddAccountForm = {
   method: "csv" | "broker" | null;
@@ -38,8 +40,17 @@ export type NewAccount = {
 
 const BROKERS: { value: string; label: string; image: string }[] = [
   { value: "ftmo", label: "FTMO", image: "/FTMO.png" },
-  { value: "myforexfunds", label: "MyForexFunds", image: "/FTMO.png" },
   { value: "fundingpips", label: "FundingPips", image: "/FTMO.png" },
+  {
+    value: "alphacapitalgroup",
+    label: "AlphaCapitalGroup",
+    image: "/FTMO.png",
+  },
+  {
+    value: "seacrestfunded",
+    label: "SeacrestFunded",
+    image: "/FTMO.png",
+  },
 ];
 
 export function AddAccountSheet({
@@ -113,27 +124,30 @@ export function AddAccountSheet({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button variant="secondary" size="sm" className="w-full gap-2">
-          <Plus className="size-3" /> Add an account
+        <Button className="shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+          <div className="contents">
+            <span className="px-4">Add an account</span>
+          </div>
         </Button>
       </SheetTrigger>
 
       <SheetContent side="right">
-        <SheetHeader>
-          <SheetTitle>
+        <SheetHeader className="gap-1 px-8 py-8 pb-2">
+          <SheetTitle className="tracking-tight">
             {step === 1
-              ? "Add an account"
+              ? "Connect your account"
               : step === 2
               ? form.method === "csv"
-                ? "Import via CSV"
+                ? "Import account with CSV upload"
                 : "Sync via Broker"
-              : "Account added"}
+              : "Account connected successfully."}
           </SheetTitle>
-          <SheetDescription>
+
+          <SheetDescription className="text-[#A0A0A6] text-xs tracking-wide leading-relaxed">
             {step === 1 && "Choose how you want to add your trading account."}
             {step === 2 &&
               form.method === "csv" &&
-              "Upload your CSV and enter basic details."}
+              "Upload your CSV and enter details relating to your trading account."}
             {step === 2 &&
               form.method === "broker" &&
               "Enter broker credentials to sync (coming soon)."}
@@ -141,99 +155,109 @@ export function AddAccountSheet({
           </SheetDescription>
         </SheetHeader>
 
-        {step === 1 && (
-          <div className="flex flex-col gap-3 p-4">
-            <Button
-              className="justify-start"
-              onClick={() => {
-                setForm({ ...form, method: "csv" });
-                setStep(2);
-              }}
-            >
-              Import account via CSV
-            </Button>
-            <Button
-              variant="outline"
-              className="justify-start"
-              onClick={() => {
-                setForm({ ...form, method: "broker" });
-                setStep(2);
-              }}
-            >
-              Automatically sync via broker
-            </Button>
-          </div>
-        )}
+        <div className="w-full h-[2px] bg-[#000]/75 border-b border-[#222225]" />
 
-        {step === 2 && form.method === "csv" && (
-          <div className="flex flex-col gap-4 p-4">
-            <div className="grid gap-2">
-              <label className="text-xs font-medium">CSV file</label>
-              <Input
-                type="file"
-                accept=".csv"
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, file: e.target.files?.[0] || null }))
-                }
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium">Account name</label>
-              <Input
-                placeholder="e.g., FTMO 100k Live"
-                value={form.name}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, name: e.target.value }))
-                }
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium">Broker</label>
-              <Select
-                value={form.broker}
-                onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
+        <div className="px-4">
+          {step === 1 && (
+            <div className="flex flex-col gap-2 px-4">
+              <Button
+                className="shadow-secondary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-emerald-600 text-white w-full text-xs hover:bg-emerald-600 hover:!brightness-120 hover:text-white duration-250"
+                onClick={() => {
+                  setForm({ ...form, method: "csv" });
+                  setStep(2);
+                }}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a broker" />
-                </SelectTrigger>
-                <SelectContent>
-                  {BROKERS.map((b) => (
-                    <SelectItem key={b.value} value={b.value}>
-                      {b.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                Import account via CSV
+              </Button>
+              <Button
+                className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
+                disabled
+                onClick={() => {
+                  setForm({ ...form, method: "broker" });
+                  setStep(2);
+                }}
+              >
+                Broker sync
+              </Button>
             </div>
-          </div>
-        )}
+          )}
 
-        {step === 2 && form.method === "broker" && (
-          <div className="p-4 text-xs text-secondary">
-            Broker sync setup coming soon.
-          </div>
-        )}
+          {step === 2 && form.method === "csv" && (
+            <div className="flex flex-col gap-5 px-4">
+              <CsvUpload
+                onFileChange={(f) => setForm((prev) => ({ ...prev, file: f }))}
+              />
+
+              <div className="grid gap-2">
+                <label className="text-xs font-medium">Account name</label>
+                <Input
+                  placeholder="e.g. FTMO 100k Live"
+                  className=""
+                  value={form.name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-xs font-medium">Broker</label>
+                <Select
+                  value={form.broker}
+                  onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a broker" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BROKERS.map((b) => (
+                      <SelectItem key={b.value} value={b.value}>
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={b.image}
+                            alt={b.label}
+                            className="w-4 h-4 object-contain"
+                          />
+                          {b.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && form.method === "broker" && (
+            <div className="p-4 text-xs text-secondary">
+              Broker sync setup coming soon.
+            </div>
+          )}
+        </div>
 
         <SheetFooter>
           {step === 1 && (
             <SheetClose asChild>
-              <Button variant="outline">Cancel</Button>
+              <Button className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+                Cancel
+              </Button>
             </SheetClose>
           )}
 
           {step === 2 && form.method === "csv" && (
             <div className="flex w-full gap-2">
               <Button
-                variant="outline"
-                className="flex-1"
+                className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] flex-1 text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => setStep(1)}
               >
                 Back
               </Button>
               <Button
-                className="flex-1"
+                className={cn(
+                  canSubmit &&
+                    "!bg-emerald-600 hover:bg-emerald-500 !text-white",
+                  "shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 bg-[#222225] transition-all active:scale-95 text-[#A0A0A6] flex-1 text-xs hover:!brightness-120 hover:text-white duration-250"
+                )}
                 disabled={!canSubmit || submitting}
                 onClick={handleSubmitCSV}
               >
@@ -245,8 +269,7 @@ export function AddAccountSheet({
           {step === 2 && form.method === "broker" && (
             <div className="flex w-full gap-2">
               <Button
-                variant="outline"
-                className="flex-1"
+                className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => setStep(1)}
               >
                 Back

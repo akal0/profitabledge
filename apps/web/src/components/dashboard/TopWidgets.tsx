@@ -1,7 +1,6 @@
 "use client";
 
 import { VariantBadge } from "@/components/ui/badges/variant-badge";
-import { CardHeading } from "@/components/ui/card-heading";
 import React, { type ComponentType, useEffect, useMemo, useState } from "react";
 
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
@@ -12,20 +11,16 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { VariantButton } from "../ui/buttons/variant-button";
-import { Button, buttonVariants } from "../ui/button";
-import { Icon } from "../icons/Icon";
-import Link from "next/link";
 
-import ArrowUpRight from "../../../public/icons/arrow-up-right.svg";
-
-import { GradientLink } from "../ui/gradient-button";
 import { useAccountStore } from "@/stores/account";
 import { useStatsStore } from "@/stores/stats";
 
 import NumberFlow, { continuous, NumberFlowGroup } from "@number-flow/react";
 
-import InfinitySign from "../../../public/icons/infinity.svg";
+import InfinitySign from "@/public/icons/infinity.svg";
+import { AnimatedNumber } from "../ui/animated-number";
+import { Button } from "../ui/button";
+import { CardSeparator } from "../ui/separator";
 
 const chartConfig = {
   wins: {
@@ -62,73 +57,64 @@ function useAccountStats(accountId?: string) {
 export function AccountBalanceCard({ accountId }: { accountId?: string }) {
   const { data } = useAccountStats(accountId);
   const balance = data?.totalProfit ?? 0;
-  const formattedBalance = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(balance));
 
   return (
-    <div className="bg-white aspect-video rounded-lg border border-black/5 p-6 pt-7 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center">
-        <h2 className="text-sm font-medium text-secondary tracking-tight">
-          Account balance
+    <div className="bg-white dark:bg-card dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
+      <div className="flex w-full justify-between items-center px-6 py-4">
+        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+          <span className="px-0">Account balance</span>
         </h2>
 
-        <GradientLink
-          size="sm"
-          icon={<ArrowUpRight className="size-3" />}
-          variant="emerald"
-          href="/"
-        />
+        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
+          <div className="flex items-center gap-1.5">
+            <span> View trades </span>
+          </div>
+        </Button>
       </div>
 
-      <NumberFlowGroup>
-        <div className="flex flex-col gap-2">
-          <h1 className="font-semibold text-2xl text-emerald-500">
-            <NumberFlow
-              trend={1}
-              plugins={[continuous]}
+      <CardSeparator />
+
+      <div className="flex flex-col gap-2.5 px-6 pb-5 h-full justify-end">
+        <h1 className="font-semibold  text-2xl text-emerald-400">
+          $
+          <AnimatedNumber
+            value={balance}
+            format={(n) =>
+              n.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })
+            }
+            springOptions={{
+              bounce: 0,
+              duration: 2000,
+            }}
+          />
+        </h1>
+
+        <div className="flex gap-2 items-center">
+          {/* Placeholder delta; compute vs prior period later */}
+
+          <h2 className="shadow-primary-button cursor-default rounded-[6px] py-1.5 px-6 h-max transition-all active:scale-95 bg-emerald-600 text-shadow-2xs font-semibold text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+            {balance > 0 ? "+" : "-"}
+            $
+            <AnimatedNumber
               value={balance}
-              format={{
-                style: "currency",
-                currency: "usd",
-              }}
-              transformTiming={{
-                easing: `linear(0, 0.0033 0.8%, 0.0263 2.39%, 0.0896 4.77%, 0.4676 15.12%, 0.5688, 0.6553, 0.7274, 0.7862, 0.8336 31.04%, 0.8793, 0.9132 38.99%, 0.9421 43.77%, 0.9642 49.34%, 0.9796 55.71%, 0.9893 62.87%, 0.9952 71.62%, 0.9983 82.76%, 0.9996 99.47%)`,
+              format={(n) =>
+                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+              }
+              springOptions={{
+                bounce: 0,
                 duration: 2000,
               }}
             />
-          </h1>
+          </h2>
 
-          <div className="flex gap-2 items-center">
-            {/* Placeholder delta; compute vs prior period later */}
-            <VariantBadge
-              gradientFrom="#1AC889"
-              gradientTo="#16B377"
-              borderColor="#16B377"
-              size="md"
-            >
-              <NumberFlow
-                trend={1}
-                plugins={[continuous]}
-                value={balance}
-                format={{
-                  maximumFractionDigits: 2,
-                  signDisplay: "always",
-                }}
-                locales="en-US"
-                transformTiming={{
-                  easing: `linear(0, 0.0033 0.8%, 0.0263 2.39%, 0.0896 4.77%, 0.4676 15.12%, 0.5688, 0.6553, 0.7274, 0.7862, 0.8336 31.04%, 0.8793, 0.9132 38.99%, 0.9421 43.77%, 0.9642 49.34%, 0.9796 55.71%, 0.9893 62.87%, 0.9952 71.62%, 0.9983 82.76%, 0.9996 99.47%)`,
-                  duration: 2000,
-                }}
-              />
-            </VariantBadge>
-            <p className="text-xs font-medium text-secondary">
-              in the lifetime of this account.
-            </p>
-          </div>
+          <p className="text-xs font-medium text-secondary">
+            in the lifetime of this account.
+          </p>
         </div>
-      </NumberFlowGroup>
+      </div>
     </div>
   );
 }
@@ -142,11 +128,12 @@ export function WinRateCard({ accountId }: { accountId?: string }) {
 
   const displayWinrate = (wins / total) * 100;
 
-  const winrate = Number(
-    displayWinrate % 1 === 0
-      ? displayWinrate.toFixed(0)
-      : displayWinrate.toFixed(1)
-  );
+  const winrate =
+    Number(
+      displayWinrate % 1 === 0
+        ? displayWinrate.toFixed(0)
+        : displayWinrate.toFixed(1)
+    ) || 0;
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -164,23 +151,27 @@ export function WinRateCard({ accountId }: { accountId?: string }) {
   );
 
   return (
-    <div className="bg-white aspect-video rounded-lg border border-black/5 p-6 pt-7 flex flex-col shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full gap-6">
-      <div className="flex w-full justify-between items-center">
-        <h2 className="text-sm font-medium text-secondary tracking-tight">
-          Win rate
+    <div className="bg-white dark:bg-[#27272A] dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
+      <div className="flex w-full justify-between items-center px-6 py-4">
+        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+          <span>Win rate</span>
         </h2>
 
-        <GradientLink
-          size="sm"
-          icon={<ArrowUpRight className="size-3" />}
-          variant="emerald"
-          href="/"
-        />
+        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
+          <div className="flex items-center gap-1.5">
+            <span> View trades </span>
+          </div>
+        </Button>
       </div>
 
-      <div className="flex w-full justify-between items-center">
+      <CardSeparator />
+
+      <div className="flex w-full justify-between px-6 h-full">
         {mounted ? (
-          <ChartContainer config={chartConfig} className="w-[160px] h-[120px]">
+          <ChartContainer
+            config={chartConfig}
+            className="w-[160px] h-full mt-2  "
+          >
             <BarChart
               data={chartData}
               margin={{ left: 0, right: 0, top: 8, bottom: 0 }}
@@ -221,18 +212,19 @@ export function WinRateCard({ accountId }: { accountId?: string }) {
           <div className="w-[120px] h-[120px]" />
         )}
 
-        <h1 className="text-xs text-secondary font-medium flex flex-col ml-4 h-full justify-center items-end">
+        <h1 className="text-xs text-secondary font-medium flex flex-col ml-4 h-full justify-end items-end pb-5">
           <span className="font-semibold text-2xl text-emerald-500">
-            <NumberFlow
-              trend={1}
-              plugins={[continuous]}
+            <AnimatedNumber
               value={winrate}
-              suffix="%"
-              transformTiming={{
-                easing: `linear(0, 0.0033 0.8%, 0.0263 2.39%, 0.0896 4.77%, 0.4676 15.12%, 0.5688, 0.6553, 0.7274, 0.7862, 0.8336 31.04%, 0.8793, 0.9132 38.99%, 0.9421 43.77%, 0.9642 49.34%, 0.9796 55.71%, 0.9893 62.87%, 0.9952 71.62%, 0.9983 82.76%, 0.9996 99.47%)`,
+              format={(n) =>
+                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+              }
+              springOptions={{
+                bounce: 0,
                 duration: 2000,
               }}
             />
+            %
           </span>{" "}
           win rate of all time.
         </h1>
@@ -243,7 +235,7 @@ export function WinRateCard({ accountId }: { accountId?: string }) {
 
 export function WinStreakCard({ accountId }: { accountId?: string }) {
   const { data } = useAccountStats(accountId);
-  const streak = Math.min(5, data?.winStreak ?? 0);
+  const streak = Math.round(Math.min(5, data?.winStreak ?? 0));
   const headingColors =
     streak === 0
       ? { from: "#D32F2F", to: "#C62828" }
@@ -258,36 +250,34 @@ export function WinStreakCard({ accountId }: { accountId?: string }) {
   }
 
   return (
-    <div className="bg-white aspect-video rounded-lg border border-black/5 p-6 pt-7 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center">
-        <h2 className="text-sm font-medium text-secondary tracking-tight">
-          Win streak
+    <div className="bg-white dark:bg-[#27272A] dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
+      <div className="flex w-full justify-between items-center px-6 py-4">
+        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+          <span className="px-0">Win streak</span>
         </h2>
 
-        <GradientLink
-          size="sm"
-          icon={<ArrowUpRight className="size-3" />}
-          variant="emerald"
-          href="/"
-        />
+        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
+          <div className="flex items-center gap-1.5">
+            <span> View trades </span>
+          </div>
+        </Button>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <CardSeparator />
+
+      <div className="flex flex-col gap-2 px-6 h-full justify-end pb-5">
         <h1 className="text-2xl font-semibold text-emerald-500">
-          <NumberFlow
-            trend={1}
-            plugins={[continuous]}
+          <AnimatedNumber
             value={streak}
-            suffix=" wins"
-            format={{
-              maximumFractionDigits: 2,
-            }}
-            transformTiming={{
-              easing: `linear(0, 0.0033 0.8%, 0.0263 2.39%, 0.0896 4.77%, 0.4676 15.12%, 0.5688, 0.6553, 0.7274, 0.7862, 0.8336 31.04%, 0.8793, 0.9132 38.99%, 0.9421 43.77%, 0.9642 49.34%, 0.9796 55.71%, 0.9893 62.87%, 0.9952 71.62%, 0.9983 82.76%, 0.9996 99.47%)`,
+            format={(n) =>
+              n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+            }
+            springOptions={{
+              bounce: 0,
               duration: 2000,
             }}
-            isolate
-          />
+          />{" "}
+          {streak === 1 ? "win" : "wins"}
         </h1>
 
         <div className="flex gap-2 items-center">
@@ -310,44 +300,43 @@ export function WinStreakCard({ accountId }: { accountId?: string }) {
 
 export function ProfitFactorCard({ accountId }: { accountId?: string }) {
   const { data } = useAccountStats(accountId);
-  const pf = data?.profitFactor ?? null;
+  let pf = data?.profitFactor ?? null;
+  const pfRounded2 = pf !== null ? Number(pf.toFixed(2)) : null;
 
   return (
-    <div className="bg-white aspect-video rounded-lg border border-black/5 p-6 pt-7 flex flex-col justify-between shadow-[0_1x_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center">
-        <h2 className="text-sm font-medium text-secondary tracking-tight">
-          Profit factor
+    <div className="bg-white dark:bg-[#27272A] dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
+      <div className="flex w-full justify-between items-center px-6 py-4">
+        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+          <span className="px-0">Profit factor</span>
         </h2>
 
-        <GradientLink
-          size="sm"
-          icon={<ArrowUpRight className="size-3" />}
-          variant="emerald"
-          href="/"
-        />
+        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
+          <div className="flex items-center gap-1.5">
+            <span> View trades </span>
+          </div>
+        </Button>
       </div>
 
-      <div className="flex flex-col">
+      <CardSeparator />
+
+      <div className="flex flex-col px-6 h-full justify-end pb-5">
         <h1 className="text-2xl text-emerald-500 font-semibold">
-          {pf ? (
-            <NumberFlow
-              trend={1}
-              plugins={[continuous]}
-              value={pf}
-              format={{
-                maximumFractionDigits: 2,
-              }}
-              transformTiming={{
-                easing: `linear(0, 0.0033 0.8%, 0.0263 2.39%, 0.0896 4.77%, 0.4676 15.12%, 0.5688, 0.6553, 0.7274, 0.7862, 0.8336 31.04%, 0.8793, 0.9132 38.99%, 0.9421 43.77%, 0.9642 49.34%, 0.9796 55.71%, 0.9893 62.87%, 0.9952 71.62%, 0.9983 82.76%, 0.9996 99.47%)`,
+          {pfRounded2 !== null ? (
+            <AnimatedNumber
+              value={pfRounded2}
+              format={(n) =>
+                n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+              }
+              springOptions={{
+                bounce: 0,
                 duration: 2000,
               }}
-              isolate
             />
           ) : (
             <InfinitySign
               width={40}
               height={40}
-              className="text-emerald-500 shrink-0"
+              className="fill-transparent stroke-emerald-500 shrink-0 [*]:transition-none"
             />
           )}
         </h1>
@@ -388,7 +377,7 @@ export function TopWidgets({ enabledWidgets }: TopWidgetsProps) {
   const accountId = useAccountStore((s) => s.selectedAccountId);
 
   return (
-    <div className="grid auto-rows-min gap-1 md:grid-cols-4 bg-muted/25 p-1 rounded-xl border border-black/5">
+    <div className="grid auto-rows-min gap-1 md:grid-cols-4 bg-muted/25 dark:bg-muted/25 p-1 rounded-xl border-[0.5px] border-black/5 dark:border-white/5">
       {displayWidgets.map((widgetType, index) => {
         const CardComponent = cardComponents[widgetType];
         return (

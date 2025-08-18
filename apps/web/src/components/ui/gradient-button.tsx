@@ -15,7 +15,7 @@ const gradientButtonVariants = cva(
           "border border-indigo-400/20 border-b-indigo-600/70 border-t-indigo-400/70 bg-gradient-to-b from-indigo-500 to-indigo-600 ring-1 ring-indigo-600",
         blue: "border border-blue-400/20 border-b-blue-600/70 border-t-blue-400/70 bg-gradient-to-b from-blue-500 to-blue-600 ring-1 ring-blue-600",
         emerald:
-          "border border-emerald-400/20 border-b-emerald-600/70 border-t-emerald-400/70 bg-gradient-to-b from-emerald-500 to-emerald-600 ring-1 ring-emerald-600",
+          "border border-emerald-400/20 border-b-emerald-600/70 border-t-emerald-400/70 bg-gradient-to-b from-emerald-500 to-emerald-800 ring-1 ring-emerald-800",
         red: "border border-red-400/20 border-b-red-600/70 border-t-red-400/70 bg-gradient-to-b from-red-500 to-red-600 ring-1 ring-red-600",
         purple:
           "border border-purple-400/20 border-b-purple-600/70 border-t-purple-400/70 bg-gradient-to-b from-purple-500 to-purple-600 ring-1 ring-purple-600",
@@ -27,8 +27,8 @@ const gradientButtonVariants = cva(
         cyan: "border border-sky-400/20 border-b-sky-600/70 border-t-sky-400/70 bg-gradient-to-b from-sky-500 to-sky-600 ring-1 ring-sky-600",
       },
       size: {
-        sm: "px-2 py-2",
-        md: "px-3 py-2",
+        sm: "px-2 py-1.5",
+        md: "px-4 py-1.5",
       },
     },
     defaultVariants: {

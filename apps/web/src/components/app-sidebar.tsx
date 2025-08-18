@@ -13,48 +13,62 @@ import AccountSwitcher, {
 } from "./dashboard/sidebar/account-selector";
 import type { NewAccount } from "./dashboard/sidebar/add-account-sheet";
 import { cn } from "@/lib/utils";
-import { Icon } from "@/components/icons/Icon";
-import { Separator } from "./ui/separator";
-import Link from "next/link";
-import { Button, buttonVariants } from "./ui/button";
-import { VariantButton } from "./ui/buttons/variant-button";
 
-import Lightning from "../../public/icons/lightning.svg";
+import Link from "next/link";
+import { buttonVariants } from "./ui/button";
+import Lightning from "@/public/icons/lightning.svg";
+import DashboardIcon from "@/public/icons/dashboard.svg";
+import EdgebotIcon from "@/public/icons/edgebot.svg";
+import CalendarIcon from "@/public/icons/calendar.svg";
+import JournalIcon from "@/public/icons/journal.svg";
+import ReportsIcon from "@/public/icons/reports.svg";
+import AccountIcon from "@/public/icons/account.svg";
 import { AddAccountSheet } from "./dashboard/sidebar/add-account-sheet";
 import { trpcClient } from "@/utils/trpc";
+import ClockIcon from "@/public/icons/clock.svg";
 
-const data = {
+import { Separator } from "./ui/separator";
+
+type NavIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+type NavItem = {
+  title: string;
+  url: string;
+  icon: NavIcon;
+  isActive?: boolean;
+};
+
+const data: { navMain: NavItem[] } = {
   navMain: [
     {
       title: "Dashboard",
       url: "#",
-      icon: "dashboard",
+      icon: DashboardIcon,
       isActive: true,
     },
     {
       title: "Edgebot",
       url: "#",
-      icon: "edgebot",
+      icon: EdgebotIcon,
     },
     {
       title: "Calendar",
       url: "#",
-      icon: "calendar",
+      icon: CalendarIcon,
     },
     {
       title: "Journal",
       url: "#",
-      icon: "journal",
+      icon: JournalIcon,
     },
     {
       title: "Reports",
       url: "#",
-      icon: "reports",
+      icon: ReportsIcon,
     },
     {
       title: "Account Stats",
       url: "#",
-      icon: "account",
+      icon: AccountIcon,
     },
   ],
 };
@@ -98,12 +112,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, []);
 
   return (
-    <Sidebar variant="inset" {...props}>
-      <SidebarHeader>
+    <Sidebar className="px-0" variant="inset" {...props}>
+      <SidebarHeader className="px-4">
         {accounts.length > 0 ? (
           <AccountSwitcher accounts={accounts} defaultAccount={accounts[0]} />
         ) : (
-          <div className="p-2">
+          <div className="pt-1">
             <AddAccountSheet
               onAccountCreated={(a: NewAccount) =>
                 setAccounts((prev) => [
@@ -116,35 +130,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         )}
       </SidebarHeader>
 
-      <div className="px-2 my-2">
-        <Separator className="" />
+      <div className="my-2">
+        <Separator />
       </div>
 
-      <SidebarContent className="p-2 flex flex-col gap-2">
+      <SidebarContent className="p-2 px-4 flex flex-col gap-2 bg-sidebar dark:text-neutral-200">
         {data.navMain.map((item, idx) => (
           <Link
             href="#"
             key={item.title}
             className={cn(
-              `group px-2 py-2.5 flex items-center gap-2 hover:bg-[#f2f2f2] rounded-sm transition-all duration-75 border border-black/0 group`,
+              `group/navlink px-4 py-2.5 flex items-center gap-3 rounded-sm transition-all duration-100 group/navlink bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent`,
               item.isActive &&
-                " bg-[#efefef] border flex gap-3 hover:bg-[#e8e8e8] transition-all duration-250"
+                "shadow-sidebar-button rounded-[6px] gap-3 h-max transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-[#A0A0A6]/75 duration-250"
             )}
-            onMouseEnter={() => setHoveredItem(item.title)}
-            onMouseLeave={() => setHoveredItem(null)}
           >
+            {/*
             <Icon
               icon={item.icon}
-              isActive={item.isActive}
               isHovered={hoveredItem === item.title && !item.isActive}
               size={16}
+            />
+            */}
+
+            <item.icon
+              className={cn(
+                "size-3.5 fill-[#8b8b97] group-hover/navlink:fill-black dark:group-hover/navlink:fill-white",
+                item.isActive && "fill-black dark:fill-white"
+              )}
             />
 
             <p
               className={cn(
-                `text-xs text-secondary font-medium transition-all duration-500`,
-                hoveredItem === item.title && "text-black/60",
-                item.isActive === true && "font-semibold text-black"
+                `text-xs text-secondary dark:text-neutral-300 font-semibold tracking-tight transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white`,
+                item.isActive && "text-black dark:text-white"
               )}
             >
               {item.title}
@@ -153,18 +172,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ))}
       </SidebarContent>
 
-      <SidebarFooter>
-        <div className="flex gap-1.5 items-center justify-center py-2 px-4 w-full bg-[#f2f2f2] rounded-[6px]">
-          <Icon
-            icon="clock"
-            size={12}
-            inactiveFillColor="#f2f2f2"
-            inactiveStrokeColor="#8B8B97"
-          />
+      <SidebarFooter className="px-4">
+        <div className="shadow-sidebar-button flex gap-1.5 items-center justify-center py-2 px-4 w-full bg-sidebar-accent dark:bg-sidebar-accent opacity-50 rounded-[6px] select-none">
+          <ClockIcon className="size-3 fill-transparent stroke-white/50" />
 
-          <p className="text-secondary text-xs font-semibold">
+          <p className="text-white/50 text-xs font-semibold">
             {" "}
-            Free trial expires in 7 days{" "}
+            Trial expires in 4 days{" "}
           </p>
         </div>
 
@@ -172,12 +186,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           href="/"
           className={cn(
             buttonVariants,
-            "rounded-md border border-indigo-400/20 border-b-indigo-600/70 border-t-indigo-400/70 bg-gradient-to-b from-indigo-500 to-indigo-600 px-4 py-3 font-medium leading-none text-white antialiased shadow-md ring-1 ring-indigo-600 transition-all duration-500 hover:brightness-110 flex items-center justify-center gap-2"
+            "shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 duration-250 flex py-4 items-center justify-center"
           )}
         >
-          <Lightning className="drop-shadow-[0_2px_1px_rgba(0,0,0,0.3)] size-3 text-white" />
+          <Lightning className="drop-shadow-[0_2px_1px_rgba(0,0,0,0.3)] size-3.5 fill-white [*]:transition-none" />
 
-          <span className="text-shadow-2xs text-[14px] font-semibold">
+          <span className="text-shadow-2xs text-[14px] font-semibold tracking-relaxed">
             Upgrade to Pro
           </span>
         </Link>

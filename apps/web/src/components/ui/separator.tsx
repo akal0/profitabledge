@@ -1,26 +1,44 @@
-import * as React from "react"
-import * as SeparatorPrimitive from "@radix-ui/react-separator"
+import { cn } from "@/lib/utils";
 
-import { cn } from "@/lib/utils"
-
-function Separator({
-  className,
-  orientation = "horizontal",
-  decorative = true,
-  ...props
-}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+export const Separator = ({ className }: { className?: string }) => {
   return (
-    <SeparatorPrimitive.Root
-      data-slot="separator"
-      decorative={decorative}
-      orientation={orientation}
+    <div
       className={cn(
-        "bg-border shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+        "h-[2px] bg-[#000000]/50 border-b border-[#222225]",
         className
       )}
-      {...props}
     />
-  )
-}
+  );
+};
 
-export { Separator }
+export const OverlapSeparator = ({
+  className,
+  children,
+}: {
+  className?: string;
+  children?: React.ReactNode;
+}) => {
+  return (
+    <div className="flex items-center justify-center gap-2 w-full mt-8 mb-4">
+      <div
+        className={cn(
+          "h-[2px] bg-[#000000]/50 border-b border-[#222225] w-full",
+          className
+        )}
+      />
+
+      <p className="text-xs text-secondary min-w-max">{children}</p>
+
+      <div
+        className={cn(
+          "h-[2px] bg-[#000000]/50 border-b border-[#222225] w-full",
+          className
+        )}
+      />
+    </div>
+  );
+};
+
+export const CardSeparator = () => {
+  return <div className=" h-[3px] bg-[#000000]/25 border-b border-[#333333]" />;
+};

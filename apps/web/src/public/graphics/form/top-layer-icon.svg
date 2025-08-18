@@ -1,0 +1,45 @@
+<svg width="178" height="108" viewBox="0 0 178 108" fill="none" xmlns="http://www.w3.org/2000/svg">
+<foreignObject x="-177.5" y="-179.5" width="533.205" height="460"><div xmlns="http://www.w3.org/1999/xhtml" style="backdrop-filter:blur(90px);clip-path:url(#bgblur_0_996_1359_clip_path);height:100%;width:100%"></div></foreignObject><g filter="url(#filter0_di_996_1359)" data-figma-bg-blur-radius="180">
+<g data-part="bg">
+<rect width="100" height="100" rx="4" transform="matrix(0.866025 0.5 0.866025 -0.5 2.5 50.5)" fill="currentColor" shape-rendering="crispEdges"/>
+<rect width="100" height="100" rx="4" transform="matrix(0.866025 0.5 0.866025 -0.5 2.5 50.5)" stroke="white" stroke-opacity="0.15" stroke-width="0.5" shape-rendering="crispEdges"/>
+</g>
+
+<!-- left lozenge -->
+<g data-part="rect-1">
+<path d="M66.0809 52.3333C65.204 51.8271 65.204 51.0063 66.0809 50.5L70.0502 48.2083C70.927 47.7021 72.3487 47.7021 73.2256 48.2083L77.1949 50.5C78.0717 51.0063 78.0717 51.8271 77.1949 52.3333L73.2256 54.625C72.3487 55.1313 70.927 55.1313 70.0502 54.625L66.0809 52.3333Z" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+
+<!-- right lozenge -->
+<g data-part="rect-2">
+<path d="M81.9578 61.5C81.0809 60.9937 81.081 60.1729 81.9578 59.6667L85.9271 57.375C86.804 56.8687 88.2256 56.8687 89.1025 57.375L93.0718 59.6667C93.9487 60.1729 93.9487 60.9937 93.0718 61.5L89.1025 63.7917C88.2257 64.2979 86.804 64.2979 85.9271 63.7917L81.9578 61.5Z" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+
+<!-- lines -->
+<g data-part="lines">
+<path d="M79.5762 43.625L91.484 36.75" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M85.1318 46.8333L92.2765 42.7083" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M95.4531 52.7917L107.361 45.9167" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M101.011 56L108.155 51.875" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_di_996_1359" x="-177.5" y="-179.5" width="533.205" height="460" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="4"/>
+<feGaussianBlur stdDeviation="2"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_996_1359"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_996_1359" result="shape"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="-6"/>
+<feGaussianBlur stdDeviation="1"/>
+<feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.111704 0 0 0 0 0.111704 0 0 0 0 0.111704 0 0 0 0.6 0"/>
+<feBlend mode="normal" in2="shape" result="effect2_innerShadow_996_1359"/>
+</filter>
+<clipPath id="bgblur_0_996_1359_clip_path" transform="translate(177.5 179.5)"><rect width="100" height="100" rx="4" transform="matrix(0.866025 0.5 0.866025 -0.5 2.5 50.5)"/>
+</clipPath></defs>
+</svg>

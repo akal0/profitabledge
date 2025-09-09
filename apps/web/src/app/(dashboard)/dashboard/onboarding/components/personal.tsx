@@ -22,12 +22,15 @@ import X from "@/public/icons/social-media/x.svg";
 import Discord from "@/public/icons/social-media/discord.svg";
 import Instagram from "@/public/icons/social-media/instagram.svg";
 import { Separator } from "@/components/ui/separator";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { authClient } from "@/lib/auth-client";
 import Image from "next/image";
 import { trpcClient } from "@/utils/trpc";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+// import AvatarUploader from "./avatar-uploader";
 import AvatarUploader from "./avatar-uploader";
+import { uploadFiles } from "@/utils/uploadthing";
+import { ArrowRightIcon } from "lucide-react";
 
 type Me = Awaited<ReturnType<typeof trpcClient.users.me.query>>;
 
@@ -57,12 +60,25 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
     },
   });
 
+  const uploaderApiRef = useRef<null | {
+    pick: () => void;
+    clear: () => void;
+    getFile: () => File | null;
+    upload: () => Promise<string | null>;
+  }>(null);
+
   async function onSubmit(data: z.infer<typeof FormSchema>) {
+    // If avatar file selected, upload now and capture URL
+    let imageUrl: string | null = null;
+    if (uploaderApiRef.current?.getFile()) {
+      imageUrl = (await uploaderApiRef.current.upload()) || null;
+    }
+
     await trpcClient.users.updateProfile.mutate({
       fullName: data.fullName,
       username: data.username,
       email: data.email || undefined,
-      image: (data.avatar as string | null) || undefined,
+      image: imageUrl || (data.avatar as string | null) || undefined,
     });
 
     toast.success("Profile updated");
@@ -101,13 +117,17 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
         >
           <FormField
             control={form.control}
-            name="username"
+            name="avatar"
             render={({ field }) => (
               <FormItem className="px-10 space-y-1 flex flex-col">
                 <FormLabel className="text-xs">Profile picture</FormLabel>
 
                 <AvatarUploader
                   onUploaded={(url) => form.setValue("avatar", url)}
+                  initialUrl={me?.image ?? undefined}
+                  fallbackLabel={me?.email ?? ""}
+                  onReady={(api) => (uploaderApiRef.current = api)}
+                  userId={me?.id}
                 />
 
                 <FormMessage />
@@ -249,9 +269,9 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
 
           <Separator />
 
-          <div className="px-6">
+          <div className="flex gap-4 px-6">
             <Button
-              className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center w-full"
+              className="shadow-sidebar-button rounded-[6px] h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center w-full"
               type="submit"
             >
               Update

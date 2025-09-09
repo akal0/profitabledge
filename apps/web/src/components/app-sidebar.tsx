@@ -7,6 +7,8 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
+  SidebarMenuButton,
+  SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import AccountSwitcher, {
   type Account,
@@ -17,17 +19,20 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { buttonVariants } from "./ui/button";
 import Lightning from "@/public/icons/lightning.svg";
-import DashboardIcon from "@/public/icons/dashboard.svg";
-import EdgebotIcon from "@/public/icons/edgebot.svg";
-import CalendarIcon from "@/public/icons/calendar.svg";
-import JournalIcon from "@/public/icons/journal.svg";
-import ReportsIcon from "@/public/icons/reports.svg";
-import AccountIcon from "@/public/icons/account.svg";
+import DashboardIcon from "@/public/icons/navigation/dashboard.svg";
+import CalendarIcon from "@/public/icons/navigation/calendar.svg";
+import JournalIcon from "@/public/icons/navigation/journal.svg";
+import ReportsIcon from "@/public/icons/navigation/reports.svg";
+import AccountIcon from "@/public/icons/navigation/account.svg";
 import { AddAccountSheet } from "./dashboard/sidebar/add-account-sheet";
 import { trpcClient } from "@/utils/trpc";
 import ClockIcon from "@/public/icons/clock.svg";
 
 import { Separator } from "./ui/separator";
+import NavUser from "./nav-user";
+import { useAccountStore } from "@/stores/account";
+import type { Me } from "@/types/user";
+import Image from "next/image";
 
 type NavIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 type NavItem = {
@@ -46,11 +51,6 @@ const data: { navMain: NavItem[] } = {
       isActive: true,
     },
     {
-      title: "Edgebot",
-      url: "#",
-      icon: EdgebotIcon,
-    },
-    {
       title: "Calendar",
       url: "#",
       icon: CalendarIcon,
@@ -66,7 +66,7 @@ const data: { navMain: NavItem[] } = {
       icon: ReportsIcon,
     },
     {
-      title: "Account Stats",
+      title: "Account",
       url: "#",
       icon: AccountIcon,
     },
@@ -111,9 +111,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     };
   }, []);
 
+  const getInfo = async () => {
+    const me = await trpcClient.users.me.query();
+
+    return me;
+  };
+
+  const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const data = await getInfo();
+      setMe(data);
+      console.log(data);
+    })();
+  }, []);
+
+  const accountId = useAccountStore((s) => s.selectedAccountId);
+
   return (
-    <Sidebar className="px-0" variant="inset" {...props}>
-      <SidebarHeader className="px-4">
+    <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
+      <SidebarHeader className="p-4 pt-3 pb-1 h-[3.725rem]">
         {accounts.length > 0 ? (
           <AccountSwitcher accounts={accounts} defaultAccount={accounts[0]} />
         ) : (
@@ -134,67 +152,50 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Separator />
       </div>
 
-      <SidebarContent className="p-2 px-4 flex flex-col gap-2 bg-sidebar dark:text-neutral-200">
+      <SidebarContent className="px-4 py-2">
         {data.navMain.map((item, idx) => (
           <Link
             href="#"
             key={item.title}
             className={cn(
-              `group/navlink px-4 py-2.5 flex items-center gap-3 rounded-sm transition-all duration-100 group/navlink bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent`,
+              `group/navlink flex items-center gap-3 rounded-xs transition-all duration-150 group/navlink bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer`,
               item.isActive &&
-                "shadow-sidebar-button rounded-[6px] gap-3 h-max transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-[#A0A0A6]/75 duration-250"
+                "transition-all active:scale-95 bg-sidebar-accent text-white text-xs dark:hover:bg-sidebar-accent dark:hover:!brightness-120 hover:text-[#A0A0A6]/75 border-[0.5px] border-white/0"
             )}
           >
-            {/*
-            <Icon
-              icon={item.icon}
-              isHovered={hoveredItem === item.title && !item.isActive}
-              size={16}
-            />
-            */}
+            <SidebarMenuItem key={item.title} className={cn(`px-2 py-1 flex`)}>
+              <SidebarMenuButton
+                className="flex items-center justify-center gap-3 cursor-pointer"
+                // tooltip={item.title}
+              >
+                <item.icon
+                  className={cn(
+                    "stroke-[#8b8b97] dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
+                    item.isActive &&
+                      "fill-black dark:fill-transparent dark:stroke-white"
+                  )}
+                />
 
-            <item.icon
-              className={cn(
-                "size-3.5 fill-[#8b8b97] group-hover/navlink:fill-black dark:group-hover/navlink:fill-white",
-                item.isActive && "fill-black dark:fill-white"
-              )}
-            />
-
-            <p
-              className={cn(
-                `text-xs text-secondary dark:text-neutral-300 font-semibold tracking-tight transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white`,
-                item.isActive && "text-black dark:text-white"
-              )}
-            >
-              {item.title}
-            </p>
+                <p
+                  className={cn(
+                    `text-[13px] text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden`,
+                    item.isActive && "text-black dark:text-white font-medium"
+                  )}
+                >
+                  {item.title}
+                </p>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           </Link>
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="px-4">
-        <div className="shadow-sidebar-button flex gap-1.5 items-center justify-center py-2 px-4 w-full bg-sidebar-accent dark:bg-sidebar-accent opacity-50 rounded-[6px] select-none">
-          <ClockIcon className="size-3 fill-transparent stroke-white/50" />
-
-          <p className="text-white/50 text-xs font-semibold">
-            {" "}
-            Trial expires in 4 days{" "}
-          </p>
-        </div>
-
-        <Link
-          href="/"
-          className={cn(
-            buttonVariants,
-            "shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 duration-250 flex py-4 items-center justify-center"
-          )}
-        >
-          <Lightning className="drop-shadow-[0_2px_1px_rgba(0,0,0,0.3)] size-3.5 fill-white [*]:transition-none" />
-
-          <span className="text-shadow-2xs text-[14px] font-semibold tracking-relaxed">
-            Upgrade to Pro
-          </span>
-        </Link>
+      <SidebarFooter className="p-4">
+        {me && (
+          <div className="w-full h-full relative">
+            <NavUser user={me} />
+          </div>
+        )}
       </SidebarFooter>
     </Sidebar>
   );

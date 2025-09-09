@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+@import "uploadthing/tw/v4";
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes slideInLeft {
@@ -22,7 +24,7 @@
 }
 
 @theme {
-  --font-sans: "Inter", "Geist", ui-sans-serif, system-ui, sans-serif,
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
@@ -48,7 +50,7 @@ html:not(.dark) body {
 /* Dark theme when .dark class is applied */
 html.dark,
 html.dark body {
-  @apply bg-sidebar text-white;
+  @apply bg-sidebar-accent text-white;
 }
 
 :root {
@@ -164,12 +166,6 @@ html.dark body {
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
 }
 
 /* Custom utility classes */
@@ -348,5 +344,13 @@ html.dark body {
       center / contain no-repeat;
     animation: fillRise 2000ms ease-in-out infinite alternate;
     pointer-events: none;
+  }
+  .text-teal-500 {
+    text-shadow: 0 0 6px rgba(20, 184, 166, 0.55),
+      0 0 12px rgba(20, 184, 166, 0.35);
+  }
+  .dark .text-teal-500 {
+    text-shadow: 0 0 8px rgba(45, 212, 191, 0.25),
+      0 0 16px rgba(45, 212, 191, 0.25);
   }
 }

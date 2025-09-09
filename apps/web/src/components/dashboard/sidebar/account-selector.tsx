@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sidebar";
 import { AddAccountSheet, type NewAccount } from "./add-account-sheet";
 import { useAccountStore } from "@/stores/account";
+import { useEffect } from "react";
 
 export type Account = {
   id: string;
@@ -55,6 +56,23 @@ const AccountSwitcher = ({
     setSelectedAccountId(id);
   }, [items, setSelectedAccountId]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "o" || e.key === "O")) {
+        e.preventDefault();
+        if (!accounts.length) return;
+        const currentIdx = accounts.findIndex(
+          (a) => a.id === useAccountStore.getState().selectedAccountId
+        );
+        const nextIdx =
+          currentIdx >= 0 ? (currentIdx + 1) % accounts.length : 0;
+        useAccountStore.getState().setSelectedAccountId(accounts[nextIdx].id);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [accounts]);
+
   function handleSelect(idx: number) {
     setSelectedIndex(idx);
     setSelectedAccountId(items[idx]?.id);
@@ -66,86 +84,62 @@ const AccountSwitcher = ({
     pendingSelectRef.current = account.id;
   }
 
-  if (items.length === 0) {
-    return (
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            size="lg"
-            className="px-4 bg-sidebar-accent border cursor-default"
-          >
-            <span className="text-xs font-semibold text-secondary">
-              No accounts added yet
-            </span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
-      </SidebarMenu>
-    );
-  }
-
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <div className="flex flex-col gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                className="shadow-sidebar-button cursor-pointer rounded-[6px] gap-3 h-max transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-[#A0A0A6]/75 duration-250 px-4 py-3"
-              >
-                <div className="size-3 relative">
-                  <Image
-                    src={items[selectedIndex]?.image}
-                    alt="broker"
-                    fill
-                    className="rounded"
-                  />
-                </div>
+    <SidebarMenu className="h-full w-full">
+      <SidebarMenuItem className="h-full w-full">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton className="cursor-pointer rounded-xs transition-all active:scale-95 bg-sidebar-accent text-xs hover:!brightness-110 duration-150 min-w-max min-h-max !w-full !h-full flex items-center justify-center">
+              <div className="size-4 relative shrink-0">
+                <Image
+                  src={items[selectedIndex]?.image}
+                  alt="broker"
+                  fill
+                  className="object-cover"
+                />
+              </div>
 
-                <div className="flex flex-col leading-none">
-                  <span className="text-xs font-semibold">
-                    {items[selectedIndex]?.name}
-                  </span>
-                </div>
-                <ChevronsUpDown className="ml-auto stroke-[0.5px]" />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
+              {/* <p className="text-xs font-semibold min-w-max group-data-[collapsible=icon]:hidden">
+                {items[selectedIndex]?.name}
+              </p> */}
 
-            <DropdownMenuContent
-              className="w-(--radix-dropdown-menu-trigger-width) border border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20]"
-              align="start"
-            >
+              {/* <ChevronsUpDown className="ml-auto stroke-[0.5px] group-data-[collapsible=icon]:hidden" /> */}
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            className="w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-xs min-w-64"
+            align="start"
+          >
+            <div className="flex flex-col px-1">
               {items.map((account, idx) => (
                 <DropdownMenuItem
-                  className={`text-xs ${idx === selectedIndex && "font-bold"}`}
+                  className={`flex gap-3 py-2.5 text-xs ${
+                    idx === selectedIndex && "font-bold"
+                  }`}
                   key={account.id}
                   onSelect={() => handleSelect(idx)}
                 >
-                  <div className="size-3 relative">
-                    <Image
-                      src={account.image}
-                      alt="broker"
-                      fill
-                      className="rounded"
-                    />
+                  <div className="size-4 relative">
+                    <Image src={account.image} alt="broker" fill className="" />
                   </div>
                   {account.name}{" "}
                   {idx === selectedIndex && <Check className="ml-auto" />}
                 </DropdownMenuItem>
               ))}
+            </div>
 
-              {/* Separator */}
+            {/* Separator */}
 
-              <div className="flex flex-col mx-2 my-2">
-                <div className="w-full h-[2px] bg-[#161618] border-b border-[#222225]" />
-              </div>
+            <div className="flex flex-col mx-2 my-2">
+              <div className="w-full h-[2px] bg-[#161618] border-b border-[#222225]" />
+            </div>
 
-              <div className="p-1">
-                <AddAccountSheet onAccountCreated={handleAccountCreated} />
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            <div className="p-1">
+              <AddAccountSheet onAccountCreated={handleAccountCreated} />
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
   );

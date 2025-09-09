@@ -55,7 +55,7 @@ const Page = () => {
   };
 
   return (
-    <div className="flex flex-col w-screen h-screen">
+    <div className="flex flex-col w-screen h-screen bg-sidebar">
       <div className="flex flex-col">
         <div className="w-full h-20 flex justify-between items-center px-25 text-xs">
           <p className="font-bold">profitabledge</p>

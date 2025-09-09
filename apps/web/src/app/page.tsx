@@ -4,8 +4,6 @@ import { trpc } from "@/utils/trpc";
 import Header from "@/components/header";
 
 export default function Home() {
-  const healthCheck = useQuery(trpc.healthCheck.queryOptions());
-
   return (
     <main>
       <Header />

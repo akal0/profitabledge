@@ -25,7 +25,7 @@ import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
 import Discord from "@/public/icons/social-media/discord.svg";
 import { cn } from "@/lib/utils";
-import { CircleCheckIcon, XIcon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, XIcon } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
@@ -49,37 +49,81 @@ const LoginPage = () => {
     },
   });
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
-    toast.custom((t) => (
-      <div className="bg-sidebar shadow-sidebar-button text-foreground w-full rounded-md px-4 py-3 shadow-lg sm:w-[var(--width)]">
-        <div className="flex gap-2">
-          <div className="flex grow gap-3">
-            <CircleCheckIcon
-              className="mt-0.5 shrink-0 text-emerald-500"
-              size={16}
-              aria-hidden="true"
-            />
-            <div className="flex grow justify-between gap-12">
-              <p className="text-sm text-white font-medium">
-                Account successfully created.
-              </p>
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
+    await authClient.signIn.email(
+      {
+        email: data.email,
+        password: data.password,
+      },
+      {
+        onSuccess: () => {
+          toast.custom((t) => (
+            <div className="bg-sidebar shadow-sidebar-button text-foreground w-full rounded-md px-4 py-3 shadow-lg sm:w-[var(--width)]">
+              <div className="flex gap-2">
+                <div className="flex grow gap-3">
+                  <CircleCheckIcon
+                    className="mt-0.5 shrink-0 text-emerald-500"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                  <div className="flex grow justify-between gap-12">
+                    <p className="text-sm text-white font-medium">
+                      Account successfully created!
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  className="group -my-1.5 -me-2 size-8 shrink-0 p-0 hover:bg-transparent"
+                  onClick={() => toast.dismiss(t)}
+                  aria-label="Close banner"
+                >
+                  <XIcon
+                    size={16}
+                    className="opacity-60 transition-opacity group-hover:opacity-100"
+                    aria-hidden="true"
+                  />
+                </Button>
+              </div>
             </div>
-          </div>
-          <Button
-            variant="ghost"
-            className="group -my-1.5 -me-2 size-8 shrink-0 p-0 hover:bg-transparent"
-            onClick={() => toast.dismiss(t)}
-            aria-label="Close banner"
-          >
-            <XIcon
-              size={16}
-              className="opacity-60 transition-opacity group-hover:opacity-100"
-              aria-hidden="true"
-            />
-          </Button>
-        </div>
-      </div>
-    ));
+          ));
+
+          router.push("/dashboard/onboarding");
+        },
+        onError: (error) => {
+          toast.custom((t) => (
+            <div className="bg-sidebar shadow-sidebar-button text-foreground w-full rounded-md px-4 py-3 shadow-lg sm:w-[var(--width)]">
+              <div className="flex gap-2">
+                <div className="flex grow gap-3">
+                  <CircleAlertIcon
+                    className="mt-0.5 shrink-0 text-red-500"
+                    size={16}
+                    aria-hidden="true"
+                  />
+                  <div className="flex grow justify-between gap-12">
+                    <p className="text-sm text-white font-medium">
+                      Uh oh! There's been a problem.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  className="group -my-1.5 -me-2 size-8 shrink-0 p-0 hover:bg-transparent"
+                  onClick={() => toast.dismiss(t)}
+                  aria-label="Close banner"
+                >
+                  <XIcon
+                    size={16}
+                    className="opacity-60 transition-opacity group-hover:opacity-100"
+                    aria-hidden="true"
+                  />
+                </Button>
+              </div>
+            </div>
+          ));
+        },
+      }
+    );
   }
 
   const handleGoogleLogin = async () => {
@@ -97,7 +141,7 @@ const LoginPage = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen w-screen relative">
+    <div className="flex flex-col items-center justify-center h-screen w-screen relative bg-sidebar">
       <div
         className={cn(
           "z-99 opacity-25 absolute size-106 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",

@@ -1,18 +1,13 @@
-import {
-  generateUploadButton,
-  generateUploadDropzone,
-  generateReactHelpers,
-} from "@uploadthing/react";
+import { generateReactHelpers } from "@uploadthing/react";
 import type { OurFileRouter } from "../../../server/src/app/api/uploadthing/core";
 
-// Point to server origin if different from web origin
-const uploadthingUrl = `${process.env.NEXT_PUBLIC_SERVER_URL}/api/uploadthing`;
+const baseEnv = (process.env.NEXT_PUBLIC_SERVER_URL || "").replace(/\/$/, "");
+if (!baseEnv) {
+  throw new Error(
+    "NEXT_PUBLIC_SERVER_URL must be set to your server origin (e.g. http://localhost:3000)"
+  );
+}
+const uploadthingUrl = `${baseEnv}/api/uploadthing`;
 
-export const UploadButton = generateUploadButton<OurFileRouter>({
-  url: uploadthingUrl,
-});
-export const UploadDropzone = generateUploadDropzone<OurFileRouter>({
-  url: uploadthingUrl,
-});
 export const { useUploadThing, uploadFiles, getRouteConfig } =
   generateReactHelpers<OurFileRouter>({ url: uploadthingUrl });

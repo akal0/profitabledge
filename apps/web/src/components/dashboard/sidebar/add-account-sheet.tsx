@@ -24,6 +24,7 @@ import { Plus } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import CsvUpload from "@/components/upload/CsvUpload";
+import { Label } from "@/components/ui/label";
 
 export type AddAccountForm = {
   method: "csv" | "broker" | null;
@@ -124,9 +125,9 @@ export function AddAccountSheet({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button className="shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+        <Button className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-sm py-1 transition-all active:scale-95 bg-[#222225] text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
           <div className="contents">
-            <span className="px-4">Add an account</span>
+            <span className="px-4 truncate">Add an account</span>
           </div>
         </Button>
       </SheetTrigger>
@@ -161,7 +162,7 @@ export function AddAccountSheet({
           {step === 1 && (
             <div className="flex flex-col gap-2 px-4">
               <Button
-                className="shadow-secondary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-emerald-600 text-white w-full text-xs hover:bg-emerald-600 hover:!brightness-120 hover:text-white duration-250"
+                className="shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-emerald-600 text-white w-full text-xs hover:bg-emerald-600 hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => {
                   setForm({ ...form, method: "csv" });
                   setStep(2);
@@ -170,7 +171,7 @@ export function AddAccountSheet({
                 Import account via CSV
               </Button>
               <Button
-                className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
+                className="shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
                 disabled
                 onClick={() => {
                   setForm({ ...form, method: "broker" });
@@ -183,7 +184,7 @@ export function AddAccountSheet({
           )}
 
           {step === 2 && form.method === "csv" && (
-            <div className="flex flex-col gap-5 px-4">
+            <div className="flex flex-col gap-5 px-4 mt-2">
               <CsvUpload
                 onFileChange={(f) => setForm((prev) => ({ ...prev, file: f }))}
               />
@@ -192,7 +193,7 @@ export function AddAccountSheet({
                 <label className="text-xs font-medium">Account name</label>
                 <Input
                   placeholder="e.g. FTMO 100k Live"
-                  className=""
+                  className="rounded-sm px-4 dark:bg-sidebar-accent"
                   value={form.name}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, name: e.target.value }))
@@ -201,15 +202,17 @@ export function AddAccountSheet({
               </div>
 
               <div className="grid gap-2">
-                <label className="text-xs font-medium">Broker</label>
+                <Label className="text-xs font-medium">Broker</Label>
+
                 <Select
                   value={form.broker}
                   onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="w-full rounded-sm border-none px-4">
                     <SelectValue placeholder="Select a broker" />
                   </SelectTrigger>
-                  <SelectContent>
+
+                  <SelectContent className="rounded-sm mt-0.5 bg-sidebar-accent border-[0.5px] border-white/5">
                     {BROKERS.map((b) => (
                       <SelectItem key={b.value} value={b.value}>
                         <div className="flex items-center gap-2.5">
@@ -238,7 +241,7 @@ export function AddAccountSheet({
         <SheetFooter>
           {step === 1 && (
             <SheetClose asChild>
-              <Button className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+              <Button className="border-[0.5px] border-white/5 shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
                 Cancel
               </Button>
             </SheetClose>

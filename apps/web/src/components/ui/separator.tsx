@@ -11,6 +11,17 @@ export const Separator = ({ className }: { className?: string }) => {
   );
 };
 
+export const VerticalSeparator = ({ className }: { className?: string }) => {
+  return (
+    <div
+      className={cn(
+        "w-[2px] h-full bg-[#222225] border-l border-[#000000]/50",
+        className
+      )}
+    />
+  );
+};
+
 export const OverlapSeparator = ({
   className,
   children,

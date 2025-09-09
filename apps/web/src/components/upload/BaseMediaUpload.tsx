@@ -73,7 +73,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         data-dragging={isDragging || undefined}
-        className="shadow-sidebar-button hover:bg-sidebar hover:brightness-110 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-xl p-4 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px] group transition duration-250"
+        className="shadow-sidebar-button dark:bg-sidebar-accent hover:brightness-110 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-sm p-4 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px] group transition duration-250"
       >
         <input
           {...inputProps}
@@ -82,18 +82,18 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
           disabled={Boolean(file) || disabled}
         />
 
-        <div className="flex flex-col items-center justify-center text-center gap-1 ">
+        <div className="flex flex-col items-center justify-center text-center gap-3 ">
           <div
-            className="bg-sidebar shadow-sidebar-button mb-2 flex size-11 shrink-0 items-center justify-center rounded-full border-[0.5px] group-hover:bg-sidebar group-hover:brightness-110 transition duration-250"
+            className="bg-sidebar-accent shadow-primary-button flex size-12 shrink-0 items-center justify-center rounded-sm border-[0.5px] border-white/5 group-hover:brightness-110 transition duration-150"
             aria-hidden="true"
           >
             <UploadIcon className="size-4 opacity-60" />
           </div>
 
-          <div className="space-y-1.5">
-            <p className=" text-sm font-medium">{title}</p>
+          <div className="space-y-1">
+            <p className=" text-sm font-semibold">{title}</p>
 
-            <p className="text-secondary text-xs">
+            <p className="text-secondary text-[11px]">
               {description ??
                 `Drag & drop or click to browse (max. ${formatBytes(maxSize)})`}
             </p>
@@ -116,19 +116,20 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
           {files.map((f) => (
             <div
               key={f.id}
-              className="flex items-center justify-between gap-2 shadow-sidebar-button rounded-xl px-4 py-2"
+              className="flex items-center justify-between gap-2 shadow-sidebar-button rounded-sm px-4 py-1 bg-sidebar-accent"
             >
-              <div className="flex items-center gap-3 overflow-hidden">
+              <div className="flex items-center gap-2.5 overflow-hidden">
                 <PaperclipIcon
-                  className="size-3.5 shrink-0 opacity-60"
+                  className="size-3 shrink-0 opacity-60"
                   aria-hidden="true"
                 />
                 <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium">
+                  <p className="truncate text-xs font-semibold">
                     {f.file.name}
                   </p>
                 </div>
               </div>
+
               <Button
                 size="icon"
                 variant="ghost"

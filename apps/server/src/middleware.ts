@@ -1,19 +1,31 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export function middleware() {
-  const res = NextResponse.next()
+export function middleware(req: NextRequest) {
+  const headers = new Headers();
+  headers.set("Access-Control-Allow-Credentials", "true");
+  headers.set("Access-Control-Allow-Origin", process.env.CORS_ORIGIN || "");
+  headers.set(
+    "Access-Control-Allow-Methods",
+    "GET,POST,OPTIONS,PUT,PATCH,DELETE"
+  );
 
-  res.headers.append('Access-Control-Allow-Credentials', "true")
-  res.headers.append('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || "")
-  res.headers.append('Access-Control-Allow-Methods', 'GET,POST,OPTIONS')
-  res.headers.append(
-    'Access-Control-Allow-Headers',
-    'Content-Type, Authorization'
-  )
+  // Reflect requested headers (covers x-uploadthing-* and others)
+  const requested = req.headers.get("Access-Control-Request-Headers");
+  headers.set(
+    "Access-Control-Allow-Headers",
+    requested ||
+      "Content-Type, Authorization, X-Uploadthing-Package, X-Uploadthing-Version, X-Requested-With"
+  );
 
-  return res
+  if (req.method === "OPTIONS") {
+    return new NextResponse(null, { status: 204, headers });
+  }
+
+  const res = NextResponse.next();
+  headers.forEach((value, key) => res.headers.set(key, value));
+  return res;
 }
 
 export const config = {
-  matcher: '/:path*',
-}
+  matcher: "/:path*",
+};

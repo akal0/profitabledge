@@ -1,7 +1,13 @@
 "use client";
 
 import { VariantBadge } from "@/components/ui/badges/variant-badge";
-import React, { type ComponentType, useEffect, useMemo, useState } from "react";
+import React, {
+  type ComponentType,
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 
@@ -22,14 +28,17 @@ import { AnimatedNumber } from "../ui/animated-number";
 import { Button } from "../ui/button";
 import { CardSeparator } from "../ui/separator";
 
+import CircleInfo from "@/public/icons/circle-info.svg";
+import { Skeleton } from "../ui/skeleton";
+
 const chartConfig = {
   wins: {
     label: "Wins",
-    color: "#1AC889",
+    color: "#00E0C8",
   },
   losses: {
     label: "Losses",
-    color: "#D32F2F",
+    color: "#F76290",
   },
   breakeven: {
     label: "Breakeven",
@@ -59,60 +68,33 @@ export function AccountBalanceCard({ accountId }: { accountId?: string }) {
   const balance = data?.totalProfit ?? 0;
 
   return (
-    <div className="bg-white dark:bg-card dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center px-6 py-4">
-        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+    <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+      <div className="flex w-full justify-between items-center px-5 py-4">
+        <h2 className="text-xs font-semibold">
           <span className="px-0">Account balance</span>
         </h2>
 
-        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
-          <div className="flex items-center gap-1.5">
-            <span> View trades </span>
-          </div>
-        </Button>
+        <CircleInfo className="size-5 stroke-white fill-transparent" />
       </div>
 
-      <CardSeparator />
-
-      <div className="flex flex-col gap-2.5 px-6 pb-5 h-full justify-end">
-        <h1 className="font-semibold  text-2xl text-emerald-400">
-          $
-          <AnimatedNumber
-            value={balance}
-            format={(n) =>
-              n.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })
-            }
-            springOptions={{
-              bounce: 0,
-              duration: 2000,
-            }}
-          />
-        </h1>
-
-        <div className="flex gap-2 items-center">
-          {/* Placeholder delta; compute vs prior period later */}
-
-          <h2 className="shadow-primary-button cursor-default rounded-[6px] py-1.5 px-6 h-max transition-all active:scale-95 bg-emerald-600 text-shadow-2xs font-semibold text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
-            {balance > 0 ? "+" : "-"}
+      <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+        <div className="flex flex-col gap-2.5 px-6 pb-5 h-full justify-end">
+          <h1 className="font-medium text-2xl text-teal-500">
             $
             <AnimatedNumber
               value={balance}
               format={(n) =>
-                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                n.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
               }
               springOptions={{
                 bounce: 0,
                 duration: 2000,
               }}
             />
-          </h2>
-
-          <p className="text-xs font-medium text-secondary">
-            in the lifetime of this account.
-          </p>
+          </h1>
         </div>
       </div>
     </div>
@@ -151,83 +133,79 @@ export function WinRateCard({ accountId }: { accountId?: string }) {
   );
 
   return (
-    <div className="bg-white dark:bg-[#27272A] dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center px-6 py-4">
-        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
-          <span>Win rate</span>
+    <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+      <div className="flex w-full justify-between items-center px-5 py-4">
+        <h2 className="text-xs font-semibold">
+          <span className="px-0">Win rate</span>
         </h2>
 
-        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
-          <div className="flex items-center gap-1.5">
-            <span> View trades </span>
-          </div>
-        </Button>
+        <CircleInfo className="size-5 stroke-white fill-transparent" />
       </div>
 
-      <CardSeparator />
+      <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+        <div className="flex w-full justify-between px-6 h-full">
+          <h1 className="text-xs text-secondary font-medium flex flex-col h-full justify-end pb-5">
+            <span className="font-medium text-2xl text-teal-500">
+              <AnimatedNumber
+                value={winrate}
+                format={(n) =>
+                  n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                }
+                springOptions={{
+                  bounce: 0,
+                  duration: 2000,
+                }}
+              />
+              %
+            </span>{" "}
+            win rate of all time.
+          </h1>
 
-      <div className="flex w-full justify-between px-6 h-full">
-        {mounted ? (
-          <ChartContainer
-            config={chartConfig}
-            className="w-[160px] h-full mt-2  "
-          >
-            <BarChart
-              data={chartData}
-              margin={{ left: 0, right: 0, top: 8, bottom: 0 }}
-              barGap={8}
+          {mounted ? (
+            <ChartContainer
+              config={chartConfig}
+              className="w-[160px] h-[80%] place-self-end  "
             >
-              <CartesianGrid vertical={false} strokeDasharray="4 4" />
-              <XAxis
-                dataKey="label"
-                tickLine={false}
-                axisLine={false}
-                tick={false}
-              />
-              <ChartTooltip
-                cursor={false}
-                content={<ChartTooltipContent hideLabel />}
-              />
-              <Bar
-                dataKey="wins"
-                fill="var(--color-wins)"
-                radius={[3, 3, 0, 0]}
-                barSize={16}
-              />
-              <Bar
-                dataKey="losses"
-                fill="var(--color-losses)"
-                radius={[3, 3, 0, 0]}
-                barSize={16}
-              />
-              <Bar
-                dataKey="breakeven"
-                fill="var(--color-breakeven)"
-                radius={[3, 3, 0, 0]}
-                barSize={16}
-              />
-            </BarChart>
-          </ChartContainer>
-        ) : (
-          <div className="w-[120px] h-[120px]" />
-        )}
-
-        <h1 className="text-xs text-secondary font-medium flex flex-col ml-4 h-full justify-end items-end pb-5">
-          <span className="font-semibold text-2xl text-emerald-500">
-            <AnimatedNumber
-              value={winrate}
-              format={(n) =>
-                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-              }
-              springOptions={{
-                bounce: 0,
-                duration: 2000,
-              }}
-            />
-            %
-          </span>{" "}
-          win rate of all time.
-        </h1>
+              <BarChart
+                data={chartData}
+                margin={{ left: 0, right: 0, top: 8, bottom: 0 }}
+                barGap={8}
+              >
+                <CartesianGrid vertical={false} strokeDasharray="8 8" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={false}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent hideLabel />}
+                />
+                <Bar
+                  dataKey="wins"
+                  fill="var(--color-wins)"
+                  radius={[3, 3, 0, 0]}
+                  barSize={16}
+                />
+                <Bar
+                  dataKey="losses"
+                  fill="var(--color-losses)"
+                  radius={[3, 3, 0, 0]}
+                  barSize={16}
+                />
+                <Bar
+                  dataKey="breakeven"
+                  fill="var(--color-breakeven)"
+                  radius={[3, 3, 0, 0]}
+                  barSize={16}
+                />
+              </BarChart>
+            </ChartContainer>
+          ) : (
+            <div className="w-[120px] h-[120px]" />
+          )}
+        </div>
       </div>
     </div>
   );
@@ -250,48 +228,44 @@ export function WinStreakCard({ accountId }: { accountId?: string }) {
   }
 
   return (
-    <div className="bg-white dark:bg-[#27272A] dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center px-6 py-4">
-        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+    <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+      <div className="flex w-full justify-between items-center px-5 py-4">
+        <h2 className="text-xs font-semibold">
           <span className="px-0">Win streak</span>
         </h2>
 
-        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
-          <div className="flex items-center gap-1.5">
-            <span> View trades </span>
-          </div>
-        </Button>
+        <CircleInfo className="size-5 stroke-white fill-transparent" />
       </div>
 
-      <CardSeparator />
+      <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+        <div className="flex flex-col gap-2 px-6 h-full justify-end pb-5">
+          <h1 className="text-2xl font-medium text-teal-500">
+            <AnimatedNumber
+              value={streak}
+              format={(n) =>
+                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+              }
+              springOptions={{
+                bounce: 0,
+                duration: 2000,
+              }}
+            />{" "}
+            {streak === 1 ? "win" : "wins"}
+          </h1>
 
-      <div className="flex flex-col gap-2 px-6 h-full justify-end pb-5">
-        <h1 className="text-2xl font-semibold text-emerald-500">
-          <AnimatedNumber
-            value={streak}
-            format={(n) =>
-              n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-            }
-            springOptions={{
-              bounce: 0,
-              duration: 2000,
-            }}
-          />{" "}
-          {streak === 1 ? "win" : "wins"}
-        </h1>
-
-        <div className="flex gap-2 items-center">
-          {outcomes.map((res, i) => (
-            <VariantBadge
-              key={i}
-              gradientFrom={res === "W" ? "#1AC889" : "#D32F2F"}
-              gradientTo={res === "W" ? "#16B377" : "#C62828"}
-              borderColor={res === "W" ? "#16B377" : "#C62828"}
-              size="streak"
-            >
-              {res}
-            </VariantBadge>
-          ))}
+          <div className="flex gap-2 items-center">
+            {outcomes.map((res, i) => (
+              <VariantBadge
+                key={i}
+                gradientFrom={res === "W" ? "#1AC889" : "#D32F2F"}
+                gradientTo={res === "W" ? "#16B377" : "#C62828"}
+                borderColor={res === "W" ? "#16B377" : "#C62828"}
+                size="streak"
+              >
+                {res}
+              </VariantBadge>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -304,47 +278,48 @@ export function ProfitFactorCard({ accountId }: { accountId?: string }) {
   const pfRounded2 = pf !== null ? Number(pf.toFixed(2)) : null;
 
   return (
-    <div className="bg-white dark:bg-[#27272A] dark:hover:brightness-120 transition-all duration-250 dark:border-white/10 aspect-video rounded-lg border-[0.5px] border-black/5 flex flex-col justify-between shadow-[0_1px_8px_rgba(0,0,0,0.03)] h-48 w-full">
-      <div className="flex w-full justify-between items-center px-6 py-4">
-        <h2 className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-white w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250 select-none">
+    <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+      <div className="flex w-full justify-between items-center px-5 py-4">
+        <h2 className="text-xs font-semibold">
           <span className="px-0">Profit factor</span>
         </h2>
 
-        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-1.5 px-3 h-max transition-all active:scale-95 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-700 hover:!brightness-110 hover:text-white duration-250">
-          <div className="flex items-center gap-1.5">
-            <span> View trades </span>
-          </div>
-        </Button>
+        <CircleInfo className="size-5 stroke-white fill-transparent" />
       </div>
 
-      <CardSeparator />
+      <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+        <div className="flex flex-col px-6 h-full justify-end pb-5">
+          <h1 className="text-2xl text-teal-500 font-medium">
+            {pfRounded2 !== null ? (
+              <AnimatedNumber
+                value={pfRounded2}
+                format={(n) =>
+                  n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                }
+                springOptions={{
+                  bounce: 0,
+                  duration: 2000,
+                }}
+              />
+            ) : (
+              <AnimatedNumber
+                value={999}
+                format={(n) =>
+                  n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                }
+                springOptions={{
+                  bounce: 0,
+                  duration: 2000,
+                }}
+              />
+            )}
+          </h1>
 
-      <div className="flex flex-col px-6 h-full justify-end pb-5">
-        <h1 className="text-2xl text-emerald-500 font-semibold">
-          {pfRounded2 !== null ? (
-            <AnimatedNumber
-              value={pfRounded2}
-              format={(n) =>
-                n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-              }
-              springOptions={{
-                bounce: 0,
-                duration: 2000,
-              }}
-            />
-          ) : (
-            <InfinitySign
-              width={40}
-              height={40}
-              className="fill-transparent stroke-emerald-500 shrink-0 [*]:transition-none"
-            />
-          )}
-        </h1>
-
-        <div className="flex gap-2 items-center">
-          <p className="text-xs font-medium text-secondary">
-            Lifetime profit factor.
-          </p>
+          <div className="flex gap-2 items-center">
+            <p className="text-xs font-medium text-secondary">
+              Lifetime profit factor.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -366,24 +341,95 @@ const cardComponents: Record<WidgetType, ComponentType<any>> = {
 // ========================
 interface TopWidgetsProps {
   enabledWidgets: WidgetType[];
+  accountId?: string;
 }
 
-export function TopWidgets({ enabledWidgets }: TopWidgetsProps) {
+export function TopWidgets({ enabledWidgets, accountId }: TopWidgetsProps) {
   // Ensure only 4 widgets maximum
   const displayWidgets = enabledWidgets.slice(0, 4);
 
   // Fill empty slots with placeholder divs
   const emptySlots = 4 - displayWidgets.length;
-  const accountId = useAccountStore((s) => s.selectedAccountId);
 
   return (
-    <div className="grid auto-rows-min gap-1 md:grid-cols-4 bg-muted/25 dark:bg-muted/25 p-1 rounded-xl border-[0.5px] border-black/5 dark:border-white/5">
-      {displayWidgets.map((widgetType, index) => {
-        const CardComponent = cardComponents[widgetType];
-        return (
-          <CardComponent key={`${widgetType}-${index}`} accountId={accountId} />
-        );
-      })}
+    <div className="grid auto-rows-min gap-1 md:grid-cols-4 bg-muted/25 dark:bg-muted/25 p-1 rounded-sm ">
+      {accountId ? (
+        displayWidgets.map((widgetType, index) => {
+          const CardComponent = cardComponents[widgetType];
+          return (
+            <CardComponent
+              key={`${widgetType}-${index}`}
+              accountId={accountId}
+            />
+          );
+        })
+      ) : (
+        <Fragment>
+          <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+            <div className="flex w-full justify-between items-center px-5 py-4">
+              <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
+
+              <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
+            </div>
+
+            <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+              <div className="flex gap-2.5 px-6 pb-5 h-full items-end justify-between">
+                <Skeleton className="w-24 h-5 rounded-sm bg-sidebar" />
+
+                <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+            <div className="flex w-full justify-between items-center px-5 py-4">
+              <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
+
+              <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
+            </div>
+
+            <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+              <div className="flex gap-2.5 px-6 pb-5 h-full items-end justify-between">
+                <Skeleton className="w-24 h-5 rounded-sm bg-sidebar" />
+
+                <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+            <div className="flex w-full justify-between items-center px-5 py-4">
+              <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
+
+              <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
+            </div>
+
+            <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+              <div className="flex gap-2.5 px-6 pb-5 h-full items-end justify-between">
+                <Skeleton className="w-24 h-5 rounded-sm bg-sidebar" />
+
+                <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-sidebar rounded-sm h-48 w-full p-1 flex flex-col">
+            <div className="flex w-full justify-between items-center px-5 py-4">
+              <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
+
+              <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
+            </div>
+
+            <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
+              <div className="flex gap-2.5 px-6 pb-5 h-full items-end justify-between">
+                <Skeleton className="w-24 h-5 rounded-sm bg-sidebar" />
+
+                <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
+              </div>
+            </div>
+          </div>
+        </Fragment>
+      )}
 
       {/* Empty placeholder slots */}
       {Array.from({ length: emptySlots }).map((_, index) => (

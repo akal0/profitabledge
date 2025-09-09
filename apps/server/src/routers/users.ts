@@ -97,4 +97,13 @@ export const usersRouter = router({
 
       return { ok: true } as const;
     }),
+
+  clearImage: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    await db
+      .update(userTable)
+      .set({ image: "", updatedAt: new Date() })
+      .where(eq(userTable.id, userId));
+    return { ok: true } as const;
+  }),
 });

@@ -140,7 +140,7 @@ const SignupPage = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen w-screen relative">
+    <div className="flex flex-col items-center justify-center h-screen w-screen relative bg-sidebar">
       <div
         className={cn(
           "z-99 opacity-25 absolute size-106 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",

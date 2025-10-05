@@ -119,6 +119,18 @@ export const accountsRouter = router({
         const totalTrades = winsCount + lossesCount;
         const winrate = totalTrades > 0 ? (winsCount / totalTrades) * 100 : 0;
 
+        // Average hold time in seconds from trade_duration_seconds
+        const holdAgg = await db
+          .select({
+            sumSec: sql<number>`COALESCE(SUM(CAST(NULLIF(${trade.tradeDurationSeconds}, '') AS NUMERIC)), 0)`,
+            countSec: sql<number>`COALESCE(COUNT(NULLIF(${trade.tradeDurationSeconds}, '')), 0)`,
+          })
+          .from(trade)
+          .where(eq(trade.accountId, accountId));
+        const sumSec = holdAgg[0]?.sumSec ?? 0;
+        const countSec = holdAgg[0]?.countSec ?? 0;
+        const averageHoldSeconds = countSec > 0 ? sumSec / countSec : 0;
+
         // Fetch recent trades and sort by parsed close timestamp on the server (JS) side
         const recentRows = await db
           .select({
@@ -187,6 +199,7 @@ export const accountsRouter = router({
           winrate,
           winStreak,
           recentOutcomes,
+          averageHoldSeconds,
         };
       } catch (e) {
         console.error("[accounts.stats] error:", e);

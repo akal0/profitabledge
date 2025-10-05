@@ -13,7 +13,20 @@ type Me = {
   username: string | null;
 };
 
-const DashboardActionButtons: React.FC<{ user: Me }> = ({ user }) => {
+type Props = {
+  user: Me | null;
+  isEditing?: boolean;
+  onToggleEdit?: () => void;
+};
+
+import Resync from "@/public/icons/resync.svg";
+import { Skeleton } from "../ui/skeleton";
+
+const DashboardActionButtons: React.FC<Props> = ({
+  user,
+  isEditing = false,
+  onToggleEdit,
+}) => {
   const handleUSDClick = () => {
     console.log("USD clicked - toggle between USD and percentage view");
     // Add your USD toggle logic here
@@ -46,45 +59,51 @@ const DashboardActionButtons: React.FC<{ user: Me }> = ({ user }) => {
     return `${day}${suffix(day)} ${month}, ${year}`;
   };
 
-  const formattedUpdatedAt = formatDate(user.updatedAt);
+  const formattedUpdatedAt = user ? formatDate(user.updatedAt) : "";
 
   return (
-    <div className="flex gap-2">
-      <div className="bg-white w-max h-max flex items-center rounded-md gap-1 p-0.5 border-[0.5px] border-black/10 dark:border-white/5 dark:bg-muted/10">
-        <Button className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-2 h-max transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-max text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+    <div className="flex gap-2 items-center">
+      <div className="bg-white w-max h-max flex items-center gap-1 p-[3px] dark:bg-muted/25">
+        <Button className=" cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-2 h-max transition-all active:scale-95 bg-[#222225] text-white w-max text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
           <div className="contents">
             <span className="px-2">USD</span>
           </div>
         </Button>
 
-        <Button className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-2 h-max transition-all active:scale-95 bg-[#222225]/25 text-[#A0A0A6]/25 w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250">
+        <Button className=" cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-2 h-max transition-all active:scale-95 bg-[#222225]/25 text-white/25 w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-white duration-250">
           <div className="contents">
             <span className="px-0">Return (%)</span>
           </div>
         </Button>
       </div>
 
-      <div className="bg-white dark:bg-muted/10 w-max flex items-center rounded-md border-[0.5px] border-black/10 dark:border-white/5 h-max p-0.5 gap-1.5">
-        <p className="shadow-primary-button cursor-default rounded-[6px] py-2 px-4 h-max transition-all active:scale-95 bg-[#222225]/25 text-[#A0A0A6]/25 w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-[#A0A0A6]/75 duration-250">
-          <span className="px-0">Last synced: {formattedUpdatedAt} </span>
-        </p>
+      <div className="flex items-center overflow-hidden border border-white/5 bg-sidebar group">
+        <Button className="rounded-none bg-sidebar hover:bg-sidebar-accent text-white/25 text-xs py-2 px-4 cursor-default">
+          Last synced:{" "}
+          {formattedUpdatedAt || (
+            <Skeleton className="w-28 h-3.5 ml-1 rounded-none bg-sidebar-accent" />
+          )}
+        </Button>
 
-        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-2 h-max transition-all active:translate-y-1 bg-amber-600 text-white w-max text-xs hover:bg-amber-600 hover:!brightness-110 hover:text-white duration-250 group">
-          <div className="flex items-center gap-1.5">
-            {/* <Resync
-              className="size-3 fill-white/75 group-hover:animate-spin"
-              style={{ animationDuration: ".75s" }}
-            /> */}
-            <span className="">Update account</span>
-          </div>
+        <div className="h-9 w-[2px] bg-white/5 mx-0" />
+
+        <Button className="rounded-none bg-sidebar hover:bg-sidebar-accent text-white text-xs py-2">
+          <Resync
+            className="size-3.5 fill-white group-hover:animate-spin"
+            style={{ animationDuration: "3s" }}
+          />
+          Update account
         </Button>
       </div>
 
-      <div className="bg-white dark:bg-muted/10 w-max flex items-center rounded-md border-[0.5px] border-black/10 dark:border-white/5 h-max p-0.5 gap-1.5">
-        <Button className="shadow-secondary-button cursor-pointer flex transform items-center justify-center rounded-[6px] py-2 h-max transition-all active:translate-y-1 bg-emerald-700 text-white w-max text-xs hover:bg-emerald-600 hover:!brightness-110 hover:text-white duration-250">
+      <div className="bg-white dark:bg-muted/0 w-max flex items-center rounded-md h-max p-[3px] gap-1.5">
+        <Button
+          onClick={onToggleEdit}
+          className="cursor-pointer flex transform items-center justify-center py-2.5 h-full transition-all active:scale-95 text-white w-max text-xs hover:!brightness-110 hover:text-white duration-250  border-[0.5px] border-white/5 bg-sidebar rounded-none hover:bg-sidebar-accent"
+        >
           <div className="flex items-center gap-1.5">
             <EditWidgets className="size-3 fill-white/75" />
-            <span className="">Edit widgets</span>
+            <span className="">{isEditing ? "Save" : "Customize widgets"}</span>
           </div>
         </Button>
       </div>

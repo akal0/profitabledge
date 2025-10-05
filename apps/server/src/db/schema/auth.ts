@@ -1,4 +1,11 @@
-import { pgTable, text, timestamp, boolean, serial } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  timestamp,
+  boolean,
+  serial,
+  jsonb,
+} from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -7,6 +14,8 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull(),
   image: text("image"),
+  widgetPreferences: jsonb("widget_preferences"),
+  chartWidgetPreferences: jsonb("chart_widget_preferences"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });

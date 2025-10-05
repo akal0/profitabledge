@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import CircleCheck from "@/public/icons/circle-check.svg";
 import { Button } from "@/components/ui/button";
+// image assets are served from the public folder via path strings
 
 const Plans = () => {
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);

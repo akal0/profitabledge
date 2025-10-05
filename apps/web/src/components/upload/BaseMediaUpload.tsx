@@ -73,7 +73,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         data-dragging={isDragging || undefined}
-        className="shadow-sidebar-button dark:bg-sidebar-accent hover:brightness-110 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-sm p-4 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px] group transition duration-250"
+        className="border border-white/5 dark:bg-sidebar-accent hover:brightness-110 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-none p-4 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px] group transition duration-250"
       >
         <input
           {...inputProps}
@@ -84,7 +84,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
 
         <div className="flex flex-col items-center justify-center text-center gap-3 ">
           <div
-            className="bg-sidebar-accent shadow-primary-button flex size-12 shrink-0 items-center justify-center rounded-sm border-[0.5px] border-white/5 group-hover:brightness-110 transition duration-150"
+            className="bg-sidebar-accent shadow-primary-button flex size-12 shrink-0 items-center justify-center rounded-none border border-white/5 group-hover:brightness-110 transition duration-150"
             aria-hidden="true"
           >
             <UploadIcon className="size-4 opacity-60" />

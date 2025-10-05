@@ -106,9 +106,9 @@ export const VariantBadge = ({
   // Text shadow handling
   const getTextShadowClass = () => {
     if (textShadow === false) return "text-shadow-none";
-    const opacity = typeof textShadow === "number" ? textShadow : 0.3;
-    if (opacity <= 0.35) return "text-shadow-sm";
-    return "text-shadow-md";
+    const opacity = typeof textShadow === "number" ? textShadow : 0.5;
+    if (opacity <= 0.35) return "text-shadow-lg";
+    return "text-shadow-lg";
   };
 
   // Icon shadow handling
@@ -131,22 +131,16 @@ export const VariantBadge = ({
           dropShadow={getIconDropShadow()}
         />
       )}
-      {children && (
-        <span className={cn("font-semibold", getTextShadowClass())}>
-          {children}
-        </span>
-      )}
+      {children && <span className={cn("font-semibold")}>{children}</span>}
     </>
   );
 
   const badgeClasses = cn(
-    "rounded-[6px]",
+    "",
     "inline-flex items-center justify-center gap-1.5",
     sizeConfig.text,
     sizeConfig.padding,
     "font-medium leading-none antialiased",
-    "border",
-    shadowClass,
     className
   );
 

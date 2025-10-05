@@ -13,17 +13,16 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import AvatarUpload from "@/components/upload/AvatarUpload";
 
 import { OverlapSeparator, Separator } from "@/components/ui/separator";
 import Link from "next/link";
 
 import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
-import Discord from "@/public/icons/social-media/discord.svg";
+
 import { cn } from "@/lib/utils";
 import { CircleAlertIcon, CircleCheckIcon, XIcon } from "lucide-react";
 import { authClient } from "@/lib/auth-client";

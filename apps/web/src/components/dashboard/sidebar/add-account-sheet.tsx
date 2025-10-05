@@ -40,17 +40,17 @@ export type NewAccount = {
 };
 
 const BROKERS: { value: string; label: string; image: string }[] = [
-  { value: "ftmo", label: "FTMO", image: "/FTMO.png" },
-  { value: "fundingpips", label: "FundingPips", image: "/FTMO.png" },
+  { value: "ftmo", label: "FTMO", image: "/brokers/FTMO.png" },
+  { value: "fundingpips", label: "FundingPips", image: "/brokers/FTMO.png" },
   {
     value: "alphacapitalgroup",
     label: "AlphaCapitalGroup",
-    image: "/FTMO.png",
+    image: "/brokers/FTMO.png",
   },
   {
     value: "seacrestfunded",
     label: "SeacrestFunded",
-    image: "/FTMO.png",
+    image: "/brokers/FTMO.png",
   },
 ];
 
@@ -125,9 +125,10 @@ export function AddAccountSheet({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-sm py-1 transition-all active:scale-95 bg-[#222225] text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
-          <div className="contents">
-            <span className="px-4 truncate">Add an account</span>
+        <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+          <div className="flex items-center gap-2">
+            <Plus className="size-3.5" />
+            <span className=" truncate">Add an account</span>
           </div>
         </Button>
       </SheetTrigger>
@@ -162,7 +163,7 @@ export function AddAccountSheet({
           {step === 1 && (
             <div className="flex flex-col gap-2 px-4">
               <Button
-                className="shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-emerald-600 text-white w-full text-xs hover:bg-emerald-600 hover:!brightness-120 hover:text-white duration-250"
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-emerald-600 text-white w-full text-xs hover:bg-emerald-600 hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => {
                   setForm({ ...form, method: "csv" });
                   setStep(2);
@@ -170,8 +171,9 @@ export function AddAccountSheet({
               >
                 Import account via CSV
               </Button>
+
               <Button
-                className="shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
                 disabled
                 onClick={() => {
                   setForm({ ...form, method: "broker" });
@@ -191,9 +193,10 @@ export function AddAccountSheet({
 
               <div className="grid gap-2">
                 <label className="text-xs font-medium">Account name</label>
+
                 <Input
                   placeholder="e.g. FTMO 100k Live"
-                  className="rounded-sm px-4 dark:bg-sidebar-accent"
+                  className="rounded-none px-4 dark:bg-sidebar-accent"
                   value={form.name}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, name: e.target.value }))
@@ -208,11 +211,11 @@ export function AddAccountSheet({
                   value={form.broker}
                   onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
                 >
-                  <SelectTrigger className="w-full rounded-sm border-none px-4">
+                  <SelectTrigger className="w-full px-4">
                     <SelectValue placeholder="Select a broker" />
                   </SelectTrigger>
 
-                  <SelectContent className="rounded-sm mt-0.5 bg-sidebar-accent border-[0.5px] border-white/5">
+                  <SelectContent className="rounded-none mt-0.5 bg-sidebar-accent border border-white/5">
                     {BROKERS.map((b) => (
                       <SelectItem key={b.value} value={b.value}>
                         <div className="flex items-center gap-2.5">
@@ -241,7 +244,7 @@ export function AddAccountSheet({
         <SheetFooter>
           {step === 1 && (
             <SheetClose asChild>
-              <Button className="border-[0.5px] border-white/5 shadow-sidebar-button cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+              <Button className="border-[0.5px] border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
                 Cancel
               </Button>
             </SheetClose>
@@ -250,16 +253,17 @@ export function AddAccountSheet({
           {step === 2 && form.method === "csv" && (
             <div className="flex w-full gap-2">
               <Button
-                className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] flex-1 text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] flex-1 text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => setStep(1)}
               >
                 Back
               </Button>
+
               <Button
                 className={cn(
                   canSubmit &&
                     "!bg-emerald-600 hover:bg-emerald-500 !text-white",
-                  "shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 bg-[#222225] transition-all active:scale-95 text-[#A0A0A6] flex-1 text-xs hover:!brightness-120 hover:text-white duration-250"
+                  "border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 bg-[#222225] transition-all active:scale-95 text-[#A0A0A6] flex-1 text-xs hover:!brightness-120 hover:text-white duration-250"
                 )}
                 disabled={!canSubmit || submitting}
                 onClick={handleSubmitCSV}

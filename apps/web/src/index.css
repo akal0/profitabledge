@@ -172,7 +172,7 @@ html.dark body {
 @layer utilities {
   .shadow-primary-button {
     box-shadow: rgb(22, 22, 24) 0px 0px 0px 1px, rgb(22, 22, 24) 0px 1px 2px,
-      rgba(232, 232, 255, 0.12) 0px 0.75px 0.5px inset;
+      rgba(232, 232, 255, 0.12) 0px 0.35px 0.75px inset;
   }
 
   .shadow-secondary-button {
@@ -189,6 +189,51 @@ html.dark body {
     box-shadow: rgb(22, 22, 24) 0px 0px 0px 1px, rgb(0, 0, 0) 0px 0px 6px,
       rgba(232, 232, 255, 0.12) -0.25px 0.75px 0.5px inset,
       rgba(232, 232, 255, 0.12) 0.25px -0.25px 0.5px inset;
+  }
+
+  /* Subtle shake animation for edit mode highlight */
+  @keyframes shake-subtle {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-1px);
+    }
+    40% {
+      transform: translateX(1.5px);
+    }
+    60% {
+      transform: translateX(-1px);
+    }
+    80% {
+      transform: translateX(1px);
+    }
+  }
+  .animate-shake-subtle {
+    animation: shake-subtle 600ms ease-in-out infinite;
+  }
+  /* Subtle rotate/tilt animation for edit mode */
+  @keyframes tilt-subtle {
+    0% {
+      transform: rotate(0deg);
+    }
+    25% {
+      transform: rotate(-0.4deg);
+    }
+    50% {
+      transform: rotate(0.8deg);
+    }
+    75% {
+      transform: rotate(-0.5deg);
+    }
+    100% {
+      transform: rotate(0deg);
+    }
+  }
+  .animate-tilt-subtle {
+    transform-origin: 50% 50%;
+    animation: tilt-subtle 1500ms ease-in-out infinite;
   }
 }
 
@@ -344,13 +389,5 @@ html.dark body {
       center / contain no-repeat;
     animation: fillRise 2000ms ease-in-out infinite alternate;
     pointer-events: none;
-  }
-  .text-teal-500 {
-    text-shadow: 0 0 6px rgba(20, 184, 166, 0.55),
-      0 0 12px rgba(20, 184, 166, 0.35);
-  }
-  .dark .text-teal-500 {
-    text-shadow: 0 0 8px rgba(45, 212, 191, 0.25),
-      0 0 16px rgba(45, 212, 191, 0.25);
   }
 }

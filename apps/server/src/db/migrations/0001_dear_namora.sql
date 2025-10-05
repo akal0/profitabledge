@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "chart_widget_preferences" jsonb;

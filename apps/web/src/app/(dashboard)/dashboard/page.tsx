@@ -11,7 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-import { TopWidgets, type WidgetType } from "@/components/dashboard/TopWidgets";
+import { Widgets, type WidgetType } from "@/components/dashboard/TopWidgets";
 
 import {
   SidebarInset,
@@ -32,15 +32,21 @@ import { useAccountStore } from "@/stores/account";
 import type { Me } from "@/types/user";
 import { Skeleton } from "@/components/ui/skeleton";
 import NavUser from "@/components/nav-user";
-import BottomWidgets from "@/components/dashboard/BottomWidgets";
+import Calendar from "@/components/dashboard/calendar/calendar";
+import {
+  ChartWidgets,
+  type ChartWidgetType,
+} from "@/components/dashboard/ChartWidgets";
 
-// User's selected top 4 widgets - replace with database/API call later
-const userEnabledWidgets: WidgetType[] = [
+// Default widgets (fallback)
+const defaultWidgets: WidgetType[] = [
   "account-balance",
   "win-rate",
   "profit-factor",
   "win-streak",
 ];
+
+const defaultChartWidgets: ChartWidgetType[] = ["daily", "performance"];
 
 export default function Page() {
   const getInfo = async () => {
@@ -50,13 +56,84 @@ export default function Page() {
   };
 
   const [me, setMe] = useState<Me | null>(null);
+  const [widgets, setWidgets] = useState<WidgetType[]>(defaultWidgets);
+  const [chartWidgets, setChartWidgets] =
+    useState<ChartWidgetType[]>(defaultChartWidgets);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     (async () => {
       const data = await getInfo();
       setMe(data);
+      const fromDb = (data as any)?.widgetPreferences?.widgets as
+        | WidgetType[]
+        | undefined;
+      if (fromDb && Array.isArray(fromDb) && fromDb.length > 0) {
+        setWidgets(fromDb.slice(0, 12));
+      }
     })();
   }, []);
+  const toggleWidget = (type: WidgetType) => {
+    setWidgets((prev) => {
+      const exists = prev.includes(type);
+      if (exists) {
+        return prev.filter((w) => w !== type);
+      }
+      if (prev.length >= 12) return prev; // cap 12
+      return [...prev, type];
+    });
+  };
+
+  const reorderWidgets = (fromIndex: number, toIndex: number) => {
+    setWidgets((prev) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= prev.length ||
+        toIndex >= prev.length
+      )
+        return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const toggleChartWidget = (type: ChartWidgetType) => {
+    setChartWidgets((prev) => {
+      const exists = prev.includes(type);
+      if (exists) {
+        return prev.filter((w) => w !== type);
+      }
+      if (prev.length >= 12) return prev;
+      return [...prev, type];
+    });
+  };
+
+  const reorderChartWidgets = (fromIndex: number, toIndex: number) => {
+    setChartWidgets((prev) => {
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= prev.length ||
+        toIndex >= prev.length
+      )
+        return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+  };
+
+  const saveWidgets = async () => {
+    try {
+      await trpcClient.users.updateWidgetPreferences.mutate({ widgets });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const accountId = useAccountStore((s) => s.selectedAccountId);
 
@@ -105,7 +182,7 @@ export default function Page() {
 
         {/* Dashboard overview */}
 
-        <div className="flex flex-col w-full h-full gap-6 px-8">
+        <div className="flex flex-col w-full h-full gap-4 px-8">
           {/* Welcome message + buttons  */}
           <div className="w-full flex shrink-0 items-center justify-between">
             {/* Welcome message */}
@@ -133,19 +210,50 @@ export default function Page() {
 
             {/*  */}
 
-            {/* <DashboardActionButtons user={me} /> */}
+            <DashboardActionButtons
+              user={me ?? null}
+              isEditing={isEditing}
+              onToggleEdit={async () => {
+                // if toggling off, persist
+                setIsEditing((prev) => {
+                  const next = !prev;
+                  if (prev && !next) {
+                    // exiting edit mode -> save
+                    void saveWidgets();
+                  }
+                  return next;
+                });
+              }}
+            />
           </div>
 
           {/* Widgets */}
 
           <div className="flex flex-1 flex-col gap-8">
-            {/* Top widgets */}
-            <TopWidgets
-              enabledWidgets={userEnabledWidgets}
+            {/* Widgets */}
+            <Widgets
+              enabledWidgets={widgets}
               accountId={accountId}
+              isEditing={isEditing}
+              onToggleWidget={toggleWidget}
+              onReorder={reorderWidgets}
+              onEnterEdit={() => setIsEditing(true)}
             />
 
-            <BottomWidgets enabledWidgets={userEnabledWidgets} />
+            {/* Calendar */}
+
+            <Calendar accountId={accountId} />
+
+            {/* Chart widgets */}
+
+            <ChartWidgets
+              accountId={accountId}
+              enabledWidgets={chartWidgets}
+              isEditing={isEditing}
+              onToggleWidget={toggleChartWidget}
+              onReorder={reorderChartWidgets}
+              onEnterEdit={() => setIsEditing(true)}
+            />
           </div>
         </div>
 

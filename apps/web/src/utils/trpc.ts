@@ -4,6 +4,19 @@ import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { AppRouter } from "../../../server/src/routers";
 import { toast } from "sonner";
 
+function getCandidateBases(): string[] {
+  if (typeof window !== "undefined") {
+    const { protocol, hostname } = window.location;
+    const env = process.env.NEXT_PUBLIC_SERVER_URL || "";
+    const localhost = `${protocol}//localhost:3000`;
+    const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+    const lan = isLanIp ? `${protocol}//${hostname}:3000` : "";
+    const ordered = isLanIp ? [lan, localhost, env] : [localhost, lan, env];
+    return Array.from(new Set(ordered.filter(Boolean)));
+  }
+  return [process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"];
+}
+
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
@@ -19,15 +32,28 @@ export const queryClient = new QueryClient({
   }),
 });
 
+const candidates = getCandidateBases();
+const primaryBase = `${candidates[0]}/trpc`;
+
 export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
-      url: `${process.env.NEXT_PUBLIC_SERVER_URL}/trpc`,
-      fetch(url, options) {
-        return fetch(url, {
-          ...options,
-          credentials: "include",
-        });
+      url: primaryBase,
+      async fetch(url, options) {
+        const bases = candidates.map((b) => `${b}/trpc`);
+        for (let i = 0; i < bases.length; i++) {
+          const target = url.toString().replace(primaryBase, bases[i]);
+          try {
+            const res = await fetch(target, {
+              ...(options || {}),
+              credentials: "include",
+            });
+            return res;
+          } catch (e) {
+            if (i === bases.length - 1) throw e;
+          }
+        }
+        return fetch(url, { ...(options || {}), credentials: "include" });
       },
     }),
   ],

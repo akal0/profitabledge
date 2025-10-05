@@ -76,13 +76,13 @@ const data: { navMain: NavItem[] } = {
 function brokerToImage(broker: string): string {
   switch (broker) {
     case "ftmo":
-      return "/FTMO.png";
+      return "/brokers/FTMO.png";
     case "myforexfunds":
-      return "/FTMO.png";
+      return "/brokers/FTMO.png";
     case "fundingpips":
       return "/FTMO.png";
     default:
-      return "/FTMO.png";
+      return "/brokers/FTMO.png";
   }
 }
 
@@ -170,7 +170,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <item.icon
                   className={cn(
-                    "stroke-[#8b8b97] dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
+                    "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
                     item.isActive &&
                       "fill-black dark:fill-transparent dark:stroke-white"
                   )}

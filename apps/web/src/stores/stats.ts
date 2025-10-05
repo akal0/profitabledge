@@ -10,6 +10,7 @@ export type AccountStats = {
   winrate: number;
   winStreak: number;
   recentOutcomes: ("W" | "L")[];
+  averageHoldSeconds?: number;
 };
 
 type StatsState = {

@@ -17,6 +17,8 @@ export const usersRouter = router({
         email: userTable.email,
         emailVerified: userTable.emailVerified,
         image: userTable.image,
+        widgetPreferences: userTable.widgetPreferences,
+        chartWidgetPreferences: userTable.chartWidgetPreferences,
         createdAt: userTable.createdAt,
         updatedAt: userTable.updatedAt,
       })
@@ -29,8 +31,105 @@ export const usersRouter = router({
       throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
     }
 
+    // Initialize default widgets on first read if missing
+    const defaultWidgets = [
+      "account-balance",
+      "win-rate",
+      "win-streak",
+      "profit-factor",
+    ] as const;
+    const widgetsFromDb = (currentUser as any)?.widgetPreferences?.widgets as
+      | string[]
+      | undefined;
+    if (!Array.isArray(widgetsFromDb) || widgetsFromDb.length === 0) {
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: { widgets: defaultWidgets },
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+      return { ...currentUser, widgetPreferences: { widgets: defaultWidgets } };
+    }
+
+    // Initialize default chart widgets if missing (same defaults for now)
+    const chartFromDb = (currentUser as any)?.chartWidgetPreferences
+      ?.widgets as string[] | undefined;
+    if (!Array.isArray(chartFromDb) || chartFromDb.length === 0) {
+      await db
+        .update(userTable)
+        .set({
+          chartWidgetPreferences: { widgets: defaultWidgets },
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+      return {
+        ...currentUser,
+        chartWidgetPreferences: { widgets: defaultWidgets },
+      };
+    }
+
     return currentUser;
   }),
+
+  updateWidgetPreferences: protectedProcedure
+    .input(
+      z.object({
+        widgets: z
+          .array(
+            z.enum([
+              "account-balance",
+              "win-rate",
+              "profit-factor",
+              "win-streak",
+              "hold-time",
+              "test",
+            ])
+          )
+          .max(12)
+          .default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: { widgets: input.widgets },
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+      return { ok: true } as const;
+    }),
+
+  updateChartWidgetPreferences: protectedProcedure
+    .input(
+      z.object({
+        widgets: z
+          .array(
+            z.enum([
+              "account-balance",
+              "win-rate",
+              "profit-factor",
+              "win-streak",
+              "hold-time",
+            ])
+          )
+          .max(12)
+          .default([]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      await db
+        .update(userTable)
+        .set({
+          chartWidgetPreferences: { widgets: input.widgets },
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+      return { ok: true } as const;
+    }),
 
   updateProfile: protectedProcedure
     .input(

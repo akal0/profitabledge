@@ -16,6 +16,7 @@ export const user = pgTable("user", {
   image: text("image"),
   widgetPreferences: jsonb("widget_preferences"),
   chartWidgetPreferences: jsonb("chart_widget_preferences"),
+  tablePreferences: jsonb("table_preferences"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });

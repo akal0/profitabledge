@@ -8,6 +8,7 @@ import { Toaster } from "./ui/sonner";
 import React, { useEffect } from "react";
 import { trpcClient } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
@@ -25,14 +26,18 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   }, [selectedAccountId, setSelectedAccountId]);
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-    >
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      <Toaster richColors />
-    </ThemeProvider>
+    <NuqsAdapter>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+        <Toaster richColors />
+      </ThemeProvider>
+    </NuqsAdapter>
   );
 }

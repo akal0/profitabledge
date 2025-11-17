@@ -30,7 +30,9 @@ type Props = {
 };
 
 function toCal(d: Date): CalendarDate {
-  return fromDate(d, getLocalTimeZone());
+  const z = getLocalTimeZone();
+  const cd = fromDate(d, z);
+  return new CalendarDate(cd.year, cd.month, cd.day);
 }
 
 function formatLabel(start: Date, end: Date) {
@@ -152,6 +154,10 @@ export default function Component({
         );
       }}
       className="*:not-first:mt-2 group hover:brightness-120 transition-all duration-150"
+      // onPointerDown={() => {
+      //   const y = window.scrollY;
+      //   requestAnimationFrame(() => window.scrollTo(0, y));
+      // }}
     >
       <div className="flex cursor-pointer">
         <Group

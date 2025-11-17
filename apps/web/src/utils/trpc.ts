@@ -11,7 +11,8 @@ function getCandidateBases(): string[] {
     const localhost = `${protocol}//localhost:3000`;
     const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
     const lan = isLanIp ? `${protocol}//${hostname}:3000` : "";
-    const ordered = isLanIp ? [lan, localhost, env] : [localhost, lan, env];
+    // Prefer explicit env first if provided, then LAN/localhost fallbacks
+    const ordered = isLanIp ? [env, lan, localhost] : [env, localhost, lan];
     return Array.from(new Set(ordered.filter(Boolean)));
   }
   return [process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"];
@@ -49,8 +50,8 @@ export const trpcClient = createTRPCClient<AppRouter>({
               credentials: "include",
             });
             return res;
-          } catch (e) {
-            if (i === bases.length - 1) throw e;
+          } catch (_) {
+            // try next base
           }
         }
         return fetch(url, { ...(options || {}), credentials: "include" });

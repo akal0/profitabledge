@@ -1,34 +1,6 @@
 "use client";
 
-import { VariantBadge } from "@/components/ui/badges/variant-badge";
-import React, {
-  type ComponentType,
-  Fragment,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-
-import { useAccountStore } from "@/stores/account";
-import { useStatsStore } from "@/stores/stats";
-
-import NumberFlow, { continuous, NumberFlowGroup } from "@number-flow/react";
-
-import InfinitySign from "@/public/icons/infinity.svg";
-import { AnimatedNumber } from "../ui/animated-number";
-import { Button } from "../ui/button";
-import { CardSeparator } from "../ui/separator";
-
-import CircleInfo from "@/public/icons/circle-info.svg";
+import React, { Fragment } from "react";
 import { Skeleton } from "../ui/skeleton";
 import {
   DndContext,
@@ -42,26 +14,31 @@ import {
   useSortable,
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
+
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "@/lib/utils";
 
 import { GripVertical } from "lucide-react";
 
-import Bank from "@/public/icons/bank.svg";
-import WinRate from "@/public/icons/winrate.svg";
-import WinStreak from "@/public/icons/winstreak.svg";
-import ProfitFactor from "@/public/icons/profit-factor.svg";
-import Test from "@/public/icons/test.svg";
 import { DailyNetBarChart } from "./charts/daily-net";
 import CompareSwitch from "./compare-switch";
 import { PerformanceWeekdayChart } from "./charts/performance-weekday";
 import { useDateRangeStore } from "@/stores/date-range";
+import { PerformingAssetsBarChart } from "./charts/performing-assets";
 
 // Define your chart widget mapping here. Add/remove keys and components freely.
 const chartCardComponents = {
-  daily: DailyNetCard,
-  performance: PerformanceWeekdayCard,
+  "daily-net": DailyNetCard,
+  "performance-weekday": PerformanceWeekdayCard,
+  "performing-assets": PerformingAssetsCard,
 } as const;
+
+// Backward-compatibility for older saved keys in DB
+const widgetKeyAliases: Record<string, keyof typeof chartCardComponents> = {
+  daily: "daily-net",
+  performance: "performance-weekday",
+  performingAssets: "performing-assets",
+};
 
 // Widget types are derived from the mapping keys so you don't have to update a separate type
 export type ChartWidgetType = keyof typeof chartCardComponents;
@@ -174,6 +151,41 @@ export function PerformanceWeekdayCard({
   );
 }
 
+export function PerformingAssetsCard({
+  accountId,
+  isEditing = false,
+  className,
+}: {
+  accountId?: string;
+  isEditing?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "bg-sidebar h-full w-full border border-white/5 p-1 flex flex-col group",
+        isEditing ? "animate-tilt-subtle hover:animate-none" : ""
+      )}
+    >
+      <div className="flex w-full gap-1.5 items-center justify-between p-3.5">
+        <h2 className="text-sm font-medium flex items-center gap-2 text-white/50">
+          <span>Performance by asset</span>
+        </h2>
+
+        {isEditing ? null : <CompareSwitch ownerId="performing-assets" />}
+      </div>
+
+      <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col h-full w-full">
+        <div className="flex flex-col p-3.5 h-full ">
+          <PerformingAssetsBarChart
+            accountId={accountId}
+            ownerId="performing-assets"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 // ========================
 // TopWidgets Container Component
 // ========================
@@ -241,7 +253,27 @@ export function ChartWidgets({
         <div className="grid auto-rows-min gap-1.5 md:grid-cols-4 2xl:grid-cols-3 ">
           {accountId ? (
             displayWidgets.map((widgetType, index) => {
-              const CardComponent = chartCardComponents[widgetType];
+              const resolvedKey =
+                (widgetKeyAliases as any)[widgetType] ?? widgetType;
+              const CardComponent = (chartCardComponents as any)[
+                resolvedKey
+              ] as React.ComponentType<any> | undefined;
+              if (!CardComponent) {
+                // Skip unknown/legacy keys to avoid runtime errors
+                if (
+                  process &&
+                  (process as any).env?.NODE_ENV !== "production"
+                ) {
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "Unknown chart widget key:",
+                    widgetType,
+                    "→ resolved:",
+                    resolvedKey
+                  );
+                }
+                return null;
+              }
               return (
                 <SortableWidget
                   key={`${widgetType}-${index}`}
@@ -280,85 +312,52 @@ export function ChartWidgets({
             })
           ) : (
             <Fragment>
-              <div className="bg-sidebar border border-white/5 h-full w-full p-1 flex flex-col">
-                <div className="flex w-full justify-between items-center p-3.5">
-                  <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div
+                  key={`empty-${index}`}
+                  className="bg-sidebar border border-white/5 h-max w-full p-1 flex flex-col"
+                >
+                  <div className="flex w-full justify-between items-center p-3.5">
+                    <Skeleton className="w-24 h-5 rounded-none bg-sidebar-accent" />
+                    <Skeleton className="w-16 h-5 rounded-none bg-sidebar-accent" />
+                  </div>
 
-                  <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
-                </div>
+                  <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
+                    <div className="flex flex-col gap-6 p-3.5 h-full items-start justify-between">
+                      <div className="flex gap-2">
+                        <Skeleton className="w-16 h-4 rounded-none bg-sidebar" />
 
-                <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
-                  <div className="flex gap-2.5 p-3.5 h-full items-end justify-between">
-                    <div className="flex flex-col gap-2">
-                      <Skeleton className="w-12 h-4 rounded-sm bg-sidebar" />
+                        <Skeleton className="w-24 h-4 rounded-none bg-sidebar" />
+                        <Skeleton className="w-32 h-4 rounded-none bg-sidebar" />
+                      </div>
 
-                      <Skeleton className="w-24 h-4 rounded-sm bg-sidebar" />
+                      <div className="flex gap-4 w-full h-max">
+                        <div className="flex flex-col gap-4 w-16 h-full pb-8">
+                          {Array.from({ length: 8 }).map((_, index) => (
+                            <Skeleton
+                              key={index}
+                              className="w-full h-4 rounded-none bg-sidebar"
+                            />
+                          ))}
+                        </div>
+
+                        <div className="flex flex-col gap-4 w-full">
+                          <Skeleton className="w-full h-full rounded-none bg-sidebar" />
+
+                          <div className="flex gap-4 w-full h-max">
+                            {Array.from({ length: 7 }).map((_, index) => (
+                              <Skeleton
+                                key={index}
+                                className="w-full h-4 rounded-none bg-sidebar"
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-
-                    <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
                   </div>
                 </div>
-              </div>
-
-              <div className="bg-sidebar border border-white/5 h-full w-full p-1 flex flex-col">
-                <div className="flex w-full justify-between items-center p-3.5">
-                  <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
-
-                  <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
-                </div>
-
-                <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
-                  <div className="flex gap-2.5 p-3.5 h-full items-end justify-between">
-                    <div className="flex flex-col gap-2">
-                      <Skeleton className="w-12 h-4 rounded-sm bg-sidebar" />
-
-                      <Skeleton className="w-24 h-4 rounded-sm bg-sidebar" />
-                    </div>
-
-                    <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-sidebar border border-white/5 h-full w-full p-1 flex flex-col">
-                <div className="flex w-full justify-between items-center p-3.5">
-                  <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
-
-                  <Skeleton className="w-16 h-5 rounded-sm bg-sidebar-accent" />
-                </div>
-
-                <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
-                  <div className="flex gap-2.5 px-6 py-3 h-full items-end justify-between">
-                    <div className="flex flex-col gap-2">
-                      <Skeleton className="w-12 h-4 rounded-sm bg-sidebar" />
-
-                      <Skeleton className="w-24 h-4 rounded-sm bg-sidebar" />
-                    </div>
-
-                    <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-sidebar rounded-sm h-full w-full p-1 flex flex-col">
-                <div className="flex w-full justify-between items-center px-6 py-4">
-                  <Skeleton className="w-24 h-5 rounded-sm bg-sidebar-accent" />
-
-                  <Skeleton className="w-20 h-5 rounded-sm bg-sidebar-accent" />
-                </div>
-
-                <div className="bg-white dark:bg-sidebar-accent dark:hover:brightness-120 transition-all duration-150 rounded-b-sm rounded-t-md flex flex-col justify-between h-full w-full">
-                  <div className="flex gap-2.5 px-6 pb-3 h-full items-end justify-between">
-                    <div className="flex flex-col gap-2">
-                      <Skeleton className="w-12 h-4 rounded-sm bg-sidebar" />
-
-                      <Skeleton className="w-24 h-4 rounded-sm bg-sidebar" />
-                    </div>
-
-                    <Skeleton className="w-48 h-24 rounded-sm bg-sidebar" />
-                  </div>
-                </div>
-              </div>
+              ))}
             </Fragment>
           )}
 

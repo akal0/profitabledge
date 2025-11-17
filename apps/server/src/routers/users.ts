@@ -19,6 +19,7 @@ export const usersRouter = router({
         image: userTable.image,
         widgetPreferences: userTable.widgetPreferences,
         chartWidgetPreferences: userTable.chartWidgetPreferences,
+        tablePreferences: userTable.tablePreferences,
         createdAt: userTable.createdAt,
         updatedAt: userTable.updatedAt,
       })
@@ -38,6 +39,13 @@ export const usersRouter = router({
       "win-streak",
       "profit-factor",
     ] as const;
+
+    const defaultChartWidgets = [
+      "daily-net",
+      "performance-weekday",
+      "performing-assets",
+    ] as const;
+
     const widgetsFromDb = (currentUser as any)?.widgetPreferences?.widgets as
       | string[]
       | undefined;
@@ -52,25 +60,67 @@ export const usersRouter = router({
       return { ...currentUser, widgetPreferences: { widgets: defaultWidgets } };
     }
 
-    // Initialize default chart widgets if missing (same defaults for now)
+    // Initialize default chart widgets if missing
     const chartFromDb = (currentUser as any)?.chartWidgetPreferences
       ?.widgets as string[] | undefined;
     if (!Array.isArray(chartFromDb) || chartFromDb.length === 0) {
       await db
         .update(userTable)
         .set({
-          chartWidgetPreferences: { widgets: defaultWidgets },
+          chartWidgetPreferences: { widgets: defaultChartWidgets },
           updatedAt: new Date(),
         })
         .where(eq(userTable.id, userId));
       return {
         ...currentUser,
-        chartWidgetPreferences: { widgets: defaultWidgets },
+        chartWidgetPreferences: { widgets: defaultChartWidgets },
       };
     }
 
     return currentUser;
   }),
+
+  getTablePreferences: protectedProcedure
+    .input(
+      z.object({
+        tableId: z.string().min(1),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({
+          tablePreferences: userTable.tablePreferences,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const pref = (rows[0]?.tablePreferences as any) || {};
+      return pref[input.tableId] || null;
+    }),
+
+  updateTablePreferences: protectedProcedure
+    .input(
+      z.object({
+        tableId: z.string().min(1),
+        preferences: z.any(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({ tablePreferences: userTable.tablePreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const curr = (rows[0]?.tablePreferences as any) || {};
+      const next = { ...curr, [input.tableId]: input.preferences };
+      await db
+        .update(userTable)
+        .set({ tablePreferences: next, updatedAt: new Date() })
+        .where(eq(userTable.id, userId));
+      return { ok: true } as const;
+    }),
 
   updateWidgetPreferences: protectedProcedure
     .input(
@@ -83,7 +133,12 @@ export const usersRouter = router({
               "profit-factor",
               "win-streak",
               "hold-time",
-              "test",
+              "average-rr",
+              "asset-profitability",
+              "trade-counts",
+              "profit-expectancy",
+              "total-losses",
+              "consistency-score",
             ])
           )
           .max(12)
@@ -107,13 +162,7 @@ export const usersRouter = router({
       z.object({
         widgets: z
           .array(
-            z.enum([
-              "account-balance",
-              "win-rate",
-              "profit-factor",
-              "win-streak",
-              "hold-time",
-            ])
+            z.enum(["daily-net", "performance-weekday", "performing-assets"]) // chart widget keys
           )
           .max(12)
           .default([]),

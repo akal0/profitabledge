@@ -30,6 +30,8 @@ export type AddAccountForm = {
   method: "csv" | "broker" | null;
   name: string;
   broker: string;
+  initialCurrency: "$" | "£" | "€" | "";
+  initialBalance: string;
   file: File | null;
 };
 
@@ -65,6 +67,8 @@ export function AddAccountSheet({
     method: null,
     name: "",
     broker: "",
+    initialCurrency: "$",
+    initialBalance: "",
     file: null,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -78,7 +82,14 @@ export function AddAccountSheet({
 
   function resetAll() {
     setStep(1);
-    setForm({ method: null, name: "", broker: "", file: null });
+    setForm({
+      method: null,
+      name: "",
+      broker: "",
+      initialCurrency: "$",
+      initialBalance: "",
+      file: null,
+    });
   }
 
   function handleOpenChange(next: boolean) {
@@ -91,6 +102,13 @@ export function AddAccountSheet({
     setSubmitting(true);
 
     try {
+      const normalizeBalance = (input: string): number | undefined => {
+        const cleaned = String(input || "").replace(/[^0-9.\-]/g, "");
+        if (!cleaned) return undefined;
+        const n = Number(cleaned);
+        return Number.isFinite(n) && n >= 0 ? n : undefined;
+      };
+
       const fileAsBase64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -105,6 +123,8 @@ export function AddAccountSheet({
       const res = await trpcClient.upload.importCsv.mutate({
         name: form.name,
         broker: form.broker,
+        initialBalance: normalizeBalance(form.initialBalance),
+        initialCurrency: (form.initialCurrency || "$") as "$" | "£" | "€",
         csvBase64: fileAsBase64,
       });
 
@@ -116,6 +136,10 @@ export function AddAccountSheet({
       });
       setSubmitting(false);
       setStep(3);
+      // Ensure the dashboard re-fetches data for the new account
+      if (typeof window !== "undefined") {
+        window.location.reload();
+      }
     } catch (e) {
       console.error(e);
       setSubmitting(false);
@@ -125,8 +149,8 @@ export function AddAccountSheet({
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
-          <div className="flex items-center gap-2">
+        <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+          <div className="flex items-center gap-2 truncate">
             <Plus className="size-3.5" />
             <span className=" truncate">Add an account</span>
           </div>
@@ -157,13 +181,13 @@ export function AddAccountSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="w-full h-[2px] bg-[#000]/75 border-b border-[#222225]" />
+        <div className="w-full h-[2px] bg-[#000]/30 border-b border-[#222225]" />
 
         <div className="px-4">
           {step === 1 && (
             <div className="flex flex-col gap-2 px-4">
               <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-emerald-600 text-white w-full text-xs hover:bg-emerald-600 hover:!brightness-120 hover:text-white duration-250"
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none transition-all active:scale-95 bg-transparent hover:bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-white duration-250"
                 onClick={() => {
                   setForm({ ...form, method: "csv" });
                   setStep(2);
@@ -173,7 +197,7 @@ export function AddAccountSheet({
               </Button>
 
               <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
                 disabled
                 onClick={() => {
                   setForm({ ...form, method: "broker" });
@@ -231,6 +255,42 @@ export function AddAccountSheet({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="grid gap-2">
+                <Label className="text-xs font-medium">
+                  Initial account balance
+                </Label>
+                <div className="flex items-center gap-0">
+                  <Select
+                    value={form.initialCurrency}
+                    onValueChange={(v: "$" | "£" | "€") =>
+                      setForm((f) => ({ ...f, initialCurrency: v }))
+                    }
+                  >
+                    <SelectTrigger className="w-20 px-4 border-r-0">
+                      <SelectValue placeholder="$" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-none mt-0.5 bg-sidebar-accent border border-white/5">
+                      {(["$", "£", "€"] as const).map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="$100,000"
+                    className="rounded-none px-4 dark:bg-sidebar-accent flex-1"
+                    value={form.initialBalance}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, initialBalance: e.target.value }))
+                    }
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -244,7 +304,7 @@ export function AddAccountSheet({
         <SheetFooter>
           {step === 1 && (
             <SheetClose asChild>
-              <Button className="border-[0.5px] border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-xs py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+              <Button className="border-[0.5px] border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
                 Cancel
               </Button>
             </SheetClose>
@@ -253,7 +313,7 @@ export function AddAccountSheet({
           {step === 2 && form.method === "csv" && (
             <div className="flex w-full gap-2">
               <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] flex-1 text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] flex-1 text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => setStep(1)}
               >
                 Back
@@ -263,7 +323,7 @@ export function AddAccountSheet({
                 className={cn(
                   canSubmit &&
                     "!bg-emerald-600 hover:bg-emerald-500 !text-white",
-                  "border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 bg-[#222225] transition-all active:scale-95 text-[#A0A0A6] flex-1 text-xs hover:!brightness-120 hover:text-white duration-250"
+                  "border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 bg-[#222225] transition-all active:scale-95 text-[#A0A0A6] flex-1 text-xs hover:!brightness-120 hover:text-white duration-250"
                 )}
                 disabled={!canSubmit || submitting}
                 onClick={handleSubmitCSV}

@@ -11,6 +11,11 @@ export type AccountStats = {
   winStreak: number;
   recentOutcomes: ("W" | "L")[];
   averageHoldSeconds?: number;
+  averageRMultiple?: number | null;
+  grossProfit?: number;
+  initialBalance?: number;
+  accountBalance?: number;
+  expectancy?: number;
 };
 
 type StatsState = {

@@ -15,6 +15,41 @@
       "when": 1759592077191,
       "tag": "0001_dear_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1759685475128,
+      "tag": "0002_silly_paladin",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1760063260855,
+      "tag": "0003_damp_starhawk",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1760183660841,
+      "tag": "0004_black_mandroid",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1760187084109,
+      "tag": "0005_lively_kinsey_walden",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1760191357677,
+      "tag": "0006_previous_goblin_queen",
+      "breakpoints": true
     }
   ]
 }

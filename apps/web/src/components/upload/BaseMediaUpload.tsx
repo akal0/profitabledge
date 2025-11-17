@@ -116,7 +116,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
           {files.map((f) => (
             <div
               key={f.id}
-              className="flex items-center justify-between gap-2 shadow-sidebar-button rounded-sm px-4 py-1 bg-sidebar-accent"
+              className="border border-white/5 flex items-center justify-between gap-2 px-4 py-1 bg-sidebar-accent"
             >
               <div className="flex items-center gap-2.5 overflow-hidden">
                 <PaperclipIcon

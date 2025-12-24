@@ -1,0 +1,1 @@
+ALTER TABLE "user" ADD COLUMN "advanced_metrics_preferences" jsonb;

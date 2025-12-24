@@ -39,6 +39,7 @@ import {
 } from "@/components/dashboard/chart-widgets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CheckCircle2 } from "lucide-react";
 
 // Default widgets (fallback)
 const defaultWidgets: WidgetType[] = [
@@ -66,6 +67,8 @@ export default function Page() {
   const [chartWidgets, setChartWidgets] =
     useState<ChartWidgetType[]>(defaultChartWidgets);
   const [isEditing, setIsEditing] = useState(false);
+  const [accountMetrics, setAccountMetrics] = useState<any>(null);
+  const accountId = useAccountStore((s) => s.selectedAccountId);
 
   useEffect(() => {
     (async () => {
@@ -75,7 +78,7 @@ export default function Page() {
         | WidgetType[]
         | undefined;
       if (fromWidgets && Array.isArray(fromWidgets) && fromWidgets.length > 0) {
-        setWidgets(fromWidgets.slice(0, 12));
+        setWidgets(fromWidgets.slice(0, 15));
       }
       const fromChartRaw = (data as any)?.chartWidgetPreferences?.widgets as
         | string[]
@@ -100,19 +103,36 @@ export default function Page() {
           );
         const unique: ChartWidgetType[] = Array.from(new Set(normalized)).slice(
           0,
-          12
+          15
         ) as any;
         setChartWidgets(unique.length > 0 ? unique : chartWidgets);
       }
     })();
   }, []);
+
+  // Fetch live metrics for the selected account
+  useEffect(() => {
+    (async () => {
+      if (!accountId) return;
+      try {
+        const metrics = await trpcClient.accounts.liveMetrics.query({
+          accountId,
+        });
+        setAccountMetrics(metrics);
+      } catch {
+        // Account doesn't have live metrics (manual account or error)
+        setAccountMetrics(null);
+      }
+    })();
+  }, [accountId]);
+
   const toggleWidget = (type: WidgetType) => {
     setWidgets((prev) => {
       const exists = prev.includes(type);
       if (exists) {
         return prev.filter((w) => w !== type);
       }
-      if (prev.length >= 12) return prev; // cap 12
+      if (prev.length >= 15) return prev; // cap 15
       return [...prev, type];
     });
   };
@@ -139,7 +159,7 @@ export default function Page() {
       if (exists) {
         return prev.filter((w) => w !== type);
       }
-      if (prev.length >= 12) return prev;
+      if (prev.length >= 15) return prev;
       return [...prev, type];
     });
   };
@@ -172,8 +192,6 @@ export default function Page() {
     }
   };
 
-  const accountId = useAccountStore((s) => s.selectedAccountId);
-
   return (
     <SidebarProvider className="min-h-[100vh] h-full relative">
       <AppSidebar />
@@ -193,8 +211,15 @@ export default function Page() {
             </div>
 
             <div>
-              <Button className="cursor-pointer flex transform items-center justify-center py-2.5 h-full transition-all active:scale-95 text-white w-max text-xs hover:!brightness-110 hover:text-white duration-250  border-[0.5px] border-white/5 bg-sidebar rounded-none hover:bg-sidebar-accent">
-                Non-verified manual account
+              <Button className="cursor-pointer flex transform items-center justify-center gap-2 py-2.5 h-full transition-all active:scale-95 text-white w-max text-xs hover:!brightness-110 hover:text-white duration-250  border-[0.5px] border-white/5 bg-sidebar rounded-none hover:bg-sidebar-accent">
+                {accountMetrics?.isVerified ? (
+                  <>
+                    <CheckCircle2 className="size-3.5 text-teal-400" />
+                    <span>EA-synced account</span>
+                  </>
+                ) : (
+                  <span>Manual account</span>
+                )}
               </Button>
             </div>
           </header>
@@ -283,6 +308,7 @@ export default function Page() {
               onToggleWidget={toggleWidget}
               onReorder={reorderWidgets}
               onEnterEdit={() => setIsEditing(true)}
+              maxWidgets={15}
             />
 
             {/* Calendar */}

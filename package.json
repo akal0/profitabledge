@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "dev": "turbo dev",
+    "dev:all": "mprocs",
     "build": "turbo build",
     "check-types": "turbo check-types",
     "dev:native": "turbo -F native dev",
@@ -18,7 +19,14 @@
     "db:migrate": "turbo -F server db:migrate"
   },
   "devDependencies": {
+    "@types/pg": "^8.16.0",
+    "pg": "^8.16.3",
+    "postgres": "^3.4.7",
     "turbo": "^2.5.6"
   },
-  "packageManager": "bun@1.2.12"
+  "packageManager": "bun@1.2.12",
+  "dependencies": {
+    "drizzle-kit": "^0.31.8",
+    "drizzle-orm": "^0.45.1"
+  }
 }

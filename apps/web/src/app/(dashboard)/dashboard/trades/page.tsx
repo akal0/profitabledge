@@ -66,7 +66,7 @@ const TradesPage = () => {
           <Separator />
         </div>
 
-        <div className="flex flex-col w-full h-max gap-4 px-8 pb-12 dark:bg-sidebar">
+        <div className="flex flex-col w-full h-max gap-4 px-8 pr-28 pb-12 dark:bg-sidebar">
           <TradeTableInfinite />
         </div>
       </SidebarInset>

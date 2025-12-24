@@ -1,16 +1,22 @@
 import { create } from "zustand";
-import type { StateCreator } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
 
 type AccountState = {
   selectedAccountId?: string;
   setSelectedAccountId: (id?: string) => void;
 };
 
-const createAccountSlice: StateCreator<AccountState, [], [], AccountState> = (
-  set
-) => ({
-  selectedAccountId: undefined,
-  setSelectedAccountId: (id?: string) => set({ selectedAccountId: id }),
-});
-
-export const useAccountStore = create<AccountState>()(createAccountSlice);
+export const useAccountStore = create<AccountState>()(
+  persist(
+    (set) => ({
+      selectedAccountId: undefined,
+      setSelectedAccountId: (id?: string) => {
+        set({ selectedAccountId: id });
+      },
+    }),
+    {
+      name: "profitabledge-account-storage",
+      storage: createJSONStorage(() => localStorage),
+    }
+  )
+);

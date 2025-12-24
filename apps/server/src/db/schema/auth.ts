@@ -17,6 +17,7 @@ export const user = pgTable("user", {
   widgetPreferences: jsonb("widget_preferences"),
   chartWidgetPreferences: jsonb("chart_widget_preferences"),
   tablePreferences: jsonb("table_preferences"),
+  advancedMetricsPreferences: jsonb("advanced_metrics_preferences"), // { disableSampleGating: boolean, alphaWeightedMpe: number }
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });
@@ -59,4 +60,20 @@ export const verification = pgTable("verification", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
+});
+
+// API keys for MT4/MT5 Expert Advisor integration
+export const apiKey = pgTable("api_key", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: text("name").notNull(), // User-friendly name: "My FTMO Account EA"
+  keyHash: text("key_hash").notNull().unique(), // SHA-256 hash of the actual key
+  keyPrefix: text("key_prefix").notNull(), // First 8 chars for display: "pe_live_abc123..."
+  isActive: boolean("is_active").notNull().default(true),
+  lastUsedAt: timestamp("last_used_at"),
+  expiresAt: timestamp("expires_at"), // Optional: keys can expire
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

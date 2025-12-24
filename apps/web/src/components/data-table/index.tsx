@@ -15,16 +15,16 @@ export function DataTable<TData>({
   onRowClick?: (row: any) => void;
 }) {
   return (
-    <div className="w-full border border-white/5">
+    <div className="w-full border border-white/5 overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="w-max min-w-full text-xs">
           <thead className="border-b border-white/5">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="bg-sidebar">
                 {hg.headers.map((h) => (
                   <th
                     key={h.id}
-                    className="text-left font-medium px-3 py-4 text-white/70 pl-8 bg-sidebar-accent"
+                    className="text-left font-medium px-6 py-4 text-white/70 bg-sidebar-accent whitespace-nowrap"
                   >
                     {h.isPlaceholder
                       ? null
@@ -52,7 +52,7 @@ export function DataTable<TData>({
                 }}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-6 pl-8 select-none">
+                  <td key={cell.id} className="px-6 py-6 select-none whitespace-nowrap">
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>
                 ))}

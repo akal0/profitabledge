@@ -4,6 +4,7 @@ import { VariantBadge } from "@/components/ui/badges/variant-badge";
 import React, {
   type ComponentType,
   Fragment,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -20,8 +21,6 @@ import {
 
 import { useAccountStore } from "@/stores/account";
 import { useStatsStore } from "@/stores/stats";
-
-import NumberFlow, { continuous, NumberFlowGroup } from "@number-flow/react";
 
 import InfinitySign from "@/public/icons/infinity.svg";
 import { AnimatedNumber } from "../ui/animated-number";
@@ -50,6 +49,8 @@ import {
   ChevronRight,
   GripVertical,
   TrendingDown,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
 import {
   Tooltip,
@@ -93,6 +94,7 @@ const chartConfig = {
 // Widget types - used for identifying which card to render
 export type WidgetType =
   | "account-balance"
+  | "account-equity"
   | "win-streak"
   | "profit-factor"
   | "win-rate"
@@ -102,7 +104,8 @@ export type WidgetType =
   | "trade-counts"
   | "profit-expectancy"
   | "total-losses"
-  | "consistency-score";
+  | "consistency-score"
+  | "open-trades";
 
 function useAccountStats(accountId?: string) {
   const fetchStats = useStatsStore((s) => s.fetchStats);
@@ -124,18 +127,20 @@ export function AccountBalanceCard({
   className?: string;
 }) {
   const { data } = useAccountStats(accountId);
-  const [initialBalance, setInitialBalance] = useState<number | null>(null);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        setInitialBalance(data?.initialBalance ?? null);
-      } catch {}
-    })();
-  }, [data]);
+  // Determine balance source:
+  // 1. If EA-synced (isVerified) and data is fresh, use liveBalance from EA
+  // 2. Otherwise, calculate from historical data (initialBalance + totalProfit)
+  const isVerified = data?.isVerified ?? false;
+  const isLiveDataFresh = data?.isLiveDataFresh ?? false;
+  const liveBalance = data?.liveBalance ?? null;
+  const initialBalance = data?.initialBalance ?? 0;
+  const totalProfit = data?.totalProfit ?? 0;
 
   const balance =
-    data && initialBalance ? initialBalance + Number(data?.totalProfit) : 0;
+    isVerified && isLiveDataFresh && liveBalance !== null
+      ? liveBalance
+      : initialBalance + totalProfit;
 
   return (
     <div
@@ -170,8 +175,152 @@ export function AccountBalanceCard({
           </h1>
 
           <p className="text-xs font-medium text-secondary">
-            Sum of your all-time profit and initial account balance
+            {isVerified && isLiveDataFresh
+              ? "Live balance from EA"
+              : "Sum of your all-time profit and initial account balance"}
           </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function AccountEquityCard({
+  accountId,
+  isEditing = false,
+  className,
+}: {
+  accountId?: string;
+  isEditing?: boolean;
+  className?: string;
+}) {
+  const [liveMetrics, setLiveMetrics] = useState<any>(null);
+  const [loadingLive, setLoadingLive] = useState(false);
+  const [isLive, setIsLive] = useState(false);
+
+  // Fetch live metrics function
+  const fetchLiveMetrics = useCallback(async () => {
+    if (!accountId) return;
+
+    try {
+      const metrics = await trpcClient.accounts.liveMetrics.query({
+        accountId,
+      });
+      setLiveMetrics(metrics);
+      setIsLive(true);
+
+      // Flash the live indicator briefly
+      setTimeout(() => setIsLive(false), 300);
+    } catch {
+      // Live metrics not available (manual account or error)
+    }
+  }, [accountId]);
+
+  // Initial fetch
+  useEffect(() => {
+    if (!accountId) return;
+    setLoadingLive(true);
+    fetchLiveMetrics().finally(() => setLoadingLive(false));
+  }, [accountId, fetchLiveMetrics]);
+
+  // Real-time polling: every 2 seconds when tab is visible
+  useEffect(() => {
+    if (!accountId) return;
+
+    const interval = setInterval(() => {
+      // Only poll when document is visible to save resources
+      if (!document.hidden) {
+        fetchLiveMetrics();
+      }
+    }, 2000); // Poll every 2 seconds
+
+    // Also resume polling when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchLiveMetrics();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [accountId, fetchLiveMetrics]);
+
+  const isVerified = liveMetrics?.isVerified ?? false;
+  const liveEquity = liveMetrics?.liveEquity ?? null;
+  const totalFloatingPL = liveMetrics?.totalFloatingPL ?? 0;
+  const openTradesCount = liveMetrics?.openTradesCount ?? 0;
+
+  // Only show this widget for EA-synced accounts (unless in edit mode for preview)
+  if (!isVerified && !loadingLive && !isEditing) {
+    return null;
+  }
+
+  return (
+    <div
+      className={`bg-sidebar h-60 w-full border border-white/5 p-1 flex flex-col group ${
+        isEditing ? "animate-tilt-subtle hover:animate-none" : ""
+      } ${className ?? ""}`}
+    >
+      <div className="flex w-full gap-1.5 items-center p-3.5 justify-between">
+        <div className="flex gap-1.5 items-center">
+          <Bank className="size-4 stroke-white/50 group-hover:stroke-white fill-sidebar transition-all duration-250" />
+          <h2 className="text-xs font-medium flex items-center gap-2 text-white/50 group-hover:text-white transition-all duration-250">
+            <span>Account equity</span>
+          </h2>
+        </div>
+
+        {/* Live indicator */}
+        <div className="flex items-center gap-1.5">
+          <div
+            className={cn(
+              "size-1.5 rounded-full transition-all duration-300",
+              isLive ? "bg-teal-400 shadow-[0_0_8px_2px_rgba(45,212,191,0.4)]" : "bg-teal-400/40"
+            )}
+          />
+          <span className="text-[10px] text-white/30">LIVE</span>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex flex-col justify-between h-full w-full">
+        <div className="flex flex-col gap-1 p-3.5 h-full justify-end">
+          <h1 className="font-medium text-2xl text-teal-400">
+            $
+            <AnimatedNumber
+              value={liveEquity ?? 0}
+              format={(n) =>
+                n.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              }
+              springOptions={{
+                bounce: 0,
+                duration: 2000,
+              }}
+            />
+          </h1>
+
+          <div className="flex flex-col gap-0.5">
+            {/* <p className="text-xs font-medium text-secondary">
+              Live equity from EA
+            </p> */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-white/40">
+                {openTradesCount} open trade{openTradesCount !== 1 ? "s" : ""}
+              </span>
+              <span
+                className={cn(
+                  "font-semibold",
+                  totalFloatingPL >= 0 ? "text-teal-400" : "text-rose-400"
+                )}
+              >
+                {totalFloatingPL >= 0 ? "+" : ""}${totalFloatingPL.toFixed(2)}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -192,6 +341,7 @@ export function WinRateCard({
   const losses = Number(data?.losses ?? 0);
   const breakeven = 0;
   const total = wins + losses;
+  const hasNoTrades = total === 0;
 
   const displayWinrate = (wins / total) * 100;
 
@@ -231,69 +381,78 @@ export function WinRateCard({
       </div>
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex flex-col justify-between h-full w-full">
-        <div className="flex w-full justify-between h-full">
-          <h1 className="text-xs text-secondary font-medium flex flex-col h-full justify-end p-3.5">
-            <span className="font-medium text-2xl text-teal-400">
-              <AnimatedNumber
-                value={winrate}
-                format={(n) =>
-                  n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                }
-                springOptions={{
-                  bounce: 0,
-                  duration: 2000,
-                }}
-              />
-              %
-            </span>{" "}
-            All-time win rate
-          </h1>
+        {hasNoTrades ? (
+          <div className="flex flex-col gap-1 p-3.5 h-full justify-end">
+            <h1 className="text-2xl font-medium text-white/40">—</h1>
+            <p className="text-xs font-medium text-secondary">
+              No closed trades yet
+            </p>
+          </div>
+        ) : (
+          <div className="flex w-full justify-between h-full">
+            <h1 className="text-xs text-secondary font-medium flex flex-col h-full justify-end p-3.5">
+              <span className="font-medium text-2xl text-teal-400">
+                <AnimatedNumber
+                  value={winrate}
+                  format={(n) =>
+                    n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                  }
+                  springOptions={{
+                    bounce: 0,
+                    duration: 2000,
+                  }}
+                />
+                %
+              </span>{" "}
+              All-time win rate
+            </h1>
 
-          {mounted ? (
-            <ChartContainer
-              config={chartConfig}
-              className="w-[150px] h-[100%] place-self-end"
-            >
-              <BarChart
-                data={chartData}
-                margin={{ left: 24, right: 24, top: 24, bottom: -8 }}
-                barGap={8}
+            {mounted ? (
+              <ChartContainer
+                config={chartConfig}
+                className="w-[150px] h-[100%] place-self-end"
               >
-                <CartesianGrid vertical={false} strokeDasharray="8 8" />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={false}
-                />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
-                />
-                <Bar
-                  dataKey="wins"
-                  fill="var(--color-wins)"
-                  radius={[0, 0, 0, 0]}
-                  barSize={12}
-                />
-                <Bar
-                  dataKey="losses"
-                  fill="var(--color-losses)"
-                  radius={[0, 0, 0, 0]}
-                  barSize={12}
-                />
-                <Bar
-                  dataKey="breakeven"
-                  fill="var(--color-breakeven)"
-                  radius={[0, 0, 0, 0]}
-                  barSize={12}
-                />
-              </BarChart>
-            </ChartContainer>
-          ) : (
-            <div className="w-[120px] h-[120px]" />
-          )}
-        </div>
+                <BarChart
+                  data={chartData}
+                  margin={{ left: 24, right: 24, top: 24, bottom: -8 }}
+                  barGap={8}
+                >
+                  <CartesianGrid vertical={false} strokeDasharray="8 8" />
+                  <XAxis
+                    dataKey="label"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={false}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Bar
+                    dataKey="wins"
+                    fill="var(--color-wins)"
+                    radius={[0, 0, 0, 0]}
+                    barSize={12}
+                  />
+                  <Bar
+                    dataKey="losses"
+                    fill="var(--color-losses)"
+                    radius={[0, 0, 0, 0]}
+                    barSize={12}
+                  />
+                  <Bar
+                    dataKey="breakeven"
+                    fill="var(--color-breakeven)"
+                    radius={[0, 0, 0, 0]}
+                    barSize={12}
+                  />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <div className="w-[120px] h-[120px]" />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -317,11 +476,10 @@ export function WinStreakCard({
       ? { from: "#FF6F00", to: "#E65100" }
       : { from: "#1AC889", to: "#16B377" };
 
-  // Use most recent 5 outcomes from server (W/L), pad to 5 for consistent UI
-  const outcomes: ("W" | "L")[] = [...(data?.recentOutcomes ?? [])].slice(0, 5);
-  if (outcomes.length < 5) {
-    outcomes.push(...Array(5 - outcomes.length).fill("L"));
-  }
+  // Use most recent 5 outcomes from server (W/L)
+  const rawOutcomes = data?.recentOutcomes ?? [];
+  const hasNoTrades = rawOutcomes.length === 0;
+  const outcomes: ("W" | "L")[] = [...rawOutcomes].slice(0, 5);
 
   return (
     <div
@@ -338,33 +496,44 @@ export function WinStreakCard({
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex flex-col justify-end h-full w-full">
         <div className="flex flex-col gap-1.5 p-3.5 h-full justify-end">
-          <h1 className="text-2xl font-medium text-teal-400">
-            <AnimatedNumber
-              value={streak}
-              format={(n) =>
-                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-              }
-              springOptions={{
-                bounce: 0,
-                duration: 2000,
-              }}
-            />{" "}
-            {streak === 1 ? "win" : "wins"}
-          </h1>
+          {hasNoTrades ? (
+            <div className="flex flex-col gap-1">
+              <h1 className="text-2xl font-medium text-white/40">—</h1>
+              <p className="text-xs font-medium text-secondary">
+                No closed trades yet
+              </p>
+            </div>
+          ) : (
+            <>
+              <h1 className="text-2xl font-medium text-teal-400">
+                <AnimatedNumber
+                  value={streak}
+                  format={(n) =>
+                    n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                  }
+                  springOptions={{
+                    bounce: 0,
+                    duration: 2000,
+                  }}
+                />{" "}
+                {streak === 1 ? "win" : "wins"}
+              </h1>
 
-          <div className="flex items-center w-max gap-1.5">
-            {outcomes.map((res, i) => (
-              <div
-                key={res + i}
-                className={cn(
-                  "px-2 py-1",
-                  res === "W" ? "bg-teal-500" : "bg-rose-500"
-                )}
-              >
-                <h1 className="text-xs text-white font-medium"> {res} </h1>
+              <div className="flex items-center w-max gap-1.5">
+                {outcomes.map((res, i) => (
+                  <div
+                    key={res + i}
+                    className={cn(
+                      "px-2 py-1",
+                      res === "W" ? "bg-teal-500" : "bg-rose-500"
+                    )}
+                  >
+                    <h1 className="text-xs text-white font-medium"> {res} </h1>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -381,6 +550,9 @@ export function ProfitFactorCard({
   className?: string;
 }) {
   const { data } = useAccountStats(accountId);
+  const wins = Number(data?.wins ?? 0);
+  const losses = Number(data?.losses ?? 0);
+  const hasNoTrades = wins + losses === 0;
   let pf = data?.profitFactor ?? null;
   const pfRounded2 = pf !== null ? Number(pf.toFixed(2)) : null;
 
@@ -399,37 +571,48 @@ export function ProfitFactorCard({
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex flex-col justify-between h-full w-full">
         <div className="flex flex-col p-3.5 h-full justify-end">
-          <h1 className="text-2xl text-teal-400 font-medium">
-            {pfRounded2 !== null ? (
-              <AnimatedNumber
-                value={pfRounded2}
-                format={(n) =>
-                  n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                }
-                springOptions={{
-                  bounce: 0,
-                  duration: 2000,
-                }}
-              />
-            ) : (
-              <AnimatedNumber
-                value={999}
-                format={(n) =>
-                  n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                }
-                springOptions={{
-                  bounce: 0,
-                  duration: 2000,
-                }}
-              />
-            )}
-          </h1>
+          {hasNoTrades ? (
+            <>
+              <h1 className="text-2xl font-medium text-white/40">—</h1>
+              <p className="text-xs font-medium text-secondary">
+                No closed trades yet
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl text-teal-400 font-medium">
+                {pfRounded2 !== null ? (
+                  <AnimatedNumber
+                    value={pfRounded2}
+                    format={(n) =>
+                      n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                    }
+                    springOptions={{
+                      bounce: 0,
+                      duration: 2000,
+                    }}
+                  />
+                ) : (
+                  <AnimatedNumber
+                    value={999}
+                    format={(n) =>
+                      n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                    }
+                    springOptions={{
+                      bounce: 0,
+                      duration: 2000,
+                    }}
+                  />
+                )}
+              </h1>
 
-          <div className="flex gap-2 items-center">
-            <p className="text-xs font-medium text-secondary">
-              All time profit factor
-            </p>
-          </div>
+              <div className="flex gap-2 items-center">
+                <p className="text-xs font-medium text-secondary">
+                  All time profit factor
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -449,6 +632,7 @@ export function ProfitExpectancyCard({
   const wins = Number(data?.wins ?? 0);
   const losses = Number(data?.losses ?? 0);
   const total = wins + losses;
+  const hasNoTrades = total === 0;
   const grossProfit = Number(data?.grossProfit ?? 0);
   const grossLoss = Number((data as any)?.grossLoss ?? 0);
 
@@ -474,33 +658,44 @@ export function ProfitExpectancyCard({
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
         <div className="flex flex-col p-3.5 h-full justify-end">
-          <h1
-            className={cn(
-              "text-2xl font-medium",
-              isNegative ? "text-rose-400" : "text-teal-400"
-            )}
-          >
-            <AnimatedNumber
-              value={expectancy}
-              format={(n) => {
-                const sign = n < 0 ? "-$" : "$";
-                return (
-                  sign +
-                  Math.abs(n).toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })
-                );
-              }}
-              springOptions={{ bounce: 0, duration: 1200 }}
-            />
-          </h1>
+          {hasNoTrades ? (
+            <>
+              <h1 className="text-2xl font-medium text-white/40">—</h1>
+              <p className="text-xs font-medium text-secondary">
+                No closed trades yet
+              </p>
+            </>
+          ) : (
+            <>
+              <h1
+                className={cn(
+                  "text-2xl font-medium",
+                  isNegative ? "text-rose-400" : "text-teal-400"
+                )}
+              >
+                <AnimatedNumber
+                  value={expectancy}
+                  format={(n) => {
+                    const sign = n < 0 ? "-$" : "$";
+                    return (
+                      sign +
+                      Math.abs(n).toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })
+                    );
+                  }}
+                  springOptions={{ bounce: 0, duration: 1200 }}
+                />
+              </h1>
 
-          <div className="flex gap-2 items-center">
-            <p className="text-xs font-medium text-secondary">
-              The profit expectancy is the - ( Win % × Avg Win ) – ( Loss % ×
-              Avg Loss )
-            </p>
-          </div>
+              <div className="flex gap-2 items-center">
+                <p className="text-xs font-medium text-secondary">
+                  The profit expectancy is the - ( Win % × Avg Win ) – ( Loss % ×
+                  Avg Loss )
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -811,6 +1006,7 @@ export function ConsistencyScoreCard({
   const totalDays = byDay.length;
   const profitableDays = byDay.filter((d) => d.totalProfit > 0).length;
   const pct = totalDays > 0 ? (profitableDays / totalDays) * 100 : 0;
+  const hasNoTrades = totalDays === 0;
 
   return (
     <div
@@ -830,7 +1026,7 @@ export function ConsistencyScoreCard({
             <span>Consistency score</span>
           </h2>
         </div>
-        {!isEditing && (
+        {!isEditing && !hasNoTrades && (
           <div
             className="flex items-center gap-2"
             onPointerDown={(e) => e.stopPropagation()}
@@ -855,19 +1051,30 @@ export function ConsistencyScoreCard({
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
         <div className="flex flex-col p-3.5 h-full justify-end">
-          <h1 className="text-2xl font-medium text-white">
-            <AnimatedNumber
-              value={pct}
-              format={(n) =>
-                n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-              }
-              springOptions={{ bounce: 0, duration: 1200 }}
-            />
-            %
-          </h1>
-          <div className="text-xs text-secondary">
-            {profitableDays} profitable days out of {totalDays}
-          </div>
+          {hasNoTrades ? (
+            <>
+              <h1 className="text-2xl font-medium text-white/40">—</h1>
+              <p className="text-xs font-medium text-secondary">
+                No closed trades yet
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-medium text-white">
+                <AnimatedNumber
+                  value={pct}
+                  format={(n) =>
+                    n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                  }
+                  springOptions={{ bounce: 0, duration: 1200 }}
+                />
+                %
+              </h1>
+              <div className="text-xs text-secondary">
+                {profitableDays} profitable days out of {totalDays}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -884,6 +1091,9 @@ export function HoldTimeCard({
   className?: string;
 }) {
   const { data } = useAccountStats(accountId);
+  const wins = Number(data?.wins ?? 0);
+  const losses = Number(data?.losses ?? 0);
+  const hasNoTrades = wins + losses === 0;
   const avgSec = Number(data?.averageHoldSeconds ?? 0);
   const formatHMS = (s: number) => {
     const total = Math.max(0, Math.floor(Number(s) || 0));
@@ -912,19 +1122,30 @@ export function HoldTimeCard({
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col justify-between h-full w-full">
         <div className="flex flex-col p-3.5 h-full justify-end">
-          <h1 className="text-2xl text-teal-400 font-medium">
-            <AnimatedNumber
-              value={avgSec}
-              format={formatHMS}
-              springOptions={{ bounce: 0, duration: 1200 }}
-            />
-          </h1>
+          {hasNoTrades ? (
+            <>
+              <h1 className="text-2xl font-medium text-white/40">—</h1>
+              <p className="text-xs font-medium text-secondary">
+                No closed trades yet
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl text-teal-400 font-medium">
+                <AnimatedNumber
+                  value={avgSec}
+                  format={formatHMS}
+                  springOptions={{ bounce: 0, duration: 1200 }}
+                />
+              </h1>
 
-          <div className="flex gap-2 items-center">
-            <p className="text-xs font-medium text-secondary">
-              This is your average hold time across all trades
-            </p>
-          </div>
+              <div className="flex gap-2 items-center">
+                <p className="text-xs font-medium text-secondary">
+                  This is your average hold time across all trades
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -943,6 +1164,8 @@ export function AverageRRCard({
   const { data } = useAccountStats(accountId);
   const [riskInput, setRiskInput] = useState<string>("1");
   const wins = Number(data?.wins ?? 0);
+  const losses = Number(data?.losses ?? 0);
+  const hasNoTrades = wins + losses === 0;
   const grossProfit = Number(data?.grossProfit ?? 0);
   const [initialBalance, setInitialBalance] = useState<number | null>(null);
 
@@ -984,7 +1207,7 @@ export function AverageRRCard({
           </h2>
         </div>
 
-        {!isEditing && (
+        {!isEditing && !hasNoTrades && (
           <div className="flex items-center gap-2 w-full justify-end">
             <span className="text-xs text-white/50">Risk</span>
 
@@ -1013,21 +1236,32 @@ export function AverageRRCard({
 
       <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex flex-col justify-between h-full w-full">
         <div className="flex flex-col p-3.5 h-full justify-end">
-          <h1 className="text-2xl text-teal-400 font-medium">
-            <AnimatedNumber
-              value={display}
-              format={(n) =>
-                n.toLocaleString(undefined, { maximumFractionDigits: 2 })
-              }
-              springOptions={{ bounce: 0, duration: 1200 }}
-            />
-            R
-          </h1>
-          <div className="flex gap-2 items-center">
-            <p className="text-xs font-medium text-secondary">
-              This is your average win ÷ (risk % of initial balance)
-            </p>
-          </div>
+          {hasNoTrades ? (
+            <>
+              <h1 className="text-2xl font-medium text-white/40">—</h1>
+              <p className="text-xs font-medium text-secondary">
+                No closed trades yet
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl text-teal-400 font-medium">
+                <AnimatedNumber
+                  value={display}
+                  format={(n) =>
+                    n.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                  }
+                  springOptions={{ bounce: 0, duration: 1200 }}
+                />
+                R
+              </h1>
+              <div className="flex gap-2 items-center">
+                <p className="text-xs font-medium text-secondary">
+                  This is your average win ÷ (risk % of initial balance)
+                </p>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -1339,6 +1573,7 @@ export function TradeCountsCard({
 // ========================
 const cardComponents: Record<WidgetType, ComponentType<any>> = {
   "account-balance": AccountBalanceCard,
+  "account-equity": AccountEquityCard,
   "win-rate": WinRateCard,
   "win-streak": WinStreakCard,
   "profit-factor": ProfitFactorCard,
@@ -1349,6 +1584,7 @@ const cardComponents: Record<WidgetType, ComponentType<any>> = {
   "profit-expectancy": ProfitExpectancyCard,
   "total-losses": TotalLossesCard,
   "consistency-score": ConsistencyScoreCard,
+  "open-trades": OpenTradesWidget,
 } as const;
 
 // ========================
@@ -1361,6 +1597,7 @@ export interface TopWidgetsProps {
   onToggleWidget?: (type: WidgetType) => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
   onEnterEdit?: () => void;
+  maxWidgets?: number;
 }
 
 export function Widgets({
@@ -1370,9 +1607,10 @@ export function Widgets({
   onToggleWidget,
   onReorder,
   onEnterEdit,
+  maxWidgets = 15,
 }: TopWidgetsProps) {
-  // Ensure only 4 widgets maximum
-  const displayWidgets = enabledWidgets.slice(0, 12);
+  // Ensure only max widgets
+  const displayWidgets = enabledWidgets.slice(0, maxWidgets);
 
   // Fill empty slots with placeholder divs
   const emptySlots = 0 - displayWidgets.length;
@@ -1380,6 +1618,7 @@ export function Widgets({
   // All possible widgets for discovery in edit mode
   const allWidgets: WidgetType[] = [
     "account-balance",
+    "account-equity",
     "win-rate",
     "profit-factor",
     "win-streak",
@@ -1390,6 +1629,7 @@ export function Widgets({
     "profit-expectancy",
     "total-losses",
     "consistency-score",
+    "open-trades",
   ];
 
   const availableWidgets = allWidgets.filter(
@@ -1398,7 +1638,11 @@ export function Widgets({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 6 },
+      activationConstraint: {
+        distance: 8,
+        delay: 100,
+        tolerance: 5,
+      },
     })
   );
 
@@ -1437,13 +1681,23 @@ export function Widgets({
                 >
                   <div
                     className="h-60 w-full relative cursor-pointer"
-                    onPointerDown={handlePointerDown}
-                    onPointerUp={handlePointerUp}
-                    onClick={() => isEditing && onToggleWidget?.(widgetType)}
+                    onPointerDown={(e) => {
+                      handlePointerDown();
+                    }}
+                    onPointerUp={(e) => {
+                      handlePointerUp();
+                    }}
+                    onPointerCancel={handlePointerUp}
+                    onClick={(e) => {
+                      if (isEditing) {
+                        e.stopPropagation();
+                        onToggleWidget?.(widgetType);
+                      }
+                    }}
                   >
                     {/* checkmark when selected in edit mode */}
                     {isEditing ? (
-                      <div className="flex items-center absolute right-5 top-5 z-10 gap-2">
+                      <div className="flex items-center absolute right-5 top-5 z-10 gap-2 pointer-events-none">
                         <div className="size-4 border border-white/5 flex items-center justify-center">
                           <svg
                             viewBox="0 0 24 24"
@@ -1498,12 +1752,26 @@ export function Widgets({
           {isEditing &&
             availableWidgets.map((widgetType, index) => {
               const CardComponent = cardComponents[widgetType];
+              const isAtMaxLimit = displayWidgets.length >= maxWidgets;
               return (
                 <div
                   key={`available-${widgetType}-${index}`}
-                  className="opacity-50 hover:opacity-100 transition-all duration-150 hover:animate-none cursor-pointer"
-                  onClick={() => onToggleWidget?.(widgetType)}
+                  className={cn(
+                    "transition-all duration-150 hover:animate-none relative",
+                    isAtMaxLimit
+                      ? "opacity-25 cursor-not-allowed"
+                      : "opacity-50 hover:opacity-100 cursor-pointer"
+                  )}
+                  onClick={() => !isAtMaxLimit && onToggleWidget?.(widgetType)}
                 >
+                  {/* Max limit indicator overlay */}
+                  {isAtMaxLimit && (
+                    <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/40 backdrop-blur-[2px]">
+                      <div className="text-xs text-white/80 font-medium px-3 py-1.5 bg-sidebar/90 border border-white/10">
+                        Max {maxWidgets} widgets reached
+                      </div>
+                    </div>
+                  )}
                   {/* checkmark hidden since not selected yet */}
                   <CardComponent accountId={accountId} isEditing={true} />
                 </div>
@@ -1567,6 +1835,233 @@ function SortableWidget({
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
       {children}
+    </div>
+  );
+}
+
+export function OpenTradesWidget({
+  accountId,
+  isEditing = false,
+  className,
+}: {
+  accountId?: string;
+  isEditing?: boolean;
+  className?: string;
+}) {
+  type OpenTrade = {
+    id: string;
+    ticket: string;
+    symbol: string;
+    tradeType: "long" | "short";
+    volume: number;
+    openPrice: number;
+    openTime: string;
+    currentPrice: number | null;
+    profit: number;
+    swap: number;
+    commission: number;
+  };
+
+  const [trades, setTrades] = useState<OpenTrade[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(0);
+  const [isLive, setIsLive] = useState(false);
+  const pageSize = 4;
+
+  // Fetch open trades from live metrics
+  const fetchOpenTrades = useCallback(async () => {
+    if (!accountId) return;
+
+    try {
+      const metrics = await trpcClient.accounts.liveMetrics.query({
+        accountId,
+      });
+
+      if (metrics?.openTrades) {
+        setTrades(metrics.openTrades);
+        setIsLive(true);
+        setTimeout(() => setIsLive(false), 300);
+      }
+    } catch {
+      // Error fetching open trades
+    }
+  }, [accountId]);
+
+  // Initial fetch
+  useEffect(() => {
+    if (!accountId) return;
+    setLoading(true);
+    fetchOpenTrades().finally(() => setLoading(false));
+  }, [accountId, fetchOpenTrades]);
+
+  // Real-time polling: every 2 seconds when tab is visible
+  useEffect(() => {
+    if (!accountId) return;
+
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchOpenTrades();
+      }
+    }, 2000);
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchOpenTrades();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [accountId, fetchOpenTrades]);
+
+  // Reset page when trades change
+  useEffect(() => setPage(0), [trades]);
+
+  const pageCount = Math.max(1, Math.ceil(trades.length / pageSize));
+  const pageItems = useMemo(
+    () => trades.slice(page * pageSize, page * pageSize + pageSize),
+    [trades, page]
+  );
+
+  const formatPrice = (price: number) => price.toFixed(5);
+  const formatProfit = (profit: number) => {
+    const sign = profit >= 0 ? "+" : "";
+    return `${sign}$${profit.toFixed(2)}`;
+  };
+
+  return (
+    <div
+      className={`bg-sidebar border border-white/5 h-60 w-full p-1 flex flex-col group ${
+        isEditing ? "animate-tilt-subtle hover:animate-none" : ""
+      } ${className ?? ""}`}
+    >
+      <div
+        className={cn(
+          "flex w-full items-center p-3.5 gap-2 justify-between",
+          !isEditing ? "py-2.5" : ""
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <Activity className="size-3.5 text-white/40" />
+          <h2 className="text-xs font-medium flex items-center gap-2 text-white/50 group-hover:text-white transition-all duration-250">
+            <span>Open trades</span>
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Live indicator */}
+          {!isEditing && (
+            <div className="flex items-center gap-1.5">
+              <div
+                className={cn(
+                  "size-1.5 rounded-full transition-all duration-300",
+                  isLive ? "bg-teal-400 shadow-[0_0_8px_2px_rgba(45,212,191,0.4)]" : "bg-teal-400/40"
+                )}
+              />
+              <span className="text-[10px] text-white/30">LIVE</span>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!isEditing && trades.length > pageSize && (
+            <div className="flex items-center gap-2 border border-white/5">
+              <Button
+                className="text-xs text-white/50 hover:text-white disabled:opacity-40 border-r border-white/5 rounded-none px-2 py-1 bg-transparent hover:bg-sidebar-accent hover:brightness-120"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+
+              <span className="text-[10px] text-white/40 px-1">
+                {page + 1}/{pageCount}
+              </span>
+
+              <Button
+                className="text-xs text-white/50 hover:text-white disabled:opacity-40 border-l border-white/5 rounded-none py-1 bg-transparent hover:bg-sidebar-accent hover:brightness-120"
+                disabled={page >= pageCount - 1}
+                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col h-full w-full overflow-hidden">
+        <div className="flex flex-col gap-2.5 p-3.5 h-full justify-start overflow-y-auto">
+          {loading ? (
+            Array.from({ length: pageSize }).map((_, i) => (
+              <div key={`ot-skel-${i}`} className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="w-20 h-4 rounded-none bg-sidebar" />
+                  <Skeleton className="w-16 h-4 rounded-none bg-sidebar" />
+                </div>
+                <Skeleton className="w-full h-3 rounded-none bg-sidebar" />
+              </div>
+            ))
+          ) : pageItems.length === 0 ? (
+            <div className="text-xs text-white/40 flex items-center justify-center h-full">
+              No open trades
+            </div>
+          ) : (
+            pageItems.map((trade) => {
+              const isProfit = trade.profit >= 0;
+              return (
+                <div
+                  key={trade.id}
+                  className="flex flex-col gap-1 pb-2.5 border-b border-white/5 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-white/80">
+                        {trade.symbol}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-[10px] px-1.5 py-0.5 rounded-sm",
+                          trade.tradeType === "long"
+                            ? "bg-teal-400/20 text-teal-400"
+                            : "bg-rose-400/20 text-rose-400"
+                        )}
+                      >
+                        {trade.tradeType === "long" ? (
+                          <TrendingUp className="size-2.5" />
+                        ) : (
+                          <TrendingDown className="size-2.5" />
+                        )}
+                      </span>
+                    </div>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold",
+                        isProfit ? "text-teal-400" : "text-rose-400"
+                      )}
+                    >
+                      {formatProfit(trade.profit)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10px] text-white/40">
+                    <div className="flex items-center gap-2">
+                      <span>Vol: {trade.volume}</span>
+                      <span>•</span>
+                      <span>Entry: {formatPrice(trade.openPrice)}</span>
+                    </div>
+                    <span>
+                      Current: {formatPrice(trade.currentPrice ?? trade.openPrice)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }

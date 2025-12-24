@@ -50,6 +50,9 @@ export interface TradesToolbarProps {
   allSymbols?: string[];
   symbolCounts?: Record<string, number>;
   symbolTotal?: number;
+  killzones: string[];
+  onKillzonesChange: (k: string[]) => void;
+  allKillzones?: Array<{ name: string; color: string }>;
   sortValue?: string;
   start?: Date;
   end?: Date;
@@ -99,6 +102,9 @@ export default function TradesToolbar({
   allSymbols,
   symbolCounts,
   symbolTotal,
+  killzones,
+  onKillzonesChange,
+  allKillzones,
   sortValue,
   start,
   end,
@@ -149,6 +155,11 @@ export default function TradesToolbar({
       setStagedSymbols(symbols);
     }
   }, [symbolPopoverOpen]);
+
+  const [stagedKillzones, setStagedKillzones] = React.useState<string[]>(killzones);
+  React.useEffect(() => {
+    setStagedKillzones(killzones);
+  }, [killzones]);
 
   const stagedCount = React.useMemo(() => {
     if (!symbolCounts) return stagedSymbols.length || 0;
@@ -606,6 +617,61 @@ export default function TradesToolbar({
                   })()}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>Killzone</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="rounded-none bg-sidebar border border-white/5 p-2 w-[280px]">
+                  <DropdownMenuLabel className="px-2 pb-2 text-[12px] font-normal text-white/60">
+                    Select killzones
+                  </DropdownMenuLabel>
+                  <div className="max-h-64 overflow-auto pr-1">
+                    {(allKillzones || []).map((kz) => {
+                      const selected = stagedKillzones.includes(kz.name);
+                      return (
+                        <label
+                          key={kz.name}
+                          className="flex items-center gap-2 px-1 py-1.5 text-xs"
+                        >
+                          <Checkbox
+                            checked={selected}
+                            onCheckedChange={(v) => {
+                              const next = new Set(stagedKillzones);
+                              if (v) next.add(kz.name);
+                              else next.delete(kz.name);
+                              setStagedKillzones(Array.from(next));
+                            }}
+                            className="rounded-none border-white/5 cursor-pointer hover:brightness-120 data-[state=checked]:brightness-120"
+                          />
+                          <div
+                            className="w-3 h-3 rounded-sm"
+                            style={{ backgroundColor: kz.color }}
+                          />
+                          <span className="select-none">{kz.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="pt-3 flex gap-2">
+                    <Button
+                      className="flex-1 border border-white/5 bg-sidebar hover:bg-sidebar-accent rounded-none text-xs text-white py-3"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setStagedKillzones([]);
+                      }}
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      className="flex-1 border border-white/5 bg-sidebar hover:bg-sidebar-accent rounded-none text-xs text-white py-3"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onKillzonesChange(stagedKillzones);
+                      }}
+                    >
+                      Apply
+                    </Button>
+                  </div>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -708,6 +774,21 @@ export default function TradesToolbar({
             onClick={() => onSwapClear?.()}
           >
             {formatNumBadge("Swap", swapMin, swapMax, swapHistogram, "$")}{" "}
+            <span className="ml-2">×</span>
+          </Button>
+        ) : null}
+
+        {/* Killzones badge */}
+        {killzones.length > 0 && killzones.length !== (allKillzones?.length || 0) ? (
+          <Button
+            className="border border-white/5 px-4 text-xs text-white/70 hover:text-white bg-sidebar rounded-none hover:bg-sidebar-accent max-w-[260px] truncate flex items-center gap-2"
+            onClick={() => onKillzonesChange([])}
+          >
+            {(() => {
+              const shown = killzones.slice(0, 2).join(", ");
+              const extra = killzones.length - 2;
+              return extra > 0 ? `${shown} +${extra}` : shown;
+            })()}
             <span className="ml-2">×</span>
           </Button>
         ) : null}

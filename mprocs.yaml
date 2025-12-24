@@ -1,0 +1,11 @@
+procs:
+  server:
+    cmd: ["bun", "run", "dev:server"]
+
+  web:
+    cmd: ["bun", "run", "dev:web"]
+
+  studio:
+    cwd: "apps/server"
+    cmd: ["bun", "run", "db:studio"]
+    autostart: false

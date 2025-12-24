@@ -196,12 +196,16 @@ export const accountsRouter = router({
           averageRMultiple = expectancy / avgLoss;
         }
 
-        // Load initial balance for account balance computation
+        // Load initial balance and live metrics for EA-synced accounts
         const acctRows = await db
           .select({
             initialBalance: sql<
               string | null
             >`${tradingAccount.initialBalance}`,
+            isVerified: tradingAccount.isVerified,
+            liveBalance: tradingAccount.liveBalance,
+            liveEquity: tradingAccount.liveEquity,
+            lastSyncedAt: tradingAccount.lastSyncedAt,
           })
           .from(tradingAccount)
           .where(eq(tradingAccount.id, accountId))
@@ -211,6 +215,22 @@ export const accountsRouter = router({
             ? Number(acctRows[0].initialBalance)
             : 0;
         const accountBalance = initialBalanceNum + totalProfit;
+
+        // Check if account is EA-synced and has recent data
+        const isVerified = acctRows[0]?.isVerified === 1;
+        const liveBalance = acctRows[0]?.liveBalance
+          ? Number(acctRows[0].liveBalance)
+          : null;
+        const liveEquity = acctRows[0]?.liveEquity
+          ? Number(acctRows[0].liveEquity)
+          : null;
+        const lastSyncedAt = acctRows[0]?.lastSyncedAt;
+
+        // Calculate if EA data is recent (within last 5 minutes)
+        const isLiveDataFresh =
+          isVerified &&
+          lastSyncedAt &&
+          Date.now() - lastSyncedAt.getTime() < 5 * 60 * 1000;
 
         return {
           totalProfit,
@@ -227,6 +247,12 @@ export const accountsRouter = router({
           initialBalance: initialBalanceNum,
           accountBalance,
           expectancy,
+          // Live metrics (only present for EA-synced accounts)
+          isVerified,
+          liveBalance,
+          liveEquity,
+          lastSyncedAt: lastSyncedAt?.toISOString() || null,
+          isLiveDataFresh,
         };
       } catch (e) {
         console.error("[accounts.stats] error:", e);
@@ -856,5 +882,171 @@ export const accountsRouter = router({
         minISO: new Date(minTs || Date.now()).toISOString(),
         maxISO: new Date(maxTs || Date.now()).toISOString(),
       } as const;
+    }),
+
+  /**
+   * Update broker settings for an account
+   */
+  updateBrokerSettings: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        brokerType: z.enum(["mt4", "mt5", "ctrader", "other"]).optional(),
+        preferredDataSource: z
+          .enum(["dukascopy", "alphavantage", "truefx", "broker"])
+          .optional(),
+        averageSpreadPips: z.number().min(0).max(100).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Verify account belongs to user
+      const account = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, input.accountId))
+        .limit(1);
+
+      if (!account.length) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Account not found",
+        });
+      }
+
+      if (account[0].userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to update this account",
+        });
+      }
+
+      // Update account settings
+      const updates: any = {};
+      if (input.brokerType !== undefined) updates.brokerType = input.brokerType;
+      if (input.preferredDataSource !== undefined)
+        updates.preferredDataSource = input.preferredDataSource;
+      if (input.averageSpreadPips !== undefined)
+        updates.averageSpreadPips = input.averageSpreadPips.toString();
+
+      if (Object.keys(updates).length > 0) {
+        await db
+          .update(tradingAccount)
+          .set(updates)
+          .where(eq(tradingAccount.id, input.accountId));
+      }
+
+      return { success: true };
+    }),
+
+  /**
+   * Get live account metrics from EA
+   * Returns live balance, equity, margin, open trades, and sync status
+   */
+  liveMetrics: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const accountId = input.accountId;
+
+      // Import openTrade table
+      const { openTrade } = await import("../db/schema/trading");
+
+      // Fetch account with live metrics
+      const accounts = await db
+        .select({
+          id: tradingAccount.id,
+          userId: tradingAccount.userId,
+          name: tradingAccount.name,
+          broker: tradingAccount.broker,
+          brokerType: tradingAccount.brokerType,
+          isVerified: tradingAccount.isVerified,
+          liveBalance: tradingAccount.liveBalance,
+          liveEquity: tradingAccount.liveEquity,
+          liveMargin: tradingAccount.liveMargin,
+          liveFreeMargin: tradingAccount.liveFreeMargin,
+          lastSyncedAt: tradingAccount.lastSyncedAt,
+          initialBalance: tradingAccount.initialBalance,
+        })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, accountId))
+        .limit(1);
+
+      if (!accounts.length) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Account not found",
+        });
+      }
+
+      const account = accounts[0];
+
+      // Verify account belongs to user
+      if (account.userId !== ctx.session.user.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "You don't have permission to access this account",
+        });
+      }
+
+      // Fetch open trades for this account
+      const openTrades = await db
+        .select()
+        .from(openTrade)
+        .where(eq(openTrade.accountId, accountId))
+        .orderBy(desc(openTrade.openTime));
+
+      // Calculate total floating P&L from open trades
+      const totalFloatingPL = openTrades.reduce((sum, trade) => {
+        return sum + Number(trade.profit || 0);
+      }, 0);
+
+      // Parse numeric fields
+      const liveBalance = account.liveBalance
+        ? Number(account.liveBalance)
+        : null;
+      const liveEquity = account.liveEquity ? Number(account.liveEquity) : null;
+      const liveMargin = account.liveMargin ? Number(account.liveMargin) : null;
+      const liveFreeMargin = account.liveFreeMargin
+        ? Number(account.liveFreeMargin)
+        : null;
+      const initialBalance = account.initialBalance
+        ? Number(account.initialBalance)
+        : null;
+
+      // Map open trades to frontend format
+      const trades = openTrades.map((trade) => ({
+        id: trade.id,
+        ticket: trade.ticket,
+        symbol: trade.symbol,
+        tradeType: trade.tradeType as "long" | "short",
+        volume: Number(trade.volume),
+        openPrice: Number(trade.openPrice),
+        openTime: trade.openTime.toISOString(),
+        sl: trade.sl ? Number(trade.sl) : null,
+        tp: trade.tp ? Number(trade.tp) : null,
+        currentPrice: trade.currentPrice ? Number(trade.currentPrice) : null,
+        swap: Number(trade.swap || 0),
+        commission: Number(trade.commission || 0),
+        profit: Number(trade.profit || 0),
+        comment: trade.comment,
+        magicNumber: trade.magicNumber,
+        lastUpdatedAt: trade.lastUpdatedAt.toISOString(),
+      }));
+
+      return {
+        accountId: account.id,
+        accountName: account.name,
+        broker: account.broker,
+        brokerType: account.brokerType,
+        isVerified: account.isVerified === 1,
+        liveBalance,
+        liveEquity,
+        liveMargin,
+        liveFreeMargin,
+        initialBalance,
+        lastSyncedAt: account.lastSyncedAt?.toISOString() || null,
+        openTrades: trades,
+        totalFloatingPL,
+        openTradesCount: trades.length,
+      };
     }),
 });

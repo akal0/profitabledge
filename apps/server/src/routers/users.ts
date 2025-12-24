@@ -20,6 +20,7 @@ export const usersRouter = router({
         widgetPreferences: userTable.widgetPreferences,
         chartWidgetPreferences: userTable.chartWidgetPreferences,
         tablePreferences: userTable.tablePreferences,
+        advancedMetricsPreferences: userTable.advancedMetricsPreferences,
         createdAt: userTable.createdAt,
         updatedAt: userTable.updatedAt,
       })
@@ -129,6 +130,7 @@ export const usersRouter = router({
           .array(
             z.enum([
               "account-balance",
+              "account-equity",
               "win-rate",
               "profit-factor",
               "win-streak",
@@ -139,9 +141,10 @@ export const usersRouter = router({
               "profit-expectancy",
               "total-losses",
               "consistency-score",
+              "open-trades",
             ])
           )
-          .max(12)
+          .max(15)
           .default([]),
       })
     )
@@ -164,7 +167,7 @@ export const usersRouter = router({
           .array(
             z.enum(["daily-net", "performance-weekday", "performing-assets"]) // chart widget keys
           )
-          .max(12)
+          .max(15)
           .default([]),
       })
     )
@@ -254,4 +257,57 @@ export const usersRouter = router({
       .where(eq(userTable.id, userId));
     return { ok: true } as const;
   }),
+
+  getAdvancedMetricsPreferences: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const rows = await db
+      .select({ advancedMetricsPreferences: userTable.advancedMetricsPreferences })
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .limit(1);
+
+    const prefs = rows[0]?.advancedMetricsPreferences as any;
+
+    return {
+      disableSampleGating: prefs?.disableSampleGating ?? false,
+      alphaWeightedMpe: prefs?.alphaWeightedMpe ?? 0.30,
+    };
+  }),
+
+  updateAdvancedMetricsPreferences: protectedProcedure
+    .input(
+      z.object({
+        disableSampleGating: z.boolean().optional(),
+        alphaWeightedMpe: z.number().min(0.20).max(0.40).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      // Get current preferences
+      const rows = await db
+        .select({ advancedMetricsPreferences: userTable.advancedMetricsPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const currentPrefs = (rows[0]?.advancedMetricsPreferences as any) || {};
+
+      // Merge with new values
+      const updatedPrefs = {
+        ...currentPrefs,
+        ...(input.disableSampleGating !== undefined && { disableSampleGating: input.disableSampleGating }),
+        ...(input.alphaWeightedMpe !== undefined && { alphaWeightedMpe: input.alphaWeightedMpe }),
+      };
+
+      await db
+        .update(userTable)
+        .set({
+          advancedMetricsPreferences: updatedPrefs,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      return { ok: true } as const;
+    }),
 });

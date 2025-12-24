@@ -11,19 +11,31 @@ import { useAccountStore } from "@/stores/account";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
-  const setSelectedAccountId = useAccountStore((s) => s.setSelectedAccountId);
+  const hasInitializedRef = React.useRef(false);
 
-  // Initialize selected account to first available
+  // Initialize selected account to first available ONLY if no persisted value exists
   useEffect(() => {
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     (async () => {
       try {
-        const accounts = await trpcClient.accounts.list.query();
-        if (!accounts?.length) return;
-        if (!selectedAccountId) setSelectedAccountId(accounts[0].id);
-      } catch {}
+        // Wait a tick to let Zustand hydrate from localStorage
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        const currentValue = useAccountStore.getState().selectedAccountId;
+
+        // Only initialize if there's still no selected account after hydration
+        if (!currentValue) {
+          const accounts = await trpcClient.accounts.list.query();
+          if (!accounts?.length) return;
+          useAccountStore.getState().setSelectedAccountId(accounts[0].id);
+        }
+      } catch (e) {
+        console.error('[Providers] Error initializing account:', e);
+      }
     })();
-  }, [selectedAccountId, setSelectedAccountId]);
+  }, []); // Only run once on mount
 
   return (
     <NuqsAdapter>

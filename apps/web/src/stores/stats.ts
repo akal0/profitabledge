@@ -16,6 +16,12 @@ export type AccountStats = {
   initialBalance?: number;
   accountBalance?: number;
   expectancy?: number;
+  // Live EA metrics
+  isVerified?: boolean;
+  liveBalance?: number | null;
+  liveEquity?: number | null;
+  lastSyncedAt?: string | null;
+  isLiveDataFresh?: boolean;
 };
 
 type StatsState = {

@@ -20,11 +20,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus } from "lucide-react";
+import { Plus, ExternalLink } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import CsvUpload from "@/components/upload/CsvUpload";
 import { Label } from "@/components/ui/label";
+import Link from "next/link";
 
 export type AddAccountForm = {
   method: "csv" | "broker" | null;
@@ -197,14 +198,13 @@ export function AddAccountSheet({
               </Button>
 
               <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250 "
-                disabled
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none transition-all active:scale-95 bg-transparent hover:bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-white duration-250"
                 onClick={() => {
                   setForm({ ...form, method: "broker" });
                   setStep(2);
                 }}
               >
-                Broker sync
+                MT5 EA Sync (Recommended)
               </Button>
             </div>
           )}
@@ -295,8 +295,32 @@ export function AddAccountSheet({
           )}
 
           {step === 2 && form.method === "broker" && (
-            <div className="p-4 text-xs text-secondary">
-              Broker sync setup coming soon.
+            <div className="p-4 text-xs space-y-4">
+              <div className="bg-teal-900/20 border border-teal-500/30 p-4 rounded-md">
+                <p className="text-teal-300 font-medium mb-2 text-sm">
+                  ✓ MT5 EA Auto-Sync
+                </p>
+                <p className="text-white/60 text-xs">
+                  Your account will automatically appear here when you attach the ProfitabEdge EA to your MT5 terminal.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <p className="text-white font-medium text-sm">Quick Setup:</p>
+                <ol className="list-decimal list-inside text-white/70 space-y-2">
+                  <li>Go to Settings → EA Setup</li>
+                  <li>Generate an API key</li>
+                  <li>Download and install the EA</li>
+                  <li>Attach EA to any chart in MT5</li>
+                  <li>Your account will sync automatically!</li>
+                </ol>
+              </div>
+
+              <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-md">
+                <p className="text-blue-300 text-xs">
+                  <strong>Note:</strong> The EA will automatically register your MT5 account with all details (balance, broker, currency) when it first connects.
+                </p>
+              </div>
             </div>
           )}
         </div>
@@ -334,15 +358,18 @@ export function AddAccountSheet({
           )}
 
           {step === 2 && form.method === "broker" && (
-            <div className="flex w-full gap-2">
+            <div className="flex flex-col gap-2 w-full">
+              <Link href="/dashboard/settings/ea-setup" onClick={() => setOpen(false)}>
+                <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-teal-600 hover:bg-teal-700 text-white w-full text-xs duration-250">
+                  <ExternalLink className="size-3.5" />
+                  Go to EA Setup
+                </Button>
+              </Link>
               <Button
-                className="shadow-primary-button cursor-pointer flex transform items-center justify-center gap-2 rounded-[6px] py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
+                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
                 onClick={() => setStep(1)}
               >
                 Back
-              </Button>
-              <Button className="flex-1" disabled>
-                Continue
               </Button>
             </div>
           )}

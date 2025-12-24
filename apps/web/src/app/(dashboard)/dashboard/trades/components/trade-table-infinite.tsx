@@ -24,6 +24,7 @@ import { ArrowDownRight, ArrowUpRight, X } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KillzoneTagCell } from "@/components/killzone-tag-cell";
 
 type TradeRow = {
   id: string;
@@ -41,9 +42,24 @@ type TradeRow = {
   swap?: number | null;
   createdAtISO: string;
   holdSeconds: number;
+  // Killzone tagging
+  killzone?: string | null;
+  killzoneColor?: string | null;
   // Optional widgets that can be enabled via Columns menu
   maxRR?: number | null;
   drawdown?: number | null;
+  // Advanced metrics
+  manipulationPips?: number | null;
+  mpeManipLegR?: number | null;
+  mpeManipPE_R?: number | null;
+  realisedRR?: number | null;
+  rrCaptureEfficiency?: number | null;
+  manipRREfficiency?: number | null;
+  rawSTDV?: number | null;
+  rawSTDV_PE?: number | null;
+  stdvBucket?: string | null;
+  estimatedWeightedMPE_R?: number | null;
+  outcome?: "Win" | "Loss" | "BE" | "PW";
 };
 
 type DirectionType = "all" | "long" | "short";
@@ -102,6 +118,54 @@ const columns: ColumnDef<TradeRow, any>[] = [
           ) : (
             <ArrowDownRight className="size-3 stroke-3" />
           )}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "killzone",
+    header: "Killzone",
+    cell: ({ row }) => {
+      const trade = row.original as TradeRow;
+      return (
+        <KillzoneTagCell
+          tradeId={trade.id}
+          killzone={trade.killzone}
+          killzoneColor={trade.killzoneColor}
+        />
+      );
+    },
+  },
+  {
+    accessorKey: "outcome",
+    header: "Outcome",
+    cell: ({ getValue }) => {
+      const v = getValue<"Win" | "Loss" | "BE" | "PW" | undefined>();
+      if (!v) return <span className="text-white/40">—</span>;
+
+      let chipClass = "";
+      let label = v;
+
+      if (v === "Win") {
+        chipClass = "bg-teal-800/15 text-teal-400";
+      } else if (v === "Loss") {
+        chipClass = "bg-red-900/15 text-rose-400";
+      } else if (v === "BE") {
+        chipClass = "bg-sidebar-accent text-white/50";
+        label = "Breakeven";
+      } else if (v === "PW") {
+        chipClass = "bg-yellow-300/15 text-yellow-300";
+        label = "Partial win";
+      }
+
+      return (
+        <span
+          className={cn(
+            "px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide",
+            chipClass
+          )}
+        >
+          {label}
         </span>
       );
     },
@@ -305,21 +369,307 @@ const columns: ColumnDef<TradeRow, any>[] = [
       );
     },
   },
-  // Additional optional widget columns (hidden by default)
+  // Advanced trading metrics columns (hidden by default, toggleable)
   {
-    accessorKey: "maxRR",
-    header: "Max R/R",
+    accessorKey: "manipulationPips",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Manipulation (Pips)
+        <span
+          className="text-white/40 text-xs"
+          title="Raw size of manipulation leg in pips"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
     cell: ({ getValue }) => {
       const v = getValue<number | null | undefined>();
       if (v == null) return <span className="text-white/40">—</span>;
-      // const abs = Math.abs(v);
-      // const formatted = Number.isInteger(abs)
-      //   ? abs.toLocaleString()
-      //   : abs.toFixed(2);
-      // return <span className="text-white/70">{formatted}</span>;
+      return <span className="text-white/70">{v.toFixed(1)}</span>;
     },
   },
+  {
+    accessorKey: "mpeManipLegR",
+    header: () => (
+      <div className="flex items-center gap-1">
+        MPE Manip Leg (R)
+        <span
+          className="text-white/40 text-xs"
+          title="Max Price Exertion from manipulation reference in R"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      return <span className="text-white/70">{v.toFixed(2)}R</span>;
+    },
+  },
+  {
+    accessorKey: "mpeManipPE_R",
+    header: () => (
+      <div className="flex items-center gap-1">
+        MPE Manip PE (R)
+        <span
+          className="text-white/40 text-xs"
+          title="Post-exit max price movement from manipulation reference in R"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      return <span className="text-white/70">{v.toFixed(2)}R</span>;
+    },
+  },
+  {
+    accessorKey: "maxRR",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Max R:R
+        <span
+          className="text-white/40 text-xs"
+          title="Maximum theoretical R offered from entry while trade was open"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      const formatted = v.toFixed(2);
+      return (
+        <span
+          className={cn(
+            "px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide",
+            v >= 2
+              ? "bg-teal-800/15 text-teal-400"
+              : v >= 1
+              ? "bg-yellow-300/15 text-yellow-300"
+              : "bg-sidebar-accent text-white/50"
+          )}
+        >
+          {formatted}R
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "realisedRR",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Realised R:R
+        <span
+          className="text-white/40 text-xs"
+          title="Final R after commissions, swaps, partials"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      const formatted = v.toFixed(2);
+      const isPositive = v >= 0;
+      return (
+        <span
+          className={cn(
+            "px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide",
+            isPositive
+              ? "bg-teal-800/15 text-teal-400"
+              : "bg-red-900/15 text-rose-400"
+          )}
+        >
+          {isPositive ? "+" : ""}
+          {formatted}R
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "rrCaptureEfficiency",
+    header: () => (
+      <div className="flex items-center gap-1">
+        RR Capture Eff. (%)
+        <span
+          className="text-white/40 text-xs"
+          title="How much of available R was actually captured (0-100%)"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      const pct = Math.round(v);
+      return (
+        <span
+          className={cn(
+            "px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide",
+            pct >= 75
+              ? "bg-teal-800/15 text-teal-400"
+              : pct >= 50
+              ? "bg-yellow-300/15 text-yellow-300"
+              : pct >= 25
+              ? "bg-amber-900/15 text-amber-500"
+              : "bg-red-900/15 text-rose-400"
+          )}
+        >
+          {pct}%
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "manipRREfficiency",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Manip RR Eff. (%)
+        <span
+          className="text-white/40 text-xs"
+          title="How much of manipulation move was captured (can exceed 100%)"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      const pct = Math.round(v);
+      return (
+        <span
+          className={cn(
+            "px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide",
+            pct >= 100
+              ? "bg-teal-800/15 text-teal-400"
+              : pct >= 75
+              ? "bg-yellow-300/15 text-yellow-300"
+              : pct >= 50
+              ? "bg-amber-900/15 text-amber-500"
+              : "bg-red-900/15 text-rose-400"
+          )}
+        >
+          {pct}%
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "rawSTDV",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Raw STDV
+        <span
+          className="text-white/40 text-xs"
+          title="Raw volatility expression of the trade"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      return <span className="text-white/70">{v.toFixed(2)}</span>;
+    },
+  },
+  {
+    accessorKey: "rawSTDV_PE",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Raw STDV PE
+        <span
+          className="text-white/40 text-xs"
+          title="Post-exit volatility excursion"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) return <span className="text-white/40">—</span>;
+      return <span className="text-white/70">{v.toFixed(2)}</span>;
+    },
+  },
+  {
+    accessorKey: "stdvBucket",
+    header: () => (
+      <div className="flex items-center gap-1">
+        STDV (Bucket)
+        <span
+          className="text-white/40 text-xs"
+          title="Bucketed volatility regime"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<string | null | undefined>();
+      if (!v) return <span className="text-white/40">—</span>;
 
+      let chipClass = "";
+      if (v.includes("-2")) chipClass = "bg-red-900/25 text-rose-400";
+      else if (v.includes("-1")) chipClass = "bg-amber-900/15 text-amber-500";
+      else if (v.includes("0")) chipClass = "bg-sidebar-accent text-white/50";
+      else if (v.includes("+1")) chipClass = "bg-yellow-300/15 text-yellow-300";
+      else if (v.includes("+2")) chipClass = "bg-teal-800/15 text-teal-400";
+
+      return (
+        <span
+          className={cn(
+            "px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide",
+            chipClass
+          )}
+        >
+          {v}
+        </span>
+      );
+    },
+  },
+  {
+    accessorKey: "estimatedWeightedMPE_R",
+    header: () => (
+      <div className="flex items-center gap-1">
+        Est. Weighted MPE (R)
+        <span
+          className="text-white/40 text-xs"
+          title="Data-driven estimate of sustainable TP in R (requires ≥100 trades)"
+        >
+          ⓘ
+        </span>
+      </div>
+    ),
+    cell: ({ getValue }) => {
+      const v = getValue<number | null | undefined>();
+      if (v == null) {
+        return (
+          <span
+            className="text-white/40 text-xs"
+            title="Requires minimum 100 trades in account"
+          >
+            Locked
+          </span>
+        );
+      }
+      return (
+        <span className="px-3 py-1.5 rounded-xs text-xs font-medium tracking-wide bg-teal-800/15 text-teal-400">
+          {v.toFixed(2)}R
+        </span>
+      );
+    },
+  },
+  // Additional optional widget columns (hidden by default)
   {
     accessorKey: "drawdown",
     header: "Max drawdown",
@@ -447,6 +797,9 @@ export default function TradeTableInfinite() {
   const [symbolsParam, setSymbolsParam] = useQueryState("symbols", {
     defaultValue: "",
   });
+  const [killzonesParam, setKillzonesParam] = useQueryState("killzones", {
+    defaultValue: "",
+  });
 
   const [holdParam, setHoldParam] = useQueryState("hold", { defaultValue: "" });
   const [volParam, setVolParam] = useQueryState("vol", { defaultValue: "" });
@@ -474,6 +827,10 @@ export default function TradeTableInfinite() {
   const symbols = React.useMemo(
     () => (symbolsParam ? symbolsParam.split(",").filter(Boolean) : []),
     [symbolsParam]
+  );
+  const killzones = React.useMemo(
+    () => (killzonesParam ? killzonesParam.split(",").filter(Boolean) : []),
+    [killzonesParam]
   );
   const start = oStart ? new Date(oStart) : undefined;
   const end = oEnd ? new Date(oEnd) : undefined;
@@ -526,6 +883,14 @@ export default function TradeTableInfinite() {
     ...symbolsOpts,
     enabled: Boolean(accountId),
   });
+  // All killzones for account
+  const killzonesOpts = trpc.trades.listKillzones.queryOptions({
+    accountId: accountId || "",
+  });
+  const { data: allKillzones } = useQuery({
+    ...killzonesOpts,
+    enabled: Boolean(accountId),
+  });
   const statsOpts = trpc.accounts.stats.queryOptions({
     accountId: accountId || "",
   });
@@ -544,6 +909,7 @@ export default function TradeTableInfinite() {
           ? undefined
           : (tradeDirection as "long" | "short"),
       symbols: symbols.length ? symbols : undefined,
+      killzones: killzones.length ? killzones : undefined,
       // Always fetch all; client filters by open date to avoid createdAt mismatch
       startISO: undefined,
       endISO: undefined,
@@ -785,7 +1151,23 @@ export default function TradeTableInfinite() {
     data: displayRows,
     columns,
     tableId: "trades",
-    initialVisibility: { maxRR: false, drawdown: false },
+    initialVisibility: {
+      // Legacy columns (hidden by default)
+      maxRR: false,
+      drawdown: false,
+      // Advanced metrics (hidden by default, user can toggle)
+      manipulationPips: false,
+      mpeManipLegR: false,
+      mpeManipPE_R: false,
+      realisedRR: false,
+      rrCaptureEfficiency: false,
+      manipRREfficiency: false,
+      rawSTDV: false,
+      rawSTDV_PE: false,
+      stdvBucket: false,
+      estimatedWeightedMPE_R: false,
+      outcome: false,
+    },
   });
 
   const [openSheet, setOpenSheet] = React.useState(false);
@@ -856,7 +1238,7 @@ export default function TradeTableInfinite() {
   console.log(displayRows);
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-hidden">
       <TradesToolbar
         q={q}
         table={table}
@@ -870,6 +1252,11 @@ export default function TradeTableInfinite() {
         }
         symbolCounts={symbolCounts}
         symbolTotal={symbolTotal}
+        killzones={killzones}
+        onKillzonesChange={(arr) =>
+          setKillzonesParam(arr.length ? arr.join(",") : null)
+        }
+        allKillzones={allKillzones || []}
         sortValue={sortParam || ""}
         start={start}
         end={end}

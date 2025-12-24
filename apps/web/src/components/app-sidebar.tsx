@@ -27,6 +27,7 @@ import AccountIcon from "@/public/icons/navigation/account.svg";
 import { AddAccountSheet } from "./dashboard/sidebar/add-account-sheet";
 import { trpcClient } from "@/utils/trpc";
 import ClockIcon from "@/public/icons/clock.svg";
+import { Settings } from "lucide-react";
 
 import { Separator } from "./ui/separator";
 import NavUser from "./nav-user";
@@ -46,13 +47,13 @@ const data: { navMain: NavItem[] } = {
   navMain: [
     {
       title: "Dashboard",
-      url: "#",
+      url: "/dashboard",
       icon: DashboardIcon,
       isActive: true,
     },
     {
-      title: "Calendar",
-      url: "#",
+      title: "Trades",
+      url: "/dashboard/trades",
       icon: CalendarIcon,
     },
     {
@@ -66,9 +67,9 @@ const data: { navMain: NavItem[] } = {
       icon: ReportsIcon,
     },
     {
-      title: "Account",
-      url: "#",
-      icon: AccountIcon,
+      title: "Settings",
+      url: "/dashboard/settings",
+      icon: Settings as any,
     },
   ],
 };
@@ -155,7 +156,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent className="px-4 py-2">
         {data.navMain.map((item, idx) => (
           <Link
-            href="#"
+            href={item.url}
             key={item.title}
             className={cn(
               `group/navlink flex items-center gap-3 rounded-xs transition-all duration-150 group/navlink bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer`,
@@ -170,7 +171,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               >
                 <item.icon
                   className={cn(
-                    "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
+                    "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white size-5",
                     item.isActive &&
                       "fill-black dark:fill-transparent dark:stroke-white"
                   )}

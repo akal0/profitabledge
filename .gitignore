@@ -1,2 +1,10 @@
 node_modules
 .turbo
+.next
+.mt5-worker
+services/mt5-worker/.venv
+services/mt5-worker/.env.windows
+__pycache__/
+*.pyc
+*.d.ts
+!next-env.d.ts

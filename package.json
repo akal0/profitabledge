@@ -10,6 +10,12 @@
     "dev:all": "mprocs",
     "build": "turbo build",
     "check-types": "turbo check-types",
+    "ai:validate:deterministic": "turbo -F server ai:validate:deterministic",
+    "mt5:backfill": "bun run --cwd apps/server mt5:backfill",
+    "mt5:mock-sync": "bun run --cwd apps/server mt5:mock-sync",
+    "price:dedupe": "bun run --cwd apps/server price:dedupe",
+    "price:prune": "bun run --cwd apps/server price:prune",
+    "setup:hooks": "bash scripts/setup-git-hooks.sh",
     "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
@@ -19,14 +25,30 @@
     "db:migrate": "turbo -F server db:migrate"
   },
   "devDependencies": {
+    "@ai-sdk/google": "^3.0.3",
+    "@ai-sdk/react": "^3.0.8",
+    "@google/generative-ai": "^0.24.1",
+    "@tiptap/extension-mention": "^3.15.0",
+    "@tiptap/extension-placeholder": "^3.15.0",
+    "@tiptap/react": "^3.15.0",
+    "@tiptap/starter-kit": "^3.15.0",
+    "@tiptap/suggestion": "^3.15.0",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/pg": "^8.16.0",
+    "ai": "^6.0.8",
     "pg": "^8.16.3",
     "postgres": "^3.4.7",
-    "turbo": "^2.5.6"
+    "react-markdown": "^10.1.0",
+    "turbo": "^2.7.2"
   },
   "packageManager": "bun@1.2.12",
   "dependencies": {
+    "@central-icons-react/all": "^1.1.83",
+    "canvas-confetti": "^1.9.4",
+    "date-fns": "^4.1.0",
     "drizzle-kit": "^0.31.8",
-    "drizzle-orm": "^0.45.1"
+    "drizzle-orm": "^0.45.1",
+    "html-to-image": "^1.11.13",
+    "nanoid": "^5.1.6"
   }
 }

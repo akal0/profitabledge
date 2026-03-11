@@ -1,3 +1,5 @@
+import { getHistoricalRates } from "dukascopy-node";
+
 // Minimal symbol translation layer from broker/DB symbols to Dukascopy IDs
 
 export function mapToDukascopyInstrument(
@@ -95,4 +97,111 @@ export function getContractSizeForSymbol(
   )
     return 1; // indices
   return 100000; // default: forex
+}
+
+/**
+ * Get normalization factor for displaying pip values
+ * Indices use points (1.0 pip size) but for display/comparison we normalize:
+ * - US100/US500: Divide by 10 (100 points -> 10 "normalized pips")
+ * - US30/GER30: Divide by 100 (100 points -> 1 "normalized pip")
+ * - Metals/Forex: No change (already in pips)
+ */
+export function getPipNormalizationFactor(
+  rawSymbol: string | null | undefined
+): number {
+  const s = String(rawSymbol || "").toLowerCase();
+  if (!s) return 1;
+
+  // US100 (Nasdaq) and US500 (S&P): 10 points = 1 normalized pip
+  if (s.includes("us100") || s.includes("nas100") || s.includes("nasdaq")) return 10;
+  if (s.includes("us500") || s.includes("spx") || s.includes("sp500")) return 10;
+
+  // US30 (Dow), GER30/40 (DAX): 100 points = 1 normalized pip
+  if (s.includes("us30") || s.includes("dow") || s.includes("dj30")) return 100;
+  if (s.includes("ger30") || s.includes("ger40") || s.includes("de30") || s.includes("de40")) return 100;
+
+  // Default: no normalization (forex, metals, etc.)
+  return 1;
+}
+
+/**
+ * Normalize pip value for display purposes
+ * Converts raw pip values to normalized pips for better cross-instrument comparison
+ */
+export function normalizePipValue(
+  pipValue: number,
+  rawSymbol: string | null | undefined
+): number {
+  const factor = getPipNormalizationFactor(rawSymbol);
+  return pipValue / factor;
+}
+
+// Dukascopy timeframe mapping
+const dukascopyTimeframeMap: Record<string, string> = {
+  m1: "m1",
+  m5: "m5",
+  m15: "m15",
+  m30: "m30",
+  h1: "h1",
+  h4: "h4",
+  d1: "d1",
+  mn1: "mn1",
+};
+
+export interface DukascopyCandle {
+  time: number; // Unix timestamp in seconds
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/**
+ * Fetch historical OHLCV candles from Dukascopy.
+ * Returns candles sorted oldest-first with unix timestamps in seconds.
+ */
+export async function fetchDukascopyCandles(
+  symbol: string,
+  timeframe: string,
+  from: Date,
+  to: Date
+): Promise<DukascopyCandle[]> {
+  const { instrument } = mapToDukascopyInstrument(symbol);
+  if (!instrument) {
+    throw new Error(`Unknown symbol: ${symbol}`);
+  }
+
+  const tf = dukascopyTimeframeMap[timeframe] || "m5";
+
+  const raw = (await getHistoricalRates({
+    instrument,
+    dates: { from, to },
+    timeframe: tf as any,
+    priceType: "bid",
+    gmtOffset: 0,
+    volumes: true,
+    format: "json",
+    batchSize: 10,
+    pauseBetweenBatchesMs: 500,
+  } as any)) as any[];
+
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [];
+  }
+
+  return raw
+    .map((r: any) => {
+      // Handle both array format [ts, o, h, l, c, v] and object format {timestamp, open, ...}
+      if (Array.isArray(r)) {
+        const ts = typeof r[0] === "number" ? Math.floor(r[0] / 1000) : 0;
+        return { time: ts, open: r[1], high: r[2], low: r[3], close: r[4], volume: r[5] ?? 0 };
+      }
+      const ts = typeof r.timestamp === "number"
+        ? Math.floor(r.timestamp / 1000)
+        : Math.floor(new Date(r.timestamp).getTime() / 1000);
+      if (isNaN(ts)) return null;
+      return { time: ts, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume ?? 0 };
+    })
+    .filter((c): c is DukascopyCandle => c !== null && c.time > 0);
 }

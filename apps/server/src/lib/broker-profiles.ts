@@ -204,8 +204,8 @@ export function getExpectedSpread(
   }
 
   // Check standard spreads
-  if (STANDARD_SPREADS[normalizedSymbol]) {
-    return STANDARD_SPREADS[normalizedSymbol] * broker.spreadAdjustment;
+  if (normalizedSymbol in STANDARD_SPREADS) {
+    return STANDARD_SPREADS[normalizedSymbol as keyof typeof STANDARD_SPREADS] * broker.spreadAdjustment;
   }
 
   // Fallback: assume 2 pips for unknown pairs

@@ -11,6 +11,7 @@
 import { db } from "../db";
 import { historicalPrices, trade } from "../db/schema/trading";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { getBrokerPipSize, normalizeBrokerSymbol } from "./mt5/symbol-specs";
 
 interface TradeData {
   id: string;
@@ -30,38 +31,65 @@ interface ManipulationResult {
   entryPeakTimestamp: Date | null;
 }
 
-/**
- * Get pip size for a symbol
- */
-function getPipSizeForSymbol(symbol: string): number {
-  const sym = symbol.toUpperCase();
+interface PostExitResult {
+  postExitPeakPrice: number | null;
+  postExitPeakTimestamp: Date | null;
+}
 
-  // JPY pairs have 2 decimal places (0.01 pip)
-  if (sym.includes("JPY")) {
-    return 0.01;
+interface PriceWindowRow {
+  time: Date;
+  highBid: string | null;
+  lowBid: string | null;
+  highAsk: string | null;
+  lowAsk: string | null;
+  high: string | null;
+  low: string | null;
+  bidPrice: string | null;
+  askPrice: string | null;
+}
+
+function toNullableNumber(value: string | number | null | undefined) {
+  if (value == null) {
+    return null;
   }
 
-  // Most forex pairs have 4 decimal places (0.0001 pip)
-  if (
-    sym.match(/^[A-Z]{6}$/) || // Standard forex pairs like EURUSD
-    sym.includes("USD") ||
-    sym.includes("EUR") ||
-    sym.includes("GBP") ||
-    sym.includes("AUD") ||
-    sym.includes("NZD") ||
-    sym.includes("CAD") ||
-    sym.includes("CHF")
-  ) {
-    return 0.0001;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
   }
 
-  // Metals like XAUUSD, XAGUSD typically use 0.01
-  if (sym.startsWith("XAU") || sym.startsWith("XAG")) {
-    return 0.01;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getSideSpecificHighLow(
+  candle: PriceWindowRow,
+  tradeType: "long" | "short"
+) {
+  if (tradeType === "long") {
+    const bid = toNullableNumber(candle.bidPrice);
+    return {
+      high:
+        toNullableNumber(candle.highBid) ??
+        bid ??
+        toNullableNumber(candle.high),
+      low:
+        toNullableNumber(candle.lowBid) ??
+        bid ??
+        toNullableNumber(candle.low),
+    };
   }
 
-  // Default to 0.0001 for unknown symbols
-  return 0.0001;
+  const ask = toNullableNumber(candle.askPrice);
+  return {
+    high:
+      toNullableNumber(candle.highAsk) ??
+      ask ??
+      toNullableNumber(candle.high),
+    low:
+      toNullableNumber(candle.lowAsk) ??
+      ask ??
+      toNullableNumber(candle.low),
+  };
 }
 
 /**
@@ -84,15 +112,23 @@ export async function calculateManipulation(
       lowAsk: historicalPrices.lowAsk,
       high: historicalPrices.high,
       low: historicalPrices.low,
+      bidPrice: historicalPrices.bidPrice,
+      askPrice: historicalPrices.askPrice,
     })
     .from(historicalPrices)
     .where(
       and(
-        eq(historicalPrices.symbol, symbol.toUpperCase()),
+        eq(historicalPrices.accountId, accountId),
+        eq(historicalPrices.symbol, normalizeBrokerSymbol(symbol)),
         gte(historicalPrices.time, open),
         lte(historicalPrices.time, close),
-        // Prefer merged bid/ask data, but fallback to single-side data
-        sql`(${historicalPrices.highBid} IS NOT NULL OR ${historicalPrices.high} IS NOT NULL)`
+        sql`(
+          ${historicalPrices.highBid} IS NOT NULL OR
+          ${historicalPrices.highAsk} IS NOT NULL OR
+          ${historicalPrices.high} IS NOT NULL OR
+          ${historicalPrices.bidPrice} IS NOT NULL OR
+          ${historicalPrices.askPrice} IS NOT NULL
+        )`
       )
     )
     .orderBy(historicalPrices.time);
@@ -116,14 +152,7 @@ export async function calculateManipulation(
   // For longs: track lowest low (adverse) and highest high (favorable)
   // For shorts: track highest high (adverse) and lowest low (favorable)
   for (const candle of priceData) {
-    // Use merged bid/ask if available, otherwise use single-side data
-    const high = candle.highBid != null ? Number(candle.highBid) :
-                 candle.highAsk != null ? Number(candle.highAsk) :
-                 candle.high != null ? Number(candle.high) : null;
-
-    const low = candle.lowBid != null ? Number(candle.lowBid) :
-                candle.lowAsk != null ? Number(candle.lowAsk) :
-                candle.low != null ? Number(candle.low) : null;
+    const { high, low } = getSideSpecificHighLow(candle, tradeType);
 
     if (tradeType === "long") {
       // Adverse movement: how low did it go
@@ -155,7 +184,7 @@ export async function calculateManipulation(
 
   // Calculate manipulation pips (adverse movement from entry)
   let manipulationPips: number | null = null;
-  const pipSize = getPipSizeForSymbol(symbol);
+  const pipSize = await getBrokerPipSize(accountId, symbol);
 
   if (worstPrice !== null) {
     if (tradeType === "long") {
@@ -175,6 +204,83 @@ export async function calculateManipulation(
     manipulationPips: manipulationPips !== null ? Number(manipulationPips.toFixed(1)) : null,
     entryPeakPrice: bestPrice,
     entryPeakTimestamp: bestTime,
+  };
+}
+
+/**
+ * Calculate post-exit peak movement for a trade using historical price data
+ * Uses the same data source as manipulation calculation (historicalPrices).
+ */
+export async function calculatePostExitPeak(
+  tradeData: TradeData,
+  accountId: string,
+  windowSeconds: number
+): Promise<PostExitResult> {
+  const { symbol, tradeType, close } = tradeData;
+
+  const from = new Date(close);
+  const to = new Date(from.getTime() + windowSeconds * 1000);
+
+  const priceData = await db
+    .select({
+      time: historicalPrices.time,
+      highBid: historicalPrices.highBid,
+      lowBid: historicalPrices.lowBid,
+      highAsk: historicalPrices.highAsk,
+      lowAsk: historicalPrices.lowAsk,
+      high: historicalPrices.high,
+      low: historicalPrices.low,
+      bidPrice: historicalPrices.bidPrice,
+      askPrice: historicalPrices.askPrice,
+    })
+    .from(historicalPrices)
+    .where(
+      and(
+        eq(historicalPrices.accountId, accountId),
+        eq(historicalPrices.symbol, normalizeBrokerSymbol(symbol)),
+        gte(historicalPrices.time, from),
+        lte(historicalPrices.time, to),
+        sql`(
+          ${historicalPrices.highBid} IS NOT NULL OR
+          ${historicalPrices.highAsk} IS NOT NULL OR
+          ${historicalPrices.high} IS NOT NULL OR
+          ${historicalPrices.bidPrice} IS NOT NULL OR
+          ${historicalPrices.askPrice} IS NOT NULL
+        )`
+      )
+    )
+    .orderBy(historicalPrices.time);
+
+  if (!priceData || priceData.length === 0) {
+    console.warn(`No post-exit price data for trade ${tradeData.id}`);
+    return {
+      postExitPeakPrice: null,
+      postExitPeakTimestamp: null,
+    };
+  }
+
+  let peakPrice: number | null = null;
+  let peakTime: Date | null = null;
+
+  for (const candle of priceData) {
+    const { high, low } = getSideSpecificHighLow(candle, tradeType);
+
+    if (tradeType === "long") {
+      if (high != null && (peakPrice === null || high > peakPrice)) {
+        peakPrice = high;
+        peakTime = candle.time;
+      }
+    } else {
+      if (low != null && (peakPrice === null || low < peakPrice)) {
+        peakPrice = low;
+        peakTime = candle.time;
+      }
+    }
+  }
+
+  return {
+    postExitPeakPrice: peakPrice,
+    postExitPeakTimestamp: peakTime,
   };
 }
 
@@ -305,4 +411,197 @@ export async function updateAccountManipulation(
   }
 
   return { processed, failed };
+}
+
+/**
+ * Batch update post-exit peak data for all trades in an account
+ */
+export async function updateAccountPostExitPeaks(
+  accountId: string,
+  windowSeconds: number,
+  onlyMissing: boolean = true,
+  progressCallback?: (current: number, total: number) => void
+): Promise<{ processed: number; failed: number }> {
+  const trades = await db
+    .select({
+      id: trade.id,
+      symbol: trade.symbol,
+      openPrice: trade.openPrice,
+      closePrice: trade.closePrice,
+      tradeType: trade.tradeType,
+      open: trade.open,
+      close: trade.close,
+      entryPeakTimestamp: trade.entryPeakTimestamp,
+      postExitPeakTimestamp: trade.postExitPeakTimestamp,
+    })
+    .from(trade)
+    .where(eq(trade.accountId, accountId))
+    .orderBy(trade.open);
+
+  let processed = 0;
+  let failed = 0;
+
+  for (const tradeData of trades) {
+    try {
+      if (
+        !tradeData.symbol ||
+        !tradeData.tradeType ||
+        !tradeData.open ||
+        !tradeData.close
+      ) {
+        failed++;
+        continue;
+      }
+
+      if (onlyMissing && tradeData.postExitPeakTimestamp != null) {
+        processed++;
+        continue;
+      }
+
+      const postExit = await calculatePostExitPeak(
+        {
+          id: tradeData.id,
+          symbol: tradeData.symbol,
+          openPrice: Number(tradeData.openPrice || 0),
+          closePrice: Number(tradeData.closePrice || 0),
+          tradeType: tradeData.tradeType as "long" | "short",
+          open: new Date(tradeData.open),
+          close: new Date(tradeData.close),
+        },
+        accountId,
+        windowSeconds
+      );
+
+      const entryPeakSeconds =
+        tradeData.entryPeakTimestamp && tradeData.open
+          ? Math.max(
+              0,
+              Math.floor(
+                (new Date(tradeData.entryPeakTimestamp).getTime() -
+                  new Date(tradeData.open).getTime()) /
+                  1000
+              )
+            )
+          : null;
+
+      const postExitSeconds =
+        postExit.postExitPeakTimestamp && tradeData.close
+          ? Math.max(
+              0,
+              Math.floor(
+                (new Date(postExit.postExitPeakTimestamp).getTime() -
+                  new Date(tradeData.close).getTime()) /
+                  1000
+              )
+            )
+          : null;
+
+      await db
+        .update(trade)
+        .set({
+          postExitPeakPrice: postExit.postExitPeakPrice?.toString() || null,
+          postExitPeakTimestamp: postExit.postExitPeakTimestamp || null,
+          postExitSamplingDuration: windowSeconds,
+          postExitPeakDurationSeconds:
+            postExitSeconds != null ? postExitSeconds : null,
+          entryPeakDurationSeconds:
+            entryPeakSeconds != null ? entryPeakSeconds : null,
+        })
+        .where(eq(trade.id, tradeData.id));
+
+      processed++;
+
+      if (progressCallback) {
+        progressCallback(processed + failed, trades.length);
+      }
+    } catch (error) {
+      console.error(`Error processing post-exit for trade ${tradeData.id}:`, error);
+      failed++;
+    }
+  }
+
+  return { processed, failed };
+}
+
+/**
+ * Update post-exit peak data for a single trade
+ */
+export async function updateTradePostExitPeak(
+  tradeId: string,
+  accountId: string,
+  windowSeconds: number
+): Promise<void> {
+  const trades = await db
+    .select({
+      id: trade.id,
+      symbol: trade.symbol,
+      openPrice: trade.openPrice,
+      closePrice: trade.closePrice,
+      tradeType: trade.tradeType,
+      open: trade.open,
+      close: trade.close,
+      entryPeakTimestamp: trade.entryPeakTimestamp,
+      postExitPeakTimestamp: trade.postExitPeakTimestamp,
+    })
+    .from(trade)
+    .where(and(eq(trade.id, tradeId), eq(trade.accountId, accountId)))
+    .limit(1);
+
+  if (!trades.length) return;
+  const tradeData = trades[0];
+
+  if (!tradeData.symbol || !tradeData.tradeType || !tradeData.open || !tradeData.close) {
+    return;
+  }
+
+  const postExit = await calculatePostExitPeak(
+    {
+      id: tradeData.id,
+      symbol: tradeData.symbol,
+      openPrice: Number(tradeData.openPrice || 0),
+      closePrice: Number(tradeData.closePrice || 0),
+      tradeType: tradeData.tradeType as "long" | "short",
+      open: new Date(tradeData.open),
+      close: new Date(tradeData.close),
+    },
+    accountId,
+    windowSeconds
+  );
+
+  if (!postExit.postExitPeakTimestamp) return;
+
+  const entryPeakSeconds =
+    tradeData.entryPeakTimestamp && tradeData.open
+      ? Math.max(
+          0,
+          Math.floor(
+            (new Date(tradeData.entryPeakTimestamp).getTime() -
+              new Date(tradeData.open).getTime()) /
+              1000
+          )
+        )
+      : null;
+
+  const postExitSeconds =
+    postExit.postExitPeakTimestamp && tradeData.close
+      ? Math.max(
+          0,
+          Math.floor(
+            (new Date(postExit.postExitPeakTimestamp).getTime() -
+              new Date(tradeData.close).getTime()) /
+              1000
+          )
+        )
+      : null;
+
+  await db
+    .update(trade)
+    .set({
+      postExitPeakPrice: postExit.postExitPeakPrice?.toString() || null,
+      postExitPeakTimestamp: postExit.postExitPeakTimestamp || null,
+      postExitSamplingDuration: windowSeconds,
+      postExitPeakDurationSeconds: postExitSeconds != null ? postExitSeconds : null,
+      entryPeakDurationSeconds: entryPeakSeconds != null ? entryPeakSeconds : null,
+    })
+    .where(eq(trade.id, tradeData.id));
 }

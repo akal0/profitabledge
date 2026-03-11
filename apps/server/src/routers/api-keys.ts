@@ -6,6 +6,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { createHash } from "crypto";
+import { createNotification } from "../lib/notifications";
 
 /**
  * Hash API key for secure storage
@@ -79,6 +80,18 @@ export const apiKeysRouter = router({
         updatedAt: new Date(),
       });
 
+      await createNotification({
+        userId: ctx.session.user.id,
+        type: "api_key",
+        title: "API key created",
+        body: `${input.name} (${prefix}) created.`,
+        metadata: {
+          name: input.name,
+          keyPrefix: prefix,
+          expiresAt,
+        },
+      });
+
       // Return the full key ONCE
       // Frontend must show a warning to save it
       return {
@@ -101,7 +114,7 @@ export const apiKeysRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Verify key belongs to user
       const result = await db
-        .select({ userId: apiKey.userId })
+        .select({ userId: apiKey.userId, name: apiKey.name, keyPrefix: apiKey.keyPrefix })
         .from(apiKey)
         .where(eq(apiKey.id, input.keyId))
         .limit(1);
@@ -129,6 +142,18 @@ export const apiKeysRouter = router({
         })
         .where(eq(apiKey.id, input.keyId));
 
+      await createNotification({
+        userId: ctx.session.user.id,
+        type: "api_key",
+        title: "API key revoked",
+        body: `${result[0].name} (${result[0].keyPrefix}) revoked.`,
+        metadata: {
+          keyId: input.keyId,
+          name: result[0].name,
+          keyPrefix: result[0].keyPrefix,
+        },
+      });
+
       return { success: true };
     }),
 
@@ -144,7 +169,7 @@ export const apiKeysRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Verify key belongs to user
       const result = await db
-        .select({ userId: apiKey.userId })
+        .select({ userId: apiKey.userId, name: apiKey.name, keyPrefix: apiKey.keyPrefix })
         .from(apiKey)
         .where(eq(apiKey.id, input.keyId))
         .limit(1);
@@ -166,6 +191,18 @@ export const apiKeysRouter = router({
       // Delete permanently
       await db.delete(apiKey).where(eq(apiKey.id, input.keyId));
 
+      await createNotification({
+        userId: ctx.session.user.id,
+        type: "api_key",
+        title: "API key deleted",
+        body: `${result[0].name} (${result[0].keyPrefix}) deleted.`,
+        metadata: {
+          keyId: input.keyId,
+          name: result[0].name,
+          keyPrefix: result[0].keyPrefix,
+        },
+      });
+
       return { success: true };
     }),
 
@@ -182,7 +219,7 @@ export const apiKeysRouter = router({
     .mutation(async ({ input, ctx }) => {
       // Verify key belongs to user
       const result = await db
-        .select({ userId: apiKey.userId })
+        .select({ userId: apiKey.userId, name: apiKey.name, keyPrefix: apiKey.keyPrefix })
         .from(apiKey)
         .where(eq(apiKey.id, input.keyId))
         .limit(1);
@@ -208,6 +245,19 @@ export const apiKeysRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(apiKey.id, input.keyId));
+
+      await createNotification({
+        userId: ctx.session.user.id,
+        type: "api_key",
+        title: "API key renamed",
+        body: `${result[0].name} renamed to ${input.name}.`,
+        metadata: {
+          keyId: input.keyId,
+          previousName: result[0].name,
+          name: input.name,
+          keyPrefix: result[0].keyPrefix,
+        },
+      });
 
       return { success: true };
     }),

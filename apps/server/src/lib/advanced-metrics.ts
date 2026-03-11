@@ -6,7 +6,7 @@
  * Post-exit metrics only consider price action after exit timestamp.
  */
 
-import { getPipSizeForSymbol } from "./dukascopy";
+import { getPipSizeForSymbol, normalizePipValue } from "./dukascopy";
 
 export interface TradeData {
   id: string;
@@ -41,6 +41,7 @@ export interface TradeData {
  * 1. Manipulation (Pips)
  * Type: Stored (or derived once per trade)
  * Description: Raw size of the manipulation leg used as structural reference.
+ * Note: Values are normalized for indices (US100, US30, etc.) for better comparison
  */
 export function calculateManipulationPips(
   manipHigh: number | null,
@@ -49,7 +50,8 @@ export function calculateManipulationPips(
 ): number | null {
   if (manipHigh == null || manipLow == null) return null;
   const pipSize = getPipSizeForSymbol(symbol);
-  return Math.abs(manipHigh - manipLow) / pipSize;
+  const rawPips = Math.abs(manipHigh - manipLow) / pipSize;
+  return normalizePipValue(rawPips, symbol);
 }
 
 /**
@@ -86,6 +88,44 @@ export function calculateMPEManipLegR(trade: TradeData): number | null {
   }
 
   return maxMovePips / slPips;
+}
+
+/**
+ * 2.1 MFE/MAE (Pips)
+ * Type: Derived
+ * Description: Max favorable/adverse excursion in pips during the trade.
+ * Note: Values are normalized for indices (US100, US30, etc.) for better comparison
+ */
+export function calculateMFEPips(trade: TradeData): number | null {
+  const { tradeDirection, entryPrice, manipulationHigh, manipulationLow, symbol } = trade;
+  if (entryPrice == null || manipulationHigh == null || manipulationLow == null) return null;
+  const pipSize = getPipSizeForSymbol(symbol);
+  if (pipSize === 0) return null;
+
+  let rawPips: number;
+  if (tradeDirection === "long") {
+    rawPips = Math.max(0, (manipulationHigh - entryPrice) / pipSize);
+  } else {
+    rawPips = Math.max(0, (entryPrice - manipulationLow) / pipSize);
+  }
+
+  return normalizePipValue(rawPips, symbol);
+}
+
+export function calculateMAEPips(trade: TradeData): number | null {
+  const { tradeDirection, entryPrice, manipulationHigh, manipulationLow, symbol } = trade;
+  if (entryPrice == null || manipulationHigh == null || manipulationLow == null) return null;
+  const pipSize = getPipSizeForSymbol(symbol);
+  if (pipSize === 0) return null;
+
+  let rawPips: number;
+  if (tradeDirection === "long") {
+    rawPips = Math.max(0, (entryPrice - manipulationLow) / pipSize);
+  } else {
+    rawPips = Math.max(0, (manipulationHigh - entryPrice) / pipSize);
+  }
+
+  return normalizePipValue(rawPips, symbol);
 }
 
 /**
@@ -354,6 +394,97 @@ export function calculateOutcome(trade: TradeData): "Win" | "Loss" | "BE" | "PW"
 }
 
 /**
+ * INTENT METRICS - What the user planned
+ */
+
+/**
+ * Planned R:R - Initial risk-to-reward ratio based on TP/SL placement
+ */
+export function calculatePlannedRR(trade: TradeData): number | null {
+  const { entryPrice, tp, sl } = trade;
+
+  if (tp == null || sl == null || entryPrice == null) return null;
+
+  const riskDistance = Math.abs(entryPrice - sl);
+  if (riskDistance === 0) return null;
+
+  const rewardDistance = Math.abs(tp - entryPrice);
+  return rewardDistance / riskDistance;
+}
+
+/**
+ * Planned Risk (Pips) - Distance from entry to stop loss
+ * Note: Values are normalized for indices (US100, US30, etc.) for better comparison
+ */
+export function calculatePlannedRiskPips(trade: TradeData): number | null {
+  const { entryPrice, sl, symbol } = trade;
+
+  if (sl == null || entryPrice == null) return null;
+
+  const pipSize = getPipSizeForSymbol(symbol);
+  const rawPips = Math.abs(entryPrice - sl) / pipSize;
+  return normalizePipValue(rawPips, symbol);
+}
+
+/**
+ * Planned Target (Pips) - Distance from entry to take profit
+ * Note: Values are normalized for indices (US100, US30, etc.) for better comparison
+ */
+export function calculatePlannedTargetPips(trade: TradeData): number | null {
+  const { entryPrice, tp, symbol } = trade;
+
+  if (tp == null || entryPrice == null) return null;
+
+  const pipSize = getPipSizeForSymbol(symbol);
+  const rawPips = Math.abs(tp - entryPrice) / pipSize;
+  return normalizePipValue(rawPips, symbol);
+}
+
+/**
+ * EFFICIENCY METRICS - How well opportunity was used
+ */
+
+/**
+ * Exit Efficiency - Timing quality vs post-exit peak
+ * 100% = exited at perfect time
+ * <100% = left opportunity on table
+ */
+export function calculateExitEfficiency(trade: TradeData): number | null {
+  const { tradeDirection, entryPrice, sl, closePrice, postExitPeakPrice, symbol } = trade;
+
+  if (
+    sl == null ||
+    closePrice == null ||
+    postExitPeakPrice == null ||
+    entryPrice == null
+  ) {
+    return null;
+  }
+
+  const pipSize = getPipSizeForSymbol(symbol);
+  const slPips = Math.abs(entryPrice - sl) / pipSize;
+
+  if (slPips === 0) return null;
+
+  const direction = tradeDirection === "long" ? 1 : -1;
+
+  // Calculate realized R at close
+  const realizedMovePips = (direction * (closePrice - entryPrice)) / pipSize;
+  const realizedR = realizedMovePips / slPips;
+
+  // Calculate max available R from post-exit peak
+  const postExitMovePips =
+    (direction * (postExitPeakPrice - entryPrice)) / pipSize;
+  const postExitMaxR = postExitMovePips / slPips;
+
+  // Avoid division by zero
+  if (postExitMaxR === 0) return null;
+
+  // Efficiency = what you got / what was available after exit
+  return (realizedR / postExitMaxR) * 100;
+}
+
+/**
  * Calculate all advanced metrics for a trade
  */
 export function calculateAllAdvancedMetrics(
@@ -361,48 +492,62 @@ export function calculateAllAdvancedMetrics(
   totalTradesInAccount: number = 0,
   disableSampleGating: boolean = false
 ) {
+  // Intent metrics (what was planned)
+  const plannedRR = calculatePlannedRR(trade);
+  const plannedRiskPips = calculatePlannedRiskPips(trade);
+  const plannedTargetPips = calculatePlannedTargetPips(trade);
+
+  // Opportunity metrics
   const manipulationPips = calculateManipulationPips(
     trade.manipulationHigh,
     trade.manipulationLow,
     trade.symbol
   );
-
+  const mfePips = calculateMFEPips(trade);
+  const maePips = calculateMAEPips(trade);
   const mpeManipLegR = calculateMPEManipLegR(trade);
   const mpeManipPE_R = calculateMPEManipPE_R(trade);
   const maxRR = calculateMaxRR(trade);
-  const realisedRR = calculateRealisedRR(trade);
-  const rrCaptureEfficiency = calculateRRCaptureEfficiency(trade);
-  const manipRREfficiency = calculateManipRREfficiency(trade);
   const rawSTDV = calculateRawSTDV(trade);
   const rawSTDV_PE = calculateRawSTDV_PE(trade);
   const stdvBucket = calculateSTDVBucket(rawSTDV);
   const estimatedWeightedMPE_R = calculateEstimatedWeightedMPE_R(trade, totalTradesInAccount, 100, disableSampleGating);
+
+  // Execution metrics
+  const realisedRR = calculateRealisedRR(trade);
   const outcome = calculateOutcome(trade);
 
-  return {
-    // Stored/derived once
-    manipulationPips,
+  // Efficiency metrics (how well opportunity was used)
+  const rrCaptureEfficiency = calculateRRCaptureEfficiency(trade);
+  const manipRREfficiency = calculateManipRREfficiency(trade);
+  const exitEfficiency = calculateExitEfficiency(trade);
 
-    // R-based metrics
+  return {
+    // Intent metrics
+    plannedRR,
+    plannedRiskPips,
+    plannedTargetPips,
+
+    // Opportunity metrics
+    manipulationPips,
+    mfePips,
+    maePips,
     mpeManipLegR,
     mpeManipPE_R,
     maxRR,
+    rawSTDV,
+    rawSTDV_PE,
+    stdvBucket,
+    estimatedWeightedMPE_R,
+
+    // Execution metrics
     realisedRR,
+    outcome,
 
     // Efficiency metrics
     rrCaptureEfficiency,
     manipRREfficiency,
-
-    // Volatility metrics
-    rawSTDV,
-    rawSTDV_PE,
-    stdvBucket,
-
-    // Advanced
-    estimatedWeightedMPE_R,
-
-    // Classification
-    outcome,
+    exitEfficiency,
   };
 }
 

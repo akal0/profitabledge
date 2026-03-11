@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "open_trade_account_ticket_idx" ON "open_trade" ("account_id","ticket");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "open_trade_account_idx" ON "open_trade" ("account_id");

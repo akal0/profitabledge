@@ -3,6 +3,8 @@ import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
 import { tradingAccount, trade } from "../db/schema/trading";
 import { randomUUID } from "crypto";
+import { createNotification } from "../lib/notifications";
+import { buildAutoPropAccountFields } from "../lib/prop-firm-detection";
 
 function parseCsv(content: string): Array<Record<string, string>> {
   const lines = content.trim().split(/\r?\n/).filter(Boolean);
@@ -82,6 +84,11 @@ export const uploadRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const { updates: autoPropFields } = await buildAutoPropAccountFields({
+        broker: input.broker,
+        brokerServer: null,
+        initialBalance: input.initialBalance ?? null,
+      });
 
       const csvBuffer = Buffer.from(input.csvBase64, "base64");
       const rows = parseCsv(csvBuffer.toString("utf8"));
@@ -94,6 +101,7 @@ export const uploadRouter = router({
         broker: input.broker,
         initialBalance: input.initialBalance as any,
         initialCurrency: input.initialCurrency ?? null,
+        ...autoPropFields,
       });
 
       const inserts = rows.map((r) => {
@@ -190,8 +198,40 @@ export const uploadRouter = router({
       });
 
       if (inserts.length) {
-        await db.insert(trade).values(inserts as any);
+        const insertedTrades = await db
+          .insert(trade)
+          .values(inserts as any)
+          .returning({ id: trade.id });
+
+        // Generate feed events for closed trades (async, don't block)
+        if (insertedTrades.length > 0) {
+          Promise.all(
+            insertedTrades.map((t) =>
+              import("../lib/feed-event-generator").then((m) =>
+                m
+                  .generateFeedEventForTrade(t.id)
+                  .catch((err) =>
+                    console.error("Feed event generation failed:", err)
+                  )
+              )
+            )
+          ).catch((err) => console.error("Feed event batch failed:", err));
+        }
       }
+
+      await createNotification({
+        userId,
+        accountId,
+        type: "trade_imported",
+        title: "CSV import complete",
+        body: `${inserts.length} trades imported into ${input.name}.`,
+        metadata: {
+          accountId,
+          accountName: input.name,
+          broker: input.broker,
+          tradesImported: inserts.length,
+        },
+      });
 
       return { accountId };
     }),

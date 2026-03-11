@@ -1,9 +1,83 @@
 import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
 import { user as userTable } from "../db/schema/auth";
-import { and, eq, ne } from "drizzle-orm";
+import { tradingAccount, trade } from "../db/schema/trading";
+import { and, eq, ne, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { createNotification } from "../lib/notifications";
+
+const DASHBOARD_WIDGET_IDS = [
+  "account-balance",
+  "account-equity",
+  "win-rate",
+  "profit-factor",
+  "win-streak",
+  "hold-time",
+  "average-rr",
+  "asset-profitability",
+  "trade-counts",
+  "profit-expectancy",
+  "total-losses",
+  "consistency-score",
+  "open-trades",
+  "risk-calculator",
+  "execution-scorecard",
+  "money-left-on-table",
+  "watchlist",
+  "session-performance",
+  "streak-calendar",
+  "tiltmeter",
+  "daily-briefing",
+  "session-coach",
+  "risk-intelligence",
+  "rule-compliance",
+  "edge-summary",
+  "edge-coach",
+  "what-if",
+  "benchmark",
+] as const;
+
+const CALENDAR_WIDGET_IDS = [
+  "net-pl",
+  "win-rate",
+  "largest-trade",
+  "largest-loss",
+  "hold-time",
+  "avg-trade",
+] as const;
+
+const CHART_WIDGET_IDS = [
+  "daily-net",
+  "performance-weekday",
+  "performing-assets",
+  "equity-curve",
+  "drawdown-chart",
+  "performance-heatmap",
+  "streak-distribution",
+  "r-multiple-distribution",
+  "mae-mfe-scatter",
+  "entry-exit-time",
+  "monte-carlo",
+  "rolling-performance",
+  "correlation-matrix",
+  "radar-comparison",
+  "risk-adjusted",
+  "bell-curve",
+] as const;
+
+type DashboardWidgetId = (typeof DASHBOARD_WIDGET_IDS)[number];
+type CalendarWidgetId = (typeof CALENDAR_WIDGET_IDS)[number];
+type ChartWidgetId = (typeof CHART_WIDGET_IDS)[number];
+
+const isDashboardWidgetId = (value: string): value is DashboardWidgetId =>
+  DASHBOARD_WIDGET_IDS.includes(value as DashboardWidgetId);
+
+const isCalendarWidgetId = (value: string): value is CalendarWidgetId =>
+  CALENDAR_WIDGET_IDS.includes(value as CalendarWidgetId);
+
+const isChartWidgetId = (value: string): value is ChartWidgetId =>
+  CHART_WIDGET_IDS.includes(value as ChartWidgetId);
 
 export const usersRouter = router({
   me: protectedProcedure.query(async ({ ctx }) => {
@@ -17,10 +91,18 @@ export const usersRouter = router({
         email: userTable.email,
         emailVerified: userTable.emailVerified,
         image: userTable.image,
+        twitter: userTable.twitter,
+        discord: userTable.discord,
+        displayName: userTable.displayName,
+        bio: userTable.bio,
+        location: userTable.location,
+        website: userTable.website,
+        profileBannerUrl: userTable.profileBannerUrl,
         widgetPreferences: userTable.widgetPreferences,
         chartWidgetPreferences: userTable.chartWidgetPreferences,
         tablePreferences: userTable.tablePreferences,
         advancedMetricsPreferences: userTable.advancedMetricsPreferences,
+        notificationPreferences: userTable.notificationPreferences,
         createdAt: userTable.createdAt,
         updatedAt: userTable.updatedAt,
       })
@@ -39,42 +121,157 @@ export const usersRouter = router({
       "win-rate",
       "win-streak",
       "profit-factor",
-    ] as const;
+    ] as const satisfies readonly DashboardWidgetId[];
+    const defaultWidgetSpans = {
+      "asset-profitability": 2,
+    } as const satisfies Partial<Record<DashboardWidgetId, number>>;
+
+    const defaultCalendarWidgets = [
+      "net-pl",
+      "win-rate",
+      "largest-trade",
+      "largest-loss",
+      "hold-time",
+      "avg-trade",
+    ] as const satisfies readonly CalendarWidgetId[];
+
+    const defaultCalendarSpans = {} as const;
 
     const defaultChartWidgets = [
       "daily-net",
       "performance-weekday",
       "performing-assets",
-    ] as const;
+    ] as const satisfies readonly ChartWidgetId[];
 
-    const widgetsFromDb = (currentUser as any)?.widgetPreferences?.widgets as
+    const currentWidgetPrefs = (currentUser as any)?.widgetPreferences || {};
+    let nextWidgetPrefs = currentWidgetPrefs;
+    let shouldUpdateWidgets = false;
+
+    const widgetsFromDb = currentWidgetPrefs?.widgets as string[] | undefined;
+    const spansFromDb = (currentWidgetPrefs?.spans ?? {}) as Record<
+      string,
+      number
+    >;
+    if (!Array.isArray(widgetsFromDb) || widgetsFromDb.length === 0) {
+      nextWidgetPrefs = {
+        ...nextWidgetPrefs,
+        widgets: defaultWidgets,
+        spans: defaultWidgetSpans,
+      };
+      shouldUpdateWidgets = true;
+    } else {
+      const filteredWidgets = Array.from(
+        new Set(widgetsFromDb.filter(isDashboardWidgetId))
+      ).slice(0, 15);
+      const cleanedSpans = Object.fromEntries(
+        Object.entries(spansFromDb).filter(
+          ([key, value]) =>
+            isDashboardWidgetId(key) &&
+            typeof value === "number" &&
+            Number.isFinite(value)
+        )
+      );
+
+      const needsWidgetCleanup =
+        filteredWidgets.length !== widgetsFromDb.length ||
+        Object.keys(cleanedSpans).length !== Object.keys(spansFromDb).length;
+
+      if (needsWidgetCleanup) {
+        nextWidgetPrefs = {
+          ...nextWidgetPrefs,
+          widgets:
+            filteredWidgets.length > 0 ? filteredWidgets : defaultWidgets,
+          spans: cleanedSpans,
+        };
+        shouldUpdateWidgets = true;
+      }
+    }
+
+    const calendarFromDb = currentWidgetPrefs?.calendar?.widgets as
       | string[]
       | undefined;
-    if (!Array.isArray(widgetsFromDb) || widgetsFromDb.length === 0) {
-      await db
-        .update(userTable)
-        .set({
-          widgetPreferences: { widgets: defaultWidgets },
-          updatedAt: new Date(),
-        })
-        .where(eq(userTable.id, userId));
-      return { ...currentUser, widgetPreferences: { widgets: defaultWidgets } };
+    const calendarSpansFromDb = (currentWidgetPrefs?.calendar?.spans ??
+      {}) as Record<string, number>;
+    if (!Array.isArray(calendarFromDb) || calendarFromDb.length === 0) {
+      // Only set defaults if calendar widgets don't exist at all
+      nextWidgetPrefs = {
+        ...nextWidgetPrefs,
+        calendar: {
+          widgets: defaultCalendarWidgets,
+          spans: defaultCalendarSpans,
+        },
+      };
+      shouldUpdateWidgets = true;
+    } else {
+      // User has calendar widgets - just validate them, don't add missing ones
+      const filtered = Array.from(
+        new Set(calendarFromDb.filter(isCalendarWidgetId))
+      ).slice(0, 6);
+      const cleanedSpans = Object.fromEntries(
+        Object.entries(calendarSpansFromDb).filter(
+          ([key, value]) =>
+            isCalendarWidgetId(key) &&
+            typeof value === "number" &&
+            Number.isFinite(value)
+        )
+      );
+      const needsCalendarCleanup =
+        filtered.length !== calendarFromDb.length ||
+        Object.keys(cleanedSpans).length !==
+          Object.keys(calendarSpansFromDb).length;
+
+      if (needsCalendarCleanup) {
+        nextWidgetPrefs = {
+          ...nextWidgetPrefs,
+          calendar: {
+            widgets: filtered,
+            spans: cleanedSpans,
+          },
+        };
+        shouldUpdateWidgets = true;
+      }
     }
 
     // Initialize default chart widgets if missing
     const chartFromDb = (currentUser as any)?.chartWidgetPreferences
       ?.widgets as string[] | undefined;
+    let nextChartPrefs = (currentUser as any)?.chartWidgetPreferences;
+    let shouldUpdateCharts = false;
     if (!Array.isArray(chartFromDb) || chartFromDb.length === 0) {
+      nextChartPrefs = { widgets: defaultChartWidgets };
+      shouldUpdateCharts = true;
+    } else {
+      const filteredCharts = Array.from(
+        new Set(chartFromDb.filter(isChartWidgetId))
+      ).slice(0, 25);
+      if (filteredCharts.length !== chartFromDb.length) {
+        nextChartPrefs = {
+          widgets:
+            filteredCharts.length > 0 ? filteredCharts : defaultChartWidgets,
+        };
+        shouldUpdateCharts = true;
+      }
+    }
+
+    if (shouldUpdateWidgets || shouldUpdateCharts) {
       await db
         .update(userTable)
         .set({
-          chartWidgetPreferences: { widgets: defaultChartWidgets },
+          ...(shouldUpdateWidgets
+            ? { widgetPreferences: nextWidgetPrefs }
+            : {}),
+          ...(shouldUpdateCharts
+            ? { chartWidgetPreferences: nextChartPrefs }
+            : {}),
           updatedAt: new Date(),
         })
         .where(eq(userTable.id, userId));
       return {
         ...currentUser,
-        chartWidgetPreferences: { widgets: defaultChartWidgets },
+        ...(shouldUpdateWidgets ? { widgetPreferences: nextWidgetPrefs } : {}),
+        ...(shouldUpdateCharts
+          ? { chartWidgetPreferences: nextChartPrefs }
+          : {}),
       };
     }
 
@@ -115,7 +312,19 @@ export const usersRouter = router({
         .where(eq(userTable.id, userId))
         .limit(1);
       const curr = (rows[0]?.tablePreferences as any) || {};
-      const next = { ...curr, [input.tableId]: input.preferences };
+      const currentTablePreferences =
+        curr[input.tableId] &&
+        typeof curr[input.tableId] === "object" &&
+        !Array.isArray(curr[input.tableId])
+          ? curr[input.tableId]
+          : {};
+      const nextTablePreferences =
+        input.preferences &&
+        typeof input.preferences === "object" &&
+        !Array.isArray(input.preferences)
+          ? { ...currentTablePreferences, ...input.preferences }
+          : input.preferences;
+      const next = { ...curr, [input.tableId]: nextTablePreferences };
       await db
         .update(userTable)
         .set({ tablePreferences: next, updatedAt: new Date() })
@@ -126,49 +335,88 @@ export const usersRouter = router({
   updateWidgetPreferences: protectedProcedure
     .input(
       z.object({
-        widgets: z
-          .array(
-            z.enum([
-              "account-balance",
-              "account-equity",
-              "win-rate",
-              "profit-factor",
-              "win-streak",
-              "hold-time",
-              "average-rr",
-              "asset-profitability",
-              "trade-counts",
-              "profit-expectancy",
-              "total-losses",
-              "consistency-score",
-              "open-trades",
-            ])
+        widgets: z.array(z.enum(DASHBOARD_WIDGET_IDS)).max(15).default([]),
+        spans: z
+          .record(
+            z.enum(DASHBOARD_WIDGET_IDS),
+            z.number().int().min(1).max(5).optional()
           )
-          .max(15)
-          .default([]),
+          .optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const cleanedSpans = Object.fromEntries(
+        Object.entries(input.spans ?? {}).filter(
+          ([, value]) => typeof value === "number" && Number.isFinite(value)
+        )
+      );
+      const rows = await db
+        .select({ widgetPreferences: userTable.widgetPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const current = (rows[0]?.widgetPreferences as any) || {};
+      const next = { ...current, widgets: input.widgets, spans: cleanedSpans };
       await db
         .update(userTable)
         .set({
-          widgetPreferences: { widgets: input.widgets },
+          widgetPreferences: next,
           updatedAt: new Date(),
         })
         .where(eq(userTable.id, userId));
       return { ok: true } as const;
     }),
 
+  updateCalendarWidgetPreferences: protectedProcedure
+    .input(
+      z.object({
+        widgets: z.array(z.enum(CALENDAR_WIDGET_IDS)).max(6).default([]),
+        spans: z
+          .record(
+            z.enum(CALENDAR_WIDGET_IDS),
+            z.number().int().min(1).max(2).optional()
+          )
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const cleanedSpans = Object.fromEntries(
+        Object.entries(input.spans ?? {}).filter(
+          ([, value]) => typeof value === "number" && Number.isFinite(value)
+        )
+      );
+      const rows = await db
+        .select({ widgetPreferences: userTable.widgetPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const current = (rows[0]?.widgetPreferences as any) || {};
+
+      const next = {
+        ...current,
+        calendar: {
+          widgets: input.widgets,
+          spans: cleanedSpans,
+        },
+      };
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: next,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      return { ok: true } as const;
+    }),
+
   updateChartWidgetPreferences: protectedProcedure
     .input(
       z.object({
-        widgets: z
-          .array(
-            z.enum(["daily-net", "performance-weekday", "performing-assets"]) // chart widget keys
-          )
-          .max(15)
-          .default([]),
+        widgets: z.array(z.enum(CHART_WIDGET_IDS)).max(25).default([]),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -183,6 +431,95 @@ export const usersRouter = router({
       return { ok: true } as const;
     }),
 
+  updateAllWidgetPreferences: protectedProcedure
+    .input(
+      z.object({
+        widgets: z.array(z.enum(DASHBOARD_WIDGET_IDS)).max(15).optional(),
+        spans: z
+          .record(
+            z.enum(DASHBOARD_WIDGET_IDS),
+            z.number().int().min(1).max(5).optional()
+          )
+          .optional(),
+        calendarWidgets: z.array(z.enum(CALENDAR_WIDGET_IDS)).max(6).optional(),
+        calendarSpans: z
+          .record(
+            z.enum(CALENDAR_WIDGET_IDS),
+            z.number().int().min(1).max(2).optional()
+          )
+          .optional(),
+        chartWidgets: z.array(z.enum(CHART_WIDGET_IDS)).max(25).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Read current preferences once
+      const rows = await db
+        .select({
+          widgetPreferences: userTable.widgetPreferences,
+          chartWidgetPreferences: userTable.chartWidgetPreferences,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const currentWidgetPrefs = (rows[0]?.widgetPreferences as any) || {};
+      const currentChartPrefs = (rows[0]?.chartWidgetPreferences as any) || {};
+
+      // Build new widgetPreferences
+      const nextWidgetPrefs = { ...currentWidgetPrefs };
+
+      // Update main widgets if provided
+      if (input.widgets !== undefined) {
+        nextWidgetPrefs.widgets = input.widgets;
+      }
+      if (input.spans !== undefined) {
+        const cleanedSpans = Object.fromEntries(
+          Object.entries(input.spans).filter(
+            ([, value]) => typeof value === "number" && Number.isFinite(value)
+          )
+        );
+        nextWidgetPrefs.spans = cleanedSpans;
+      }
+
+      // Update calendar widgets if provided
+      // IMPORTANT: Only update if calendarWidgets is explicitly provided (not just spans)
+      if (input.calendarWidgets !== undefined) {
+        const cleanedCalendarSpans = input.calendarSpans
+          ? Object.fromEntries(
+              Object.entries(input.calendarSpans).filter(
+                ([, value]) =>
+                  typeof value === "number" && Number.isFinite(value)
+              )
+            )
+          : {};
+
+        nextWidgetPrefs.calendar = {
+          widgets: input.calendarWidgets,
+          spans: cleanedCalendarSpans,
+        };
+      }
+
+      // Build new chartWidgetPreferences
+      const nextChartPrefs =
+        input.chartWidgets !== undefined
+          ? { widgets: input.chartWidgets }
+          : currentChartPrefs;
+
+      // Single atomic update
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: nextWidgetPrefs,
+          chartWidgetPreferences: nextChartPrefs,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      return { ok: true } as const;
+    }),
+
   updateProfile: protectedProcedure
     .input(
       z.object({
@@ -190,6 +527,13 @@ export const usersRouter = router({
         username: z.string().min(2),
         email: z.email().optional(),
         image: z.url().optional(),
+        twitter: z.string().optional().nullable(),
+        discord: z.string().optional().nullable(),
+        displayName: z.string().max(50).optional().nullable(),
+        bio: z.string().max(500).optional().nullable(),
+        location: z.string().max(100).optional().nullable(),
+        website: z.string().max(200).optional().nullable(),
+        profileBannerUrl: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -234,6 +578,13 @@ export const usersRouter = router({
         username: string | null;
         email: string;
         image: string | null;
+        twitter: string | null;
+        discord: string | null;
+        displayName: string | null;
+        bio: string | null;
+        location: string | null;
+        website: string | null;
+        profileBannerUrl: string | null;
         updatedAt: Date;
       }> = {
         name: input.fullName,
@@ -243,6 +594,13 @@ export const usersRouter = router({
 
       if (input.email) updates.email = input.email;
       if (input.image) updates.image = input.image;
+      if (input.twitter !== undefined) updates.twitter = input.twitter;
+      if (input.discord !== undefined) updates.discord = input.discord;
+      if (input.displayName !== undefined) updates.displayName = input.displayName;
+      if (input.bio !== undefined) updates.bio = input.bio;
+      if (input.location !== undefined) updates.location = input.location;
+      if (input.website !== undefined) updates.website = input.website;
+      if (input.profileBannerUrl !== undefined) updates.profileBannerUrl = input.profileBannerUrl;
 
       await db.update(userTable).set(updates).where(eq(userTable.id, userId));
 
@@ -261,7 +619,9 @@ export const usersRouter = router({
   getAdvancedMetricsPreferences: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
     const rows = await db
-      .select({ advancedMetricsPreferences: userTable.advancedMetricsPreferences })
+      .select({
+        advancedMetricsPreferences: userTable.advancedMetricsPreferences,
+      })
       .from(userTable)
       .where(eq(userTable.id, userId))
       .limit(1);
@@ -270,15 +630,34 @@ export const usersRouter = router({
 
     return {
       disableSampleGating: prefs?.disableSampleGating ?? false,
-      alphaWeightedMpe: prefs?.alphaWeightedMpe ?? 0.30,
+      alphaWeightedMpe: prefs?.alphaWeightedMpe ?? 0.3,
     };
   }),
+
+  getCompliancePreferences: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({
+          advancedMetricsPreferences: userTable.advancedMetricsPreferences,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const prefs = (rows[0]?.advancedMetricsPreferences as any) || {};
+      const rulesByAccount = (prefs.complianceRulesByAccount as any) || {};
+      return {
+        rules: rulesByAccount[input.accountId] || {},
+      };
+    }),
 
   updateAdvancedMetricsPreferences: protectedProcedure
     .input(
       z.object({
         disableSampleGating: z.boolean().optional(),
-        alphaWeightedMpe: z.number().min(0.20).max(0.40).optional(),
+        alphaWeightedMpe: z.number().min(0.2).max(0.4).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -286,7 +665,9 @@ export const usersRouter = router({
 
       // Get current preferences
       const rows = await db
-        .select({ advancedMetricsPreferences: userTable.advancedMetricsPreferences })
+        .select({
+          advancedMetricsPreferences: userTable.advancedMetricsPreferences,
+        })
         .from(userTable)
         .where(eq(userTable.id, userId))
         .limit(1);
@@ -296,8 +677,12 @@ export const usersRouter = router({
       // Merge with new values
       const updatedPrefs = {
         ...currentPrefs,
-        ...(input.disableSampleGating !== undefined && { disableSampleGating: input.disableSampleGating }),
-        ...(input.alphaWeightedMpe !== undefined && { alphaWeightedMpe: input.alphaWeightedMpe }),
+        ...(input.disableSampleGating !== undefined && {
+          disableSampleGating: input.disableSampleGating,
+        }),
+        ...(input.alphaWeightedMpe !== undefined && {
+          alphaWeightedMpe: input.alphaWeightedMpe,
+        }),
       };
 
       await db
@@ -308,6 +693,290 @@ export const usersRouter = router({
         })
         .where(eq(userTable.id, userId));
 
+      await createNotification({
+        userId,
+        type: "settings_updated",
+        title: "Advanced metrics updated",
+        body: "Advanced metrics preferences have been updated.",
+        metadata: {
+          updatedFields: Object.keys(input),
+        },
+      });
+
+      return { ok: true } as const;
+    }),
+
+  updateCompliancePreferences: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        rules: z.record(z.string(), z.unknown()).default({}),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({
+          advancedMetricsPreferences: userTable.advancedMetricsPreferences,
+        })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const currentPrefs = (rows[0]?.advancedMetricsPreferences as any) || {};
+      const currentRulesByAccount =
+        (currentPrefs.complianceRulesByAccount as any) || {};
+
+      const updatedPrefs = {
+        ...currentPrefs,
+        complianceRulesByAccount: {
+          ...currentRulesByAccount,
+          [input.accountId]: input.rules || {},
+        },
+      };
+
+      await db
+        .update(userTable)
+        .set({
+          advancedMetricsPreferences: updatedPrefs,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      await createNotification({
+        userId,
+        accountId: input.accountId,
+        type: "settings_updated",
+        title: "Compliance rules updated",
+        body: `Compliance rules updated for account ${input.accountId}.`,
+        metadata: {
+          accountId: input.accountId,
+          ruleCount: Object.keys(input.rules || {}).length,
+        },
+      });
+
+      return { ok: true } as const;
+    }),
+
+  /**
+   * Achievement System
+   * Check and return earned achievements based on trading milestones
+   */
+  getAchievements: protectedProcedure
+    .input(z.object({ accountId: z.string() }).optional())
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Get all user accounts if no specific one
+      const accounts = await db
+        .select({ id: tradingAccount.id })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.userId, userId));
+
+      const accountIds = input?.accountId
+        ? [input.accountId]
+        : accounts.map((a) => a.id);
+
+      if (accountIds.length === 0) return { achievements: [], score: 0 };
+
+      // Get all trades across accounts
+      const trades = await db
+        .select()
+        .from(trade)
+        .where(inArray(trade.accountId, accountIds));
+
+      const pnls = trades.map((t) => parseFloat(t.netPnl?.toString() || "0"));
+      const totalTrades = trades.length;
+      const totalPnl = pnls.reduce((s, p) => s + p, 0);
+      const wins = pnls.filter((p) => p > 0).length;
+      const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+      const grossWin = pnls.filter((p) => p > 0).reduce((s, p) => s + p, 0);
+      const grossLoss = Math.abs(
+        pnls.filter((p) => p < 0).reduce((s, p) => s + p, 0)
+      );
+      const pf = grossLoss > 0 ? grossWin / grossLoss : 0;
+
+      // Streak calculations
+      let maxWinStreak = 0;
+      let currentWinStreak = 0;
+      const sortedPnls = [...trades]
+        .sort(
+          (a, b) =>
+            new Date(a.openTime!).getTime() - new Date(b.openTime!).getTime()
+        )
+        .map((t) => parseFloat(t.netPnl?.toString() || "0"));
+      for (const p of sortedPnls) {
+        if (p > 0) {
+          currentWinStreak++;
+          maxWinStreak = Math.max(maxWinStreak, currentWinStreak);
+        } else currentWinStreak = 0;
+      }
+
+      // Daily profits
+      const dailyPnls: Record<string, number> = {};
+      for (const t of trades) {
+        if (!t.openTime) continue;
+        const d = new Date(t.openTime).toISOString().split("T")[0];
+        dailyPnls[d] =
+          (dailyPnls[d] || 0) + parseFloat(t.netPnl?.toString() || "0");
+      }
+      let maxGreenStreak = 0;
+      let currentGreenStreak = 0;
+      const sortedDays = Object.entries(dailyPnls).sort((a, b) =>
+        a[0].localeCompare(b[0])
+      );
+      for (const [, pnl] of sortedDays) {
+        if (pnl > 0) {
+          currentGreenStreak++;
+          maxGreenStreak = Math.max(maxGreenStreak, currentGreenStreak);
+        } else currentGreenStreak = 0;
+      }
+
+      // Define achievements
+      const allAchievements = [
+        {
+          id: "first_trade",
+          name: "First Trade",
+          description: "Complete your first trade",
+          icon: "🏁",
+          check: () => totalTrades >= 1,
+        },
+        {
+          id: "ten_trades",
+          name: "Getting Started",
+          description: "Complete 10 trades",
+          icon: "📊",
+          check: () => totalTrades >= 10,
+        },
+        {
+          id: "fifty_trades",
+          name: "Committed Trader",
+          description: "Complete 50 trades",
+          icon: "💪",
+          check: () => totalTrades >= 50,
+        },
+        {
+          id: "hundred_trades",
+          name: "Centurion",
+          description: "Complete 100 trades",
+          icon: "🎯",
+          check: () => totalTrades >= 100,
+        },
+        {
+          id: "five_hundred_trades",
+          name: "Veteran",
+          description: "Complete 500 trades",
+          icon: "⭐",
+          check: () => totalTrades >= 500,
+        },
+        {
+          id: "first_profit",
+          name: "In the Green",
+          description: "Achieve overall positive P&L",
+          icon: "💚",
+          check: () => totalPnl > 0,
+        },
+        {
+          id: "fifty_win_rate",
+          name: "Edge Found",
+          description: "Maintain 50%+ win rate (50+ trades)",
+          icon: "📈",
+          check: () => winRate >= 50 && totalTrades >= 50,
+        },
+        {
+          id: "sixty_win_rate",
+          name: "Sharp Shooter",
+          description: "Maintain 60%+ win rate (100+ trades)",
+          icon: "🎯",
+          check: () => winRate >= 60 && totalTrades >= 100,
+        },
+        {
+          id: "profit_factor_2",
+          name: "Double Edge",
+          description: "Achieve profit factor above 2.0",
+          icon: "💎",
+          check: () => pf >= 2 && totalTrades >= 30,
+        },
+        {
+          id: "win_streak_5",
+          name: "Hot Streak",
+          description: "Win 5 trades in a row",
+          icon: "🔥",
+          check: () => maxWinStreak >= 5,
+        },
+        {
+          id: "win_streak_10",
+          name: "Unstoppable",
+          description: "Win 10 trades in a row",
+          icon: "🏆",
+          check: () => maxWinStreak >= 10,
+        },
+        {
+          id: "green_week",
+          name: "Green Week",
+          description: "5 consecutive profitable days",
+          icon: "📅",
+          check: () => maxGreenStreak >= 5,
+        },
+        {
+          id: "green_month",
+          name: "Green Month",
+          description: "20 consecutive profitable days",
+          icon: "🗓️",
+          check: () => maxGreenStreak >= 20,
+        },
+        {
+          id: "thousand_pnl",
+          name: "First Grand",
+          description: "Earn $1,000 in total profit",
+          icon: "💰",
+          check: () => totalPnl >= 1000,
+        },
+        {
+          id: "ten_k_pnl",
+          name: "Five Figures",
+          description: "Earn $10,000 in total profit",
+          icon: "🤑",
+          check: () => totalPnl >= 10000,
+        },
+      ];
+
+      const earned = allAchievements.filter((a) => a.check());
+      const score = earned.length;
+
+      return {
+        achievements: allAchievements.map((a) => ({
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          icon: a.icon,
+          earned: a.check(),
+        })),
+        earned: earned.length,
+        total: allAchievements.length,
+        score,
+      };
+    }),
+
+  // ============== TIMEZONE MANAGEMENT ==============
+
+  updateTimezone: protectedProcedure
+    .input(z.object({ timezone: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({ widgetPreferences: userTable.widgetPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const current = (rows[0]?.widgetPreferences as any) || {};
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: { ...current, timezone: input.timezone },
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
       return { ok: true } as const;
     }),
 });

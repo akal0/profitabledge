@@ -3,7 +3,8 @@ import { z } from "zod";
 import { db } from "../db";
 import { trade, tradingAccount } from "../db/schema/trading";
 import { user } from "../db/schema/auth";
-import { and, desc, eq, lte, gte, sql } from "drizzle-orm";
+import { and, desc, eq, lte, gte, sql, inArray } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { getHistoricalRates } from "dukascopy-node";
 import {
   mapToDukascopyInstrument,
@@ -16,6 +17,18 @@ import {
   calculateConfidenceScore,
 } from "../lib/broker-profiles";
 import { calculateAllAdvancedMetrics, type TradeData } from "../lib/advanced-metrics";
+import {
+  updateAccountManipulation,
+  updateAccountPostExitPeaks,
+} from "../lib/manipulation-calculator";
+import { evaluateCompliance } from "../lib/compliance-audits";
+import { scoreOpenTrade } from "../lib/trade-scoring";
+import { enhancedCache, CacheTTL, cacheNamespaces } from "../lib/enhanced-cache";
+import {
+  ALL_ACCOUNTS_ID,
+  buildAccountScopeCondition,
+  resolveScopedAccountIds,
+} from "../lib/account-scope";
 
 // Interpret naive CSV timestamps (without timezone) as GMT+3 (FTMO MT5) and convert to UTC Date
 const ASSUMED_TZ_MINUTES = 0;
@@ -70,7 +83,117 @@ function parseNaiveAsUTC(raw: string | null): Date | null {
   return new Date(Date.UTC(y, mo, d, h, mi, s));
 }
 
+function getMt5BrokerMeta(
+  brokerMeta: unknown
+): Record<string, unknown> | null {
+  if (!brokerMeta || typeof brokerMeta !== "object" || Array.isArray(brokerMeta)) {
+    return null;
+  }
+
+  return brokerMeta as Record<string, unknown>;
+}
+
+function getMt5BrokerString(
+  brokerMeta: unknown,
+  key: string
+): string | null {
+  const meta = getMt5BrokerMeta(brokerMeta);
+  const value = meta?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function getMt5BrokerNumber(
+  brokerMeta: unknown,
+  key: string
+): number | null {
+  const meta = getMt5BrokerMeta(brokerMeta);
+  const value = meta?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+async function invalidateTradeScopeCaches(accountIds: string[]) {
+  const cacheTags = new Set<string>([`account:${ALL_ACCOUNTS_ID}`]);
+  for (const accountId of accountIds) {
+    if (accountId) {
+      cacheTags.add(`account:${accountId}`);
+    }
+  }
+
+  await enhancedCache.invalidateByTags([...cacheTags]);
+}
+
 export const tradesRouter = router({
+  // Get a single trade by ID
+  getById: protectedProcedure
+    .input(z.object({ tradeId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const result = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId,
+          symbol: trade.symbol,
+          tradeType: trade.tradeType,
+          volume: sql<number | null>`CAST(${trade.volume} AS NUMERIC)`,
+          openPrice: sql<number | null>`CAST(${trade.openPrice} AS NUMERIC)`,
+          closePrice: sql<number | null>`CAST(${trade.closePrice} AS NUMERIC)`,
+          sl: sql<number | null>`CAST(${trade.sl} AS NUMERIC)`,
+          tp: sql<number | null>`CAST(${trade.tp} AS NUMERIC)`,
+          profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
+          pips: sql<number | null>`CAST(${trade.pips} AS NUMERIC)`,
+          openTime: trade.openTime,
+          closeTime: trade.closeTime,
+          outcome: trade.outcome,
+          sessionTag: trade.sessionTag,
+          modelTag: trade.modelTag,
+          entryPeakPrice: sql<number | null>`CAST(${trade.entryPeakPrice} AS NUMERIC)`,
+          postExitPeakPrice: sql<number | null>`CAST(${trade.postExitPeakPrice} AS NUMERIC)`,
+          mfePips: sql<number | null>`CAST(${trade.mfePips} AS NUMERIC)`,
+          maePips: sql<number | null>`CAST(${trade.maePips} AS NUMERIC)`,
+          realisedRR: sql<number | null>`CAST(${trade.realisedRR} AS NUMERIC)`,
+          plannedRR: sql<number | null>`CAST(${trade.plannedRR} AS NUMERIC)`,
+          manipulationHigh: sql<number | null>`CAST(${trade.manipulationHigh} AS NUMERIC)`,
+          manipulationLow: sql<number | null>`CAST(${trade.manipulationLow} AS NUMERIC)`,
+          brokerMeta: trade.brokerMeta,
+        })
+        .from(trade)
+        .where(eq(trade.id, input.tradeId))
+        .limit(1);
+
+      if (!result[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Trade not found" });
+      }
+
+      // Verify ownership through account
+      const account = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, result[0].accountId))
+        .limit(1);
+
+      if (!account[0] || account[0].userId !== userId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+      }
+
+      return {
+        ...result[0],
+        brokerMeta: result[0].brokerMeta ?? null,
+        closeReason: getMt5BrokerString(result[0].brokerMeta, "closeReason"),
+        entrySource: getMt5BrokerString(result[0].brokerMeta, "entrySource"),
+        exitSource: getMt5BrokerString(result[0].brokerMeta, "exitSource"),
+        executionMode: getMt5BrokerString(result[0].brokerMeta, "executionMode"),
+        magicNumber: getMt5BrokerNumber(result[0].brokerMeta, "magicNumber"),
+      };
+    }),
+
   listInfinite: protectedProcedure
     .input(
       z.object({
@@ -84,13 +207,49 @@ export const tradesRouter = router({
         q: z.string().optional(),
 
         tradeDirection: z.enum(["all", "long", "short"]).default("all"),
+        ids: z.array(z.string()).optional(),
         symbols: z.array(z.string()).optional(),
         killzones: z.array(z.string()).optional(),
-        // future: sort, filters
+        sessionTags: z.array(z.string()).optional(),
+        modelTags: z.array(z.string()).optional(),
+        protocolAlignment: z
+          .array(z.enum(["aligned", "against", "discretionary"]))
+          .optional(),
+        outcomes: z.array(z.enum(["Win", "Loss", "BE", "PW"])).optional(),
+        holdMin: z.number().optional(),
+        holdMax: z.number().optional(),
+        volumeMin: z.number().optional(),
+        volumeMax: z.number().optional(),
+        profitMin: z.number().optional(),
+        profitMax: z.number().optional(),
+        commissionsMin: z.number().optional(),
+        commissionsMax: z.number().optional(),
+        swapMin: z.number().optional(),
+        swapMax: z.number().optional(),
+        slMin: z.number().optional(),
+        slMax: z.number().optional(),
+        tpMin: z.number().optional(),
+        tpMax: z.number().optional(),
+        rrMin: z.number().optional(),
+        rrMax: z.number().optional(),
+        mfeMin: z.number().optional(),
+        mfeMax: z.number().optional(),
+        maeMin: z.number().optional(),
+        maeMax: z.number().optional(),
+        efficiencyMin: z.number().optional(),
+        efficiencyMax: z.number().optional(),
       })
     )
     .query(async ({ input, ctx }) => {
       const { accountId, limit } = input;
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        accountId
+      );
+
+      if (scopedAccountIds.length === 0) {
+        return { items: [], nextCursor: undefined, totalTradesCount: 0 } as const;
+      }
 
       // Fetch user preferences for advanced metrics
       const userId = ctx.session.user.id;
@@ -102,17 +261,82 @@ export const tradesRouter = router({
 
       const advancedPrefs = (userRows[0]?.advancedMetricsPreferences as any) || {};
       const disableSampleGating = advancedPrefs.disableSampleGating ?? false;
+      const complianceRules =
+        scopedAccountIds.length === 1
+          ? (advancedPrefs.complianceRulesByAccount as any)?.[accountId] || {}
+          : {};
 
-      const whereClauses: any[] = [eq(trade.accountId, accountId)];
+      const whereClauses: any[] = [
+        buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+      ];
 
-      // createdAt based range filter (simple and efficient)
-      if (input.startISO) {
-        const s = new Date(input.startISO);
-        if (!isNaN(s.getTime())) whereClauses.push(gte(trade.createdAt, s));
-      }
-      if (input.endISO) {
-        const e = new Date(input.endISO);
-        if (!isNaN(e.getTime())) whereClauses.push(lte(trade.createdAt, e));
+      const holdSecondsExpr =
+        sql<number | null>`NULLIF(${trade.tradeDurationSeconds}, '')::numeric`;
+      const addNumericRange = (
+        expr: any,
+        min?: number,
+        max?: number
+      ) => {
+        if (min == null && max == null) return;
+        if (min != null && max != null) {
+          whereClauses.push(
+            sql`${expr} IS NOT NULL AND ${expr} >= ${min} AND ${expr} <= ${max}`
+          );
+          return;
+        }
+        if (min != null) {
+          whereClauses.push(sql`${expr} IS NOT NULL AND ${expr} >= ${min}`);
+          return;
+        }
+        whereClauses.push(sql`${expr} IS NOT NULL AND ${expr} <= ${max}`);
+      };
+
+      const parsedStart = input.startISO ? new Date(input.startISO) : null;
+      const parsedEnd = input.endISO ? new Date(input.endISO) : null;
+      const start =
+        parsedStart && !Number.isNaN(parsedStart.getTime())
+          ? new Date(parsedStart)
+          : null;
+      const end =
+        parsedEnd && !Number.isNaN(parsedEnd.getTime())
+          ? new Date(parsedEnd)
+          : null;
+
+      if (start) start.setUTCHours(0, 0, 0, 0);
+      if (end) end.setUTCHours(23, 59, 59, 999);
+
+      const openInWindow =
+        start && end
+          ? sql`${trade.openTime} IS NOT NULL AND ${trade.openTime} >= ${start} AND ${trade.openTime} <= ${end}`
+          : start
+          ? sql`${trade.openTime} IS NOT NULL AND ${trade.openTime} >= ${start}`
+          : end
+          ? sql`${trade.openTime} IS NOT NULL AND ${trade.openTime} <= ${end}`
+          : null;
+
+      const closeInWindow =
+        start && end
+          ? sql`${trade.closeTime} IS NOT NULL AND ${trade.closeTime} >= ${start} AND ${trade.closeTime} <= ${end}`
+          : start
+          ? sql`${trade.closeTime} IS NOT NULL AND ${trade.closeTime} >= ${start}`
+          : end
+          ? sql`${trade.closeTime} IS NOT NULL AND ${trade.closeTime} <= ${end}`
+          : null;
+
+      const fallbackInWindow =
+        start && end
+          ? sql`${trade.openTime} IS NULL AND ${trade.closeTime} IS NULL AND ${trade.createdAt} >= ${start} AND ${trade.createdAt} <= ${end}`
+          : start
+          ? sql`${trade.openTime} IS NULL AND ${trade.closeTime} IS NULL AND ${trade.createdAt} >= ${start}`
+          : end
+          ? sql`${trade.openTime} IS NULL AND ${trade.closeTime} IS NULL AND ${trade.createdAt} <= ${end}`
+          : null;
+
+      if (openInWindow || closeInWindow || fallbackInWindow) {
+        const predicates = [openInWindow, closeInWindow, fallbackInWindow].filter(
+          Boolean
+        );
+        whereClauses.push(sql`(${sql.join(predicates as any[], sql` OR `)})`);
       }
 
       if (input.tradeDirection && input.tradeDirection !== "all") {
@@ -124,20 +348,65 @@ export const tradesRouter = router({
         }
         // any other value => no direction filter
       }
+      if (input.ids && input.ids.length) {
+        whereClauses.push(inArray(trade.id, input.ids));
+      }
       if (input.symbols && input.symbols.length) {
         // simple OR chain
         const ors = input.symbols.map((s) => eq(trade.symbol, s));
         whereClauses.push(sql`(${sql.join(ors, sql` OR `)})`);
       }
       if (input.killzones && input.killzones.length) {
-        // simple OR chain for killzones
+        // simple OR chain for killzones (legacy support)
         const ors = input.killzones.map((k) => eq(trade.killzone, k));
+        whereClauses.push(sql`(${sql.join(ors, sql` OR `)})`);
+      }
+      if (input.sessionTags && input.sessionTags.length) {
+        // Filter by session tags
+        const ors = input.sessionTags.map((k) => eq(trade.sessionTag, k));
+        whereClauses.push(sql`(${sql.join(ors, sql` OR `)})`);
+      }
+      if (input.modelTags && input.modelTags.length) {
+        // Filter by model tags
+        const ors = input.modelTags.map((m) => eq(trade.modelTag, m));
+        whereClauses.push(sql`(${sql.join(ors, sql` OR `)})`);
+      }
+      if (input.protocolAlignment && input.protocolAlignment.length) {
+        // Filter by protocol alignment
+        const ors = input.protocolAlignment.map((p) =>
+          eq(trade.protocolAlignment, p)
+        );
+        whereClauses.push(sql`(${sql.join(ors, sql` OR `)})`);
+      }
+      if (input.outcomes && input.outcomes.length) {
+        // Filter by outcomes
+        const ors = input.outcomes.map((o) => eq(trade.outcome, o));
         whereClauses.push(sql`(${sql.join(ors, sql` OR `)})`);
       }
       if (input.q && input.q.trim()) {
         const q = `%${input.q.trim()}%`;
         whereClauses.push(sql`LOWER(${trade.symbol}) LIKE LOWER(${q})`);
       }
+
+      addNumericRange(holdSecondsExpr, input.holdMin, input.holdMax);
+      addNumericRange(trade.volume, input.volumeMin, input.volumeMax);
+      addNumericRange(trade.profit, input.profitMin, input.profitMax);
+      addNumericRange(
+        trade.commissions,
+        input.commissionsMin,
+        input.commissionsMax
+      );
+      addNumericRange(trade.swap, input.swapMin, input.swapMax);
+      addNumericRange(trade.sl, input.slMin, input.slMax);
+      addNumericRange(trade.tp, input.tpMin, input.tpMax);
+      addNumericRange(trade.realisedRR, input.rrMin, input.rrMax);
+      addNumericRange(trade.mfePips, input.mfeMin, input.mfeMax);
+      addNumericRange(trade.maePips, input.maeMin, input.maeMax);
+      addNumericRange(
+        trade.rrCaptureEfficiency,
+        input.efficiencyMin,
+        input.efficiencyMax
+      );
 
       // cursor: (createdAtISO, id) for stable keyset pagination (desc)
       if (input.cursor) {
@@ -164,6 +433,7 @@ export const tradesRouter = router({
           tpNum: sql<number | null>`CAST(${trade.tp} AS NUMERIC)`,
           openPriceNum: sql<number | null>`CAST(${trade.openPrice} AS NUMERIC)`,
           closePriceNum: sql<number | null>`CAST(${trade.closePrice} AS NUMERIC)`,
+          pipsNum: sql<number | null>`CAST(${trade.pips} AS NUMERIC)`,
           commissions: sql<
             number | null
           >`CAST(${trade.commissions} AS NUMERIC)`,
@@ -175,11 +445,39 @@ export const tradesRouter = router({
           manipulationPips: sql<number | null>`CAST(${trade.manipulationPips} AS NUMERIC)`,
           entryPeakPrice: sql<number | null>`CAST(${trade.entryPeakPrice} AS NUMERIC)`,
           postExitPeakPrice: sql<number | null>`CAST(${trade.postExitPeakPrice} AS NUMERIC)`,
+          entrySpreadPips: sql<number | null>`CAST(${trade.entrySpreadPips} AS NUMERIC)`,
+          exitSpreadPips: sql<number | null>`CAST(${trade.exitSpreadPips} AS NUMERIC)`,
+          entrySlippagePips: sql<number | null>`CAST(${trade.entrySlippagePips} AS NUMERIC)`,
+          exitSlippagePips: sql<number | null>`CAST(${trade.exitSlippagePips} AS NUMERIC)`,
+          slModCount: trade.slModCount,
+          tpModCount: trade.tpModCount,
+          partialCloseCount: trade.partialCloseCount,
+          exitDealCount: trade.exitDealCount,
+          exitVolume: sql<number | null>`CAST(${trade.exitVolume} AS NUMERIC)`,
+          entryDealCount: trade.entryDealCount,
+          entryVolume: sql<number | null>`CAST(${trade.entryVolume} AS NUMERIC)`,
+          scaleInCount: trade.scaleInCount,
+          scaleOutCount: trade.scaleOutCount,
+          trailingStopDetected: trade.trailingStopDetected,
+          entryPeakDurationSeconds: trade.entryPeakDurationSeconds,
+          postExitPeakDurationSeconds: trade.postExitPeakDurationSeconds,
+          entryBalance: sql<number | null>`CAST(${trade.entryBalance} AS NUMERIC)`,
+          entryEquity: sql<number | null>`CAST(${trade.entryEquity} AS NUMERIC)`,
+          entryMargin: sql<number | null>`CAST(${trade.entryMargin} AS NUMERIC)`,
+          entryFreeMargin: sql<number | null>`CAST(${trade.entryFreeMargin} AS NUMERIC)`,
+          entryMarginLevel: sql<number | null>`CAST(${trade.entryMarginLevel} AS NUMERIC)`,
           alphaWeightedMpe: sql<number | null>`CAST(${trade.alphaWeightedMpe} AS NUMERIC)`,
+          // Tag fields (legacy + new)
+          sessionTag: trade.sessionTag,
+          sessionTagColor: trade.sessionTagColor,
+          modelTag: trade.modelTag,
+          modelTagColor: trade.modelTagColor,
+          protocolAlignment: trade.protocolAlignment,
           beThresholdPips: sql<number | null>`CAST(${trade.beThresholdPips} AS NUMERIC)`,
           // Killzone fields
           killzone: trade.killzone,
           killzoneColor: trade.killzoneColor,
+          brokerMeta: trade.brokerMeta,
         })
         .from(trade)
         .where(and(...whereClauses))
@@ -211,7 +509,7 @@ export const tradesRouter = router({
       const totalTradesCount = await db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(trade)
-        .where(eq(trade.accountId, accountId))
+        .where(buildAccountScopeCondition(trade.accountId, scopedAccountIds))
         .then((res) => res[0]?.count ?? 0);
 
       const result = items.map((r) => {
@@ -263,6 +561,32 @@ export const tradesRouter = router({
         // Calculate all advanced metrics
         const advancedMetrics = calculateAllAdvancedMetrics(tradeData, totalTradesCount, disableSampleGating);
 
+        const compliance = evaluateCompliance(
+          {
+            sl: r.slNum != null ? Number(r.slNum) : null,
+            tp: r.tpNum != null ? Number(r.tpNum) : null,
+            sessionTag: r.sessionTag || null,
+            modelTag: r.modelTag || null,
+            entrySpreadPips:
+              r.entrySpreadPips != null ? Number(r.entrySpreadPips) : null,
+            entrySlippagePips:
+              r.entrySlippagePips != null ? Number(r.entrySlippagePips) : null,
+            exitSlippagePips:
+              r.exitSlippagePips != null ? Number(r.exitSlippagePips) : null,
+            plannedRiskPips: advancedMetrics.plannedRiskPips,
+            plannedRR: advancedMetrics.plannedRR,
+            maePips: advancedMetrics.maePips,
+            scaleInCount: r.scaleInCount != null ? Number(r.scaleInCount) : null,
+            scaleOutCount:
+              r.scaleOutCount != null ? Number(r.scaleOutCount) : null,
+            partialCloseCount:
+              r.partialCloseCount != null ? Number(r.partialCloseCount) : null,
+            holdSeconds,
+          },
+          complianceRules
+        );
+        const brokerMeta = getMt5BrokerMeta(r.brokerMeta);
+
         return {
           id: r.id,
           open: openISO,
@@ -273,59 +597,318 @@ export const tradesRouter = router({
           profit: Number(r.profit || 0),
           sl: r.slNum != null ? Number(r.slNum) : null,
           tp: r.tpNum != null ? Number(r.tpNum) : null,
+          openPrice: r.openPriceNum != null ? Number(r.openPriceNum) : null,
+          closePrice: r.closePriceNum != null ? Number(r.closePriceNum) : null,
+          pips: r.pipsNum != null ? Number(r.pipsNum) : null,
           commissions: r.commissions != null ? Number(r.commissions) : null,
           swap: r.swap != null ? Number(r.swap) : null,
           createdAtISO: r.createdAt.toISOString(),
           holdSeconds,
-          // Killzone fields
+          // Tag fields (legacy + new)
           killzone: r.killzone || null,
           killzoneColor: r.killzoneColor || null,
-          // Advanced metrics (all derived, never null-unsafe)
+          sessionTag: r.sessionTag || null,
+          sessionTagColor: r.sessionTagColor || null,
+          modelTag: r.modelTag || null,
+          modelTagColor: r.modelTagColor || null,
+          protocolAlignment: r.protocolAlignment || null,
+          outcome: advancedMetrics.outcome,
+          // Intent metrics
+          plannedRR: advancedMetrics.plannedRR,
+          plannedRiskPips: advancedMetrics.plannedRiskPips,
+          plannedTargetPips: advancedMetrics.plannedTargetPips,
+          // Opportunity metrics
           manipulationPips: advancedMetrics.manipulationPips,
+          mfePips: advancedMetrics.mfePips,
+          maePips: advancedMetrics.maePips,
           mpeManipLegR: advancedMetrics.mpeManipLegR,
           mpeManipPE_R: advancedMetrics.mpeManipPE_R,
           maxRR: advancedMetrics.maxRR,
-          realisedRR: advancedMetrics.realisedRR,
-          rrCaptureEfficiency: advancedMetrics.rrCaptureEfficiency,
-          manipRREfficiency: advancedMetrics.manipRREfficiency,
           rawSTDV: advancedMetrics.rawSTDV,
           rawSTDV_PE: advancedMetrics.rawSTDV_PE,
           stdvBucket: advancedMetrics.stdvBucket,
           estimatedWeightedMPE_R: advancedMetrics.estimatedWeightedMPE_R,
-          outcome: advancedMetrics.outcome,
+          // Execution metrics
+          realisedRR: advancedMetrics.realisedRR,
+          // Efficiency metrics
+          rrCaptureEfficiency: advancedMetrics.rrCaptureEfficiency,
+          manipRREfficiency: advancedMetrics.manipRREfficiency,
+          exitEfficiency: advancedMetrics.exitEfficiency,
+          // Execution quality (EA)
+          entrySpreadPips: r.entrySpreadPips != null ? Number(r.entrySpreadPips) : null,
+          exitSpreadPips: r.exitSpreadPips != null ? Number(r.exitSpreadPips) : null,
+          entrySlippagePips: r.entrySlippagePips != null ? Number(r.entrySlippagePips) : null,
+          exitSlippagePips: r.exitSlippagePips != null ? Number(r.exitSlippagePips) : null,
+          slModCount: r.slModCount != null ? Number(r.slModCount) : null,
+          tpModCount: r.tpModCount != null ? Number(r.tpModCount) : null,
+          partialCloseCount: r.partialCloseCount != null ? Number(r.partialCloseCount) : null,
+          exitDealCount: r.exitDealCount != null ? Number(r.exitDealCount) : null,
+          exitVolume: r.exitVolume != null ? Number(r.exitVolume) : null,
+          entryDealCount: r.entryDealCount != null ? Number(r.entryDealCount) : null,
+          entryVolume: r.entryVolume != null ? Number(r.entryVolume) : null,
+          scaleInCount: r.scaleInCount != null ? Number(r.scaleInCount) : null,
+          scaleOutCount: r.scaleOutCount != null ? Number(r.scaleOutCount) : null,
+          trailingStopDetected:
+            r.trailingStopDetected != null ? Boolean(r.trailingStopDetected) : null,
+          entryPeakDurationSeconds:
+            r.entryPeakDurationSeconds != null
+              ? Number(r.entryPeakDurationSeconds)
+              : null,
+          postExitPeakDurationSeconds:
+            r.postExitPeakDurationSeconds != null
+              ? Number(r.postExitPeakDurationSeconds)
+              : null,
+          entryBalance: r.entryBalance != null ? Number(r.entryBalance) : null,
+          entryEquity: r.entryEquity != null ? Number(r.entryEquity) : null,
+          entryMargin: r.entryMargin != null ? Number(r.entryMargin) : null,
+          entryFreeMargin: r.entryFreeMargin != null ? Number(r.entryFreeMargin) : null,
+          entryMarginLevel: r.entryMarginLevel != null ? Number(r.entryMarginLevel) : null,
+          brokerMeta,
+          closeReason: getMt5BrokerString(brokerMeta, "closeReason"),
+          entrySource: getMt5BrokerString(brokerMeta, "entrySource"),
+          exitSource: getMt5BrokerString(brokerMeta, "exitSource"),
+          executionMode: getMt5BrokerString(brokerMeta, "executionMode"),
+          magicNumber: getMt5BrokerNumber(brokerMeta, "magicNumber"),
+          complianceStatus: compliance.status,
+          complianceFlags: compliance.flags,
         };
       });
 
-      return { items: result, nextCursor } as const;
+      return { items: result, nextCursor, totalTradesCount } as const;
     }),
+
+  // Simple list for widgets that need all trades
+  list: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        limit: z.number().min(1).max(500).default(500),
+        startISO: z.string().optional(),
+        endISO: z.string().optional(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { accountId, limit } = input;
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        accountId
+      );
+
+      if (scopedAccountIds.length === 0) {
+        return { trades: [] };
+      }
+
+      const whereClauses: any[] = [
+        buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+        sql`${trade.close} IS NOT NULL`,
+      ];
+
+      const parsedStart = input.startISO ? new Date(input.startISO) : null;
+      const parsedEnd = input.endISO ? new Date(input.endISO) : null;
+      const start =
+        parsedStart && !Number.isNaN(parsedStart.getTime())
+          ? new Date(parsedStart)
+          : null;
+      const end =
+        parsedEnd && !Number.isNaN(parsedEnd.getTime())
+          ? new Date(parsedEnd)
+          : null;
+
+      if (start) start.setUTCHours(0, 0, 0, 0);
+      if (end) end.setUTCHours(23, 59, 59, 999);
+
+      const openInWindow =
+        start && end
+          ? sql`${trade.openTime} IS NOT NULL AND ${trade.openTime} >= ${start} AND ${trade.openTime} <= ${end}`
+          : start
+          ? sql`${trade.openTime} IS NOT NULL AND ${trade.openTime} >= ${start}`
+          : end
+          ? sql`${trade.openTime} IS NOT NULL AND ${trade.openTime} <= ${end}`
+          : null;
+
+      const closeInWindow =
+        start && end
+          ? sql`${trade.closeTime} IS NOT NULL AND ${trade.closeTime} >= ${start} AND ${trade.closeTime} <= ${end}`
+          : start
+          ? sql`${trade.closeTime} IS NOT NULL AND ${trade.closeTime} >= ${start}`
+          : end
+          ? sql`${trade.closeTime} IS NOT NULL AND ${trade.closeTime} <= ${end}`
+          : null;
+
+      const fallbackInWindow =
+        start && end
+          ? sql`${trade.openTime} IS NULL AND ${trade.closeTime} IS NULL AND ${trade.createdAt} >= ${start} AND ${trade.createdAt} <= ${end}`
+          : start
+          ? sql`${trade.openTime} IS NULL AND ${trade.closeTime} IS NULL AND ${trade.createdAt} >= ${start}`
+          : end
+          ? sql`${trade.openTime} IS NULL AND ${trade.closeTime} IS NULL AND ${trade.createdAt} <= ${end}`
+          : null;
+
+      if (openInWindow || closeInWindow || fallbackInWindow) {
+        const predicates = [openInWindow, closeInWindow, fallbackInWindow].filter(
+          Boolean
+        );
+        whereClauses.push(sql`(${sql.join(predicates as any[], sql` OR `)})`);
+      }
+
+      const rows = await db
+        .select({
+          id: trade.id,
+          symbol: trade.symbol,
+          tradeType: trade.tradeType,
+          volume: sql<number>`CAST(${trade.volume} AS NUMERIC)`,
+          openPrice: sql<number>`CAST(${trade.openPrice} AS NUMERIC)`,
+          closePrice: sql<number>`CAST(${trade.closePrice} AS NUMERIC)`,
+          sl: sql<number>`CAST(${trade.sl} AS NUMERIC)`,
+          tp: sql<number>`CAST(${trade.tp} AS NUMERIC)`,
+          profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
+          pips: sql<number>`CAST(${trade.pips} AS NUMERIC)`,
+          openTime: trade.openTime,
+          closeTime: trade.closeTime,
+          sessionTag: trade.sessionTag,
+          modelTag: trade.modelTag,
+          realisedRR: sql<number>`CAST(${trade.realisedRR} AS NUMERIC)`,
+          mfePips: sql<number>`CAST(${trade.mfePips} AS NUMERIC)`,
+          maePips: sql<number>`CAST(${trade.maePips} AS NUMERIC)`,
+        })
+        .from(trade)
+        .where(and(...whereClauses))
+        .orderBy(desc(trade.createdAt))
+        .limit(limit);
+
+      return {
+        trades: rows.map((t) => ({
+          id: t.id,
+          symbol: t.symbol,
+          tradeType: t.tradeType,
+          volume: Number(t.volume || 0),
+          openPrice: t.openPrice != null ? Number(t.openPrice) : null,
+          closePrice: t.closePrice != null ? Number(t.closePrice) : null,
+          sl: t.sl != null ? Number(t.sl) : null,
+          tp: t.tp != null ? Number(t.tp) : null,
+          profit: Number(t.profit || 0),
+          pips: t.pips != null ? Number(t.pips) : null,
+          openTime: t.openTime,
+          closeTime: t.closeTime,
+          sessionTag: t.sessionTag,
+          modelTag: t.modelTag,
+          realisedRR: t.realisedRR != null ? Number(t.realisedRR) : null,
+          mfePips: t.mfePips != null ? Number(t.mfePips) : null,
+          maePips: t.maePips != null ? Number(t.maePips) : null,
+        })),
+      };
+    }),
+
   listSymbols: protectedProcedure
     .input(z.object({ accountId: z.string().min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const cacheKey = `${cacheNamespaces.TRADES}:symbols:${input.accountId}`;
+      const cached = await enhancedCache.get<string[]>(cacheKey);
+      if (cached) return cached;
+
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        input.accountId
+      );
+      if (scopedAccountIds.length === 0) return [];
+
       const rows = await db
         .select({ symbol: trade.symbol })
         .from(trade)
-        .where(eq(trade.accountId, input.accountId));
+        .where(buildAccountScopeCondition(trade.accountId, scopedAccountIds));
       const set = new Set<string>();
       for (const r of rows) if (r.symbol) set.add(r.symbol);
-      return Array.from(set).sort((a, b) => a.localeCompare(b));
+      const result = Array.from(set).sort((a, b) => a.localeCompare(b));
+      await enhancedCache.set(cacheKey, result, { ttl: CacheTTL.MEDIUM, tags: [cacheNamespaces.TRADES, `account:${input.accountId}`] });
+      return result;
     }),
   listKillzones: protectedProcedure
     .input(z.object({ accountId: z.string().min(1) }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        input.accountId
+      );
+      if (scopedAccountIds.length === 0) return [];
+
       const rows = await db
-        .select({ killzone: trade.killzone, killzoneColor: trade.killzoneColor })
+        .selectDistinct({
+          name: trade.killzone,
+          color: sql<string>`COALESCE(${trade.killzoneColor}, '#FF5733')`,
+        })
         .from(trade)
-        .where(eq(trade.accountId, input.accountId));
-      const killzoneMap = new Map<string, string>();
-      for (const r of rows) {
-        if (r.killzone) {
-          killzoneMap.set(r.killzone, r.killzoneColor || "#FF5733");
-        }
-      }
-      return Array.from(killzoneMap.entries())
-        .map(([name, color]) => ({ name, color }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .where(
+          and(
+            buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+            sql`${trade.killzone} IS NOT NULL`
+          )
+        )
+        .orderBy(trade.killzone);
+      return rows as { name: string; color: string }[];
     }),
+
+  listSessionTags: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const cacheKey = `${cacheNamespaces.TRADES}:sessionTags:${input.accountId}`;
+      const cached = await enhancedCache.get<{ name: string; color: string }[]>(cacheKey);
+      if (cached) return cached;
+
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        input.accountId
+      );
+      if (scopedAccountIds.length === 0) return [];
+
+      const rows = await db
+        .selectDistinct({
+          name: trade.sessionTag,
+          color: sql<string>`COALESCE(${trade.sessionTagColor}, '#FF5733')`,
+        })
+        .from(trade)
+        .where(
+          and(
+            buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+            sql`${trade.sessionTag} IS NOT NULL`
+          )
+        )
+        .orderBy(trade.sessionTag);
+      const result = rows as { name: string; color: string }[];
+      await enhancedCache.set(cacheKey, result, { ttl: CacheTTL.MEDIUM, tags: [cacheNamespaces.TRADES, `account:${input.accountId}`] });
+      return result;
+    }),
+
+  listModelTags: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const cacheKey = `${cacheNamespaces.TRADES}:modelTags:${input.accountId}`;
+      const cached = await enhancedCache.get<{ name: string; color: string }[]>(cacheKey);
+      if (cached) return cached;
+
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        input.accountId
+      );
+      if (scopedAccountIds.length === 0) return [];
+
+      const rows = await db
+        .selectDistinct({
+          name: trade.modelTag,
+          color: sql<string>`COALESCE(${trade.modelTagColor}, '#3B82F6')`,
+        })
+        .from(trade)
+        .where(
+          and(
+            buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+            sql`${trade.modelTag} IS NOT NULL`
+          )
+        )
+        .orderBy(trade.modelTag);
+      const result = rows as { name: string; color: string }[];
+      await enhancedCache.set(cacheKey, result, { ttl: CacheTTL.MEDIUM, tags: [cacheNamespaces.TRADES, `account:${input.accountId}`] });
+      return result;
+    }),
+
   drawdownForTrade: protectedProcedure
     .input(z.object({ id: z.string().min(1), debug: z.boolean().optional() }))
     .query(async ({ input }) => {
@@ -334,6 +917,7 @@ export const tradesRouter = router({
           .select({
             id: trade.id,
             accountId: trade.accountId,
+            useBrokerData: trade.useBrokerData,
             createdAt: trade.createdAt,
             openRaw: sql<string | null>`(${trade.open})`,
             closeRaw: sql<string | null>`(${trade.close})`,
@@ -396,8 +980,8 @@ export const tradesRouter = router({
         if (!(entry > 0)) {
           return {
             id: r.id,
-            adversePips: 0,
-            adverseUsd: 0,
+            adversePips: null,
+            adverseUsd: null,
             pctToSL: null,
             hit: "NONE" as const,
             note: "NO_ENTRY",
@@ -409,20 +993,6 @@ export const tradesRouter = router({
         if (hasManipulationData) {
           const manipHigh = Number(r.manipulationHigh);
           const manipLow = Number(r.manipulationLow);
-
-          if (debugEnabled) {
-            console.log("[dd][dbg] USING_MANIPULATION_DATA", {
-              id: r.id,
-              symbol,
-              direction,
-              entry,
-              sl,
-              tp,
-              manipHigh,
-              manipLow,
-              manipPips: r.manipulationPips,
-            });
-          }
 
           // Calculate adverse movement from manipulation data
           let adversePips = 0;
@@ -492,19 +1062,6 @@ export const tradesRouter = router({
             }
           }
 
-          if (debugEnabled) {
-            console.log("[dd][dbg] RESULT_FROM_MANIPULATION", {
-              id: r.id,
-              symbol,
-              direction,
-              adversePips: Math.round(adversePips * 100) / 100,
-              adverseUsd: Math.round(adverseUsd * 100) / 100,
-              pctToSL: pctToSL != null ? Math.round(pctToSL * 100) / 100 : null,
-              hit,
-              hasSL: sl != null,
-            });
-          }
-
           return {
             id: r.id,
             adversePips: Math.round(adversePips * 100) / 100,
@@ -516,13 +1073,6 @@ export const tradesRouter = router({
         }
 
         // FALLBACK: Use Dukascopy API when manipulation data not available
-        if (debugEnabled) {
-          console.log("[dd][dbg] FALLBACK_TO_DUKASCOPY", {
-            id: r.id,
-            symbol,
-            hasManipulationData: false,
-          });
-        }
 
         // Fetch account info for broker calibration
         const accountRow = await db
@@ -578,22 +1128,6 @@ export const tradesRouter = router({
             (direction === "short" && closePx >= sl - tolPx);
           if (hitByTolerance) {
             const pipsToSl0 = Math.abs(sl - entry) / pipSize;
-            if (debugEnabled) {
-              console.log("[duka][dbg] EXACT_SL_CLOSE", {
-                id: r.id,
-                symbol,
-                instrument,
-                profit: r.profit,
-                side,
-                entry,
-                sl,
-                tp,
-                closePx,
-                pipsToSl: Math.round(pipsToSl0 * 100) / 100,
-                timeframe: "m1",
-                be: beCandidate,
-              });
-            }
             return {
               id: r.id,
               adversePips: Math.round(pipsToSl0 * 100) / 100,
@@ -619,23 +1153,6 @@ export const tradesRouter = router({
               : 0;
           }
 
-          if (debugEnabled) {
-            console.log("[duka][dbg] CLOSED_IN_DD", {
-              id: r.id,
-              symbol,
-              instrument,
-              profit: r.profit,
-              side,
-              entry,
-              sl,
-              tp,
-              closePx,
-              adversePips: Math.round(adversePips * 100) / 100,
-              adverseUsd: Math.round(adverseUsd * 100) / 100,
-              pctToSL: pctToSL != null ? Math.round(pctToSL * 100) / 100 : null,
-              timeframe: "m1",
-            });
-          }
           return {
             id: r.id,
             adversePips: Math.round(adversePips * 100) / 100,
@@ -679,18 +1196,6 @@ export const tradesRouter = router({
           return Array.isArray(raw) ? raw : [];
         }
 
-        console.log("[duka][req] drawdownForTrade", {
-          id: r.id,
-          instrument,
-          side,
-          timeframe,
-          direction,
-          pnl: r.profit,
-          from: openAt.toISOString(),
-          to: closeAt.toISOString(),
-          originalSymbol: symbol,
-          utcOffset: dukaConfigBase.utcOffset,
-        });
         // Round to whole-minute boundaries for candle requests
         const floorToMinute = (d: Date) =>
           new Date(Math.floor(d.getTime() / 60_000) * 60_000);
@@ -708,32 +1213,20 @@ export const tradesRouter = router({
         // Removed 15m extension; use exact trade window only
 
         if (!Array.isArray(priceData) || priceData.length === 0) {
-          if (debugEnabled) {
-            console.log("[duka][dbg] NO_PRICE_DATA", {
-              id: r.id,
-              symbol,
-              instrument,
-              side,
-              profit: r.profit,
-              entry,
-              sl,
-              tp,
-              openAt: openAt.toISOString(),
-              closeAt: closeAt.toISOString(),
-              timeframe,
-              candleRange: {
-                from: usedFrom.toISOString(),
-                to: usedTo.toISOString(),
-                utcOffset: dukaConfigBase.utcOffset,
-              },
-            });
-          }
           return {
             id: r.id,
-            adversePips: 0,
-            pctToSL: 0,
+            adversePips: null,
+            adverseUsd: null,
+            pctToSL: null,
             hit: "NONE" as const,
-            dataSource: "dukascopy",
+            note:
+              Number(r.useBrokerData || 0) === 1
+                ? "NO_BROKER_PRICE_HISTORY"
+                : "NO_PRICE_DATA",
+            dataSource:
+              Number(r.useBrokerData || 0) === 1
+                ? "broker-history-missing"
+                : "dukascopy",
             candleRange: {
               from: usedFrom.toISOString(),
               to: usedTo.toISOString(),
@@ -741,13 +1234,6 @@ export const tradesRouter = router({
             },
             tickRange: null,
           };
-        }
-
-        if (debugEnabled) {
-          try {
-            const sample = priceData[0];
-            console.log("[duka][dbg] SAMPLE_KEYS", Object.keys(sample || {}));
-          } catch {}
         }
 
         // Compute actual candle range returned by Dukascopy
@@ -880,50 +1366,7 @@ export const tradesRouter = router({
                 const distToSlPips = Math.abs(sl - entry) / pipSize;
                 pctToSL = distToSlPips > 0 ? clamp01(adversePips / distToSlPips) * 100 : 0;
               }
-              if (debugEnabled) {
-                console.log("[duka][dbg] TICK_FALLBACK_LONG", {
-                  id: r.id,
-                  symbol,
-                  instrument,
-                  profit: r.profit,
-                  side,
-                  entry,
-                  sl,
-                  tp,
-                  ticksCount: ticks.length,
-                  minBid2,
-                  adversePips: Math.round(adversePips * 100) / 100,
-                  adverseUsd: Math.round(adverseUsd * 100) / 100,
-                  pctToSL: pctToSL != null ? Math.round(pctToSL * 100) / 100 : null,
-                  timeframe: "tick",
-                  candleRange,
-                  tickRange: {
-                    from: tickFrom.toISOString(),
-                    to: tickTo.toISOString(),
-                    utcOffset: dukaConfigBase.utcOffset,
-                  },
-                });
-              }
             }
-          }
-          if (debugEnabled) {
-            console.log("[duka][dbg] RESULT_LONG", {
-              id: r.id,
-              symbol,
-              instrument,
-              profit: r.profit,
-              side,
-              entry,
-              sl,
-              tp,
-              priceDataCount: priceData.length,
-              minLow,
-              adversePips: Math.round(adversePips * 100) / 100,
-              adverseUsd: Math.round(adverseUsd * 100) / 100,
-              pctToSL: pctToSL != null ? Math.round(pctToSL * 100) / 100 : null,
-              timeframe,
-              candleRange,
-            });
           }
           return {
             id: r.id,
@@ -1018,50 +1461,7 @@ export const tradesRouter = router({
                 const distToSlPips = Math.abs(sl - entry) / pipSize;
                 pctToSL = distToSlPips > 0 ? clamp01(adversePips / distToSlPips) * 100 : 0;
               }
-              if (debugEnabled) {
-                console.log("[duka][dbg] TICK_FALLBACK_SHORT", {
-                  id: r.id,
-                  symbol,
-                  instrument,
-                  profit: r.profit,
-                  side,
-                  entry,
-                  sl,
-                  tp,
-                  ticksCount: ticks.length,
-                  maxAsk2,
-                  adversePips: Math.round(adversePips * 100) / 100,
-                  adverseUsd: Math.round(adverseUsd * 100) / 100,
-                  pctToSL: pctToSL != null ? Math.round(pctToSL * 100) / 100 : null,
-                  timeframe: "tick",
-                  candleRange,
-                  tickRange: {
-                    from: tickFrom.toISOString(),
-                    to: tickTo.toISOString(),
-                    utcOffset: dukaConfigBase.utcOffset,
-                  },
-                });
-              }
             }
-          }
-          if (debugEnabled) {
-            console.log("[duka][dbg] RESULT_SHORT", {
-              id: r.id,
-              symbol,
-              instrument,
-              profit: r.profit,
-              side,
-              entry,
-              sl,
-              tp,
-              priceDataCount: priceData.length,
-              maxHigh,
-              adversePips: Math.round(adversePips * 100) / 100,
-              adverseUsd: Math.round(adverseUsd * 100) / 100,
-              pctToSL: pctToSL != null ? Math.round(pctToSL * 100) / 100 : null,
-              timeframe,
-              candleRange,
-            });
           }
           return {
             id: r.id,
@@ -1130,9 +1530,1028 @@ export const tradesRouter = router({
         .set({
           killzone,
           killzoneColor,
+          // Also update sessionTag for consistency
+          sessionTag: killzone,
+          sessionTagColor: killzoneColor,
+        })
+        .where(eq(trade.id, tradeId));
+
+      await invalidateTradeScopeCaches([tradeRow[0].accountId]);
+
+      return { success: true };
+    }),
+
+  // Update session tag for a trade (new generalized version)
+  updateSessionTag: protectedProcedure
+    .input(
+      z.object({
+        tradeId: z.string().min(1),
+        sessionTag: z.string().nullable(),
+        sessionTagColor: z.union([
+          z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+          z.null(),
+        ]),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeId, sessionTag, sessionTagColor } = input;
+
+      // Verify the trade belongs to the user's account
+      const tradeRow = await db
+        .select({ accountId: trade.accountId })
+        .from(trade)
+        .where(eq(trade.id, tradeId))
+        .limit(1);
+
+      if (!tradeRow.length) {
+        throw new Error("Trade not found");
+      }
+
+      const accountRow = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, tradeRow[0].accountId))
+        .limit(1);
+
+      if (!accountRow.length || accountRow[0].userId !== ctx.session.user.id) {
+        throw new Error("Unauthorized");
+      }
+
+      let canonicalTag = sessionTag;
+      if (sessionTag) {
+        const existingTagRow = await db
+          .select({ sessionTag: trade.sessionTag })
+          .from(trade)
+          .where(
+            and(
+              eq(trade.accountId, tradeRow[0].accountId),
+              sql`lower(${trade.sessionTag}) = lower(${sessionTag})`
+            )
+          )
+          .limit(1);
+        if (existingTagRow.length && existingTagRow[0].sessionTag) {
+          canonicalTag = existingTagRow[0].sessionTag;
+        }
+      }
+
+      // Update the selected trade first.
+      await db
+        .update(trade)
+        .set({
+          sessionTag: canonicalTag,
+          sessionTagColor,
+          killzone: canonicalTag,
+          killzoneColor: sessionTagColor,
+        })
+        .where(eq(trade.id, tradeId));
+
+      if (canonicalTag) {
+        // Keep colors consistent for all trades using the same session tag.
+        await db
+          .update(trade)
+          .set({
+            sessionTag: canonicalTag,
+            sessionTagColor,
+            killzone: canonicalTag,
+            killzoneColor: sessionTagColor,
+          })
+          .where(
+            and(
+              eq(trade.accountId, tradeRow[0].accountId),
+              sql`lower(${trade.sessionTag}) = lower(${canonicalTag})`
+            )
+          );
+      }
+
+      await invalidateTradeScopeCaches([tradeRow[0].accountId]);
+
+      return { success: true };
+    }),
+
+  backfillDerivedMetrics: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        postExitWindowSeconds: z.number().min(60).max(24 * 3600).default(3600),
+        onlyMissing: z.boolean().optional().default(true),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { accountId, postExitWindowSeconds, onlyMissing } = input;
+
+      const accountRow = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, accountId))
+        .limit(1);
+
+      if (!accountRow.length || accountRow[0].userId !== ctx.session.user.id) {
+        throw new Error("Unauthorized");
+      }
+
+      const manipulation = await updateAccountManipulation(accountId);
+      const postExit = await updateAccountPostExitPeaks(
+        accountId,
+        postExitWindowSeconds,
+        onlyMissing
+      );
+
+      return {
+        success: true,
+        manipulation,
+        postExit,
+      };
+    }),
+
+  // Update model tag for a trade
+  updateModelTag: protectedProcedure
+    .input(
+      z.object({
+        tradeId: z.string().min(1),
+        modelTag: z.string().nullable(),
+        modelTagColor: z.union([
+          z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+          z.null(),
+        ]),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeId, modelTag, modelTagColor } = input;
+
+      // Verify the trade belongs to the user's account
+      const tradeRow = await db
+        .select({ accountId: trade.accountId })
+        .from(trade)
+        .where(eq(trade.id, tradeId))
+        .limit(1);
+
+      if (!tradeRow.length) {
+        throw new Error("Trade not found");
+      }
+
+      const accountRow = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, tradeRow[0].accountId))
+        .limit(1);
+
+      if (!accountRow.length || accountRow[0].userId !== ctx.session.user.id) {
+        throw new Error("Unauthorized");
+      }
+
+      // Update the model tag
+      await db
+        .update(trade)
+        .set({
+          modelTag,
+          modelTagColor,
+        })
+        .where(eq(trade.id, tradeId));
+
+      await invalidateTradeScopeCaches([tradeRow[0].accountId]);
+
+      return { success: true };
+    }),
+
+  // Update protocol alignment for a trade
+  updateProtocolAlignment: protectedProcedure
+    .input(
+      z.object({
+        tradeId: z.string().min(1),
+        protocolAlignment: z
+          .enum(["aligned", "against", "discretionary"])
+          .nullable(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeId, protocolAlignment } = input;
+
+      // Verify the trade belongs to the user's account
+      const tradeRow = await db
+        .select({ accountId: trade.accountId })
+        .from(trade)
+        .where(eq(trade.id, tradeId))
+        .limit(1);
+
+      if (!tradeRow.length) {
+        throw new Error("Trade not found");
+      }
+
+      const accountRow = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, tradeRow[0].accountId))
+        .limit(1);
+
+      if (!accountRow.length || accountRow[0].userId !== ctx.session.user.id) {
+        throw new Error("Unauthorized");
+      }
+
+      // Update the protocol alignment
+      await db
+        .update(trade)
+        .set({
+          protocolAlignment,
         })
         .where(eq(trade.id, tradeId));
 
       return { success: true };
+    }),
+
+  // Get sample gate status based on current trade count for an account
+  getSampleGateStatus: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const { accountId } = input;
+
+      // Verify account ownership
+      const accountRow = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, accountId))
+        .limit(1);
+
+      if (!accountRow.length || accountRow[0].userId !== ctx.session.user.id) {
+        throw new Error("Unauthorized");
+      }
+
+      // Get total trade count for this account
+      const result = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(trade)
+        .where(eq(trade.accountId, accountId));
+
+      const tradeCount = Number(result[0]?.count || 0);
+
+      // Import sample gate logic
+      const { getSampleGateStatus } = await import("../lib/metric-registry");
+
+      // Fetch user preferences from database
+      const userRows = await db
+        .select({ advancedMetricsPreferences: user.advancedMetricsPreferences })
+        .from(user)
+        .where(eq(user.id, ctx.session.user.id))
+        .limit(1);
+
+      const prefs = (userRows[0]?.advancedMetricsPreferences as any) || {};
+      const userPreferences = {
+        disableAllGates: prefs.disableSampleGating ?? false,
+        minimumSamples: undefined,
+      };
+
+      return getSampleGateStatus(tradeCount, userPreferences);
+    }),
+
+  // Live Trade Scoring
+  scoreOpenTrade: protectedProcedure
+    .input(z.object({ tradeId: z.string().min(1), accountId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const userId = ctx.session.user.id;
+
+      // Verify account ownership
+      const account = await db
+        .select()
+        .from(tradingAccount)
+        .where(and(eq(tradingAccount.id, input.accountId), eq(tradingAccount.userId, userId)))
+        .limit(1);
+
+      if (!account[0]) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Account not found" });
+      }
+
+      return await scoreOpenTrade(input.tradeId, input.accountId);
+    }),
+
+  // Bulk update session tags for multiple trades
+  bulkUpdateSessionTags: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+        sessionTag: z.string().nullable(),
+        sessionTagColor: z.union([
+          z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+          z.null(),
+        ]),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeIds, sessionTag, sessionTagColor } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      // Get unique account IDs
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // Canonicalize the tag name if provided
+      let canonicalTag = sessionTag;
+      if (sessionTag) {
+        const existingTagRow = await db
+          .select({ sessionTag: trade.sessionTag })
+          .from(trade)
+          .where(
+            and(
+              inArray(trade.accountId, accountIds),
+              sql`lower(${trade.sessionTag}) = lower(${sessionTag})`
+            )
+          )
+          .limit(1);
+        if (existingTagRow.length && existingTagRow[0].sessionTag) {
+          canonicalTag = existingTagRow[0].sessionTag;
+        }
+      }
+
+      // Update all selected trades
+      await db
+        .update(trade)
+        .set({
+          sessionTag: canonicalTag,
+          sessionTagColor,
+          killzone: canonicalTag,
+          killzoneColor: sessionTagColor,
+        })
+        .where(inArray(trade.id, tradeIds));
+
+      // If tag exists, update all trades with the same tag to have consistent colors
+      if (canonicalTag) {
+        for (const accountId of accountIds) {
+          await db
+            .update(trade)
+            .set({
+              sessionTag: canonicalTag,
+              sessionTagColor,
+              killzone: canonicalTag,
+              killzoneColor: sessionTagColor,
+            })
+            .where(
+              and(
+                eq(trade.accountId, accountId),
+                sql`lower(${trade.sessionTag}) = lower(${canonicalTag})`
+              )
+            );
+        }
+      }
+
+      await invalidateTradeScopeCaches(accountIds);
+
+      return { success: true, updatedCount: tradeIds.length };
+    }),
+
+  // Bulk update model tags for multiple trades
+  bulkUpdateModelTags: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+        modelTag: z.string().nullable(),
+        modelTagColor: z.union([
+          z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+          z.null(),
+        ]),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeIds, modelTag, modelTagColor } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      // Get unique account IDs
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // Update all selected trades
+      await db
+        .update(trade)
+        .set({
+          modelTag,
+          modelTagColor,
+        })
+        .where(inArray(trade.id, tradeIds));
+
+      await invalidateTradeScopeCaches(accountIds);
+
+      return { success: true, updatedCount: tradeIds.length };
+    }),
+
+  // Bulk update protocol alignment
+  bulkUpdateProtocolAlignment: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+        protocolAlignment: z
+          .enum(["aligned", "against", "discretionary"])
+          .nullable(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeIds, protocolAlignment } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // Update all selected trades
+      await db
+        .update(trade)
+        .set({ protocolAlignment })
+        .where(inArray(trade.id, tradeIds));
+
+      return { success: true, updatedCount: tradeIds.length };
+    }),
+
+  // Bulk delete trades
+  bulkDeleteTrades: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeIds } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // Delete all selected trades
+      await db.delete(trade).where(inArray(trade.id, tradeIds));
+
+      await invalidateTradeScopeCaches(accountIds);
+
+      return { success: true, deletedCount: tradeIds.length };
+    }),
+
+  // Get aggregate stats for selected trades
+  getSelectedTradesStats: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      const { tradeIds } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select()
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // Calculate stats - ensure all values are numbers
+      const totalPnL = trades.reduce((sum, t) => sum + Number(t.profit || 0), 0);
+      const totalCommissions = trades.reduce((sum, t) => sum + Number(t.commissions || 0), 0);
+      const totalSwap = trades.reduce((sum, t) => sum + Number(t.swap || 0), 0);
+      const totalVolume = trades.reduce((sum, t) => sum + Number(t.volume || 0), 0);
+      const wins = trades.filter(t => Number(t.profit || 0) > 0).length;
+      const losses = trades.filter(t => Number(t.profit || 0) < 0).length;
+      const breakeven = trades.filter(t => Number(t.profit || 0) === 0).length;
+      const winRate = trades.length > 0 ? (wins / trades.length) * 100 : 0;
+
+      // Calculate average RR correctly
+      const tradesWithRR = trades.filter(t => t.realisedRR != null && !isNaN(Number(t.realisedRR)));
+      const avgRR = tradesWithRR.length > 0
+        ? tradesWithRR.reduce((sum, t) => sum + Number(t.realisedRR || 0), 0) / tradesWithRR.length
+        : 0;
+
+      const avgHold = trades.length > 0
+        ? trades.reduce((sum, t) => sum + Number(t.holdSeconds || 0), 0) / trades.length
+        : 0;
+
+      return {
+        count: trades.length,
+        totalPnL: Number(totalPnL),
+        totalCommissions: Number(totalCommissions),
+        totalSwap: Number(totalSwap),
+        netPnL: Number(totalPnL + totalCommissions + totalSwap),
+        totalVolume: Number(totalVolume),
+        wins,
+        losses,
+        breakeven,
+        winRate: Number(winRate),
+        avgRR: Number(avgRR),
+        avgHold: Number(avgHold),
+      };
+    }),
+
+  // Bulk add notes to trades
+  bulkAddNotes: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+        note: z.string().min(1),
+        appendToExisting: z.boolean().optional().default(false),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeIds, note, appendToExisting } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId,
+          openText: trade.openText,
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // Update notes - if appendToExisting, we need to update individually
+      if (appendToExisting) {
+        for (const t of trades) {
+          const existingNote = t.openText || "";
+          const newNote = existingNote
+            ? `${existingNote}\n\n${note}`
+            : note;
+
+          await db
+            .update(trade)
+            .set({ openText: newNote })
+            .where(eq(trade.id, t.id));
+        }
+      } else {
+        await db
+          .update(trade)
+          .set({ openText: note })
+          .where(inArray(trade.id, tradeIds));
+      }
+
+      return { success: true, updatedCount: tradeIds.length };
+    }),
+
+  // Bulk toggle favorite
+  bulkToggleFavorite: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+        favorite: z.boolean(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { tradeIds, favorite } = input;
+
+      // Verify all trades belong to the user's accounts
+      const trades = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      if (trades.length === 0) {
+        throw new Error("No trades found");
+      }
+
+      const accountIds = [...new Set(trades.map(t => t.accountId))];
+
+      // Verify all accounts belong to the user
+      const accounts = await db
+        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, accountIds));
+
+      const unauthorizedAccounts = accounts.filter(
+        acc => acc.userId !== ctx.session.user.id
+      );
+
+      if (unauthorizedAccounts.length > 0) {
+        throw new Error("Unauthorized");
+      }
+
+      // For now, we'll use closeText to store favorite status
+      // You might want to add a proper favorite column later
+      // Need to fetch current closeText values first
+      const tradesWithCloseText = await db
+        .select({
+          id: trade.id,
+          closeText: trade.closeText,
+        })
+        .from(trade)
+        .where(inArray(trade.id, tradeIds));
+
+      // Update each trade individually
+      for (const t of tradesWithCloseText) {
+        const currentText = t.closeText || '';
+        let newText: string;
+
+        if (favorite) {
+          // Add [FAVORITE] if not already there
+          newText = currentText.includes('[FAVORITE]')
+            ? currentText
+            : currentText + ' [FAVORITE]';
+        } else {
+          // Remove [FAVORITE] if present
+          newText = currentText.replace(/\s*\[FAVORITE\]\s*/g, '').trim();
+        }
+
+        await db
+          .update(trade)
+          .set({ closeText: newText })
+          .where(eq(trade.id, t.id));
+      }
+
+      return { success: true, updatedCount: tradeIds.length };
+    }),
+
+  // Create a manual trade entry
+  create: protectedProcedure
+    .input(z.object({
+      accountId: z.string(),
+      symbol: z.string().min(1).max(20),
+      tradeType: z.enum(["long", "short"]),
+      volume: z.number().positive(),
+      openPrice: z.number().positive(),
+      closePrice: z.number().positive(),
+      openTime: z.string(), // ISO date string
+      closeTime: z.string(), // ISO date string
+      sl: z.number().optional(),
+      tp: z.number().optional(),
+      profit: z.number().optional(), // If not provided, will be calculated
+      commissions: z.number().optional(),
+      swap: z.number().optional(),
+      sessionTag: z.string().optional(),
+      modelTag: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Verify account ownership
+      const account = await db
+        .select({ id: tradingAccount.id, initialBalance: tradingAccount.initialBalance })
+        .from(tradingAccount)
+        .where(and(eq(tradingAccount.id, input.accountId), eq(tradingAccount.userId, userId)))
+        .limit(1);
+
+      if (!account[0]) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Account not found" });
+      }
+
+      // Parse timestamps
+      const openTime = new Date(input.openTime);
+      const closeTime = new Date(input.closeTime);
+
+      if (isNaN(openTime.getTime()) || isNaN(closeTime.getTime())) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid date format" });
+      }
+
+      if (closeTime <= openTime) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Close time must be after open time" });
+      }
+
+      // Calculate trade duration
+      const durationSeconds = Math.floor((closeTime.getTime() - openTime.getTime()) / 1000);
+
+      // Calculate pips and profit if not provided
+      const pipSize = getPipSizeForSymbol(input.symbol);
+      const isLong = input.tradeType === "long";
+      const priceDiff = isLong 
+        ? input.closePrice - input.openPrice 
+        : input.openPrice - input.closePrice;
+      const pips = priceDiff / pipSize;
+      
+      // Standard lot calculation (simplified - 1 lot = 100,000 units for forex)
+      const contractSize = getContractSizeForSymbol(input.symbol);
+      const calculatedProfit = priceDiff * input.volume * contractSize;
+      const profit = input.profit ?? calculatedProfit;
+
+      // Determine outcome
+      let outcome: "Win" | "Loss" | "BE" | "PW";
+      const netProfit = profit - (input.commissions || 0) - Math.abs(input.swap || 0);
+      if (netProfit > 0) {
+        outcome = "Win";
+      } else if (netProfit < -0.01) {
+        outcome = "Loss";
+      } else {
+        outcome = "BE";
+      }
+
+      // Create the trade
+      const tradeId = crypto.randomUUID();
+      const [newTrade] = await db
+        .insert(trade)
+        .values({
+          id: tradeId,
+          accountId: input.accountId,
+          symbol: input.symbol.toUpperCase(),
+          tradeType: input.tradeType,
+          volume: input.volume.toString(),
+          openPrice: input.openPrice.toString(),
+          closePrice: input.closePrice.toString(),
+          openTime,
+          closeTime,
+          open: openTime.toISOString(),
+          close: closeTime.toISOString(),
+          sl: input.sl?.toString() || null,
+          tp: input.tp?.toString() || null,
+          profit: profit.toString(),
+          pips: pips.toString(),
+          commissions: input.commissions?.toString() || null,
+          swap: input.swap?.toString() || null,
+          tradeDurationSeconds: durationSeconds.toString(),
+          outcome,
+          sessionTag: input.sessionTag || null,
+          modelTag: input.modelTag || null,
+        })
+        .returning();
+
+      // Calculate planned RR if SL and TP provided
+      if (input.sl && input.tp) {
+        const plannedRiskPips = Math.abs(input.openPrice - input.sl) / pipSize;
+        const plannedTargetPips = Math.abs(input.tp - input.openPrice) / pipSize;
+        const plannedRR = plannedRiskPips > 0 ? plannedTargetPips / plannedRiskPips : null;
+
+        if (plannedRR !== null) {
+          await db
+            .update(trade)
+            .set({
+              plannedRR: plannedRR.toString(),
+              plannedRiskPips: plannedRiskPips.toString(),
+              plannedTargetPips: plannedTargetPips.toString(),
+            })
+            .where(eq(trade.id, tradeId));
+        }
+      }
+
+      return {
+        id: newTrade.id,
+        symbol: newTrade.symbol,
+        profit: parseFloat(newTrade.profit || "0"),
+        pips: parseFloat(newTrade.pips || "0"),
+        outcome: newTrade.outcome,
+      };
+    }),
+
+  // Update a trade
+  update: protectedProcedure
+    .input(z.object({
+      tradeId: z.string(),
+      symbol: z.string().min(1).max(20).optional(),
+      tradeType: z.enum(["long", "short"]).optional(),
+      volume: z.number().positive().optional(),
+      openPrice: z.number().positive().optional(),
+      closePrice: z.number().positive().optional(),
+      openTime: z.string().optional(),
+      closeTime: z.string().optional(),
+      sl: z.number().nullable().optional(),
+      tp: z.number().nullable().optional(),
+      profit: z.number().optional(),
+      commissions: z.number().optional(),
+      swap: z.number().optional(),
+      sessionTag: z.string().nullable().optional(),
+      modelTag: z.string().nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Verify ownership through account
+      const existing = await db
+        .select({
+          id: trade.id,
+          accountId: trade.accountId,
+        })
+        .from(trade)
+        .where(eq(trade.id, input.tradeId))
+        .limit(1);
+
+      if (!existing[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Trade not found" });
+      }
+
+      const account = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, existing[0].accountId))
+        .limit(1);
+
+      if (!account[0] || account[0].userId !== userId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+      }
+
+      // Build update object
+      const updates: Record<string, any> = {};
+
+      if (input.symbol !== undefined) updates.symbol = input.symbol.toUpperCase();
+      if (input.tradeType !== undefined) updates.tradeType = input.tradeType;
+      if (input.volume !== undefined) updates.volume = input.volume.toString();
+      if (input.openPrice !== undefined) updates.openPrice = input.openPrice.toString();
+      if (input.closePrice !== undefined) updates.closePrice = input.closePrice.toString();
+      if (input.openTime !== undefined) {
+        const openTime = new Date(input.openTime);
+        updates.openTime = openTime;
+        updates.open = openTime.toISOString();
+      }
+      if (input.closeTime !== undefined) {
+        const closeTime = new Date(input.closeTime);
+        updates.closeTime = closeTime;
+        updates.close = closeTime.toISOString();
+      }
+      if (input.sl !== undefined) updates.sl = input.sl?.toString() || null;
+      if (input.tp !== undefined) updates.tp = input.tp?.toString() || null;
+      if (input.profit !== undefined) updates.profit = input.profit.toString();
+      if (input.commissions !== undefined) updates.commissions = input.commissions.toString();
+      if (input.swap !== undefined) updates.swap = input.swap.toString();
+      if (input.sessionTag !== undefined) updates.sessionTag = input.sessionTag;
+      if (input.modelTag !== undefined) updates.modelTag = input.modelTag;
+
+      // Recalculate outcome if profit changed
+      if (input.profit !== undefined) {
+        const netProfit = input.profit - (input.commissions || 0) - Math.abs(input.swap || 0);
+        if (netProfit > 0) {
+          updates.outcome = "Win";
+        } else if (netProfit < -0.01) {
+          updates.outcome = "Loss";
+        } else {
+          updates.outcome = "BE";
+        }
+      }
+
+      const [updated] = await db
+        .update(trade)
+        .set(updates)
+        .where(eq(trade.id, input.tradeId))
+        .returning();
+
+      // Invalidate caches for this account
+      if (updated?.accountId) {
+        await invalidateTradeScopeCaches([updated.accountId]);
+      }
+
+      return updated;
+    }),
+
+  // Delete a trade
+  delete: protectedProcedure
+    .input(z.object({ tradeId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Verify ownership
+      const existing = await db
+        .select({ id: trade.id, accountId: trade.accountId })
+        .from(trade)
+        .where(eq(trade.id, input.tradeId))
+        .limit(1);
+
+      if (!existing[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Trade not found" });
+      }
+
+      const account = await db
+        .select({ userId: tradingAccount.userId })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.id, existing[0].accountId))
+        .limit(1);
+
+      if (!account[0] || account[0].userId !== userId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+      }
+
+      await db.delete(trade).where(eq(trade.id, input.tradeId));
+
+      // Invalidate caches for this account
+      await invalidateTradeScopeCaches([existing[0].accountId]);
+
+      return { ok: true };
     }),
 });

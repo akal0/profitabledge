@@ -1,5 +1,6 @@
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
+import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { AppRouter } from "../../../server/src/routers";
 import { toast } from "sonner";
@@ -36,6 +37,7 @@ export const queryClient = new QueryClient({
 const candidates = getCandidateBases();
 const primaryBase = `${candidates[0]}/trpc`;
 
+// Vanilla tRPC client for non-React contexts (server-side, effects, etc.)
 export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
@@ -60,7 +62,39 @@ export const trpcClient = createTRPCClient<AppRouter>({
   ],
 });
 
-export const trpc = createTRPCOptionsProxy<AppRouter>({
+// Create tRPC React hooks
+export const trpc = createTRPCReact<AppRouter>();
+
+// Create the tRPC client for the Provider
+export const trpcReactClient = trpc.createClient({
+  links: [
+    httpBatchLink({
+      url: primaryBase,
+      async fetch(url, options) {
+        const bases = candidates.map((b) => `${b}/trpc`);
+        for (let i = 0; i < bases.length; i++) {
+          const target = url.toString().replace(primaryBase, bases[i]);
+          try {
+            const res = await fetch(target, {
+              ...(options || {}),
+              credentials: "include",
+            });
+            return res;
+          } catch (_) {
+            // try next base
+          }
+        }
+        return fetch(url, { ...(options || {}), credentials: "include" });
+      },
+    }),
+  ],
+});
+
+// Create the tRPC options proxy for tanstack react-query helpers
+export const trpcOptions = createTRPCOptionsProxy<AppRouter>({
   client: trpcClient,
   queryClient,
 });
+
+// Export for React components - use trpc.useQuery(), trpc.useMutation(), etc.
+export const useTRPC = () => trpc;

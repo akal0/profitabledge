@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAllowedWebOrigins } from "./lib/origins";
 
 export function middleware(req: NextRequest) {
   const headers = new Headers();
   headers.set("Access-Control-Allow-Credentials", "true");
   // Comma-separated list of allowed origins; reflect request origin if present
-  const originList =
-    process.env.CORS_ORIGIN ||
-    "http://localhost:3001,http://192.168.1.173:3001";
-  const allowed = originList
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const allowed = getAllowedWebOrigins();
   const reqOrigin = req.headers.get("origin") || "";
   const isDev = process.env.NODE_ENV !== "production";
   // In dev, reflect any origin to simplify LAN testing; otherwise require allowlist match

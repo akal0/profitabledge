@@ -7,7 +7,7 @@ function inferAuthBases(): string[] {
     const localhost = `${protocol}//localhost:3000`;
     const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
     const lan = isLanIp ? `${protocol}//${hostname}:3000` : "";
-    const ordered = isLanIp ? [lan, localhost, env] : [localhost, lan, env];
+    const ordered = isLanIp ? [env, lan, localhost] : [env, localhost, lan];
     return Array.from(new Set(ordered.filter(Boolean)));
   }
   return [process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"];
@@ -19,7 +19,7 @@ function buildTarget(
   input: RequestInfo | URL,
   base: string,
   primary: string
-): string | URL {
+): RequestInfo | URL {
   if (typeof input === "string") {
     if (/^https?:\/\//i.test(input)) {
       if (primary && input.startsWith(primary))
@@ -33,7 +33,7 @@ function buildTarget(
 
 export const authClient = createAuthClient({
   baseURL: bases[0],
-  async fetch(input, init) {
+  async fetch(input: RequestInfo | URL, init?: RequestInit) {
     for (let i = 0; i < bases.length; i++) {
       const target = buildTarget(input, bases[i], bases[0]);
       try {

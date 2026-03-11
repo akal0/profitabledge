@@ -1,16 +1,15 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
 import * as schema from "../db/schema/auth";
+import { getAllowedWebOrigins } from "./origins";
 
-const defaultOrigins = ["http://localhost:3001", "http://192.168.1.173:3001"];
-
-export const auth = betterAuth({
+const authOptions = {
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: schema,
   }),
-  trustedOrigins: [...defaultOrigins, process.env.CORS_ORIGIN || ""],
+  trustedOrigins: getAllowedWebOrigins(),
   emailAndPassword: {
     enabled: true,
   },
@@ -31,4 +30,8 @@ export const auth = betterAuth({
     process.env.BETTER_AUTH_URL ||
     process.env.NEXT_PUBLIC_SERVER_URL ||
     "http://localhost:3000",
-});
+} satisfies BetterAuthOptions;
+
+// Type annotation to avoid TS2742 error with project references
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const auth: ReturnType<typeof betterAuth> = betterAuth(authOptions) as any;

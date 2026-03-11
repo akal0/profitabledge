@@ -1,12 +1,11 @@
 "use client";
 
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { queryClient } from "@/utils/trpc";
+import { queryClient, trpc, trpcReactClient, trpcClient } from "@/utils/trpc";
 import { ThemeProvider } from "./theme-provider";
+import { TooltipProvider } from "./ui/tooltip";
 import { Toaster } from "./ui/sonner";
 import React, { useEffect } from "react";
-import { trpcClient } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 
@@ -39,17 +38,21 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <NuqsAdapter>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="system"
-        enableSystem
-        disableTransitionOnChange
-      >
+      <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          {children}
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <TooltipProvider>
+              {children}
+            </TooltipProvider>
+            <Toaster richColors />
+          </ThemeProvider>
         </QueryClientProvider>
-        <Toaster richColors />
-      </ThemeProvider>
+      </trpc.Provider>
     </NuqsAdapter>
   );
 }

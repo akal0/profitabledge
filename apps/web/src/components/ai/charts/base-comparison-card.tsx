@@ -1,0 +1,103 @@
+"use client";
+
+import React from "react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+
+export interface ComparisonSide {
+  label: string;
+  value: number;
+  count?: number;
+}
+
+export interface BaseComparisonCardProps {
+  a: ComparisonSide;
+  b: ComparisonSide;
+  delta: number;
+  deltaPercent?: string;
+  formatValue?: (v: number) => string;
+}
+
+const defaultFormat = (v: number) => {
+  const abs = Math.abs(v);
+  const sign = v < 0 ? "-$" : "$";
+  return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+};
+
+export function BaseComparisonCard({
+  a,
+  b,
+  delta,
+  deltaPercent,
+  formatValue: fmt = defaultFormat,
+}: BaseComparisonCardProps) {
+  const isABetter = a.value > b.value;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div
+          className={cn(
+            "p-4 rounded-lg border",
+            isABetter
+              ? "bg-teal-500/10 border-teal-500/30"
+              : "bg-white/5 border-white/10"
+          )}
+        >
+          <p className="text-xs text-white/50 mb-1">{a.label}</p>
+          <p
+            className={cn(
+              "text-2xl font-bold",
+              isABetter ? "text-teal-400" : "text-white"
+            )}
+          >
+            {fmt(a.value)}
+          </p>
+          {a.count && (
+            <p className="text-[10px] text-white/30 mt-1">n={a.count}</p>
+          )}
+        </div>
+
+        <div
+          className={cn(
+            "p-4 rounded-lg border",
+            !isABetter
+              ? "bg-teal-500/10 border-teal-500/30"
+              : "bg-white/5 border-white/10"
+          )}
+        >
+          <p className="text-xs text-white/50 mb-1">{b.label}</p>
+          <p
+            className={cn(
+              "text-2xl font-bold",
+              !isABetter ? "text-teal-400" : "text-white"
+            )}
+          >
+            {fmt(b.value)}
+          </p>
+          {b.count && (
+            <p className="text-[10px] text-white/30 mt-1">n={b.count}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center gap-2 py-2 bg-white/5 rounded-lg">
+        <span className="text-white/50 text-sm">Difference:</span>
+        <span
+          className={cn(
+            "font-semibold",
+            delta >= 0 ? "text-teal-400" : "text-rose-400"
+          )}
+        >
+          {delta >= 0 ? "+" : ""}
+          {fmt(delta)}
+        </span>
+        {deltaPercent && (
+          <Badge variant="outline" className="text-xs">
+            {deltaPercent}
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}

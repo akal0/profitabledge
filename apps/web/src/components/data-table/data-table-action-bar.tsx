@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "motion/react";
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
+import { VerticalSeparator } from "@/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
@@ -116,7 +116,7 @@ function DataTableActionBarAction({
       <TooltipTrigger asChild>{trigger}</TooltipTrigger>
       <TooltipContent
         sideOffset={6}
-        className="border bg-accent font-semibold text-foreground dark:bg-zinc-900 [&>span]:hidden"
+        className="font-semibold [&>span]:hidden"
       >
         <p>{tooltip}</p>
       </TooltipContent>
@@ -140,10 +140,7 @@ function DataTableActionBarSelection<TData>({
       <span className="whitespace-nowrap text-xs">
         {table.getFilteredSelectedRowModel().rows.length} selected
       </span>
-      <Separator
-        orientation="vertical"
-        className="mr-1 ml-2 data-[orientation=vertical]:h-4"
-      />
+      <VerticalSeparator className="mr-1 ml-2 h-4" />
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
@@ -157,7 +154,7 @@ function DataTableActionBarSelection<TData>({
         </TooltipTrigger>
         <TooltipContent
           sideOffset={10}
-          className="flex items-center gap-2 border bg-accent px-2 py-1 font-semibold text-foreground dark:bg-zinc-900 [&>span]:hidden"
+          className="flex items-center gap-2 font-semibold [&>span]:hidden"
         >
           <p>Clear selection</p>
           <kbd className="select-none rounded border bg-background px-1.5 py-px font-mono font-normal text-[0.7rem] text-foreground shadow-xs">

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Sheet,
   SheetContent,
@@ -8,7 +9,6 @@ import {
   SheetTitle,
   SheetDescription,
   SheetTrigger,
-  SheetFooter,
   SheetClose,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -20,15 +20,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, ExternalLink } from "lucide-react";
+import { Plus, ExternalLink, Sparkles, Plug, Cpu } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
+import { trpcOptions } from "@/utils/trpc";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import CsvUpload from "@/components/upload/CsvUpload";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { Separator } from "@/components/ui/separator";
+import {
+  TRADE_ACTION_BUTTON_CLASS,
+  TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+  TRADE_IDENTIFIER_PILL_CLASS,
+  TRADE_IDENTIFIER_TONES,
+  TRADE_SURFACE_CARD_CLASS,
+} from "@/components/trades/trade-identifier-pill";
 
 export type AddAccountForm = {
-  method: "csv" | "broker" | null;
+  method: "csv" | "broker" | "ea" | null;
   name: string;
   broker: string;
   initialCurrency: "$" | "£" | "€" | "";
@@ -57,11 +67,19 @@ const BROKERS: { value: string; label: string; image: string }[] = [
   },
 ];
 
+const DEMO_ACCOUNT_NAME = "Demo Account";
+const DEMO_BROKER = "ProfitEdge Demo";
+const DEMO_BROKER_SERVER = "ProfitEdge-Demo01";
+const DEMO_ACCOUNT_PREFIX = "DEMO-";
+
 export function AddAccountSheet({
   onAccountCreated,
+  trigger,
 }: {
   onAccountCreated: (account: NewAccount) => void;
+  trigger?: React.ReactNode;
 }) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<AddAccountForm>({
@@ -73,6 +91,24 @@ export function AddAccountSheet({
     file: null,
   });
   const [submitting, setSubmitting] = useState(false);
+  const { data: rawAccounts } = useQuery(
+    trpcOptions.accounts.list.queryOptions()
+  );
+  const accounts = (rawAccounts as any[] | undefined) ?? [];
+
+  const demoAccounts = useMemo(
+    () =>
+      accounts.filter((account: any) => {
+        const accountNumber = String(account.accountNumber || "");
+        return (
+          account.name === DEMO_ACCOUNT_NAME &&
+          account.broker === DEMO_BROKER &&
+          account.brokerServer === DEMO_BROKER_SERVER &&
+          accountNumber.startsWith(DEMO_ACCOUNT_PREFIX)
+        );
+      }),
+    [accounts]
+  );
 
   const canSubmit = useMemo(() => {
     if (form.method === "csv") {
@@ -147,241 +183,617 @@ export function AddAccountSheet({
     }
   }
 
+  async function refreshAccounts() {
+    await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  }
+
+  async function handleDemoWorkspace() {
+    try {
+      setSubmitting(true);
+      const result =
+        demoAccounts.length > 0
+          ? await trpcClient.accounts.resetDemoWorkspace.mutate()
+          : await trpcClient.accounts.createSampleAccount.mutate();
+
+      await refreshAccounts();
+
+      const resetCount =
+        typeof (result as any).resetCount === "number"
+          ? (result as any).resetCount
+          : 0;
+
+      toast.success(
+        demoAccounts.length > 0
+          ? `Demo workspace regenerated. Replaced ${resetCount} seeded demo account${
+              resetCount === 1 ? "" : "s"
+            } with ${result.tradeCount} trades and ${
+              result.openTradeCount
+            } live positions.`
+          : `Demo account created with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
+      );
+
+      onAccountCreated({
+        id: result.account.id,
+        name: result.account.name,
+        image: "",
+      });
+
+      setOpen(false);
+    } catch (e: any) {
+      toast.error(
+        e.message ||
+          (demoAccounts.length > 0
+            ? "Failed to regenerate demo workspace"
+            : "Failed to create demo account")
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const sheetTitle =
+    step === 1
+      ? "Connect your account"
+      : step === 2
+      ? form.method === "csv"
+        ? "Import account with CSV upload"
+        : form.method === "broker"
+        ? "Broker sync"
+        : "EA sync"
+      : "Account ready";
+
+  const sheetDescription =
+    step === 1
+      ? "Choose how you want to add your trading account."
+      : step === 2 && form.method === "csv"
+      ? "Upload your CSV and enter the details for this trading account."
+      : step === 2 && form.method === "broker"
+      ? "Use Connections to sync supported broker and platform accounts directly."
+      : step === 2 && form.method === "ea"
+      ? "Use the MT5 EA bridge for terminal-based sync and richer trade analytics."
+      : "Your account has been added to the account switcher.";
+
+  const sectionTitleClass =
+    "text-xs font-semibold text-white/70 tracking-wide";
+  const fieldLabelClass = "text-xs text-white/50";
+  const fieldInputClass =
+    "rounded-sm border-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-white/25 hover:brightness-100";
+  const fieldSelectTriggerClass =
+    "h-9 rounded-sm border-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
+  const fieldSelectContentClass =
+    "rounded-sm border border-white/8 bg-sidebar p-1 text-white/80";
+  const fieldSelectItemClass =
+    "rounded-sm px-4 py-2.5 text-xs text-white/80 data-[highlighted]:bg-sidebar-accent/80";
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
-        <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
-          <div className="flex items-center gap-2 truncate">
-            <Plus className="size-3.5" />
-            <span className=" truncate">Add an account</span>
-          </div>
-        </Button>
+        {trigger || (
+          <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+            <div className="flex items-center gap-2 truncate">
+              <Plus className="size-3.5" />
+              <span className=" truncate">Add an account</span>
+            </div>
+          </Button>
+        )}
       </SheetTrigger>
 
-      <SheetContent side="right">
-        <SheetHeader className="gap-1 px-8 py-8 pb-2">
-          <SheetTitle className="tracking-tight">
-            {step === 1
-              ? "Connect your account"
-              : step === 2
-              ? form.method === "csv"
-                ? "Import account with CSV upload"
-                : "Sync via Broker"
-              : "Account connected successfully."}
-          </SheetTitle>
-
-          <SheetDescription className="text-[#A0A0A6] text-xs tracking-wide leading-relaxed">
-            {step === 1 && "Choose how you want to add your trading account."}
-            {step === 2 &&
-              form.method === "csv" &&
-              "Upload your CSV and enter details relating to your trading account."}
-            {step === 2 &&
-              form.method === "broker" &&
-              "Enter broker credentials to sync (coming soon)."}
-            {step === 3 && "Your account has been added to the switcher."}
-          </SheetDescription>
-        </SheetHeader>
-
-        <div className="w-full h-[2px] bg-[#000]/30 border-b border-[#222225]" />
-
-        <div className="px-4">
-          {step === 1 && (
-            <div className="flex flex-col gap-2 px-4">
-              <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none transition-all active:scale-95 bg-transparent hover:bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-white duration-250"
-                onClick={() => {
-                  setForm({ ...form, method: "csv" });
-                  setStep(2);
-                }}
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-2xl overflow-y-auto rounded-md p-0"
+      >
+        <div className="px-6 py-5 pb-0">
+          <SheetHeader className="p-0">
+            <div className="flex w-full items-end justify-between gap-4">
+              <div className="flex flex-col items-start gap-1">
+                <SheetTitle className="text-base font-semibold text-white">
+                  {sheetTitle}
+                </SheetTitle>
+                <SheetDescription className="max-w-md text-xs leading-relaxed text-white/40">
+                  {sheetDescription}
+                </SheetDescription>
+              </div>
+              <span
+                className={cn(
+                  TRADE_IDENTIFIER_PILL_CLASS,
+                  TRADE_IDENTIFIER_TONES.neutral,
+                  "min-h-6 px-2 py-0.5 text-[10px]"
+                )}
               >
-                Import account via CSV
-              </Button>
-
-              <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none transition-all active:scale-95 bg-transparent hover:bg-sidebar-accent text-white w-full text-xs hover:!brightness-110 hover:text-white duration-250"
-                onClick={() => {
-                  setForm({ ...form, method: "broker" });
-                  setStep(2);
-                }}
-              >
-                MT5 EA Sync (Recommended)
-              </Button>
+                Step {step} of 3
+              </span>
             </div>
+          </SheetHeader>
+        </div>
+
+        <div className="flex flex-col">
+          {step === 1 && (
+            <>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Connection method</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className="grid gap-3">
+                  <Button
+                    className={cn(
+                      TRADE_SURFACE_CARD_CLASS,
+                      "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                    )}
+                    onClick={() => {
+                      setForm({ ...form, method: "csv" });
+                      setStep(2);
+                    }}
+                  >
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-sm font-medium text-white">
+                        Import account via CSV
+                      </span>
+                      <span className="text-xs text-white/45">
+                        Upload a statement export and create a new account from
+                        it.
+                      </span>
+                    </div>
+                    <span className="text-white/35">→</span>
+                  </Button>
+
+                  <Button
+                    className={cn(
+                      TRADE_SURFACE_CARD_CLASS,
+                      "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                    )}
+                    onClick={() => {
+                      setForm({ ...form, method: "broker" });
+                      setStep(2);
+                    }}
+                  >
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-sm font-medium text-white">
+                        Broker sync
+                      </span>
+                      <span className="text-xs text-white/45">
+                        Connect through the Connections page for direct broker
+                        and platform sync.
+                      </span>
+                    </div>
+                    <span
+                      className={cn(
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        TRADE_IDENTIFIER_TONES.info,
+                        "min-h-6 px-2 py-0.5 text-[10px]"
+                      )}
+                    >
+                      Recommended
+                    </span>
+                  </Button>
+
+                  <Button
+                    className={cn(
+                      TRADE_SURFACE_CARD_CLASS,
+                      "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                    )}
+                    onClick={() => {
+                      setForm({ ...form, method: "ea" });
+                      setStep(2);
+                    }}
+                  >
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-sm font-medium text-white">
+                        EA sync
+                      </span>
+                      <span className="text-xs text-white/45">
+                        Use the MT5 EA bridge for terminal-side sync and
+                        advanced intratrade metrics.
+                      </span>
+                    </div>
+                    <span
+                      className={cn(
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        TRADE_IDENTIFIER_TONES.live,
+                        "min-h-6 px-2 py-0.5 text-[10px]"
+                      )}
+                    >
+                      MT5 only
+                    </span>
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Demo workspace</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 p-4")}>
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="mt-0.5 size-4 text-amber-300" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-white">
+                        Explore with demo data
+                      </p>
+                      <p className="text-xs leading-relaxed text-white/45">
+                        {demoAccounts.length > 0
+                          ? `Replace ${demoAccounts.length} seeded demo workspace${
+                              demoAccounts.length === 1 ? "" : "s"
+                            } with a fresh fully-populated trading environment.`
+                          : "Create a fully-seeded demo account with historical trades and live positions."}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    className={cn(
+                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                      "h-9 w-full border-amber-400/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
+                    )}
+                    onClick={handleDemoWorkspace}
+                    disabled={submitting}
+                  >
+                    <Sparkles className="size-3.5" />
+                    {submitting
+                      ? demoAccounts.length > 0
+                        ? "Regenerating..."
+                        : "Creating..."
+                      : demoAccounts.length > 0
+                      ? "Regenerate demo workspace"
+                      : "Try with demo data"}
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-5">
+                <SheetClose asChild>
+                  <Button className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}>
+                    Cancel
+                  </Button>
+                </SheetClose>
+              </div>
+            </>
           )}
 
           {step === 2 && form.method === "csv" && (
-            <div className="flex flex-col gap-5 px-4 mt-2">
-              <CsvUpload
-                onFileChange={(f) => setForm((prev) => ({ ...prev, file: f }))}
-              />
-
-              <div className="grid gap-2">
-                <label className="text-xs font-medium">Account name</label>
-
-                <Input
-                  placeholder="e.g. FTMO 100k Live"
-                  className="rounded-none px-4 dark:bg-sidebar-accent"
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, name: e.target.value }))
-                  }
+            <>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Upload CSV</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <CsvUpload
+                  onFileChange={(f) => setForm((prev) => ({ ...prev, file: f }))}
                 />
               </div>
 
-              <div className="grid gap-2">
-                <Label className="text-xs font-medium">Broker</Label>
-
-                <Select
-                  value={form.broker}
-                  onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
-                >
-                  <SelectTrigger className="w-full px-4">
-                    <SelectValue placeholder="Select a broker" />
-                  </SelectTrigger>
-
-                  <SelectContent className="rounded-none mt-0.5 bg-sidebar-accent border border-white/5">
-                    {BROKERS.map((b) => (
-                      <SelectItem key={b.value} value={b.value}>
-                        <div className="flex items-center gap-2.5">
-                          <img
-                            src={b.image}
-                            alt={b.label}
-                            className="w-4 h-4 object-contain"
-                          />
-                          {b.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Account details</h3>
               </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>Account name</Label>
+                    <Input
+                      placeholder="e.g. FTMO 100k Live"
+                      className={fieldInputClass}
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                    />
+                  </div>
 
-              <div className="grid gap-2">
-                <Label className="text-xs font-medium">
-                  Initial account balance
-                </Label>
-                <div className="flex items-center gap-0">
-                  <Select
-                    value={form.initialCurrency}
-                    onValueChange={(v: "$" | "£" | "€") =>
-                      setForm((f) => ({ ...f, initialCurrency: v }))
-                    }
-                  >
-                    <SelectTrigger className="w-20 px-4 border-r-0">
-                      <SelectValue placeholder="$" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-none mt-0.5 bg-sidebar-accent border border-white/5">
-                      {(["$", "£", "€"] as const).map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>Broker</Label>
+                    <Select
+                      value={form.broker}
+                      onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
+                    >
+                      <SelectTrigger className={fieldSelectTriggerClass}>
+                        <SelectValue placeholder="Select a broker" />
+                      </SelectTrigger>
 
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="$100,000"
-                    className="rounded-none px-4 dark:bg-sidebar-accent flex-1"
-                    value={form.initialBalance}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, initialBalance: e.target.value }))
-                    }
-                  />
+                      <SelectContent className={fieldSelectContentClass}>
+                        {BROKERS.map((b) => (
+                          <SelectItem
+                            key={b.value}
+                            value={b.value}
+                            className={fieldSelectItemClass}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <img
+                                src={b.image}
+                                alt={b.label}
+                                className="h-4 w-4 object-contain"
+                              />
+                              {b.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>
+                      Initial account balance
+                    </Label>
+                    <div className="flex items-center gap-0">
+                      <Select
+                        value={form.initialCurrency}
+                        onValueChange={(v: "$" | "£" | "€") =>
+                          setForm((f) => ({ ...f, initialCurrency: v }))
+                        }
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            fieldSelectTriggerClass,
+                            "w-20 rounded-r-none border-r-0"
+                          )}
+                        >
+                          <SelectValue placeholder="$" />
+                        </SelectTrigger>
+                        <SelectContent className={fieldSelectContentClass}>
+                          {(["$", "£", "€"] as const).map((c) => (
+                            <SelectItem
+                              key={c}
+                              value={c}
+                              className={fieldSelectItemClass}
+                            >
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="$100,000"
+                        className={cn(
+                          fieldInputClass,
+                          "flex-1 rounded-l-none border-l-0"
+                        )}
+                        value={form.initialBalance}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            initialBalance: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
+
+              <Separator />
+              <div className="px-6 py-5">
+                <div className="flex w-full gap-2">
+                  <Button
+                    className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
+                    onClick={() => setStep(1)}
+                  >
+                    Back
+                  </Button>
+
+                  <Button
+                    className={cn(
+                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                      "h-9 flex-1",
+                      !canSubmit && "opacity-60"
+                    )}
+                    disabled={!canSubmit || submitting}
+                    onClick={handleSubmitCSV}
+                  >
+                    {submitting ? "Uploading..." : "Upload"}
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
 
           {step === 2 && form.method === "broker" && (
-            <div className="p-4 text-xs space-y-4">
-              <div className="bg-teal-900/20 border border-teal-500/30 p-4 rounded-md">
-                <p className="text-teal-300 font-medium mb-2 text-sm">
-                  ✓ MT5 EA Auto-Sync
-                </p>
-                <p className="text-white/60 text-xs">
-                  Your account will automatically appear here when you attach the ProfitabEdge EA to your MT5 terminal.
-                </p>
+            <>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Connections</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 p-4")}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Plug className="size-4 text-blue-300" />
+                        <p className="text-sm font-medium text-white">
+                          Direct platform sync
+                        </p>
+                      </div>
+                      <p className="text-xs leading-relaxed text-white/45">
+                        Connect MetaTrader 5, cTrader, Match-Trader, or
+                        TradeLocker from the Connections page. ProfitEdge
+                        handles the sync workflow from there.
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        TRADE_IDENTIFIER_TONES.info,
+                        "min-h-6 px-2 py-0.5 text-[10px]"
+                      )}
+                    >
+                      Recommended
+                    </span>
+                  </div>
+
+                  <Button
+                    asChild
+                    className={cn(
+                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                      "h-9 w-full"
+                    )}
+                  >
+                    <Link
+                      href="/dashboard/settings/connections"
+                      onClick={() => setOpen(false)}
+                    >
+                      <ExternalLink className="size-3.5" />
+                      Go to Connections
+                    </Link>
+                  </Button>
+                </div>
               </div>
 
-              <div className="space-y-3">
-                <p className="text-white font-medium text-sm">Quick Setup:</p>
-                <ol className="list-decimal list-inside text-white/70 space-y-2">
-                  <li>Go to Settings → EA Setup</li>
-                  <li>Generate an API key</li>
-                  <li>Download and install the EA</li>
-                  <li>Attach EA to any chart in MT5</li>
-                  <li>Your account will sync automatically!</li>
-                </ol>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>What to expect</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
+                  <ol className="space-y-2 text-sm text-white/70">
+                    <li>1. Open Connections.</li>
+                    <li>2. Choose the provider you want to link.</li>
+                    <li>3. Complete the connection and let sync create or link the account.</li>
+                  </ol>
+                  <p className="text-xs leading-relaxed text-white/40">
+                    Use this flow for supported direct platform and broker sync.
+                    It is the main path for non-EA account connections.
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-md">
-                <p className="text-blue-300 text-xs">
-                  <strong>Note:</strong> The EA will automatically register your MT5 account with all details (balance, broker, currency) when it first connects.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <SheetFooter>
-          {step === 1 && (
-            <SheetClose asChild>
-              <Button className="border-[0.5px] border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
-                Cancel
-              </Button>
-            </SheetClose>
-          )}
-
-          {step === 2 && form.method === "csv" && (
-            <div className="flex w-full gap-2">
-              <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] flex-1 text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
-                onClick={() => setStep(1)}
-              >
-                Back
-              </Button>
-
-              <Button
-                className={cn(
-                  canSubmit &&
-                    "!bg-emerald-600 hover:bg-emerald-500 !text-white",
-                  "border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 bg-[#222225] transition-all active:scale-95 text-[#A0A0A6] flex-1 text-xs hover:!brightness-120 hover:text-white duration-250"
-                )}
-                disabled={!canSubmit || submitting}
-                onClick={handleSubmitCSV}
-              >
-                {submitting ? "Uploading..." : "Upload"}
-              </Button>
-            </div>
-          )}
-
-          {step === 2 && form.method === "broker" && (
-            <div className="flex flex-col gap-2 w-full">
-              <Link href="/dashboard/settings/ea-setup" onClick={() => setOpen(false)}>
-                <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-3 transition-all active:scale-95 bg-teal-600 hover:bg-teal-700 text-white w-full text-xs duration-250">
-                  <ExternalLink className="size-3.5" />
-                  Go to EA Setup
+              <Separator />
+              <div className="px-6 py-5">
+                <Button
+                  className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                  onClick={() => setStep(1)}
+                >
+                  Back
                 </Button>
-              </Link>
-              <Button
-                className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-1 transition-all active:scale-95 bg-[#222225] text-[#A0A0A6] w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
-                onClick={() => setStep(1)}
-              >
-                Back
-              </Button>
-            </div>
+              </div>
+            </>
+          )}
+
+          {step === 2 && form.method === "ea" && (
+            <>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>MT5 EA bridge</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 p-4")}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Cpu className="size-4 text-teal-300" />
+                        <p className="text-sm font-medium text-white">
+                          Terminal-side MT5 sync
+                        </p>
+                      </div>
+                      <p className="text-xs leading-relaxed text-white/45">
+                        Use the EA bridge when you want MT5 terminal sync plus
+                        the advanced intratrade metrics the API path cannot
+                        capture.
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        TRADE_IDENTIFIER_TONES.live,
+                        "min-h-6 px-2 py-0.5 text-[10px]"
+                      )}
+                    >
+                      MT5 only
+                    </span>
+                  </div>
+
+                  <Button
+                    asChild
+                    className={cn(
+                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                      "h-9 w-full"
+                    )}
+                  >
+                    <Link
+                      href="/dashboard/settings/ea-setup"
+                      onClick={() => setOpen(false)}
+                    >
+                      <ExternalLink className="size-3.5" />
+                      Go to EA Setup
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>What to expect</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
+                  <ol className="space-y-2 text-sm text-white/70">
+                    <li>1. Open EA Setup.</li>
+                    <li>2. Generate the key and install the EA in MT5.</li>
+                    <li>3. Attach the EA and let the first sync register the account.</li>
+                  </ol>
+                  <p className="text-xs leading-relaxed text-white/40">
+                    Use this flow when you specifically want MT5 terminal-side
+                    sync and the richer analytics captured by the EA bridge.
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-5">
+                <Button
+                  className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                  onClick={() => setStep(1)}
+                >
+                  Back
+                </Button>
+              </div>
+            </>
           )}
 
           {step === 3 && (
-            <SheetClose asChild>
-              <Button className="w-full" onClick={() => setOpen(false)}>
-                Done
-              </Button>
-            </SheetClose>
+            <>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Account ready</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-2 p-4")}>
+                  <p className="text-sm font-medium text-white">
+                    Your account has been added successfully.
+                  </p>
+                  <p className="text-xs leading-relaxed text-white/45">
+                    It is now available in the account switcher and ready to use
+                    across the dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-5">
+                <SheetClose asChild>
+                  <Button
+                    className={cn(TRADE_ACTION_BUTTON_PRIMARY_CLASS, "h-9 w-full")}
+                    onClick={() => setOpen(false)}
+                  >
+                    Done
+                  </Button>
+                </SheetClose>
+              </div>
+            </>
           )}
-        </SheetFooter>
+        </div>
       </SheetContent>
     </Sheet>
   );

@@ -7,6 +7,7 @@ export type AccountStats = {
   profitFactor: number | null;
   wins: number;
   losses: number;
+  breakeven: number;
   winrate: number;
   winStreak: number;
   recentOutcomes: ("W" | "L")[];

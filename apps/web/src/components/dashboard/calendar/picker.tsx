@@ -3,7 +3,6 @@ import {
   DateRangePicker,
   Dialog,
   Group,
-  Label,
   Popover,
 } from "react-aria-components";
 
@@ -12,7 +11,7 @@ import { RangeCalendar } from "@/components/ui/calendar-rac";
 import { DateInput, dateInputStyle } from "@/components/ui/datefield-rac";
 
 import CalendarIcon from "@/public/icons/calendar.svg";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDate,
   fromDate,
@@ -27,6 +26,12 @@ type Props = {
   onRangeChange?: (start: Date, end: Date) => void;
   valueStart?: Date;
   valueEnd?: Date;
+  minDays?: number;
+  maxDays?: number;
+  quickRanges?: Array<{
+    label: string;
+    getRange: (minDate: Date, maxDate: Date) => { start: Date; end: Date };
+  }>;
 };
 
 function toCal(d: Date): CalendarDate {
@@ -63,6 +68,45 @@ export default function Component({
   onRangeChange,
   valueStart,
   valueEnd,
+  minDays = 3,
+  maxDays = 7,
+  quickRanges = [
+    {
+      label: "This week",
+      getRange: (min, max) => {
+        const endJs = new Date(max);
+        endJs.setHours(0, 0, 0, 0);
+        const startJs = new Date(endJs);
+        startJs.setDate(endJs.getDate() - 6);
+        return { start: startJs < min ? min : startJs, end: endJs };
+      },
+    },
+    {
+      label: "Last week",
+      getRange: (min, max) => {
+        const endJs = new Date(max);
+        endJs.setHours(0, 0, 0, 0);
+        const prevEndJs = new Date(endJs);
+        prevEndJs.setDate(endJs.getDate() - 7);
+        const prevStartJs = new Date(prevEndJs);
+        prevStartJs.setDate(prevEndJs.getDate() - 6);
+        return {
+          start: prevStartJs < min ? min : prevStartJs,
+          end: prevEndJs > max ? max : prevEndJs,
+        };
+      },
+    },
+    {
+      label: "Last 3 days",
+      getRange: (min, max) => {
+        const endJs = new Date(max);
+        endJs.setHours(0, 0, 0, 0);
+        const startJs = new Date(endJs);
+        startJs.setDate(endJs.getDate() - 2);
+        return { start: startJs < min ? min : startJs, end: endJs };
+      },
+    },
+  ],
 }: Props) {
   const minValue = useMemo(() => toCal(minDate), [minDate]);
   const maxValue = useMemo(() => toCal(maxDate), [maxDate]);
@@ -77,27 +121,36 @@ export default function Component({
     [value, tz]
   );
 
-  // sync externally corrected range back into picker
-  if (valueStart && valueEnd) {
-    const vs = toCal(valueStart);
-    const ve = toCal(valueEnd);
-    if (value.start.compare(vs) !== 0 || value.end.compare(ve) !== 0) {
-      setValue({ start: vs, end: ve });
-    }
-  }
+  useEffect(() => {
+    if (!valueStart || !valueEnd) return;
+    const nextStart = toCal(valueStart);
+    const nextEnd = toCal(valueEnd);
+    setValue((current) => {
+      if (
+        current.start.compare(nextStart) === 0 &&
+        current.end.compare(nextEnd) === 0
+      ) {
+        return current;
+      }
+      return {
+        start: nextStart,
+        end: nextEnd,
+      };
+    });
+  }, [valueEnd, valueStart]);
 
   return (
     <DateRangePicker
       value={value}
       onChange={(range) => {
         if (!range) return;
-        const minDays = 3;
-        const maxDays = 7;
         let { start, end } = range as any;
         if (start && !end) {
-          end = start.add({ days: maxDays - 1 });
+          const span = maxDays ? maxDays - 1 : minDays - 1;
+          end = start.add({ days: span });
         } else if (!start && end) {
-          start = end.subtract({ days: maxDays - 1 });
+          const span = maxDays ? maxDays - 1 : minDays - 1;
+          start = end.subtract({ days: span });
         }
         // Enforce min/max days when both present
         if (start && end) {
@@ -109,7 +162,7 @@ export default function Component({
                 86400000
             ) + 1;
           let desired = diff;
-          if (diff > maxDays) desired = maxDays;
+          if (maxDays && diff > maxDays) desired = maxDays;
           if (diff < minDays) desired = minDays;
           if (desired !== diff) {
             end = start.add({ days: desired - 1 });
@@ -153,17 +206,13 @@ export default function Component({
           end.toDate(getLocalTimeZone())
         );
       }}
-      className="*:not-first:mt-2 group hover:brightness-120 transition-all duration-150"
-      // onPointerDown={() => {
-      //   const y = window.scrollY;
-      //   requestAnimationFrame(() => window.scrollTo(0, y));
-      // }}
+      className="transition-all duration-150"
     >
-      <div className="flex cursor-pointer">
+      <div className="relative flex">
         <Group
           className={cn(
             dateInputStyle,
-            "pe-12 rounded-none bg-sidebar border-white/5 py-2.5"
+            "h-[38px] pe-12 rounded-sm border-white/5 bg-sidebar py-2.5 shadow-none"
           )}
         >
           {/* Keep inputs for a11y but visually hide; we render a custom label */}
@@ -180,8 +229,11 @@ export default function Component({
           </span>
         </Group>
 
-        <Button className="text-muted-foreground/80 hover:text-foreground z-10 -ms-11 flex w-9 items-center justify-center rounded-none transition-[color,box-shadow] outline-none cursor-pointer">
-          <CalendarIcon className="size-4 fill-white/75" />
+        <Button
+          aria-label={`Open date range picker for ${label}`}
+          className="absolute inset-0 z-10 flex items-center justify-end rounded-sm px-3 text-white/75 transition-[color,box-shadow,filter] duration-150 outline-none hover:text-white focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          <CalendarIcon className="pointer-events-none size-4 fill-current" />
         </Button>
       </div>
 
@@ -200,11 +252,15 @@ export default function Component({
             onChange={(range) => {
               // mirror the same enforcement as picker wrapper
               if (!range) return;
-              const minDays = 3;
-              const maxDays = 7;
               let { start, end } = range as any;
-              if (start && !end) end = start.add({ days: maxDays - 1 });
-              if (end && !start) start = end.subtract({ days: maxDays - 1 });
+              if (start && !end) {
+                const span = maxDays ? maxDays - 1 : minDays - 1;
+                end = start.add({ days: span });
+              }
+              if (end && !start) {
+                const span = maxDays ? maxDays - 1 : minDays - 1;
+                start = end.subtract({ days: span });
+              }
               if (start && end) {
                 const jsStart = start.toDate(tz);
                 const jsEnd = end.toDate(tz);
@@ -215,7 +271,7 @@ export default function Component({
                       86400000
                   ) + 1;
                 let desired = diff;
-                if (diff > maxDays) desired = maxDays;
+                if (maxDays && diff > maxDays) desired = maxDays;
                 if (diff < minDays) desired = minDays;
                 if (desired !== diff) end = start.add({ days: desired - 1 });
               }
@@ -258,100 +314,49 @@ export default function Component({
             }}
           />
 
-          {/* Quick ranges */}
-          <div className="grid grid-cols-3 gap-1 mt-2">
-            <Button
-              className="cursor-pointer text-xs py-2 rounded-none bg-sidebar border border-white/5 hover:bg-sidebar-accent"
-              onPress={() => {
-                // Most recent 7-day window ending at maxDate
-                const endJs = new Date(maxDate);
-                endJs.setHours(0, 0, 0, 0);
-                const startJs = new Date(endJs);
-                startJs.setDate(endJs.getDate() - 6);
-                // Clamp to bounds
-                const clampedStartJs =
-                  startJs < minDate ? new Date(minDate) : startJs;
-                const clampedEndJs =
-                  endJs > maxDate ? new Date(maxDate) : endJs;
-                // Enforce 3-7 days inclusive
-                const tzNow = getLocalTimeZone();
-                let start = toCal(clampedStartJs);
-                let end = toCal(clampedEndJs);
-                let diff =
-                  Math.floor(
-                    (+end.toDate(tzNow) - +start.toDate(tzNow)) / 86400000
-                  ) + 1;
-                if (diff < 3) end = start.add({ days: 2 });
-                if (diff > 7) end = start.add({ days: 6 });
-                setValue({ start, end });
-                onRangeChange?.(start.toDate(tzNow), end.toDate(tzNow));
-              }}
-            >
-              This week
-            </Button>
-
-            <Button
-              className="cursor-pointer text-xs py-2 rounded-none bg-sidebar border border-white/5 hover:bg-sidebar-accent"
-              onPress={() => {
-                // Previous 7-day window before the most recent 7 days
-                const endJs = new Date(maxDate);
-                endJs.setHours(0, 0, 0, 0);
-                // Last 7 days end at maxDate; previous week ends the day before that start
-                const prevEndJs = new Date(endJs);
-                prevEndJs.setDate(endJs.getDate() - 7);
-                const prevStartJs = new Date(prevEndJs);
-                prevStartJs.setDate(prevEndJs.getDate() - 6);
-                // Clamp to bounds
-                const clampedStartJs =
-                  prevStartJs < minDate ? new Date(minDate) : prevStartJs;
-                const clampedEndJs =
-                  prevEndJs > maxDate ? new Date(maxDate) : prevEndJs;
-                const tzNow = getLocalTimeZone();
-                let start = toCal(clampedStartJs);
-                let end = toCal(clampedEndJs);
-                let diff =
-                  Math.floor(
-                    (+end.toDate(tzNow) - +start.toDate(tzNow)) / 86400000
-                  ) + 1;
-                if (diff < 3) end = start.add({ days: 2 });
-                if (diff > 7) end = start.add({ days: 6 });
-                setValue({ start, end });
-                onRangeChange?.(start.toDate(tzNow), end.toDate(tzNow));
-              }}
-            >
-              Last week
-            </Button>
-
-            <Button
-              className="cursor-pointer text-xs py-2 rounded-none bg-sidebar border border-white/5 hover:bg-sidebar-accent"
-              onPress={() => {
-                // Most recent 3-day window ending at maxDate
-                const endJs = new Date(maxDate);
-                endJs.setHours(0, 0, 0, 0);
-                const startJs = new Date(endJs);
-                startJs.setDate(endJs.getDate() - 2);
-                const clampedStartJs =
-                  startJs < minDate ? new Date(minDate) : startJs;
-                const clampedEndJs =
-                  endJs > maxDate ? new Date(maxDate) : endJs;
-                const tzNow = getLocalTimeZone();
-                let start = toCal(clampedStartJs);
-                let end = toCal(clampedEndJs);
-                // Ensure at least 3 days
-                let diff =
-                  Math.floor(
-                    (+end.toDate(tzNow) - +start.toDate(tzNow)) / 86400000
-                  ) + 1;
-                if (diff < 3) end = start.add({ days: 2 });
-                // Cap at 7 days (not expected here but keep consistent)
-                if (diff > 7) end = start.add({ days: 6 });
-                setValue({ start, end });
-                onRangeChange?.(start.toDate(tzNow), end.toDate(tzNow));
-              }}
-            >
-              Last 3 days
-            </Button>
-          </div>
+          {quickRanges.length > 0 ? (
+            <div className="grid grid-cols-3 gap-1 mt-2">
+              {quickRanges.map((range) => (
+                <Button
+                  key={range.label}
+                  className="cursor-pointer text-xs py-2 rounded-none bg-sidebar border border-white/5 hover:bg-sidebar-accent"
+                  onPress={() => {
+                    const tzNow = getLocalTimeZone();
+                    const { start, end } = range.getRange(minDate, maxDate);
+                    let nextStart = toCal(start);
+                    let nextEnd = toCal(end);
+                    if (maxDays) {
+                      const diff =
+                        Math.floor(
+                          (+nextEnd.toDate(tzNow) - +nextStart.toDate(tzNow)) /
+                            86400000
+                        ) + 1;
+                      if (diff > maxDays) {
+                        nextEnd = nextStart.add({ days: maxDays - 1 });
+                      }
+                    }
+                    if (minDays) {
+                      const diff =
+                        Math.floor(
+                          (+nextEnd.toDate(tzNow) - +nextStart.toDate(tzNow)) /
+                            86400000
+                        ) + 1;
+                      if (diff < minDays) {
+                        nextEnd = nextStart.add({ days: minDays - 1 });
+                      }
+                    }
+                    setValue({ start: nextStart, end: nextEnd });
+                    onRangeChange?.(
+                      nextStart.toDate(tzNow),
+                      nextEnd.toDate(tzNow)
+                    );
+                  }}
+                >
+                  {range.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </Dialog>
       </Popover>
     </DateRangePicker>

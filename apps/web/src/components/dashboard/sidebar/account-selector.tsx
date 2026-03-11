@@ -15,18 +15,42 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { AddAccountSheet, type NewAccount } from "./add-account-sheet";
-import { useAccountStore } from "@/stores/account";
+import {
+  ALL_ACCOUNTS_ID,
+  isAllAccountsScope,
+  useAccountStore,
+} from "@/stores/account";
 import { useEffect, useState } from "react";
-import { trpcClient } from "@/utils/trpc";
+import { useTRPC, trpcClient, trpcOptions } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
 export type Account = {
   id: string;
   name: string;
   image: string;
+  broker?: string | null;
+  brokerServer?: string | null;
+  accountNumber?: string | null;
 };
+
+const DEMO_ACCOUNT_NAME = "Demo Account";
+const DEMO_BROKER = "ProfitEdge Demo";
+const DEMO_BROKER_SERVER = "ProfitEdge-Demo01";
+const DEMO_ACCOUNT_PREFIX = "DEMO-";
+
+function isDemoWorkspaceAccount(account: Partial<Account>) {
+  return (
+    account.name === DEMO_ACCOUNT_NAME &&
+    account.broker === DEMO_BROKER &&
+    account.brokerServer === DEMO_BROKER_SERVER &&
+    String(account.accountNumber || "").startsWith(DEMO_ACCOUNT_PREFIX)
+  );
+}
 
 const AccountSwitcher = ({
   accounts,
@@ -35,12 +59,26 @@ const AccountSwitcher = ({
   accounts: Account[];
   defaultAccount?: Account;
 }) => {
+  const trpc = useTRPC();
+  const { isMobile, state } = useSidebar();
   const [items, setItems] = React.useState<Account[]>(accounts);
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
   const setSelectedAccountId = useAccountStore((s) => s.setSelectedAccountId);
   const pendingSelectRef = React.useRef<string | undefined>(undefined);
-  const [accountMetrics, setAccountMetrics] = useState<Record<string, any>>({});
   const hasInitialized = React.useRef(false);
+
+  const allAccountsItem = React.useMemo<Account>(
+    () => ({
+      id: ALL_ACCOUNTS_ID,
+      name: "All Accounts",
+      image: "/brokers/FTMO.png",
+    }),
+    []
+  );
+  const selectorItems = React.useMemo(
+    () => [allAccountsItem, ...items],
+    [allAccountsItem, items]
+  );
 
   // Sync items when accounts prop changes
   React.useEffect(() => {
@@ -51,38 +89,38 @@ const AccountSwitcher = ({
   // CRITICAL: Only depend on `items`, not on `selectedAccountId` or `setSelectedAccountId`
   // This prevents the effect from re-running when Zustand hydrates
   React.useEffect(() => {
-    if (hasInitialized.current || !items.length) return;
+    if (hasInitialized.current || !selectorItems.length) return;
     hasInitialized.current = true;
 
     // Read persisted value directly from localStorage
     let persistedId: string | undefined;
     try {
-      const stored = localStorage.getItem('profitabledge-account-storage');
+      const stored = localStorage.getItem("profitabledge-account-storage");
       if (stored) {
         const parsed = JSON.parse(stored);
         persistedId = parsed?.state?.selectedAccountId;
       }
     } catch (e) {
-      console.error('Failed to read persisted account:', e);
+      console.error("Failed to read persisted account:", e);
     }
 
     const currentStoreValue = useAccountStore.getState().selectedAccountId;
 
     // If persisted account exists and is valid, ensure it's set in the store
-    if (persistedId && items.find((a) => a.id === persistedId)) {
+    if (persistedId && selectorItems.find((a) => a.id === persistedId)) {
       useAccountStore.getState().setSelectedAccountId(persistedId);
     } else if (!currentStoreValue) {
       // Only set to first if there's no value at all
-      useAccountStore.getState().setSelectedAccountId(items[0]?.id);
+      useAccountStore.getState().setSelectedAccountId(allAccountsItem.id);
     }
-  }, [items]); // ONLY depend on items
+  }, [selectorItems, allAccountsItem.id]); // ONLY depend on selector items
 
   // Calculate selectedIndex from selectedAccountId
   const selectedIndex = React.useMemo(() => {
-    if (!selectedAccountId || !items.length) return 0;
-    const idx = items.findIndex((a) => a.id === selectedAccountId);
+    if (!selectedAccountId || !selectorItems.length) return 0;
+    const idx = selectorItems.findIndex((a) => a.id === selectedAccountId);
     return idx >= 0 ? idx : 0;
-  }, [selectedAccountId, items]);
+  }, [selectedAccountId, selectorItems]);
 
   // After adding a new account, defer global selection to post-render
   React.useEffect(() => {
@@ -92,47 +130,65 @@ const AccountSwitcher = ({
     setSelectedAccountId(id);
   }, [items, setSelectedAccountId]);
 
-  // Fetch live metrics for all accounts
-  React.useEffect(() => {
-    const fetchMetrics = async () => {
-      const metrics: Record<string, any> = {};
-      for (const account of items) {
-        try {
-          const data = await trpcClient.accounts.liveMetrics.query({
-            accountId: account.id,
-          });
-          metrics[account.id] = data;
-        } catch {
-          // Account doesn't have live metrics (manual account)
-        }
-      }
-      setAccountMetrics(metrics);
-    };
+  // Fetch live metrics for all accounts using tRPC hooks
+  const metricsQueries = useQueries({
+    queries: items.map((account) => ({
+      queryKey: ["accounts.liveMetrics", { accountId: account.id }],
+      queryFn: () =>
+        trpcClient.accounts.liveMetrics.query({ accountId: account.id }),
+      refetchInterval: 5000, // Poll every 5 seconds
+      staleTime: 4000, // Consider data stale after 4 seconds
+      retry: false, // Don't retry on error (manual accounts don't have metrics)
+    })),
+  });
 
-    if (items.length > 0) {
-      fetchMetrics();
+  const { data: aggregatedStats } = useQuery({
+    ...trpcOptions.accounts.aggregatedStats.queryOptions(),
+    staleTime: 4000,
+    refetchInterval: 5000,
+  });
+
+  // Derive accountMetrics from queries (no setState needed - prevents infinite loop)
+  // Create stable dependency array
+  const queriesData = React.useMemo(
+    () => metricsQueries.map((q) => q.data),
+    [metricsQueries.map((q) => q.dataUpdatedAt).join(",")]
+  );
+
+  const accountMetrics = React.useMemo(() => {
+    const metrics: Record<string, any> = {};
+    queriesData.forEach((data, index) => {
+      if (data && items[index]) {
+        metrics[items[index].id] = data;
+      }
+    });
+    if (aggregatedStats) {
+      metrics[ALL_ACCOUNTS_ID] = aggregatedStats;
     }
-  }, [items]);
+    return metrics;
+  }, [aggregatedStats, queriesData, items]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === "o" || e.key === "O")) {
         e.preventDefault();
-        if (!accounts.length) return;
-        const currentIdx = accounts.findIndex(
+        if (!selectorItems.length) return;
+        const currentIdx = selectorItems.findIndex(
           (a) => a.id === useAccountStore.getState().selectedAccountId
         );
         const nextIdx =
-          currentIdx >= 0 ? (currentIdx + 1) % accounts.length : 0;
-        useAccountStore.getState().setSelectedAccountId(accounts[nextIdx].id);
+          currentIdx >= 0 ? (currentIdx + 1) % selectorItems.length : 0;
+        useAccountStore
+          .getState()
+          .setSelectedAccountId(selectorItems[nextIdx].id);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [accounts]);
+  }, [selectorItems]);
 
   function handleSelect(idx: number) {
-    setSelectedAccountId(items[idx]?.id);
+    setSelectedAccountId(selectorItems[idx]?.id);
   }
 
   function handleAccountCreated(account: NewAccount) {
@@ -142,45 +198,74 @@ const AccountSwitcher = ({
   }
 
   // Don't render until we have items and a selected account
-  if (!items.length || !selectedAccountId) {
+  if (!selectorItems.length || !selectedAccountId) {
     return null;
   }
 
+  const isCollapsed = state === "collapsed" && !isMobile;
+
   return (
-    <SidebarMenu className="h-full w-full">
-      <SidebarMenuItem className="h-full w-full">
+    <SidebarMenu className={cn("h-full w-full", isCollapsed && "items-center")}>
+      <SidebarMenuItem
+        className={cn("h-full w-full", isCollapsed && "flex justify-center")}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="cursor-pointer rounded-xs transition-all active:scale-95 bg-sidebar-accent text-xs hover:!brightness-110 duration-150 min-w-max min-h-max !w-full !h-full flex items-center justify-center">
-              <div className="size-4 relative shrink-0">
+            <SidebarMenuButton
+              className={cn(
+                "!h-full cursor-pointer items-center gap-2 bg-sidebar-accent text-xs shadow-sm ring-1! ring-white/5 transition-all duration-150 active:scale-95 hover:!brightness-110",
+                isCollapsed
+                  ? "size-8 justify-center rounded-lg px-2"
+                  : "rounded-lg px-5"
+              )}
+            >
+              <div className="size-3.5 relative shrink-0 rounded-full overflow-hidden">
                 <Image
-                  src={items[selectedIndex].image}
+                  src={selectorItems[selectedIndex].image}
                   alt="broker"
                   fill
                   className="object-cover"
                 />
               </div>
 
-              {/* <p className="text-xs font-semibold min-w-max group-data-[collapsible=icon]:hidden">
-                {items[selectedIndex].name}
-              </p> */}
+              <p className="text-[11px] font-semibold truncate group-data-[collapsible=icon]:hidden">
+                {selectorItems[selectedIndex].name}
+              </p>
+              {!isAllAccountsScope(selectorItems[selectedIndex].id) &&
+              isDemoWorkspaceAccount(selectorItems[selectedIndex]) ? (
+                <span className="hidden md:inline-flex items-center rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-amber-300 group-data-[collapsible=icon]:hidden">
+                  Demo workspace
+                </span>
+              ) : null}
 
-              {/* <ChevronsUpDown className="ml-auto stroke-[0.5px] group-data-[collapsible=icon]:hidden" /> */}
+              <ChevronsUpDown className="ml-auto size-2.5 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-xs min-w-64"
+            className="w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-lg min-w-64"
             align="start"
           >
             <div className="flex flex-col px-1">
-              {items.map((account, idx) => {
+              {selectorItems.map((account, idx) => {
                 const metrics = accountMetrics[account.id];
-                const isVerified = metrics?.isVerified ?? false;
-                const lastSyncedAt = metrics?.lastSyncedAt;
+                const isAggregate = isAllAccountsScope(account.id);
+                const isVerified = isAggregate
+                  ? false
+                  : metrics?.isVerified ?? false;
+                const lastSyncedAt = isAggregate ? null : metrics?.lastSyncedAt;
                 const lastSyncedText = lastSyncedAt
-                  ? formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })
+                  ? formatDistanceToNow(new Date(lastSyncedAt), {
+                      addSuffix: true,
+                    })
                   : null;
+                const aggregateText = isAggregate
+                  ? `${metrics?.accounts?.length ?? items.length} accounts · ${
+                      metrics?.totals?.totalTrades ?? 0
+                    } trades`
+                  : null;
+                const isDemoWorkspace =
+                  !isAggregate && isDemoWorkspaceAccount(account);
 
                 return (
                   <DropdownMenuItem
@@ -191,15 +276,32 @@ const AccountSwitcher = ({
                     onSelect={() => handleSelect(idx)}
                   >
                     <div className="flex items-center gap-3 w-full">
-                      <div className="size-4 relative">
-                        <Image src={account.image} alt="broker" fill className="" />
+                      <div className="size-3 relative">
+                        <Image
+                          src={account.image}
+                          alt="broker"
+                          fill
+                          className=""
+                        />
                       </div>
-                      <span className="flex-1">{account.name}</span>
+                      <div className="flex flex-1 items-center gap-2 min-w-0">
+                        <span className="truncate">{account.name}</span>
+                        {isDemoWorkspace ? (
+                          <span className="inline-flex items-center rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-amber-300">
+                            Demo workspace
+                          </span>
+                        ) : null}
+                      </div>
                       {isVerified && (
                         <CheckCircle2 className="size-3.5 text-teal-400" />
                       )}
                       {idx === selectedIndex && <Check className="size-4" />}
                     </div>
+                    {aggregateText && (
+                      <div className="text-[10px] text-white/40 ml-7">
+                        {aggregateText}
+                      </div>
+                    )}
                     {lastSyncedText && (
                       <div className="text-[10px] text-white/40 ml-7">
                         Synced {lastSyncedText}

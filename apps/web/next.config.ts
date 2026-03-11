@@ -1,6 +1,20 @@
 import type { NextConfig } from "next";
 /** @type {import('next').NextConfig} */
 const nextConfig: NextConfig = {
+  async redirects() {
+    return [
+      {
+        source: "/dashboard/backtest",
+        destination: "/backtest",
+        permanent: false,
+      },
+      {
+        source: "/dashboard/backtest/:path*",
+        destination: "/backtest/:path*",
+        permanent: false,
+      },
+    ];
+  },
   images: {
     remotePatterns: [
       {

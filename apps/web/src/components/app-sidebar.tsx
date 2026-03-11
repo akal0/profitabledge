@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import {
   Sidebar,
@@ -17,25 +17,34 @@ import type { NewAccount } from "./dashboard/sidebar/add-account-sheet";
 import { cn } from "@/lib/utils";
 
 import Link from "next/link";
-import { buttonVariants } from "./ui/button";
-import Lightning from "@/public/icons/lightning.svg";
+import { usePathname } from "next/navigation";
 import DashboardIcon from "@/public/icons/navigation/dashboard.svg";
 import CalendarIcon from "@/public/icons/navigation/calendar.svg";
 import JournalIcon from "@/public/icons/navigation/journal.svg";
-import ReportsIcon from "@/public/icons/navigation/reports.svg";
-import AccountIcon from "@/public/icons/navigation/account.svg";
 import { AddAccountSheet } from "./dashboard/sidebar/add-account-sheet";
 import { trpcClient } from "@/utils/trpc";
-import ClockIcon from "@/public/icons/clock.svg";
-import { Settings } from "lucide-react";
+import {
+  Settings,
+  Sparkles,
+  Copy,
+  Target,
+  Trophy,
+  Building2,
+  Award,
+  Newspaper,
+  BarChart3,
+  Rss,
+  LayoutDashboard,
+  BookOpen,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 
-import { Separator } from "./ui/separator";
 import NavUser from "./nav-user";
 import { useAccountStore } from "@/stores/account";
 import type { Me } from "@/types/user";
-import Image from "next/image";
 
-type NavIcon = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+type NavIcon = React.ComponentType<{ className?: string }>;
 type NavItem = {
   title: string;
   url: string;
@@ -43,36 +52,48 @@ type NavItem = {
   isActive?: boolean;
 };
 
-const data: { navMain: NavItem[] } = {
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: DashboardIcon,
-      isActive: true,
-    },
-    {
-      title: "Trades",
-      url: "/dashboard/trades",
-      icon: CalendarIcon,
-    },
-    {
-      title: "Journal",
-      url: "#",
-      icon: JournalIcon,
-    },
-    {
-      title: "Reports",
-      url: "#",
-      icon: ReportsIcon,
-    },
-    {
-      title: "Settings",
-      url: "/dashboard/settings",
-      icon: Settings as any,
-    },
-  ],
+type NavSection = {
+  label: string;
+  items: NavItem[];
 };
+
+const navSections: NavSection[] = [
+  {
+    label: "Trading",
+    items: [
+      { title: "Dashboard", url: "/dashboard", icon: DashboardIcon },
+      { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
+      { title: "Accounts", url: "/dashboard/accounts", icon: Building2 },
+      { title: "Goals", url: "/dashboard/goals", icon: Target },
+    ],
+  },
+  {
+    label: "Analysis",
+    items: [
+      { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
+      { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },
+      { title: "Backtest", url: "/backtest", icon: BarChart3 },
+      { title: "Prop Tracker", url: "/dashboard/prop-tracker", icon: Trophy },
+    ],
+  },
+  {
+    label: "Community",
+    items: [
+      { title: "Feed", url: "/dashboard/feed", icon: Rss },
+      { title: "Leaderboard", url: "/dashboard/leaderboard", icon: Award },
+      { title: "Achievements", url: "/dashboard/achievements", icon: Trophy },
+      { title: "News", url: "/dashboard/news", icon: Newspaper },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { title: "Trade Copier", url: "/dashboard/copier", icon: Copy },
+      { title: "AI Assistant", url: "/assistant", icon: Sparkles },
+      { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    ],
+  },
+];
 
 function brokerToImage(broker: string): string {
   switch (broker) {
@@ -88,8 +109,8 @@ function brokerToImage(broker: string): string {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [me, setMe] = useState<Me | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -97,11 +118,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       try {
         const rows = await trpcClient.accounts.list.query();
         if (!mounted) return;
-        const mapped: Account[] = rows.map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          image: brokerToImage(r.broker),
-        }));
+        const mapped: Account[] = rows.map(
+          (r: { id: string; name: string; broker: string }) => ({
+            id: r.id,
+            name: r.name,
+            image: brokerToImage(r.broker),
+          })
+        );
         setAccounts(mapped);
       } catch (e) {
         console.error(e);
@@ -112,27 +135,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     };
   }, []);
 
-  const getInfo = async () => {
-    const me = await trpcClient.users.me.query();
-
-    return me;
-  };
-
-  const [me, setMe] = useState<Me | null>(null);
-
   useEffect(() => {
     (async () => {
-      const data = await getInfo();
-      setMe(data);
-      console.log(data);
+      try {
+        const data = await trpcClient.users.me.query();
+        setMe(data);
+      } catch (e) {
+        console.error(e);
+      }
     })();
   }, []);
 
-  const accountId = useAccountStore((s) => s.selectedAccountId);
+  const pathname = usePathname();
+
+  const sections = useMemo(
+    () =>
+      navSections.map((section) => ({
+        ...section,
+        items: section.items.map((item) => {
+          const isActive =
+            item.url === "/dashboard"
+              ? pathname === item.url
+              : item.url === "/dashboard/settings"
+              ? pathname === "/dashboard/settings" ||
+                pathname?.startsWith("/dashboard/settings/")
+              : pathname?.startsWith(item.url);
+          return { ...item, isActive };
+        }),
+      })),
+    [pathname]
+  );
 
   return (
     <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
-      <SidebarHeader className="p-4 pt-3 pb-1 h-[3.725rem]">
+      <SidebarHeader className="h-[3.725rem] p-4 pb-1 pt-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-2.5">
         {accounts.length > 0 ? (
           <AccountSwitcher accounts={accounts} defaultAccount={accounts[0]} />
         ) : (
@@ -149,54 +185,58 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         )}
       </SidebarHeader>
 
-      <div className="my-2">
-        <Separator />
-      </div>
-
-      <SidebarContent className="px-4 py-2">
-        {data.navMain.map((item, idx) => (
-          <Link
-            href={item.url}
-            key={item.title}
-            className={cn(
-              `group/navlink flex items-center gap-3 rounded-xs transition-all duration-150 group/navlink bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer`,
-              item.isActive &&
-                "transition-all active:scale-95 bg-sidebar-accent text-white text-xs dark:hover:bg-sidebar-accent dark:hover:!brightness-120 hover:text-[#A0A0A6]/75 border-[0.5px] border-white/0"
-            )}
+      <SidebarContent className="px-4 py-2 overflow-y-auto">
+        {sections.map((section) => (
+          <div
+            key={section.label}
+            className="mb-3 group-data-[collapsible=icon]:mb-0"
           >
-            <SidebarMenuItem key={item.title} className={cn(`px-2 py-1 flex`)}>
-              <SidebarMenuButton
-                className="flex items-center justify-center gap-3 cursor-pointer"
-                // tooltip={item.title}
-              >
-                <item.icon
-                  className={cn(
-                    "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white size-5",
-                    item.isActive &&
-                      "fill-black dark:fill-transparent dark:stroke-white"
-                  )}
-                />
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold px-2 mb-1.5 group-data-[collapsible=icon]:hidden">
+              {section.label}
+            </p>
 
-                <p
-                  className={cn(
-                    `text-[13px] text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden`,
-                    item.isActive && "text-black dark:text-white font-medium"
-                  )}
-                >
-                  {item.title}
-                </p>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </Link>
+            {section.items.map((item) => (
+              <Link
+                href={item.url}
+                key={item.title}
+                className={cn(
+                  "group/navlink flex items-center gap-3 rounded-md transition-all duration-150 bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer",
+                  item.isActive &&
+                    "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
+                )}
+              >
+                <SidebarMenuItem className="px-2 py-0.5 flex">
+                  <SidebarMenuButton
+                    className="flex items-center justify-center gap-3 cursor-pointer"
+                    tooltip={item.title}
+                  >
+                    <item.icon
+                      className={cn(
+                        "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white size-[18px]",
+                        item.isActive &&
+                          "fill-black dark:fill-transparent dark:stroke-white"
+                      )}
+                    />
+
+                    <p
+                      className={cn(
+                        "text-[13px] text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden",
+                        item.isActive &&
+                          "text-black dark:text-white font-medium"
+                      )}
+                    >
+                      {item.title}
+                    </p>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </Link>
+            ))}
+          </div>
         ))}
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
-        {me && (
-          <div className="w-full h-full relative">
-            <NavUser user={me} />
-          </div>
-        )}
+      <SidebarFooter className="p-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-3">
+        {me && <NavUser user={me} />}
       </SidebarFooter>
     </Sidebar>
   );

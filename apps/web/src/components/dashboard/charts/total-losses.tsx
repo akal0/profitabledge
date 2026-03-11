@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import React, { useEffect, useMemo, useState } from "react";
 import { trpcClient } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
+import { formatSignedCurrency } from "./dashboard-chart-ui";
 import {
   Select,
   SelectContent,
@@ -53,13 +54,11 @@ const formatLossTooltip = (value: any, name: any, item: any) => {
   const label =
     chartConfig[name as keyof typeof chartConfig]?.label || String(name);
   const color = item?.color || item?.payload?.fill;
-  const formatted = `$${Number(value || 0).toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  })}`;
+  const formatted = formatSignedCurrency(Number(value ?? 0), 2);
   return (
     <div className="flex w-full items-center gap-2">
       <div className="flex flex-1 justify-between items-center leading-none">
-        <span className="text-muted-foreground">{label}</span>
+        <span className="text-white/65">{label}</span>
         <span className="font-medium" style={{ color }}>
           {formatted}
         </span>
@@ -171,7 +170,6 @@ export function GlowingBarVerticalChart() {
               content={
                 <ChartTooltipContent
                   className="min-w-[14rem] max-w-[22rem] max-h-56 overflow-y-auto"
-                  labelClassName="border-b border-white/10 dark:border-white/10 pb-2 mb-2"
                   hideIndicator
                   formatter={formatLossTooltip}
                 />
@@ -303,7 +301,6 @@ export function TotalLossesChart() {
           content={
             <ChartTooltipContent
               className="min-w-[14rem] max-w-[22rem] max-h-56 overflow-y-auto"
-              labelClassName="border-b border-white/10 dark:border-white/10 pb-2 mb-2"
               formatter={formatLossTooltip}
             />
           }

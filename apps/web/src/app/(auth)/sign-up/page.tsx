@@ -101,7 +101,7 @@ const SignupPage = () => {
             </div>
           ));
 
-          router.push("/dashboard/onboarding");
+          router.push("/onboarding");
         },
         onError: (error) => {
           toast.custom((t) => (

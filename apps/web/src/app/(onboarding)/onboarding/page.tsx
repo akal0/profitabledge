@@ -3,14 +3,25 @@
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { useState } from "react";
+import Link from "next/link";
 
 import ChevronRight from "@/public/icons/chevron-right.svg";
 import Plans from "./components/plans";
 import Personal from "./components/personal";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
+import {
+  Shield,
+  Target,
+  CheckCircle2,
+  TrendingUp,
+  Clock,
+  AlertTriangle,
+} from "lucide-react";
+import { trpcClient } from "@/utils/trpc";
+import { toast } from "sonner";
 
-type OnboardingStep = 1 | 2 | 3;
+type OnboardingStep = 1 | 2 | 3 | 4;
 
 const Page = () => {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
@@ -44,6 +55,16 @@ const Page = () => {
         currentStep === 3
           ? "current"
           : currentStep > 3
+          ? "completed"
+          : "upcoming",
+    },
+    {
+      id: 4,
+      name: "Trading rules",
+      status:
+        currentStep === 4
+          ? "current"
+          : currentStep > 4
           ? "completed"
           : "upcoming",
     },
@@ -226,7 +247,7 @@ const Page = () => {
               Add your trading account
             </h2>
             <div className="w-full space-y-6">
-              <div className="bg-sidebar border border-white/10 rounded-lg p-6">
+              <div className="bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button">
                 <h3 className="text-lg font-semibold text-white mb-4">
                   Import via CSV
                 </h3>
@@ -234,37 +255,229 @@ const Page = () => {
                   Upload your trading history from your broker to get started
                   quickly.
                 </p>
-                <div className="border-2 border-dashed border-white/20 rounded-lg p-8 text-center">
+                <div className="border-2 border-dashed border-white/20 rounded-lg p-8 text-center bg-sidebar/40">
                   <p className="text-white/40">
                     Drag and drop your CSV file here, or click to browse
                   </p>
                 </div>
               </div>
-              <div className="bg-sidebar border border-white/10 rounded-lg p-6 opacity-50">
-                <h3 className="text-lg font-semibold text-white mb-4">
-                  Connect Broker (Coming Soon)
-                </h3>
-                <p className="text-white/60 text-sm">
-                  Direct integration with popular brokers for real-time sync.
-                </p>
+              <div className="bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button flex flex-col gap-5">
+                <div>
+                  <h3 className="text-lg font-semibold text-white mb-2">
+                    MT5 EA Sync (Recommended)
+                  </h3>
+                  <p className="text-white/60 text-sm">
+                    Real-time broker sync using the ProfitabEdge EA. Your
+                    account will auto-register the first time the EA connects.
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  className="shadow-sidebar-button rounded-[6px] w-full h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
+                >
+                  <Link href="/dashboard/settings/ea-setup">Go to EA setup</Link>
+                </Button>
               </div>
             </div>
             <div className="flex gap-4 w-full">
               <Button
                 onClick={() => setCurrentStep(2)}
-                className="flex-1 py-3 bg-sidebar border border-white/10 text-white rounded-lg transition-colors hover:bg-white/5"
+                className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
               >
                 Back
               </Button>
-              <Button className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors">
-                Complete Setup
+              <Button
+                onClick={() => setCurrentStep(4)}
+                className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-600 cursor-pointer text-white flex-1 text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center"
+              >
+                Continue to Trading Rules
               </Button>
             </div>
           </div>
+        )}
+
+        {currentStep === 4 && (
+          <TradingRulesStep onBack={() => setCurrentStep(3)} />
         )}
       </div>
     </div>
   );
 };
+
+function TradingRulesStep({ onBack }: { onBack: () => void }) {
+  const router = useRouter();
+  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const presets = [
+    {
+      id: "conservative",
+      name: "Conservative",
+      icon: Shield,
+      description: "Strict risk management, max 2% per trade, SL required",
+      rules: {
+        requireSL: true,
+        requireTP: true,
+        maxDailyTrades: 3,
+        maxDailyLossPercent: 3,
+        maxPositionSizePercent: 2,
+        minPlannedRR: 1.5,
+      },
+    },
+    {
+      id: "balanced",
+      name: "Balanced",
+      icon: Target,
+      description: "Moderate rules, max 5 daily trades, 5% daily loss limit",
+      rules: {
+        requireSL: true,
+        maxDailyTrades: 5,
+        maxDailyLossPercent: 5,
+        maxPositionSizePercent: 3,
+        minPlannedRR: 1,
+      },
+    },
+    {
+      id: "prop-firm",
+      name: "Prop Firm Ready",
+      icon: TrendingUp,
+      description: "Rules aligned with typical prop firm challenges",
+      rules: {
+        requireSL: true,
+        requireTP: true,
+        maxDailyTrades: 5,
+        maxDailyLossPercent: 4,
+        maxPositionSizePercent: 1,
+        minPlannedRR: 1.5,
+        maxConcurrentTrades: 3,
+      },
+    },
+    {
+      id: "scalper",
+      name: "Scalper",
+      icon: Clock,
+      description: "Higher trade count, tight risk per trade, fast execution",
+      rules: {
+        requireSL: true,
+        maxDailyTrades: 15,
+        maxDailyLossPercent: 3,
+        maxPositionSizePercent: 1,
+        maxEntrySpreadPips: 2,
+        maxHoldSeconds: 1800,
+      },
+    },
+  ];
+
+  const handleComplete = async () => {
+    if (selectedPreset) {
+      setIsSubmitting(true);
+      try {
+        const preset = presets.find((p) => p.id === selectedPreset);
+        if (preset) {
+          await trpcClient.rules.createRuleSet.mutate({
+            name: `${preset.name} Rules`,
+            description: `Auto-created during onboarding: ${preset.description}`,
+            rules: preset.rules,
+            isActive: true,
+          });
+          toast.success("Trading rules created!");
+        }
+      } catch {
+        // Non-blocking - user can still proceed
+      }
+      setIsSubmitting(false);
+    }
+    router.push("/dashboard");
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-white">Set your trading rules</h2>
+        <p className="text-white/50 text-sm mt-2">
+          Choose a rule preset to get started. You can customize these later.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 w-full">
+        {presets.map((preset) => {
+          const Icon = preset.icon;
+          const isSelected = selectedPreset === preset.id;
+
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => setSelectedPreset(isSelected ? null : preset.id)}
+              className={`bg-sidebar border rounded-lg p-5 text-left transition-all hover:brightness-110 cursor-pointer ${
+                isSelected
+                  ? "border-emerald-500/50 ring-1 ring-emerald-500/20"
+                  : "border-white/10 hover:border-white/20"
+              }`}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className={`flex items-center justify-center size-9 rounded-lg ${
+                    isSelected
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-white/5 text-white/50"
+                  }`}
+                >
+                  <Icon className="size-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm text-white">
+                    {preset.name}
+                  </h3>
+                </div>
+              </div>
+              <p className="text-xs text-white/50 leading-relaxed">
+                {preset.description}
+              </p>
+              {isSelected && (
+                <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
+                  {Object.entries(preset.rules).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center gap-1.5 text-[10px] text-white/40"
+                    >
+                      <CheckCircle2 className="size-3 text-emerald-500/60" />
+                      <span>
+                        {key
+                          .replace(/([A-Z])/g, " $1")
+                          .replace(/^./, (s) => s.toUpperCase())}
+                        : {String(value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex gap-4 w-full">
+        <Button
+          onClick={onBack}
+          className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
+        >
+          Back
+        </Button>
+        <Button
+          onClick={handleComplete}
+          disabled={isSubmitting}
+          className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-600 cursor-pointer text-white flex-1 text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center"
+        >
+          {isSubmitting
+            ? "Setting up..."
+            : selectedPreset
+            ? "Create Rules & Go to Dashboard"
+            : "Skip & Go to Dashboard"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default Page;

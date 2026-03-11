@@ -3,6 +3,10 @@
 import { DataTable } from "@/components/data-table/index";
 import { useDataTable } from "../../../../../hooks/use-data-table";
 import type { ColumnDef } from "@tanstack/react-table";
+import {
+  formatCurrencyValue,
+  formatNumberValue,
+} from "@/lib/trade-formatting";
 
 type TradeRow = {
   open: string;
@@ -57,16 +61,22 @@ const columns: ColumnDef<TradeRow, any>[] = [
       );
     },
   },
-  { accessorKey: "volume", header: "Volume" },
+  {
+    accessorKey: "volume",
+    header: "Volume",
+    cell: ({ getValue }) =>
+      formatNumberValue(Number(getValue<number>() || 0), {
+        maximumFractionDigits: 2,
+      }),
+  },
   {
     accessorKey: "profit",
     header: "P/L",
     cell: ({ getValue }) => {
       const v = Number(getValue<number>() || 0);
-      const neg = v < 0;
       return (
-        <span className={neg ? "text-rose-400" : "text-teal-400"}>
-          {(neg ? "-" : "") + "$" + Math.abs(v).toLocaleString()}
+        <span className={v < 0 ? "text-rose-400" : "text-teal-400"}>
+          {formatCurrencyValue(v, { maximumFractionDigits: 2 })}
         </span>
       );
     },
@@ -76,10 +86,9 @@ const columns: ColumnDef<TradeRow, any>[] = [
     header: "Commissions",
     cell: ({ getValue }) => {
       const v = Number(getValue<number>() || 0);
-      const neg = v < 0;
       return (
-        <span className={neg ? "text-rose-400" : "text-teal-400"}>
-          {(neg ? "-" : "") + "$" + Math.abs(v).toLocaleString()}
+        <span className={v < 0 ? "text-rose-400" : "text-teal-400"}>
+          {formatCurrencyValue(v, { maximumFractionDigits: 2 })}
         </span>
       );
     },
@@ -89,10 +98,9 @@ const columns: ColumnDef<TradeRow, any>[] = [
     header: "Swap",
     cell: ({ getValue }) => {
       const v = Number(getValue<number>() || 0);
-      const neg = v < 0;
       return (
-        <span className={neg ? "text-rose-400" : "text-teal-400"}>
-          {(neg ? "-" : "") + "$" + Math.abs(v).toLocaleString()}
+        <span className={v < 0 ? "text-rose-400" : "text-teal-400"}>
+          {formatCurrencyValue(v, { maximumFractionDigits: 2 })}
         </span>
       );
     },

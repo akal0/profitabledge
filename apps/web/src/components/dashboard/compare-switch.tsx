@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 
 import { Switch } from "@/components/ui/switch";
 import {
@@ -11,11 +11,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
 import { useDateRangeStore } from "@/stores/date-range";
 import { useComparisonStore } from "@/stores/comparison";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
+import {
+  countRangeDays,
+  getComparisonRange,
+} from "@/components/dashboard/chart-comparison-utils";
 
 export default function Component({
   ownerId = "default",
@@ -27,8 +30,6 @@ export default function Component({
   effectiveRange?: { start: Date; end: Date };
 }) {
   const id = useId();
-  const [checked, setChecked] = useState(false);
-  const [selectedLabel, setSelectedLabel] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const { min, max, start: globalStart, end: globalEnd } = useDateRangeStore();
   const setComparison = useComparisonStore((s) => s.setComparison);
@@ -38,92 +39,85 @@ export default function Component({
   const end = effectiveRange?.end ?? globalEnd;
 
   const myMode = comparisons[ownerId] ?? "none";
-  const toggleSwitch = () => {
-    const next = !checked;
-    if (next && !anyOptionAvailable) return;
-    setChecked(next);
-    setComparison(ownerId, next ? "previous" : "none");
-    if (!next) setSelectedLabel(null);
-  };
-
-  // Sync local UI state with global store, so external range changes turn off UI
-  useEffect(() => {
-    const isOn = (comparisons[ownerId] ?? "none") !== "none";
-    setChecked(isOn);
-    if (!isOn) setSelectedLabel(null);
-  }, [comparisons, ownerId]);
+  const checked = myMode !== "none";
 
   const stop = (e: React.SyntheticEvent) => {
     e.stopPropagation();
   };
 
+  const range = useMemo(() => {
+    if (!start || !end) return null;
+    return { start: new Date(start), end: new Date(end) };
+  }, [end, start]);
+
   const daysSelected = (() => {
-    if (!start || !end) return 0;
-    const s = new Date(start);
-    const e = new Date(end);
-    s.setHours(0, 0, 0, 0);
-    e.setHours(0, 0, 0, 0);
-    return Math.floor((+e - +s) / 86400000) + 1;
-  })();
-  const isWeekRange = daysSelected === 7;
-  const hasPrevPeriod = (() => {
-    if (!start || !min || daysSelected <= 0) return false;
-    const prevStart = new Date(start);
-    prevStart.setHours(0, 0, 0, 0);
-    prevStart.setDate(prevStart.getDate() - daysSelected);
-    const minJs = new Date(min);
-    minJs.setHours(0, 0, 0, 0);
-    return prevStart.getTime() >= minJs.getTime();
-  })();
-  const hasPrevForMostRecentWeek = (() => {
-    if (!min || !max) return false;
-    const mostRecentEnd = new Date(max);
-    mostRecentEnd.setHours(0, 0, 0, 0);
-    const mostRecentStart = new Date(mostRecentEnd);
-    mostRecentStart.setDate(mostRecentEnd.getDate() - 6);
-    const prevOfMostRecentStart = new Date(mostRecentStart);
-    prevOfMostRecentStart.setDate(mostRecentStart.getDate() - 7);
-    const minJs = new Date(min);
-    minJs.setHours(0, 0, 0, 0);
-    return prevOfMostRecentStart.getTime() >= minJs.getTime();
+    if (!range) return 0;
+    return countRangeDays(range);
   })();
 
+  const previousRange = useMemo(() => {
+    if (!range) return null;
+    return getComparisonRange("previous", range, { minDate: min });
+  }, [min, range]);
+
+  const lastWeekRange = useMemo(() => {
+    if (!range) return null;
+    return getComparisonRange("lastWeek", range, { minDate: min });
+  }, [min, range]);
+
+  const thisWeekRange = useMemo(() => {
+    if (!range) return null;
+    return getComparisonRange("thisWeek", range, { minDate: min, maxDate: max });
+  }, [max, min, range]);
+
+  const isWeekRange = daysSelected === 7;
   const isMostRecentWeek = (() => {
     if (!isWeekRange || !end || !max) return false;
-    const e = new Date(end);
-    e.setHours(0, 0, 0, 0);
-    const mx = new Date(max);
-    mx.setHours(0, 0, 0, 0);
-    return e.getTime() === mx.getTime();
-  })();
-  const isEarliestWeek = (() => {
-    if (!isWeekRange || !start || !min) return false;
-    const s = new Date(start);
-    s.setHours(0, 0, 0, 0);
-    const mn = new Date(min);
-    mn.setHours(0, 0, 0, 0);
-    return s.getTime() === mn.getTime();
-  })();
-  const isPenultimateWeek = (() => {
-    if (!isWeekRange || !end || !max) return false;
-    const e = new Date(end);
-    e.setHours(0, 0, 0, 0);
-    const mx = new Date(max);
-    mx.setHours(0, 0, 0, 0);
-    const penultimate = new Date(mx);
-    penultimate.setDate(mx.getDate() - 7);
-    return e.getTime() === penultimate.getTime();
+    const selectedEnd = new Date(end);
+    selectedEnd.setHours(0, 0, 0, 0);
+    const maxEnd = new Date(max);
+    maxEnd.setHours(0, 0, 0, 0);
+    return selectedEnd.getTime() === maxEnd.getTime();
   })();
 
-  const disableThisWeek =
-    !isWeekRange || isMostRecentWeek || !hasPrevForMostRecentWeek;
-  const disableLastWeek = !isWeekRange || isEarliestWeek || isPenultimateWeek;
-  const disablePreviousDays = isPenultimateWeek ? true : !hasPrevPeriod;
+  const disablePreviousDays = hidePreviousDays || !previousRange;
+  const disableThisWeek = !isWeekRange || !thisWeekRange || isMostRecentWeek;
+  const disableLastWeek = !isWeekRange || !lastWeekRange;
 
   const anyOptionAvailable =
-    !disableThisWeek ||
-    !disableLastWeek ||
-    (!hidePreviousDays && !disablePreviousDays);
+    !disableThisWeek || !disableLastWeek || !disablePreviousDays;
+
+  const selectedLabel = useMemo(() => {
+    if (myMode === "none") return null;
+    if (myMode === "thisWeek") return "This week";
+    if (myMode === "lastWeek") return "Last week";
+    if (daysSelected <= 0) return "Previous range";
+    if (daysSelected === 1) return "Previous day";
+    return `Previous ${daysSelected} days`;
+  }, [daysSelected, myMode]);
+
+  const selectMode = (mode: typeof myMode) => {
+    setOpen(false);
+    setComparison(ownerId, mode);
+  };
+
+  const clearMode = () => {
+    setOpen(false);
+    setComparison(ownerId, "none");
+  };
+
+  const canOpen = anyOptionAvailable || checked;
+
+  const handleOpenMenu = (e: React.SyntheticEvent) => {
+    stop(e);
+    if (!canOpen) return;
+    setOpen(true);
+  };
+
+  const daysSelectedLabel = (() => {
+    if (daysSelected <= 0) return "range";
+    return daysSelected === 1 ? "day" : `${daysSelected} days`;
+  })();
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -132,17 +126,21 @@ export default function Component({
         data-state={checked ? "checked" : "unchecked"}
         onPointerDown={stop}
         onPointerUp={stop}
-        onClick={(e) => {
-          stop(e);
-          setOpen(true);
-        }}
+        onClick={handleOpenMenu}
       >
         <DropdownMenuTrigger asChild>
           <span className="outline-none">
             <Switch
               id={id}
               checked={checked}
-              onCheckedChange={() => {}}
+              onCheckedChange={() => {
+                if (checked) {
+                  clearMode();
+                  return;
+                }
+                if (!canOpen) return;
+                setOpen(true);
+              }}
               aria-labelledby={`${id}-off ${id}-on`}
             />
           </span>
@@ -151,10 +149,7 @@ export default function Component({
           id={`${id}-on`}
           className="group-data-[state=unchecked]:text-white/25 flex-1 cursor-pointer text-left text-xs font-medium"
           aria-controls={id}
-          onClick={(e) => {
-            stop(e);
-            setOpen(true);
-          }}
+          onClick={handleOpenMenu}
           onPointerDown={stop}
         >
           Comparison
@@ -171,8 +166,7 @@ export default function Component({
               onPointerDown={stop}
               onClick={(e) => {
                 stop(e);
-                setOpen(false);
-                setComparison(ownerId, "none");
+                clearMode();
               }}
             >
               <X className="size-3.5" />
@@ -192,43 +186,27 @@ export default function Component({
         {!hidePreviousDays && (
           <DropdownMenuItem
             disabled={disablePreviousDays}
-            onSelect={() => {
-              setOpen(false);
-              setComparison(ownerId, "previous");
-              setSelectedLabel("Previous days");
-            }}
+            onSelect={() => selectMode("previous")}
           >
-            Previous days
+            Previous {daysSelectedLabel}
           </DropdownMenuItem>
         )}
 
         <DropdownMenuItem
           disabled={disableThisWeek}
-          onSelect={() => {
-            setOpen(false);
-            setComparison(ownerId, "thisWeek");
-            setSelectedLabel("This week");
-          }}
+          onSelect={() => selectMode("thisWeek")}
         >
           This week
         </DropdownMenuItem>
 
         <DropdownMenuItem
           disabled={disableLastWeek}
-          onSelect={() => {
-            setOpen(false);
-            setComparison(ownerId, "previous");
-            setSelectedLabel("Last week");
-          }}
+          onSelect={() => selectMode("lastWeek")}
         >
           Last week
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() => {
-            setOpen(false);
-            setComparison(ownerId, "none");
-            setSelectedLabel(null);
-          }}
+          onSelect={clearMode}
           disabled={!checked}
         >
           Turn off

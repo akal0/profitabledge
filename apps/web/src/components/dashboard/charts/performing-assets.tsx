@@ -14,7 +14,6 @@ import {
 import {
   type ChartConfig,
   ChartContainer,
-  ChartTooltipContent,
   ChartTooltip,
 } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +23,15 @@ import { useMotionValueEvent, useSpring } from "framer-motion";
 import { useDateRangeStore } from "@/stores/date-range";
 import { useComparisonStore } from "@/stores/comparison";
 import { trpcClient } from "@/utils/trpc";
+import {
+  formatRangeLabel,
+  getComparisonRange,
+} from "@/components/dashboard/chart-comparison-utils";
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+  formatSignedCurrency,
+} from "./dashboard-chart-ui";
 
 const CHART_MARGIN = 35;
 
@@ -43,7 +51,7 @@ export function PerformingAssetsBarChart({
   accountId?: string;
   ownerId?: string;
 }) {
-  const { start, end, max } = useDateRangeStore();
+  const { start, end, min, max } = useDateRangeStore();
   const comparisons = useComparisonStore((s) => s.comparisons);
   const myMode = comparisons[ownerId] ?? "none";
   const [series, setSeries] = React.useState<Point[]>([]);
@@ -51,64 +59,76 @@ export function PerformingAssetsBarChart({
     Point[] | null
   >(null);
 
+  const resolvedRange = React.useMemo(() => {
+    const minD = min ? new Date(min) : undefined;
+    const maxD = max ? new Date(max) : undefined;
+    minD?.setHours(0, 0, 0, 0);
+    maxD?.setHours(23, 59, 59, 999);
+
+    if (start && end) {
+      return { start: new Date(start), end: new Date(end) };
+    }
+
+    const fallbackEnd = maxD ?? new Date();
+    const endDate = new Date(fallbackEnd);
+    endDate.setHours(23, 59, 59, 999);
+    const startDate = new Date(endDate);
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - 6);
+    if (minD && startDate < minD) {
+      return { start: minD, end: endDate };
+    }
+    return { start: startDate, end: endDate };
+  }, [end, max, min, start]);
+
+  const comparisonRange = React.useMemo(() => {
+    if (!resolvedRange) return null;
+    return getComparisonRange(myMode, resolvedRange, {
+      minDate: min,
+      maxDate: max,
+    });
+  }, [max, min, myMode, resolvedRange]);
+
   React.useEffect(() => {
+    let cancelled = false;
+
     (async () => {
-      if (!accountId || !start || !end) return;
-      // Primary: total profit grouped by asset in selected range
-      const primaryAssets = await trpcClient.accounts.profitByAssetRange.query({
+      if (!accountId || !resolvedRange) return;
+
+      const primaryPromise = trpcClient.accounts.profitByAssetRange.query({
         accountId,
-        startISO: start.toISOString(),
-        endISO: end.toISOString(),
+        startISO: resolvedRange.start.toISOString(),
+        endISO: resolvedRange.end.toISOString(),
       });
+      const comparisonPromise = comparisonRange
+        ? trpcClient.accounts.profitByAssetRange.query({
+            accountId,
+            startISO: comparisonRange.start.toISOString(),
+            endISO: comparisonRange.end.toISOString(),
+          })
+        : Promise.resolve(null);
+
+      const [primaryAssets, comparisonAssets] = await Promise.all([
+        primaryPromise,
+        comparisonPromise,
+      ]);
+      if (cancelled) return;
+
       const primaryMap = new Map<string, number>();
       for (const a of primaryAssets) {
         const key = (a.symbol ?? "(Unknown)").trim();
         primaryMap.set(key, Number(a.totalProfit ?? 0));
       }
 
-      // Optional comparison based on myMode
       let compareMap: Map<string, number> | null = null;
-      if (myMode === "previous") {
-        const dayMs = 24 * 60 * 60 * 1000;
-        const s = new Date(start);
-        const e = new Date(end);
-        s.setHours(0, 0, 0, 0);
-        e.setHours(0, 0, 0, 0);
-        const daysSelected = Math.floor((+e - +s) / dayMs) + 1;
-        const prevStart = new Date(s);
-        prevStart.setDate(s.getDate() - daysSelected);
-        const prevEnd = new Date(e);
-        prevEnd.setDate(e.getDate() - daysSelected);
-        const prevAssets = await trpcClient.accounts.profitByAssetRange.query({
-          accountId,
-          startISO: prevStart.toISOString(),
-          endISO: prevEnd.toISOString(),
-        });
+      if (comparisonAssets) {
         compareMap = new Map();
-        for (const a of prevAssets) {
-          const key = (a.symbol ?? "(Unknown)").trim();
-          compareMap.set(key, Number(a.totalProfit ?? 0));
-        }
-      } else if (myMode === "thisWeek" && max) {
-        const endMost = new Date(max);
-        endMost.setHours(0, 0, 0, 0);
-        const startMost = new Date(endMost);
-        startMost.setDate(endMost.getDate() - 6);
-        const recentAssets = await trpcClient.accounts.profitByAssetRange.query(
-          {
-            accountId,
-            startISO: startMost.toISOString(),
-            endISO: endMost.toISOString(),
-          }
-        );
-        compareMap = new Map();
-        for (const a of recentAssets) {
+        for (const a of comparisonAssets) {
           const key = (a.symbol ?? "(Unknown)").trim();
           compareMap.set(key, Number(a.totalProfit ?? 0));
         }
       }
 
-      // Build display list: union of symbols; filter out zeros in both series
       const symbols = new Set<string>([...primaryMap.keys()]);
       if (compareMap) for (const k of compareMap.keys()) symbols.add(k);
       const filteredSymbols = Array.from(symbols).filter((sym) => {
@@ -117,7 +137,6 @@ export function PerformingAssetsBarChart({
         return p !== 0 || c !== 0;
       });
 
-      // Sort by absolute primary profit desc; tie-break by compare abs
       filteredSymbols.sort((a, b) => {
         const pa = Math.abs(Number(primaryMap.get(a) ?? 0));
         const pb = Math.abs(Number(primaryMap.get(b) ?? 0));
@@ -143,14 +162,11 @@ export function PerformingAssetsBarChart({
         setComparisonSeries(null);
       }
     })();
-  }, [
-    accountId,
-    start?.toISOString(),
-    end?.toISOString(),
-    max?.toString(),
-    myMode,
-    ownerId,
-  ]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, comparisonRange, resolvedRange]);
   const [activeIndex, setActiveIndex] = React.useState<number | undefined>(
     undefined
   );
@@ -273,7 +289,7 @@ export function PerformingAssetsBarChart({
     const totals = new Map<string, number>();
     for (const p of series)
       totals.set(p.label, (totals.get(p.label) ?? 0) + Number(p.value || 0));
-    if (comparisonSeries && (myMode === "previous" || myMode === "thisWeek")) {
+    if (comparisonSeries) {
       for (const c of comparisonSeries)
         totals.set(c.label, (totals.get(c.label) ?? 0) + Number(c.value || 0));
     }
@@ -289,42 +305,20 @@ export function PerformingAssetsBarChart({
   const primaryLabel = React.useMemo(() => "Selected range", []);
   const comparisonLabel = React.useMemo(() => {
     if (!comparisonSeries) return undefined;
-    return myMode === "thisWeek" ? "This week" : "Previous range";
+    if (myMode === "thisWeek") return "This week";
+    if (myMode === "lastWeek") return "Last week";
+    return "Previous range";
   }, [comparisonSeries, myMode]);
 
-  // Build human-readable date ranges for labels/tooltips
-  const formatRange = React.useCallback((a: Date, b: Date) => {
-    const s = new Date(a);
-    const e = new Date(b);
-    const sStr = s.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const eStr = e.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    return `${sStr}–${eStr}`;
-  }, []);
-
   const selectedRangeStr = React.useMemo(() => {
-    if (!start || !end) return undefined;
-    return formatRange(start, end);
-  }, [start, end, formatRange]);
+    if (!resolvedRange) return undefined;
+    return formatRangeLabel(resolvedRange);
+  }, [resolvedRange]);
 
-  const previousRangeStr = React.useMemo(() => {
-    if (myMode === "thisWeek") return undefined;
-    if (!start || !end || myMode !== "previous") return undefined;
-    const prevStart = new Date(start);
-    prevStart.setHours(0, 0, 0, 0);
-    // Use same length as primary by counting unique assets length as proxy
-    const days = 7; // fallback window length
-    prevStart.setDate(prevStart.getDate() - days);
-    const prevEnd = new Date(end);
-    prevEnd.setHours(0, 0, 0, 0);
-    prevEnd.setDate(prevEnd.getDate() - days);
-    return formatRange(prevStart, prevEnd);
-  }, [start, end, myMode, formatRange]);
+  const comparisonRangeStr = React.useMemo(() => {
+    if (!comparisonRange) return undefined;
+    return formatRangeLabel(comparisonRange);
+  }, [comparisonRange]);
 
   return (
     <Card className="w-full h-full rounded-none bg-transparent border-none shadow-none">
@@ -334,13 +328,11 @@ export function PerformingAssetsBarChart({
             <p className="font-normal text-white/40 text-sm tracking-wide">
               Most profitable asset:{" "}
               <span className="text-teal-400 font-medium">
-                {bestWorst.best.symbol} ({bestWorst.best.v < 0 ? "-$" : "$"}
-                {Math.abs(bestWorst.best.v).toLocaleString()})
+                {bestWorst.best.symbol} ({formatSignedCurrency(bestWorst.best.v, 0)})
               </span>{" "}
               · Least profitable asset:{" "}
               <span className="text-rose-400 font-medium">
-                {bestWorst.worst.symbol} ({bestWorst.worst.v < 0 ? "-$" : "$"}
-                {Math.abs(bestWorst.worst.v).toLocaleString()})
+                {bestWorst.worst.symbol} ({formatSignedCurrency(bestWorst.worst.v, 0)})
               </span>
             </p>
           ) : (
@@ -420,8 +412,8 @@ export function PerformingAssetsBarChart({
                   radius={[0, 0, 0, 0]}
                   barSize={32}
                   name={
-                    previousRangeStr
-                      ? `${comparisonLabel} (${previousRangeStr})`
+                    comparisonRangeStr
+                      ? `${comparisonLabel} (${comparisonRangeStr})`
                       : comparisonLabel
                   }
                 >
@@ -451,47 +443,29 @@ export function PerformingAssetsBarChart({
                 content={({ active, payload }) => {
                   if (!active || !payload || !payload.length) return null;
                   return (
-                    <div className="bg-white border-black/10 dark:bg-dashboard-background dark:border-white/10 grid min-w-[16rem] gap-2 border-[0.5px] p-3 px-0 text-xs shadow-xl">
-                      <div className="text-[11px] font-medium text-black/80 dark:text-white px-3">
-                        Profit
-                      </div>
-                      <div className="h-px bg-black/10 dark:bg-white/10" />
-                      <div className="grid gap-2 px-3">
-                        {payload.map((item: any) => {
-                          const key = item.dataKey as "profit" | "compare";
-                          const isRowActive = activeDataset
-                            ? key === activeDataset
-                            : true;
-                          const v = Number(item.value ?? 0);
-                          const sign = v < 0 ? "-$" : "$";
-                          return (
-                            <div
-                              key={key}
-                              className={cn(
-                                "flex w-full justify-between font-semibold",
-                                !isRowActive && "opacity-50"
-                              )}
-                            >
-                              <span className="text-black dark:text-white/80">
-                                {item.name ??
-                                  (key === "profit" ? "Selected" : "Previous")}
-                              </span>
-                              <span
-                                className={cn(
-                                  v < 0 ? "text-rose-400" : "text-teal-400"
-                                )}
-                              >
-                                {sign}
-                                {Math.abs(Math.round(v)).toLocaleString()}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <DashboardChartTooltipFrame title="Profit">
+                      {payload.map((item: any) => {
+                        const key = item.dataKey as "profit" | "compare";
+                        const isRowActive = activeDataset
+                          ? key === activeDataset
+                          : true;
+                        const v = Number(item.value ?? 0);
+                        return (
+                          <DashboardChartTooltipRow
+                            key={key}
+                            label={
+                              item.name ??
+                              (key === "profit" ? "Selected" : "Previous")
+                            }
+                            value={formatSignedCurrency(v, 0)}
+                            tone={v < 0 ? "negative" : "positive"}
+                            dimmed={!isRowActive}
+                          />
+                        );
+                      })}
+                    </DashboardChartTooltipFrame>
                   );
                 }}
-                labelClassName="text-black"
               />
             </BarChart>
           </ChartContainer>

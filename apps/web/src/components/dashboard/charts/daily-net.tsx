@@ -14,7 +14,6 @@ import {
 import {
   type ChartConfig,
   ChartContainer,
-  ChartTooltipContent,
   ChartTooltip,
 } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
@@ -22,8 +21,21 @@ import { cn } from "@/lib/utils";
 import { JetBrains_Mono } from "next/font/google";
 import { useMotionValueEvent, useSpring } from "framer-motion";
 import { useDateRangeStore } from "@/stores/date-range";
-import { useComparisonStore } from "@/stores/comparison";
+import {
+  useComparisonStore,
+  type WidgetComparisonMode,
+} from "@/stores/comparison";
 import { trpcClient } from "@/utils/trpc";
+import {
+  countRangeDays,
+  formatRangeLabel,
+  getComparisonRange,
+} from "@/components/dashboard/chart-comparison-utils";
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+  formatSignedCurrency,
+} from "./dashboard-chart-ui";
 
 const jetBrainsMono = JetBrains_Mono({
   subsets: ["latin"],
@@ -33,6 +45,7 @@ const jetBrainsMono = JetBrains_Mono({
 const CHART_MARGIN = 35;
 
 type Point = { label: string; value: number };
+type DayRow = { dateISO: string; totalProfit: number };
 
 const chartConfig = {
   profit: {
@@ -44,78 +57,104 @@ const chartConfig = {
 export function DailyNetBarChart({
   accountId,
   ownerId = "daily-net",
+  comparisonMode,
 }: {
   accountId?: string;
   ownerId?: string;
+  comparisonMode?: WidgetComparisonMode;
 }) {
-  const { start, end } = useDateRangeStore();
+  const { start, end, min, max } = useDateRangeStore();
   const comparisons = useComparisonStore((s) => s.comparisons);
-  const myMode = comparisons[ownerId] ?? "none";
+  const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
   const [series, setSeries] = React.useState<Point[]>([]);
   const [comparisonSeries, setComparisonSeries] = React.useState<
     Point[] | null
   >(null);
 
+  const resolvedRange = React.useMemo(() => {
+    const minD = min ? new Date(min) : undefined;
+    const maxD = max ? new Date(max) : undefined;
+    minD?.setHours(0, 0, 0, 0);
+    maxD?.setHours(23, 59, 59, 999);
+
+    if (start && end) {
+      return { start: new Date(start), end: new Date(end) };
+    }
+
+    const fallbackEnd = maxD ?? new Date();
+    const endDate = new Date(fallbackEnd);
+    endDate.setHours(23, 59, 59, 999);
+    const startDate = new Date(endDate);
+    startDate.setHours(0, 0, 0, 0);
+    startDate.setDate(startDate.getDate() - 6);
+    if (minD && startDate < minD) {
+      return { start: minD, end: endDate };
+    }
+    return { start: startDate, end: endDate };
+  }, [end, max, min, start]);
+
+  const comparisonRange = React.useMemo(() => {
+    if (!resolvedRange) return null;
+    return getComparisonRange(myMode, resolvedRange, {
+      minDate: min,
+      maxDate: max,
+    });
+  }, [max, min, myMode, resolvedRange]);
+
   React.useEffect(() => {
+    let cancelled = false;
+
     (async () => {
-      if (!accountId || !start || !end) return;
-      const data = await trpcClient.accounts.recentByDay.query({
+      if (!accountId || !resolvedRange) return;
+
+      const primaryPromise = trpcClient.accounts.recentByDay.query({
         accountId,
-        startISO: start.toISOString(),
-        endISO: end.toISOString(),
+        startISO: resolvedRange.start.toISOString(),
+        endISO: resolvedRange.end.toISOString(),
       });
-      const points: Point[] = data.map((d) => ({
+      const comparisonPromise = comparisonRange
+        ? trpcClient.accounts.recentByDay.query({
+            accountId,
+            startISO: comparisonRange.start.toISOString(),
+            endISO: comparisonRange.end.toISOString(),
+          })
+        : Promise.resolve(null);
+
+      const [primary, comparison] = await Promise.all([
+        primaryPromise,
+        comparisonPromise,
+      ]);
+      if (cancelled) return;
+
+      const primaryPoints: Point[] = (primary as DayRow[]).map((d) => ({
         label: new Date(d.dateISO).toLocaleDateString("en-US", {
           month: "short",
           day: "numeric",
         }),
         value: d.totalProfit,
       }));
-      setSeries(points);
-      // Only compute comparison if this chart's comparison is enabled
-      if (myMode === "previous") {
-        const days = data.length > 0 ? data.length : 7;
-        const prevStart = new Date(start);
-        prevStart.setDate(start.getDate() - days);
-        const prevEnd = new Date(end);
-        prevEnd.setDate(end.getDate() - days);
-        const prev = await trpcClient.accounts.recentByDay.query({
-          accountId,
-          startISO: prevStart.toISOString(),
-          endISO: prevEnd.toISOString(),
-        });
-        const prevPoints: Point[] = prev.map((d) => ({
-          label: new Date(d.dateISO).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          value: d.totalProfit,
-        }));
-        setComparisonSeries(prevPoints);
-      } else if (myMode === "thisWeek") {
-        // Use most recent week from global bounds
-        const endMost = new Date(useDateRangeStore.getState().max!);
-        endMost.setHours(0, 0, 0, 0);
-        const startMost = new Date(endMost);
-        startMost.setDate(endMost.getDate() - 6);
-        const prev = await trpcClient.accounts.recentByDay.query({
-          accountId,
-          startISO: startMost.toISOString(),
-          endISO: endMost.toISOString(),
-        });
-        const weekPoints: Point[] = prev.map((d) => ({
-          label: new Date(d.dateISO).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-          }),
-          value: d.totalProfit,
-        }));
-        setComparisonSeries(weekPoints);
-      } else {
+      setSeries(primaryPoints);
+
+      if (!comparisonRange || !comparison) {
         setComparisonSeries(null);
+        return;
       }
+
+      const comparisonPoints: Point[] = (comparison as DayRow[]).map((d) => ({
+        label: new Date(d.dateISO).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        value: d.totalProfit,
+      }));
+      setComparisonSeries(comparisonPoints);
     })();
-  }, [accountId, start?.toISOString(), end?.toISOString(), myMode, ownerId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, comparisonRange, resolvedRange]);
+
   const [activeIndex, setActiveIndex] = React.useState<number | undefined>(
     undefined
   );
@@ -135,7 +174,6 @@ export function DailyNetBarChart({
     [comparisonSeries]
   );
 
-  // Merge primary and comparison series into one dataset for Recharts
   const mergedData = React.useMemo(() => {
     if (!comparisonDataForChart.length) return dataForChart;
     const len = Math.max(dataForChart.length, comparisonDataForChart.length);
@@ -151,21 +189,20 @@ export function DailyNetBarChart({
       });
     }
     return rows;
-  }, [dataForChart, comparisonDataForChart]);
+  }, [comparisonDataForChart, dataForChart]);
 
   const maxValueIndex = React.useMemo(() => {
-    // if user is moving mouse over bar then set value to the bar value
     if (activeIndex !== undefined) {
       return {
         index: activeIndex,
         value: dataForChart[activeIndex]?.profit ?? 0,
       };
     }
-    // if no active index then set value to max value
     return dataForChart.reduce(
-      (max, data, index) => {
-        return data.profit > max.value ? { index, value: data.profit } : max;
-      },
+      (currentMax, data, index) =>
+        data.profit > currentMax.value
+          ? { index, value: data.profit }
+          : currentMax,
       { index: 0, value: 0 }
     );
   }, [activeIndex, dataForChart]);
@@ -190,8 +227,6 @@ export function DailyNetBarChart({
     [maxValueIndex.value]
   );
 
-  // Compute a symmetric Y-axis domain around 0 that considers both primary and
-  // comparison values, and always yields exactly 7 ticks including $0.
   const niceScale = React.useMemo(() => {
     const values: number[] = [];
     for (const d of dataForChart)
@@ -205,7 +240,7 @@ export function DailyNetBarChart({
       : 0;
 
     if (!Number.isFinite(maxAbs) || maxAbs === 0) {
-      maxAbs = 100; // fallback so we always render a scale
+      maxAbs = 100;
     }
 
     const niceStep = (x: number) => {
@@ -219,13 +254,12 @@ export function DailyNetBarChart({
       return nf * Math.pow(10, exp);
     };
 
-    // Choose step so that +/- 3 steps covers the maxAbs value
     const step = niceStep(maxAbs / 3);
-    const max = step * 3;
-    const min = -max;
-    const ticks = Array.from({ length: 7 }, (_, i) => min + i * step);
-    return { min, max, ticks };
-  }, [dataForChart, comparisonDataForChart]);
+    const maxValue = step * 3;
+    const minValue = -maxValue;
+    const ticks = Array.from({ length: 7 }, (_, i) => minValue + i * step);
+    return { min: minValue, max: maxValue, ticks };
+  }, [comparisonDataForChart, dataForChart]);
 
   const currencyTick = (v: number) => {
     const abs = Math.abs(Math.round(v));
@@ -233,67 +267,39 @@ export function DailyNetBarChart({
     return `${prefix}${abs.toLocaleString()}`;
   };
 
-  // Sum total profit over the selected range for header message
   const weekNet = React.useMemo(
     () => Math.round(series.reduce((sum, p) => sum + (p.value || 0), 0)),
     [series]
   );
 
   const daysSelected = React.useMemo(() => {
-    if (!start || !end) return null;
-    const s = new Date(start);
-    const e = new Date(end);
-    s.setHours(0, 0, 0, 0);
-    e.setHours(0, 0, 0, 0);
-    const diff = Math.floor((+e - +s) / 86400000) + 1;
-    return diff;
-  }, [start, end]);
+    if (!resolvedRange) return null;
+    return countRangeDays(resolvedRange);
+  }, [resolvedRange]);
 
   const primaryLabel = React.useMemo(() => {
     if (!daysSelected) return "Selected days";
-    return daysSelected === 7 ? "This week" : `Selected ${daysSelected} days`;
+    return daysSelected === 7 ? "Selected week" : `Selected ${daysSelected} days`;
   }, [daysSelected]);
 
   const comparisonLabel = React.useMemo(() => {
     if (!comparisonSeries) return undefined;
     if (myMode === "thisWeek") return "This week";
+    if (myMode === "lastWeek") return "Last week";
     if (!daysSelected) return undefined;
-    if (daysSelected === 7) return "Previous week";
+    if (daysSelected === 1) return "Previous day";
     return `Previous ${daysSelected} days`;
   }, [comparisonSeries, daysSelected, myMode]);
 
-  // Build human-readable date ranges for labels/tooltips
-  const formatRange = React.useCallback((a: Date, b: Date) => {
-    const s = new Date(a);
-    const e = new Date(b);
-    const sStr = s.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const eStr = e.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    return `${sStr}–${eStr}`;
-  }, []);
-
   const selectedRangeStr = React.useMemo(() => {
-    if (!start || !end) return undefined;
-    return formatRange(start, end);
-  }, [start, end, formatRange]);
+    if (!resolvedRange) return undefined;
+    return formatRangeLabel(resolvedRange);
+  }, [resolvedRange]);
 
-  const previousRangeStr = React.useMemo(() => {
-    if (myMode === "thisWeek") return undefined;
-    if (!start || !end || myMode !== "previous" || !daysSelected)
-      return undefined;
-    const prevStart = new Date(start);
-    prevStart.setHours(0, 0, 0, 0);
-    prevStart.setDate(prevStart.getDate() - daysSelected);
-    const prevEnd = new Date(end);
-    prevEnd.setHours(0, 0, 0, 0);
-    prevEnd.setDate(prevEnd.getDate() - daysSelected);
-    return formatRange(prevStart, prevEnd);
-  }, [start, end, myMode, daysSelected, formatRange]);
+  const comparisonRangeStr = React.useMemo(() => {
+    if (!comparisonRange) return undefined;
+    return formatRangeLabel(comparisonRange);
+  }, [comparisonRange]);
 
   const positiveWeekNet = weekNet >= 0;
 
@@ -304,44 +310,41 @@ export function DailyNetBarChart({
           {daysSelected === 7 ? (
             positiveWeekNet ? (
               <p className="font-normal text-white/40 text-sm tracking-wide">
-                Awesome! You ended this week with a profit of{" "}
+                Nice work. Your selected week closed at{" "}
                 <span
                   className={cn(
                     "font-semibold tracking-normal",
                     "text-teal-400"
                   )}
                 >
-                  ${Math.abs(weekNet).toLocaleString()} 🎉
+                  {formatSignedCurrency(weekNet, 0)}
                 </span>
+                .
               </p>
             ) : (
               <p className="font-normal text-white/40 text-sm tracking-wide">
-                Have patience, you'll make back the{" "}
+                Your selected week finished at{" "}
                 <span
                   className={cn("font-medium tracking-normal", "text-rose-400")}
                 >
-                  -${Math.abs(weekNet).toLocaleString()}
-                </span>{" "}
-                you lost in no time!
+                  {formatSignedCurrency(weekNet, 0)}
+                </span>
+                .
               </p>
             )
           ) : (
             <p className="font-normal text-white/40 text-sm tracking-wide">
               In the selected {daysSelected ?? "?"} days, you{" "}
-              {positiveWeekNet ? "made" : "lost"} {""}
+              {positiveWeekNet ? "made" : "lost"}{" "}
               <span
                 className={cn(
                   "font-medium tracking-normal",
                   positiveWeekNet ? "text-teal-400" : "text-rose-400"
                 )}
               >
-                {positiveWeekNet ? "$" : "-$"}
-                {Math.abs(weekNet).toLocaleString()}
+                {formatSignedCurrency(weekNet, 0)}
               </span>
-              .{" "}
-              {positiveWeekNet
-                ? "Great job!"
-                : "Don't worry, you'll make it back!"}
+              .
             </p>
           )}
         </CardTitle>
@@ -393,7 +396,7 @@ export function DailyNetBarChart({
                   const isActive =
                     index === maxValueIndex.index &&
                     activeDataset !== "compare";
-                  const hoverFill = d.profit >= 0 ? "#2dd4bf" : "#fb7185"; // teal-400 / rose-400
+                  const hoverFill = d.profit >= 0 ? "#2dd4bf" : "#fb7185";
                   return (
                     <Cell
                       className="duration-200"
@@ -415,8 +418,8 @@ export function DailyNetBarChart({
                   radius={[0, 0, 0, 0]}
                   barSize={32}
                   name={
-                    previousRangeStr
-                      ? `${comparisonLabel} (${previousRangeStr})`
+                    comparisonRangeStr
+                      ? `${comparisonLabel} (${comparisonRangeStr})`
                       : comparisonLabel
                   }
                 >
@@ -424,7 +427,7 @@ export function DailyNetBarChart({
                     const isActive =
                       index === maxValueIndex.index &&
                       activeDataset === "compare";
-                    const hoverFill = d.compare >= 0 ? "#2dd4bf" : "#fb7185"; // teal-400 / rose-400
+                    const hoverFill = d.compare >= 0 ? "#2dd4bf" : "#fb7185";
                     return (
                       <Cell
                         className="duration-200"
@@ -446,47 +449,29 @@ export function DailyNetBarChart({
                 content={({ active, payload }) => {
                   if (!active || !payload || !payload.length) return null;
                   return (
-                    <div className="bg-white border-black/10 dark:bg-dashboard-background dark:border-white/10 grid min-w-[16rem] gap-2 border-[0.5px] p-3 px-0 text-xs shadow-xl">
-                      <div className="text-[11px] font-medium text-black/80 dark:text-white px-3">
-                        Profit
-                      </div>
-                      <div className="h-px bg-black/10 dark:bg-white/10" />
-                      <div className="grid gap-2 px-3">
-                        {payload.map((item: any) => {
-                          const key = item.dataKey as "profit" | "compare";
-                          const isRowActive = activeDataset
-                            ? key === activeDataset
-                            : true;
-                          const v = Number(item.value ?? 0);
-                          const sign = v < 0 ? "-$" : "$";
-                          return (
-                            <div
-                              key={key}
-                              className={cn(
-                                "flex w-full justify-between font-semibold",
-                                !isRowActive && "opacity-50"
-                              )}
-                            >
-                              <span className="text-black dark:text-white/80">
-                                {item.name ??
-                                  (key === "profit" ? "Selected" : "Previous")}
-                              </span>
-                              <span
-                                className={cn(
-                                  v < 0 ? "text-rose-400" : "text-teal-400"
-                                )}
-                              >
-                                {sign}
-                                {Math.abs(Math.round(v)).toLocaleString()}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <DashboardChartTooltipFrame title="Profit">
+                      {payload.map((item: any) => {
+                        const key = item.dataKey as "profit" | "compare";
+                        const isRowActive = activeDataset
+                          ? key === activeDataset
+                          : true;
+                        const v = Number(item.value ?? 0);
+                        return (
+                          <DashboardChartTooltipRow
+                            key={key}
+                            label={
+                              item.name ??
+                              (key === "profit" ? "Selected" : "Comparison")
+                            }
+                            value={formatSignedCurrency(v, 0)}
+                            tone={v < 0 ? "negative" : "positive"}
+                            dimmed={!isRowActive}
+                          />
+                        );
+                      })}
+                    </DashboardChartTooltipFrame>
                   );
                 }}
-                labelClassName="text-black"
               />
             </BarChart>
           </ChartContainer>
@@ -509,9 +494,8 @@ const CustomReferenceLabel: React.FC<CustomReferenceLabelProps> = (props) => {
   const x = viewBox?.x ?? 0;
   const y = viewBox?.y ?? 0;
 
-  // we need to change width based on value length
   const width = React.useMemo(() => {
-    const characterWidth = 8; // Average width of a character in pixels
+    const characterWidth = 8;
     const padding = 10;
     return value.toString().length * characterWidth + padding;
   }, [value]);

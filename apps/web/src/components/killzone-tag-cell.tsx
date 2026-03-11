@@ -23,6 +23,11 @@ import {
 } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
 import Color from "color";
+import {
+  getTradeIdentifierColorStyle,
+  TRADE_IDENTIFIER_BUTTON_CLASS,
+  TRADE_IDENTIFIER_PILL_CLASS,
+} from "@/components/trades/trade-identifier-pill";
 
 interface KillzoneTagCellProps {
   tradeId: string;
@@ -120,20 +125,20 @@ export function KillzoneTagCell({
         >
           {killzone && killzoneColor ? (
             <Badge
-              style={{
-                backgroundColor: killzoneColor,
-                color: Color(killzoneColor).isDark() ? "#fff" : "#000",
-              }}
-              className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
+              style={getTradeIdentifierColorStyle(killzoneColor)}
+              className={cn(
+                TRADE_IDENTIFIER_PILL_CLASS,
+                "hover:opacity-90"
+              )}
             >
               <TagIcon size={12} />
-              {killzone}
+              <span className="max-w-[12rem] truncate">{killzone}</span>
             </Badge>
           ) : (
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-0! hover:bg-transparent! text-muted-foreground hover:text-foreground text-xs"
+              className={cn(TRADE_IDENTIFIER_BUTTON_CLASS, "gap-1.5")}
             >
               <Plus className="mb-0.5 size-3.5" />
               Add tag
@@ -205,7 +210,7 @@ export function KillzoneTagCell({
                 <ColorPicker
                   value={selectedColor}
                   onChange={(rgba) => {
-                    const [r, g, b] = rgba;
+                    const [r, g, b] = rgba as [number, number, number];
                     const hex = Color.rgb(r, g, b).hex();
                     setSelectedColor(hex);
                   }}

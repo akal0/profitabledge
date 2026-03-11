@@ -27,6 +27,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
@@ -47,31 +48,53 @@ type Me = {
 };
 
 const NavUser: React.FC<{ user: Me }> = ({ user }) => {
-  const { isMobile } = useSidebar();
+  const { isMobile, state } = useSidebar();
+  const isCollapsed = state === "collapsed" && !isMobile;
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
+    <SidebarMenu className={cn(isCollapsed && "items-center")}>
+      <SidebarMenuItem className={cn(isCollapsed && "flex justify-center")}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton className="flex cursor-pointer bg-white dark:bg-sidebar hover:bg-white dark:hover:brightness-110 focus:bg-white dark:hover:bg-sidebar dark:focus:bg-sidebar rounded-xs items-center justify-center shadow-sidebar-button !w-max !h-max ">
-              {/* <Avatar className="size-8 rounded-md shadow-secondary-button">
-                <AvatarImage
-                  src={user.image ?? undefined}
-                  alt={user.name}
-                  className=""
-                />
-                <AvatarFallback className="rounded-lg">User</AvatarFallback>
-              </Avatar> */}
+            <SidebarMenuButton
+              className={cn(
+                "!h-auto cursor-pointer items-center gap-2.5 shadow-primary-button shadow-sm ring-1! ring-white/5",
+                isCollapsed
+                  ? "!size-auto !w-auto rounded-full !bg-transparent !p-0 shadow-none ring-0 hover:!bg-transparent focus:!bg-transparent dark:!bg-transparent dark:hover:!bg-transparent dark:focus:!bg-transparent"
+                  : "rounded-lg bg-white px-2 py-1.5 hover:bg-white focus:bg-white dark:bg-sidebar dark:hover:bg-sidebar dark:hover:brightness-110 dark:focus:bg-sidebar"
+              )}
+            >
+              <Avatar
+                className={cn(
+                  "rounded-full shrink-0 shadow-secondary-button",
+                  isCollapsed ? "size-8" : "size-7"
+                )}
+              >
+                {user.image ? (
+                  <AvatarImage
+                    src={user.image}
+                    alt={user.name}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback
+                  className="rounded-full text-[10px] bg-sidebar-accent text-foreground font-semibold"
+                  delayMs={0}
+                >
+                  {user.name?.charAt(0)?.toUpperCase() ?? "U"}
+                </AvatarFallback>
+              </Avatar>
 
-              <div className="size-8 rounded-xs shadow-secondary-button">
-                <Image
-                  src={user.image ?? ""}
-                  alt="pfp"
-                  fill
-                  className="object-cover"
-                />
+              <div className="flex flex-col min-w-0 group-data-[collapsible=icon]:hidden">
+                <span className="text-xs font-semibold truncate text-foreground">
+                  {user.name}
+                </span>
+                <span className="text-[10px] truncate text-muted-foreground">
+                  {user.email}
+                </span>
               </div>
+
+              <ChevronsUpDown className="ml-auto size-3.5 shrink-0 text-muted-foreground group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
 
@@ -85,12 +108,19 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
               <DropdownMenuLabel className="p-3 font-normal flex justify-between items-start">
                 <div className="flex items-center gap-3  text-left text-sm h-full">
                   <Avatar className="size-10 rounded-xs shadow-secondary-button">
-                    <AvatarImage
-                      src={user.image ?? undefined}
-                      alt={user.name}
-                      className="object-cover"
-                    />
-                    <AvatarFallback className="rounded-lg">User</AvatarFallback>
+                    {user.image ? (
+                      <AvatarImage
+                        src={user.image}
+                        alt={user.name}
+                        className="object-cover"
+                      />
+                    ) : null}
+                    <AvatarFallback
+                      className="rounded-lg bg-sidebar text-foreground font-semibold"
+                      delayMs={0}
+                    >
+                      {user.name?.charAt(0)?.toUpperCase() ?? "U"}
+                    </AvatarFallback>
                   </Avatar>
 
                   <div className="grid text-left text-xs leading-tight gap-0.5">

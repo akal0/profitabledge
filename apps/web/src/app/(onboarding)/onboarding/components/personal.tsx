@@ -79,6 +79,8 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
       username: data.username,
       email: data.email || undefined,
       image: imageUrl || (data.avatar as string | null) || undefined,
+      twitter: data.twitter?.trim() || null,
+      discord: data.discord?.trim() || null,
     });
 
     toast.success("Profile updated");
@@ -102,8 +104,8 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
         username: data?.username ?? "",
         email: data?.email ?? "",
         avatar: null,
-        twitter: "",
-        discord: "",
+        twitter: data?.twitter ?? "",
+        discord: data?.discord ?? "",
       });
     })();
   }, []);
@@ -145,7 +147,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
                 <FormItem className="space-y-1">
                   <FormLabel className="text-xs">Full name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Profitable Trader" {...field} />
+                    <Input placeholder="Profitable trader" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -161,11 +163,11 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
                   <FormControl>
                     <div className="*:not-first:mt-2 rounded-md border-[0.5px] border-white/0">
                       <div className="flex rounded-md ">
-                        <span className="bg-sidebar text-secondary z-0 inline-flex items-center rounded-s-md px-3 text-xs shadow-sidebar-button shadow-none">
+                        <span className="bg-sidebar text-secondary z-10 inline-flex items-center px-3 text-xs border border-white/5 border-r-0">
                           profitabledge.com/
                         </span>
                         <Input
-                          className="-ms-px rounded-s-none !border-none relative z-10"
+                          className=" bg-sidebar relative z-0 focus-visible:scale-[100%]"
                           placeholder="profitabletrader"
                           type="text"
                           {...field}
@@ -220,7 +222,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
 
                       <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center peer-disabled:opacity-50 ps-3 pt-[1.5px] pb-[0.5px]">
                         <X
-                          className="size-3.5 mr-2 stroke-white group-hover:fill-white transition duration-500"
+                          className="size-3.5 mr-2 fill-white group-hover:fill-white transition duration-500"
                           aria-hidden="true"
                         />
 
@@ -253,7 +255,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
 
                       <div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center peer-disabled:opacity-50 ps-3 pt-[1.5px] pb-[0.5px]">
                         <Discord
-                          className="size-3.5 mr-2 stroke-white group-hover:fill-white transition duration-500"
+                          className="size-3.5 mr-2 fill-white group-hover:fill-white transition duration-500"
                           aria-hidden="true"
                         />
 

@@ -87,7 +87,7 @@ const LoginPage = () => {
             </div>
           ));
 
-          router.push("/dashboard/onboarding");
+          router.push("/onboarding");
         },
         onError: (error) => {
           toast.custom((t) => (
@@ -128,14 +128,14 @@ const LoginPage = () => {
   const handleGoogleLogin = async () => {
     const data = await authClient.signIn.social({
       provider: "google",
-      callbackURL: `${window.location.origin}/dashboard/onboarding`,
+      callbackURL: `${window.location.origin}/onboarding`,
     });
   };
 
   const handleTwitterLogin = async () => {
     const data = await authClient.signIn.social({
       provider: "twitter",
-      callbackURL: `${window.location.origin}/dashboard/onboarding`,
+      callbackURL: `${window.location.origin}/onboarding`,
     });
   };
 

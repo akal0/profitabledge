@@ -2,6 +2,10 @@
 
 import EditWidgets from "@/public/icons/edit-widgets.svg";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { WidgetPresets } from "./widget-presets";
+import { exportWidgetsAsJson, exportWidgetsAsCsv } from "./widget-export";
+import type { WidgetType } from "./widgets";
 
 type Me = {
   name: string;
@@ -17,6 +21,14 @@ type Props = {
   user: Me | null;
   isEditing?: boolean;
   onToggleEdit?: () => void;
+  valueMode?: "usd" | "percent";
+  onValueModeChange?: (mode: "usd" | "percent") => void;
+  widgets?: WidgetType[];
+  widgetSpans?: Partial<Record<WidgetType, number>>;
+  onApplyPreset?: (
+    widgets: WidgetType[],
+    spans: Partial<Record<WidgetType, number>>
+  ) => void;
 };
 
 import Resync from "@/public/icons/resync.svg";
@@ -26,22 +38,12 @@ const DashboardActionButtons: React.FC<Props> = ({
   user,
   isEditing = false,
   onToggleEdit,
+  valueMode = "usd",
+  onValueModeChange,
+  widgets = [],
+  widgetSpans = {},
+  onApplyPreset,
 }) => {
-  const handleUSDClick = () => {
-    console.log("USD clicked - toggle between USD and percentage view");
-    // Add your USD toggle logic here
-  };
-
-  const handleResyncClick = () => {
-    console.log("Resync clicked - triggering data resync");
-    // Add your resync logic here
-  };
-
-  const handleEditWidgetsClick = () => {
-    console.log("Edit widgets clicked - opening widget editor");
-    // Add your edit widgets logic here
-  };
-
   const formatDate = (iso: string) => {
     const date = new Date(iso);
     if (isNaN(date.getTime())) return iso;
@@ -61,32 +63,51 @@ const DashboardActionButtons: React.FC<Props> = ({
 
   const formattedUpdatedAt = user ? formatDate(user.updatedAt) : "";
 
+  const handleExport = (format: "json" | "csv") => {
+    if (format === "json") {
+      exportWidgetsAsJson(widgets, widgetSpans);
+    } else {
+      exportWidgetsAsCsv(widgets, widgetSpans);
+    }
+  };
+
   return (
     <div className="flex gap-2 items-center">
-      <div className="bg-white w-max h-max flex items-center gap-1 p-[3px] dark:bg-muted/25">
-        <Button className=" cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-2 h-max transition-all active:scale-95 bg-[#222225] text-white w-max text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
-          <div className="contents">
-            <span className="px-2">USD</span>
-          </div>
+      <div className="bg-white w-max h-max flex items-center gap-1 p-[3px] dark:bg-muted/25 rounded-sm">
+        <Button
+          onClick={() => onValueModeChange?.("usd")}
+          className={cn(
+            "cursor-pointer flex transform items-center justify-center gap-2 rounded-sm py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
+            valueMode === "usd"
+              ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120"
+              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+          )}
+        >
+          <span className="px-2">USD</span>
         </Button>
 
-        <Button className=" cursor-pointer flex transform items-center justify-center gap-2 rounded-none py-2 h-max transition-all active:scale-95 bg-[#222225]/25 text-white/25 w-max text-xs dark:hover:bg-[#222225] hover:!brightness-105 hover:text-white duration-250">
-          <div className="contents">
-            <span className="px-0">Return (%)</span>
-          </div>
+        <Button
+          onClick={() => onValueModeChange?.("percent")}
+          className={cn(
+            "cursor-pointer flex transform items-center justify-center gap-2 rounded-sm py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
+            valueMode === "percent"
+              ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120"
+              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+          )}
+        >
+          <span className="px-0">Return (%)</span>
         </Button>
       </div>
 
-      <div className="flex items-center overflow-hidden border border-white/5 bg-sidebar group">
-        <Button className="rounded-none bg-sidebar hover:bg-sidebar-accent text-white/25 text-xs py-2 px-4 cursor-default">
+      <div className="flex items-center overflow-hidden border border-white/5 bg-sidebar group rounded-sm">
+        <Button className="rounded-sm! bg-sidebar hover:bg-sidebar-accent text-white/25 text-xs py-2 px-4 cursor-default">
           Last synced:{" "}
           {formattedUpdatedAt || (
             <Skeleton className="w-28 h-3.5 ml-1 rounded-none bg-sidebar-accent" />
           )}
         </Button>
 
-        <div className="h-9 w-[2px] bg-white/5 mx-0" />
-
+        <div className="h-9 w-[1px] bg-white/5 mx-0" />
         <Button className="rounded-none bg-sidebar hover:bg-sidebar-accent text-white text-xs py-2">
           <Resync
             className="size-3.5 fill-white group-hover:animate-spin"
@@ -96,17 +117,20 @@ const DashboardActionButtons: React.FC<Props> = ({
         </Button>
       </div>
 
-      <div className="bg-white dark:bg-muted/0 w-max flex items-center rounded-md h-max p-[3px] gap-1.5">
-        <Button
-          onClick={onToggleEdit}
-          className="cursor-pointer flex transform items-center justify-center py-2.5 h-full transition-all active:scale-95 text-white w-max text-xs hover:!brightness-110 hover:text-white duration-250  border-[0.5px] border-white/5 bg-sidebar rounded-none hover:bg-sidebar-accent"
-        >
-          <div className="flex items-center gap-1.5">
-            <EditWidgets className="size-3 fill-white/75" />
-            <span className="">{isEditing ? "Save" : "Customize widgets"}</span>
-          </div>
-        </Button>
-      </div>
+      <WidgetPresets
+        currentWidgets={widgets}
+        currentSpans={widgetSpans}
+        onApplyPreset={onApplyPreset || (() => {})}
+        onExport={handleExport}
+      />
+
+      <Button
+        onClick={onToggleEdit}
+        className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
+      >
+        <EditWidgets className="size-3.5 fill-white/75" />
+        <span>{isEditing ? "Save" : "Customize widgets"}</span>
+      </Button>
     </div>
   );
 };

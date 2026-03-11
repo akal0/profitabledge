@@ -587,7 +587,7 @@ export default function RangeSlider({
 
         {showCountButton ? (
           <Button
-            className="w-full !border-white/5 rounded-none !bg-transparent hover:!bg-sidebar-accent py-3 text-xs"
+            className="w-full rounded-sm border-white/8 bg-white/[0.03] py-3 text-xs text-white/80 hover:bg-white/[0.06]"
             variant="outline"
             disabled={!histogramData || histogramData.length === 0}
             onClick={() =>

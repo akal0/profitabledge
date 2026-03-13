@@ -5,24 +5,139 @@ import {
   tradingAccount,
   propAlert,
   propDailySnapshot,
+  propChallengeInstance,
+  propChallengeRule,
+  propFirm,
+  trade,
 } from "../db/schema/trading";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import {
   detectPropFirm,
-  getAllPropFirms,
+  getAccessiblePropFirms,
+  getChallengeRuleById,
   getPropFirmById,
   getChallengeRulesForFirm,
+  resolvePropTrackingSeed,
 } from "../lib/prop-firm-detection";
+import { checkPropRules, syncPropAccountState } from "../lib/prop-rule-monitor";
 import {
-  checkPropRules,
-  saveAlerts,
-  createDailySnapshot,
-} from "../lib/prop-rule-monitor";
+  attachAccountToPropChallenge,
+  ensurePropChallengeLineageForAccount,
+  getPropChallengeLineageForAccount,
+  listContinuablePropChallenges,
+  pausePropChallengeForAccount,
+  recordPropChallengePhaseAdvance,
+  syncPropChallengeOutcomeForAccount,
+} from "../lib/prop-challenge-lineage";
 
 function toNumber(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 }
+
+function average(values: number[]) {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function standardDeviation(values: number[], mean = average(values)) {
+  if (values.length === 0) return 0;
+  const variance =
+    values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) /
+    values.length;
+  return Math.sqrt(variance);
+}
+
+function gaussianishSample() {
+  return (
+    (Math.random() +
+      Math.random() +
+      Math.random() +
+      Math.random() +
+      Math.random() +
+      Math.random() -
+      3) /
+    Math.sqrt(3)
+  );
+}
+
+function sampleOne<T>(values: T[]) {
+  return values[Math.floor(Math.random() * values.length)]!;
+}
+
+function dayDiffInclusive(start: Date, end: Date) {
+  const startDay = new Date(start);
+  const endDay = new Date(end);
+  startDay.setHours(0, 0, 0, 0);
+  endDay.setHours(0, 0, 0, 0);
+  return Math.max(1, Math.floor((+endDay - +startDay) / 86400000) + 1);
+}
+
+function getProbabilityMetricMode(
+  phase: Record<string, any> | null | undefined
+): "currency" | "percent" {
+  return phase?.profitTargetType === "absolute" ? "currency" : "percent";
+}
+
+function getMaxDrawdownValueFromPeak(
+  mode: "currency" | "percent",
+  maxLossType: "trailing" | "absolute" | null | undefined,
+  currentProfit: number,
+  peakProfit: number,
+  phaseStartBalance: number
+) {
+  if (mode === "currency") {
+    return Math.max(0, peakProfit - currentProfit);
+  }
+
+  if (maxLossType === "trailing") {
+    const peakEquity = phaseStartBalance * (1 + peakProfit / 100);
+    const currentEquity = phaseStartBalance * (1 + currentProfit / 100);
+    if (peakEquity <= 0) return 0;
+    return Math.max(0, ((peakEquity - currentEquity) / peakEquity) * 100);
+  }
+
+  return Math.max(0, peakProfit - currentProfit);
+}
+
+function getCurrentPeakProfitValue(
+  mode: "currency" | "percent",
+  maxLossType: "trailing" | "absolute" | null | undefined,
+  currentProfit: number,
+  currentDrawdown: number
+) {
+  if (mode === "currency") {
+    return currentProfit + currentDrawdown;
+  }
+
+  if (maxLossType === "trailing") {
+    const currentEquityMultiple = 1 + currentProfit / 100;
+    const remainingFraction = 1 - currentDrawdown / 100;
+
+    if (remainingFraction <= 0) {
+      return currentProfit + currentDrawdown;
+    }
+
+    return (currentEquityMultiple / remainingFraction - 1) * 100;
+  }
+
+  return currentProfit + currentDrawdown;
+}
+
+const customChallengePhaseSchema = z.object({
+  profitTarget: z.number().positive(),
+  dailyLossLimit: z.number().positive(),
+  maxLoss: z.number().positive(),
+  timeLimitDays: z.number().int().positive().nullable().default(null),
+  minTradingDays: z.number().int().min(0).default(0),
+});
+
+const customFundedPhaseSchema = z.object({
+  dailyLossLimit: z.number().positive(),
+  maxLoss: z.number().positive(),
+  timeLimitDays: z.number().int().positive().nullable().default(null),
+  minTradingDays: z.number().int().min(0).default(0),
+});
 
 /**
  * Prop Firms tRPC Router
@@ -33,8 +148,8 @@ export const propFirmsRouter = router({
   /**
    * Get all active prop firms
    */
-  list: protectedProcedure.query(async () => {
-    return getAllPropFirms();
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return getAccessiblePropFirms(ctx.session.user.id);
   }),
 
   /**
@@ -42,8 +157,8 @@ export const propFirmsRouter = router({
    */
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      return getPropFirmById(input.id);
+    .query(async ({ input, ctx }) => {
+      return getPropFirmById(input.id, ctx.session.user.id);
     }),
 
   /**
@@ -51,8 +166,107 @@ export const propFirmsRouter = router({
    */
   getChallengeRules: protectedProcedure
     .input(z.object({ propFirmId: z.string() }))
-    .query(async ({ input }) => {
-      return getChallengeRulesForFirm(input.propFirmId);
+    .query(async ({ input, ctx }) => {
+      return getChallengeRulesForFirm(input.propFirmId, ctx.session.user.id);
+    }),
+
+  createCustomFlow: protectedProcedure
+    .input(
+      z.object({
+        propFirmName: z.string().trim().min(2).max(80),
+        challengeDisplayName: z.string().trim().min(2).max(120).optional(),
+        description: z.string().trim().max(240).optional(),
+        challengePhases: z.array(customChallengePhaseSchema).min(1).max(8),
+        fundedPhase: customFundedPhaseSchema,
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const propFirmName = input.propFirmName.trim();
+      const challengeDisplayName =
+        input.challengeDisplayName?.trim() || `${propFirmName} Custom Flow`;
+      const firmDescription =
+        input.description?.trim() || "Custom user-defined prop challenge flow.";
+      const now = new Date();
+
+      const phases = [
+        ...input.challengePhases.map((phase, index) => ({
+          order: index + 1,
+          name: `Phase ${index + 1}`,
+          profitTarget: phase.profitTarget,
+          profitTargetType: "percentage" as const,
+          dailyLossLimit: phase.dailyLossLimit,
+          maxLoss: phase.maxLoss,
+          maxLossType: "absolute" as const,
+          timeLimitDays: phase.timeLimitDays ?? null,
+          minTradingDays: phase.minTradingDays,
+          consistencyRule: null,
+          customRules: {
+            isCustom: true,
+          },
+        })),
+        {
+          order: 0,
+          name: "Funded",
+          profitTarget: null,
+          profitTargetType: "percentage" as const,
+          dailyLossLimit: input.fundedPhase.dailyLossLimit,
+          maxLoss: input.fundedPhase.maxLoss,
+          maxLossType: "absolute" as const,
+          timeLimitDays: input.fundedPhase.timeLimitDays ?? null,
+          minTradingDays: input.fundedPhase.minTradingDays,
+          consistencyRule: null,
+          customRules: {
+            isCustom: true,
+            funded: true,
+          },
+        },
+      ];
+
+      const [createdFirm] = await db
+        .insert(propFirm)
+        .values({
+          id: crypto.randomUUID(),
+          createdByUserId: ctx.session.user.id,
+          name: propFirmName,
+          displayName: propFirmName,
+          description: firmDescription,
+          logo: null,
+          website: null,
+          supportedPlatforms: ["mt4", "mt5", "ctrader"],
+          brokerDetectionPatterns: [],
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+
+      if (!createdFirm) {
+        throw new Error("Failed to create prop firm");
+      }
+
+      const [createdRule] = await db
+        .insert(propChallengeRule)
+        .values({
+          id: crypto.randomUUID(),
+          createdByUserId: ctx.session.user.id,
+          propFirmId: createdFirm.id,
+          challengeType: "custom",
+          displayName: challengeDisplayName,
+          phases,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+
+      if (!createdRule) {
+        throw new Error("Failed to create challenge rule");
+      }
+
+      return {
+        propFirm: createdFirm,
+        challengeRule: createdRule,
+      };
     }),
 
   /**
@@ -70,18 +284,63 @@ export const propFirmsRouter = router({
     }),
 
   /**
+   * List existing challenge instances that can be continued with a new account
+   */
+  listContinuableChallenges: protectedProcedure.query(async ({ ctx }) => {
+    const instances = await listContinuablePropChallenges(ctx.session.user.id);
+
+    return Promise.all(
+      instances.map(async (instance) => {
+        const [propFirm, challengeRule] = await Promise.all([
+          getPropFirmById(instance.propFirmId, ctx.session.user.id),
+          getChallengeRuleById(
+            instance.propChallengeRuleId,
+            ctx.session.user.id
+          ),
+        ]);
+        const phases = (challengeRule?.phases as any[]) || [];
+        const currentPhase =
+          phases.find((phase: any) => phase.order === instance.currentPhase) ||
+          null;
+
+        return {
+          ...instance,
+          propFirm,
+          challengeRule,
+          currentPhase,
+        };
+      })
+    );
+  }),
+
+  /**
    * Assign prop firm to an account
    */
   assignToAccount: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        propFirmId: z.string(),
-        challengeRuleId: z.string(),
-        currentPhase: z.number().min(0).max(3),
-        phaseStartDate: z.string(), // ISO date string
-        manualOverride: z.boolean().default(false),
-      })
+      z
+        .object({
+          accountId: z.string(),
+          propFirmId: z.string().optional(),
+          challengeRuleId: z.string().optional(),
+          currentPhase: z.number().int().min(0).max(12).optional(),
+          challengeInstanceId: z.string().nullish(),
+          phaseStartDate: z.string().optional(), // ISO date string
+          manualOverride: z.boolean().default(false),
+        })
+        .refine(
+          (value) =>
+            Boolean(value.challengeInstanceId) ||
+            Boolean(
+              value.propFirmId &&
+                value.challengeRuleId &&
+                value.currentPhase !== undefined
+            ),
+          {
+            message: "Challenge configuration is required",
+            path: ["challengeInstanceId"],
+          }
+        )
     )
     .mutation(async ({ input, ctx }) => {
       // Verify account belongs to user
@@ -96,40 +355,83 @@ export const propFirmsRouter = router({
         throw new Error("Account not found or access denied");
       }
 
-      // Get starting balance and equity
-      const startBalance = parseFloat(
-        account.liveBalance?.toString() ||
-          account.initialBalance?.toString() ||
-          "0"
+      let resolvedPropFirmId = input.propFirmId ?? account.propFirmId;
+      let resolvedChallengeRuleId =
+        input.challengeRuleId ?? account.propChallengeRuleId;
+      let resolvedCurrentPhase = input.currentPhase ?? 1;
+
+      if (input.challengeInstanceId) {
+        const challengeInstance =
+          await db.query.propChallengeInstance.findFirst({
+            where: and(
+              eq(propChallengeInstance.id, input.challengeInstanceId),
+              eq(propChallengeInstance.userId, ctx.session.user.id)
+            ),
+          });
+
+        if (!challengeInstance) {
+          throw new Error("Challenge not found or access denied");
+        }
+
+        resolvedPropFirmId = challengeInstance.propFirmId;
+        resolvedChallengeRuleId = challengeInstance.propChallengeRuleId;
+        resolvedCurrentPhase = challengeInstance.currentPhase;
+      }
+
+      if (!resolvedPropFirmId || !resolvedChallengeRuleId) {
+        throw new Error("Challenge configuration is incomplete");
+      }
+
+      const { phaseStartDate, startBalance, startEquity } =
+        await resolvePropTrackingSeed(
+          {
+            accountId: account.id,
+            broker: account.broker,
+            brokerServer: account.brokerServer,
+            initialBalance: account.initialBalance,
+            liveBalance: account.liveBalance,
+            liveEquity: account.liveEquity,
+          },
+          {
+            phaseStartDate: input.phaseStartDate,
+          }
+        );
+
+      const challengeRule = await getChallengeRuleById(
+        resolvedChallengeRuleId,
+        ctx.session.user.id
       );
-      const startEquity = parseFloat(
-        account.liveEquity?.toString() || account.liveBalance?.toString() || "0"
+      const resolvedPropFirm = await getPropFirmById(
+        resolvedPropFirmId,
+        ctx.session.user.id
       );
 
-      // Update account with prop firm info
-      await db
-        .update(tradingAccount)
-        .set({
-          isPropAccount: true,
-          propFirmId: input.propFirmId,
-          propChallengeRuleId: input.challengeRuleId,
-          propCurrentPhase: input.currentPhase,
-          propPhaseStartDate: input.phaseStartDate,
-          propPhaseStartBalance: startBalance.toString(),
-          propPhaseStartEquity: startEquity.toString(),
-          propDailyHighWaterMark: startEquity.toString(),
-          propPhaseHighWaterMark: startEquity.toString(),
-          propPhaseCurrentProfit: "0",
-          propPhaseCurrentProfitPercent: "0",
-          propPhaseTradingDays: 0,
-          propPhaseStatus: "active",
-          propPhaseBestDayProfit: "0",
-          propPhaseBestDayProfitPercent: "0",
-          propManualOverride: input.manualOverride,
-        })
-        .where(eq(tradingAccount.id, input.accountId));
+      if (!resolvedPropFirm || !challengeRule) {
+        throw new Error("Challenge configuration not found");
+      }
+      const phaseLabel =
+        ((challengeRule?.phases as any[]) || []).find(
+          (phase: any) => phase.order === resolvedCurrentPhase
+        )?.name || null;
 
-      return { success: true };
+      const challengeInstance = await attachAccountToPropChallenge({
+        userId: ctx.session.user.id,
+        accountId: input.accountId,
+        propFirmId: resolvedPropFirmId,
+        challengeRuleId: resolvedChallengeRuleId,
+        currentPhase: resolvedCurrentPhase,
+        phaseStartDate,
+        startBalance,
+        startEquity,
+        manualOverride: input.manualOverride,
+        challengeInstanceId: input.challengeInstanceId ?? null,
+        phaseLabel,
+      });
+
+      return {
+        success: true,
+        challengeInstanceId: challengeInstance.id,
+      };
     }),
 
   /**
@@ -149,6 +451,8 @@ export const propFirmsRouter = router({
       if (!account) {
         throw new Error("Account not found or access denied");
       }
+
+      await pausePropChallengeForAccount(input.accountId);
 
       await db
         .update(tradingAccount)
@@ -170,6 +474,8 @@ export const propFirmsRouter = router({
           propPhaseBestDayProfitPercent: null,
           propManualOverride: true,
           propDetectedFirmId: null,
+          propChallengeInstanceId: null,
+          propIsCurrentChallengeStage: true,
         })
         .where(eq(tradingAccount.id, input.accountId));
 
@@ -196,17 +502,22 @@ export const propFirmsRouter = router({
 
       // Get prop firm and challenge rules
       const propFirm = account.propFirmId
-        ? await getPropFirmById(account.propFirmId)
+        ? await getPropFirmById(account.propFirmId, ctx.session.user.id)
         : null;
       const challengeRule = account.propChallengeRuleId
-        ? await db.query.propChallengeRule.findFirst({
-            where: (propChallengeRule, { eq }) =>
-              eq(propChallengeRule.id, account.propChallengeRuleId!),
-          })
+        ? await getChallengeRuleById(
+            account.propChallengeRuleId,
+            ctx.session.user.id
+          )
         : null;
 
       // Check rules and get current metrics
-      const ruleCheck = await checkPropRules(input.accountId);
+      const ruleCheck =
+        (await syncPropAccountState(input.accountId)) ??
+        (await checkPropRules(input.accountId));
+      const challengeLineage = await getPropChallengeLineageForAccount(
+        input.accountId
+      );
 
       // Get recent alerts
       const alerts = await db.query.propAlert.findMany({
@@ -305,6 +616,8 @@ export const propFirmsRouter = router({
         challengeRule,
         currentPhase,
         ruleCheck,
+        effectivePhaseStatus: ruleCheck.phaseStatus,
+        challengeLineage,
         alerts,
         snapshots,
         commandCenter: {
@@ -326,7 +639,8 @@ export const propFirmsRouter = router({
     .input(
       z.object({
         accountId: z.string(),
-        limit: z.number().optional().default(50),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(20).default(5),
         acknowledged: z.boolean().optional(),
       })
     )
@@ -349,11 +663,32 @@ export const propFirmsRouter = router({
         whereConditions.push(eq(propAlert.acknowledged, input.acknowledged));
       }
 
-      return db.query.propAlert.findMany({
-        where: and(...whereConditions),
-        orderBy: desc(propAlert.createdAt),
-        limit: input.limit,
-      });
+      const offset = (input.page - 1) * input.pageSize;
+      const whereClause = and(...whereConditions);
+      const [items, totalRows] = await Promise.all([
+        db.query.propAlert.findMany({
+          where: whereClause,
+          orderBy: desc(propAlert.createdAt),
+          limit: input.pageSize,
+          offset,
+        }),
+        db
+          .select({
+            count: sql<number>`count(*)::int`,
+          })
+          .from(propAlert)
+          .where(whereClause),
+      ]);
+
+      const totalCount = Number(totalRows[0]?.count ?? 0);
+
+      return {
+        items,
+        totalCount,
+        page: input.page,
+        pageSize: input.pageSize,
+        totalPages: Math.max(1, Math.ceil(totalCount / input.pageSize)),
+      };
     }),
 
   /**
@@ -397,7 +732,7 @@ export const propFirmsRouter = router({
     .input(
       z.object({
         accountId: z.string(),
-        newPhase: z.number().min(0).max(3),
+        newPhase: z.number().int().min(0).max(12),
         status: z.enum(["active", "passed", "failed", "paused"]),
       })
     )
@@ -417,6 +752,7 @@ export const propFirmsRouter = router({
       const now = new Date().toISOString().split("T")[0];
       const currentBalance = parseFloat(account.liveBalance?.toString() || "0");
       const currentEquity = parseFloat(account.liveEquity?.toString() || "0");
+      const previousPhase = account.propCurrentPhase ?? input.newPhase;
 
       await db
         .update(tradingAccount)
@@ -435,6 +771,23 @@ export const propFirmsRouter = router({
           propPhaseBestDayProfitPercent: "0",
         })
         .where(eq(tradingAccount.id, input.accountId));
+
+      if (input.newPhase !== previousPhase) {
+        await recordPropChallengePhaseAdvance({
+          accountId: input.accountId,
+          previousPhase,
+          nextPhase: input.newPhase,
+          phaseStartedAt: now,
+          startBalance: currentBalance,
+          startEquity: currentEquity,
+        });
+      }
+
+      await ensurePropChallengeLineageForAccount(input.accountId);
+      await syncPropChallengeOutcomeForAccount({
+        accountId: input.accountId,
+        phaseStatus: input.status,
+      });
 
       return { success: true };
     }),
@@ -487,40 +840,38 @@ export const propFirmsRouter = router({
         throw new Error("Account not found or is not a prop account");
       }
 
-      // Get historical snapshots to calculate avg daily return and std dev
-      const snapshots = await db.query.propDailySnapshot.findMany({
-        where: eq(propDailySnapshot.accountId, input.accountId),
-        orderBy: desc(propDailySnapshot.date),
-        limit: 30, // Last 30 days
-      });
+      const ruleCheck =
+        (await syncPropAccountState(input.accountId)) ??
+        (await checkPropRules(input.accountId));
 
-      if (snapshots.length === 0) {
+      if (account.propCurrentPhase === 0) {
+        return {
+          passPercentage: 100,
+          daysToTarget: 0,
+          riskOfFailure: 0,
+          avgDailyReturn: 0,
+          stdDev: 0,
+          message: "This account has already reached funded status.",
+        };
+      }
+
+      if (ruleCheck.phaseStatus === "failed") {
         return {
           passPercentage: 0,
           daysToTarget: null,
           riskOfFailure: 100,
-          message: "Not enough data to calculate probability",
+          avgDailyReturn: 0,
+          stdDev: 0,
+          message:
+            "This phase has already failed due to the current rule state.",
         };
       }
 
-      // Calculate average daily return and standard deviation
-      const dailyReturns = snapshots.map((s) =>
-        parseFloat(s.dailyProfitPercent?.toString() || "0")
-      );
-      const avgDailyReturn =
-        dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
-      const variance =
-        dailyReturns.reduce(
-          (sum, r) => sum + Math.pow(r - avgDailyReturn, 2),
-          0
-        ) / dailyReturns.length;
-      const stdDev = Math.sqrt(variance);
-
       // Get challenge rules
-      const challengeRule = await db.query.propChallengeRule.findFirst({
-        where: (propChallengeRule, { eq }) =>
-          eq(propChallengeRule.id, account.propChallengeRuleId!),
-      });
+      const challengeRule = await getChallengeRuleById(
+        account.propChallengeRuleId!,
+        ctx.session.user.id
+      );
 
       if (!challengeRule) {
         throw new Error("Challenge rules not found");
@@ -535,82 +886,275 @@ export const propFirmsRouter = router({
         throw new Error("Current phase not found");
       }
 
-      const profitTarget = currentPhase.profitTarget;
-      const dailyLossLimit = currentPhase.dailyLossLimit;
-      const maxLoss = currentPhase.maxLoss;
-      const timeLimitDays = currentPhase.timeLimitDays || 365;
+      const metricMode = getProbabilityMetricMode(currentPhase);
+      const phaseStartDate = account.propPhaseStartDate
+        ? new Date(`${account.propPhaseStartDate}T00:00:00.000Z`)
+        : null;
+      const phaseStartDayKey = phaseStartDate
+        ? phaseStartDate.toISOString().split("T")[0]
+        : null;
+      const snapshots = await db.query.propDailySnapshot.findMany({
+        where: phaseStartDayKey
+          ? and(
+              eq(propDailySnapshot.accountId, input.accountId),
+              gte(propDailySnapshot.date, phaseStartDayKey)
+            )
+          : eq(propDailySnapshot.accountId, input.accountId),
+        orderBy: desc(propDailySnapshot.date),
+        limit: 90,
+      });
 
-      const currentProfit = parseFloat(
-        account.propPhaseCurrentProfit?.toString() || "0"
+      const tradingDaySnapshots = snapshots.filter(
+        (snapshot) =>
+          Boolean(snapshot.isTradingDay) ||
+          Math.abs(
+            toNumber(
+              metricMode === "currency"
+                ? snapshot.dailyProfit
+                : snapshot.dailyProfitPercent
+            )
+          ) > 0.0001
       );
-      const currentProfitPercent = parseFloat(
-        account.propPhaseCurrentProfitPercent?.toString() || "0"
-      );
+      const sampledSnapshots =
+        tradingDaySnapshots.length > 0 ? tradingDaySnapshots : snapshots;
+      let dailyReturns = sampledSnapshots
+        .map((snapshot) =>
+          toNumber(
+            metricMode === "currency"
+              ? snapshot.dailyProfit
+              : snapshot.dailyProfitPercent
+          )
+        )
+        .filter((value) => Number.isFinite(value));
 
-      // Monte Carlo simulation (1000 iterations)
-      const simulations = 1000;
+      let observedTradingDays = tradingDaySnapshots.length;
+      const observedCalendarDays = phaseStartDate
+        ? dayDiffInclusive(phaseStartDate, new Date())
+        : Math.max(1, snapshots.length);
+
+      if (dailyReturns.length < 3 && phaseStartDate) {
+        const tradeDayRows = await db
+          .select({
+            day: sql<string>`DATE(${trade.closeTime})`,
+            pnl: sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC) + COALESCE(CAST(${trade.commissions} AS NUMERIC),0) + COALESCE(CAST(${trade.swap} AS NUMERIC),0)),0)`,
+          })
+          .from(trade)
+          .where(
+            and(
+              eq(trade.accountId, input.accountId),
+              gte(trade.closeTime, phaseStartDate)
+            )
+          )
+          .groupBy(sql`DATE(${trade.closeTime})`)
+          .orderBy(sql`DATE(${trade.closeTime})`)
+          .limit(90);
+
+        if (tradeDayRows.length > 0) {
+          let runningBalance = Math.max(
+            1,
+            toNumber(account.propPhaseStartBalance ?? account.initialBalance)
+          );
+
+          dailyReturns = tradeDayRows
+            .map((row) => {
+              const dailyPnl = toNumber(row.pnl);
+              const dailyReturn =
+                metricMode === "currency"
+                  ? dailyPnl
+                  : runningBalance > 0
+                  ? (dailyPnl / runningBalance) * 100
+                  : 0;
+              runningBalance += dailyPnl;
+              return dailyReturn;
+            })
+            .filter((value) => Number.isFinite(value));
+          observedTradingDays = tradeDayRows.length;
+        }
+      }
+
+      if (dailyReturns.length === 0) {
+        return {
+          passPercentage: 0,
+          daysToTarget: null,
+          avgDailyReturn: 0,
+          stdDev: 0,
+          riskOfFailure: 100,
+          message: "Not enough phase trade data to calculate probability",
+        };
+      }
+
+      const avgDailyReturn = average(dailyReturns);
+      const rawStdDev = standardDeviation(dailyReturns, avgDailyReturn);
+      const sampleConfidence = Math.min(1, dailyReturns.length / 20);
+      const currentResult =
+        metricMode === "currency"
+          ? toNumber(ruleCheck.metrics.currentProfit)
+          : toNumber(ruleCheck.metrics.currentProfitPercent);
+      const currentDrawdown =
+        metricMode === "currency"
+          ? toNumber(ruleCheck.metrics.maxDrawdown)
+          : toNumber(ruleCheck.metrics.maxDrawdownPercent);
+      const currentPeakProfit = getCurrentPeakProfitValue(
+        metricMode,
+        currentPhase.maxLossType,
+        currentResult,
+        currentDrawdown
+      );
+      const profitTarget = toNumber(currentPhase.profitTarget);
+      const dailyLossLimit =
+        currentPhase.dailyLossLimit != null
+          ? toNumber(currentPhase.dailyLossLimit)
+          : null;
+      const maxLoss =
+        currentPhase.maxLoss != null ? toNumber(currentPhase.maxLoss) : null;
+      const remainingDays = Math.max(
+        0,
+        ruleCheck.metrics.daysRemaining ??
+          toNumber(currentPhase.timeLimitDays || 365)
+      );
+      const currentTradingDays = Math.max(
+        0,
+        toNumber(ruleCheck.metrics.tradingDays)
+      );
+      const minTradingDays = Math.max(0, toNumber(currentPhase.minTradingDays));
+      const targetRemaining = Math.max(0, profitTarget - currentResult);
+      const tradingDayRate = Math.min(
+        1,
+        Math.max(
+          0.1,
+          observedCalendarDays > 0
+            ? observedTradingDays / observedCalendarDays
+            : 1
+        )
+      );
+      const shrunkMean = avgDailyReturn * sampleConfidence;
+      const volatilityFloor =
+        metricMode === "currency"
+          ? Math.max(
+              50,
+              Math.abs(avgDailyReturn) * 0.35,
+              targetRemaining * 0.08
+            )
+          : Math.max(
+              0.2,
+              Math.abs(avgDailyReturn) * 0.35,
+              targetRemaining * 0.08
+            );
+      const stdDev = Math.max(rawStdDev, volatilityFloor);
+
+      if (
+        remainingDays === 0 &&
+        !(currentResult >= profitTarget && currentTradingDays >= minTradingDays)
+      ) {
+        return {
+          passPercentage: 0,
+          daysToTarget: null,
+          avgDailyReturn,
+          stdDev,
+          riskOfFailure: 100,
+          message: "No time remains in the current phase window.",
+        };
+      }
+
+      if (
+        currentResult >= profitTarget &&
+        currentTradingDays >= minTradingDays
+      ) {
+        return {
+          passPercentage: 99.9,
+          daysToTarget: 0,
+          avgDailyReturn,
+          stdDev,
+          riskOfFailure: 0.1,
+          message:
+            "The live rule state already satisfies the target and minimum trading days.",
+        };
+      }
+
+      // Monte Carlo simulation with empirical sampling + uncertainty floor.
+      const simulations = 1500;
       let passCount = 0;
       const daysToTargetSamples: number[] = [];
 
       for (let i = 0; i < simulations; i++) {
-        let profit = currentProfitPercent;
-        let maxDrawdown = 0;
+        let profit = currentResult;
+        let peakProfit = currentPeakProfit;
+        let tradingDays = currentTradingDays;
         let failed = false;
-        let dayCount = 0;
+        let passed = false;
 
-        for (let day = 0; day < timeLimitDays; day++) {
-          // Sample from normal distribution
-          const dailyReturn =
-            avgDailyReturn +
-            (stdDev *
-              (Math.random() +
-                Math.random() +
-                Math.random() +
-                Math.random() +
-                Math.random() +
-                Math.random() -
-                3)) /
-              Math.sqrt(3);
+        for (let day = 0; day < remainingDays; day++) {
+          const isTradingDay = Math.random() <= tradingDayRate;
 
-          // Check daily loss breach
+          if (!isTradingDay) {
+            if (profit >= profitTarget && tradingDays >= minTradingDays) {
+              passCount++;
+              daysToTargetSamples.push(day + 1);
+              passed = true;
+              break;
+            }
+
+            continue;
+          }
+
+          tradingDays += 1;
+
+          const empiricalReturn = sampleOne(dailyReturns);
+          const gaussianReturn = shrunkMean + stdDev * gaussianishSample();
+          const dailyReturn = empiricalReturn * 0.65 + gaussianReturn * 0.35;
+          const simulatedDailyDrawdown =
+            Math.max(0, -dailyReturn) * (1 + Math.random() * 0.35);
+
           if (
             dailyLossLimit !== null &&
-            Math.abs(Math.min(dailyReturn, 0)) > dailyLossLimit
+            simulatedDailyDrawdown > dailyLossLimit
           ) {
             failed = true;
             break;
           }
 
           profit += dailyReturn;
-          maxDrawdown = Math.max(maxDrawdown, -Math.min(profit, 0));
+          peakProfit = Math.max(peakProfit, profit);
 
-          // Check max loss breach
-          if (maxLoss !== null && maxDrawdown > maxLoss) {
+          const simulatedMaxDrawdown =
+            maxLoss !== null
+              ? getMaxDrawdownValueFromPeak(
+                  metricMode,
+                  currentPhase.maxLossType,
+                  profit,
+                  peakProfit,
+                  Math.max(1, toNumber(account.propPhaseStartBalance))
+                )
+              : 0;
+
+          if (maxLoss !== null && simulatedMaxDrawdown > maxLoss) {
             failed = true;
             break;
           }
 
-          // Check profit target
-          if (profitTarget !== null && profit >= profitTarget) {
+          if (profit >= profitTarget && tradingDays >= minTradingDays) {
             passCount++;
             daysToTargetSamples.push(day + 1);
+            passed = true;
             break;
           }
-
-          dayCount++;
         }
 
-        if (dayCount >= timeLimitDays && profit < profitTarget) {
-          failed = true;
+        if (passed || failed) {
+          continue;
         }
       }
 
-      const passPercentage = (passCount / simulations) * 100;
+      const passPercentage = ((passCount + 1) / (simulations + 2)) * 100;
       const avgDaysToTarget =
         daysToTargetSamples.length > 0
           ? daysToTargetSamples.reduce((a, b) => a + b, 0) /
             daysToTargetSamples.length
           : null;
+      const requiredTradingDaysRemaining = Math.max(
+        0,
+        minTradingDays - currentTradingDays
+      );
 
       return {
         passPercentage,
@@ -618,7 +1162,7 @@ export const propFirmsRouter = router({
         riskOfFailure: 100 - passPercentage,
         avgDailyReturn,
         stdDev,
-        message: `Based on your last ${snapshots.length} days of trading`,
+        message: `Simulation uses ${dailyReturns.length} observed phase day(s), ${remainingDays} remaining day(s), and ${requiredTradingDaysRemaining} trading day(s) still required.`,
       };
     }),
 });

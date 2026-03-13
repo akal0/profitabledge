@@ -1,38 +1,27 @@
-import { router, protectedProcedure, publicProcedure } from "../lib/trpc";
+import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
-import { aiActionLog, aiChatMessage, aiReport } from "../db/schema/ai";
 import {
-  goal as goalTable,
   openTrade,
-  performanceAlert,
-  performanceAlertRule,
   propChallengeRule,
   propDailySnapshot,
   tradingAccount,
   trade,
 } from "../db/schema/trading";
-import { user as userTable } from "../db/schema/auth";
-import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { cache, cacheKeys } from "../lib/cache";
 import { createNotification } from "../lib/notifications";
 import { equitySnapshot } from "../db/schema/connections";
-import { backtestSession, backtestTrade } from "../db/schema/backtest";
 import {
   tradeChecklistResult,
   tradeChecklistTemplate,
-  traderDigest,
 } from "../db/schema/coaching";
-import { journalEntry, tradeMedia, tradeNote } from "../db/schema/journal";
+import { tradeMedia, tradeNote } from "../db/schema/journal";
 import { tradeAnnotation } from "../db/schema/social-redesign";
 import { calculateAllAdvancedMetrics } from "../lib/advanced-metrics";
 import { createAutoTradeReviewEntry } from "../lib/auto-journal";
 import { generateFeedEventForTrade } from "../lib/feed-event-generator";
-import {
-  generateMorningBriefing,
-  generateTradeFeedback,
-} from "../lib/ai/engine/digest-generator";
 import {
   ALL_ACCOUNTS_ID,
   buildAccountScopeCondition,
@@ -49,6 +38,28 @@ import {
   buildAutoPropAccountFields,
   syncAutoPropClassificationForUser,
 } from "../lib/prop-firm-detection";
+import { ensurePropChallengeLineageForAccount } from "../lib/prop-challenge-lineage";
+import {
+  getArchivedIdsProcedure,
+  toggleArchiveProcedure,
+} from "./accounts/archive-preferences";
+import {
+  generateTrackRecordProcedure,
+  getTrackRecordProcedure,
+} from "./accounts/track-record";
+import { eaHealthProcedure, healthScoreProcedure } from "./accounts/health";
+import { aggregatedStatsProcedure } from "./accounts/aggregated-stats";
+import { seedDemoBacktestSessions } from "./accounts/demo-backtest";
+import { seedDemoDigests } from "./accounts/demo-digests";
+import { seedDemoGoalsAndAlerts } from "./accounts/demo-governance";
+import {
+  DEMO_ACCOUNT_NAME,
+  DEMO_ACCOUNT_PREFIX,
+  DEMO_BROKER,
+  DEMO_BROKER_SERVER,
+  resetDemoWorkspaceForUser,
+  seedDemoAiHistory,
+} from "./accounts/demo-workspace";
 
 export const accountsRouter = router({
   create: protectedProcedure
@@ -83,6 +94,10 @@ export const accountsRouter = router({
           ...autoPropFields,
         })
         .returning();
+
+      if (account?.isPropAccount) {
+        await ensurePropChallengeLineageForAccount(account.id);
+      }
 
       return account;
     }),
@@ -171,6 +186,8 @@ export const accountsRouter = router({
               closeRaw: sql<string | null>`${trade.close}`,
               closeTime: trade.closeTime,
               createdAt: trade.createdAt,
+              symbol: trade.symbol,
+              tradeType: trade.tradeType,
             })
             .from(trade)
             .where(tradeScope)
@@ -235,7 +252,7 @@ export const accountsRouter = router({
           .slice(0, 100);
 
         const getOutcomeMark = (row: {
-          outcome: "Win" | "Loss" | "BE" | "PW" | null;
+          outcome: string | null;
           profit: number;
         }): "W" | "L" | "B" => {
           if (row.outcome === "Win" || row.outcome === "PW") return "W";
@@ -250,6 +267,17 @@ export const accountsRouter = router({
           .map(getOutcomeMark)
           .filter((outcome): outcome is "W" | "L" => outcome !== "B")
           .slice(0, 5);
+
+        const recentTrades = recentSorted
+          .filter((r) => getOutcomeMark(r) !== "B")
+          .slice(0, 5)
+          .map((r) => ({
+            symbol: r.symbol ?? null,
+            tradeType: r.tradeType ?? null,
+            profit: r.profit,
+            outcome: getOutcomeMark(r) as "W" | "L",
+            closeTime: r.closeTime?.toISOString() ?? r.closeRaw ?? null,
+          }));
 
         let streak = 0;
         for (const r of recentSorted) {
@@ -325,6 +353,7 @@ export const accountsRouter = router({
           winrate,
           winStreak,
           recentOutcomes,
+          recentTrades,
           averageRMultiple,
           averageHoldSeconds,
           initialBalance: initialBalanceNum,
@@ -1783,623 +1812,36 @@ export const accountsRouter = router({
     }),
 
   // Multi-account aggregated stats
-  aggregatedStats: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-
-    // Get all accounts for user
-    const accounts = await db
-      .select({
-        id: tradingAccount.id,
-        name: tradingAccount.name,
-        broker: tradingAccount.broker,
-        initialBalance: tradingAccount.initialBalance,
-        isVerified: tradingAccount.isVerified,
-        liveBalance: tradingAccount.liveBalance,
-        liveEquity: tradingAccount.liveEquity,
-        lastSyncedAt: tradingAccount.lastSyncedAt,
-        isPropAccount: tradingAccount.isPropAccount,
-      })
-      .from(tradingAccount)
-      .where(eq(tradingAccount.userId, userId));
-
-    if (accounts.length === 0) {
-      return {
-        accounts: [],
-        totals: {
-          totalBalance: 0,
-          totalEquity: 0,
-          totalProfit: 0,
-          totalTrades: 0,
-          totalWins: 0,
-          totalLosses: 0,
-          overallWinRate: 0,
-          overallProfitFactor: null as number | null,
-          overallExpectancy: 0,
-        },
-      };
-    }
-
-    const accountIds = accounts.map((a) => a.id);
-
-    // Aggregate stats across all accounts in one query
-    const [agg] = await db
-      .select({
-        totalProfit: sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
-        grossProfit: sql<number>`COALESCE(SUM(CASE WHEN CAST(${trade.profit} AS NUMERIC) > 0 THEN CAST(${trade.profit} AS NUMERIC) ELSE 0 END), 0)`,
-        grossLoss: sql<number>`COALESCE(SUM(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN ABS(CAST(${trade.profit} AS NUMERIC)) ELSE 0 END), 0)`,
-        wins: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) > 0 THEN 1 END)`,
-        losses: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN 1 END)`,
-        total: sql<number>`COUNT(*)`,
-      })
-      .from(trade)
-      .where(inArray(trade.accountId, accountIds));
-
-    // Per-account stats for comparison table
-    const perAccountStats = await db
-      .select({
-        accountId: trade.accountId,
-        totalProfit: sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
-        wins: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) > 0 THEN 1 END)`,
-        losses: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN 1 END)`,
-        total: sql<number>`COUNT(*)`,
-      })
-      .from(trade)
-      .where(inArray(trade.accountId, accountIds))
-      .groupBy(trade.accountId);
-
-    const totalProfit = agg?.totalProfit ?? 0;
-    const grossProfit = agg?.grossProfit ?? 0;
-    const grossLoss = agg?.grossLoss ?? 0;
-    const wins = agg?.wins ?? 0;
-    const losses = agg?.losses ?? 0;
-    const totalTrades = agg?.total ?? 0;
-
-    // Compute totals across accounts
-    let totalBalance = 0;
-    let totalEquity = 0;
-    for (const acct of accounts) {
-      const ib = Number(acct.initialBalance || 0);
-      const acctStats = perAccountStats.find((s) => s.accountId === acct.id);
-      const acctProfit = acctStats?.totalProfit ?? 0;
-      const isVerified = acct.isVerified === 1;
-      const isFresh =
-        isVerified &&
-        acct.lastSyncedAt &&
-        Date.now() - acct.lastSyncedAt.getTime() < 5 * 60 * 1000;
-
-      if (isFresh && acct.liveBalance) {
-        totalBalance += Number(acct.liveBalance);
-        totalEquity += Number(acct.liveEquity || acct.liveBalance);
-      } else {
-        totalBalance += ib + acctProfit;
-        totalEquity += ib + acctProfit;
-      }
-    }
-
-    const accountsWithStats = accounts.map((acct) => {
-      const stats = perAccountStats.find((s) => s.accountId === acct.id);
-      const ib = Number(acct.initialBalance || 0);
-      const profit = stats?.totalProfit ?? 0;
-      const w = stats?.wins ?? 0;
-      const l = stats?.losses ?? 0;
-      const t = stats?.total ?? 0;
-      return {
-        id: acct.id,
-        name: acct.name,
-        broker: acct.broker,
-        isPropAccount: acct.isPropAccount,
-        isVerified: acct.isVerified === 1,
-        totalTrades: t,
-        wins: w,
-        losses: l,
-        winRate: t > 0 ? (w / t) * 100 : 0,
-        totalProfit: profit,
-        balance: ib + profit,
-        contribution:
-          totalProfit !== 0 ? (profit / Math.abs(totalProfit)) * 100 : 0,
-      };
-    });
-
-    return {
-      accounts: accountsWithStats,
-      totals: {
-        totalBalance,
-        totalEquity,
-        totalProfit,
-        totalTrades,
-        totalWins: wins,
-        totalLosses: losses,
-        overallWinRate: totalTrades > 0 ? (wins / totalTrades) * 100 : 0,
-        overallProfitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
-        overallExpectancy: totalTrades > 0 ? totalProfit / totalTrades : 0,
-      },
-    };
-  }),
+  aggregatedStats: aggregatedStatsProcedure,
 
   /**
    * Account Health Score
    * Composite score (0-100) based on key trading metrics
    */
-  healthScore: protectedProcedure
-    .input(z.object({ accountId: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const accountIds = await resolveScopedAccountIds(userId, input.accountId);
-
-      if (accountIds.length === 0) {
-        return null;
-      }
-
-      const accountScope = buildAccountScopeCondition(
-        tradingAccount.id,
-        accountIds
-      );
-      const tradeScope = buildAccountScopeCondition(
-        trade.accountId,
-        accountIds
-      );
-
-      const accounts = await db
-        .select({
-          id: tradingAccount.id,
-          liveBalance: tradingAccount.liveBalance,
-          initialBalance: tradingAccount.initialBalance,
-        })
-        .from(tradingAccount)
-        .where(accountScope);
-
-      // Get recent trades (last 90 days)
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-      const trades = await db
-        .select()
-        .from(trade)
-        .where(and(tradeScope, gte(trade.openTime, ninetyDaysAgo)))
-        .orderBy(trade.openTime);
-
-      if (trades.length < 5) {
-        return {
-          score: 0,
-          factors: {},
-          message: "Need at least 5 trades in the last 90 days",
-        };
-      }
-
-      const pnls = trades.map((t) => parseFloat(t.profit?.toString() || "0"));
-      const wins = pnls.filter((p) => p > 0);
-      const losses = pnls.filter((p) => p < 0);
-      const winRate = (wins.length / trades.length) * 100;
-      const grossWin = wins.reduce((s, p) => s + p, 0);
-      const grossLoss = Math.abs(losses.reduce((s, p) => s + p, 0));
-      const pf = grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? 5 : 0;
-      const rrs = trades
-        .map((t) => parseFloat(t.realisedRR?.toString() || "0"))
-        .filter((r) => r !== 0);
-      const avgRR =
-        rrs.length > 0 ? rrs.reduce((s, r) => s + r, 0) / rrs.length : 0;
-
-      // Daily P&L for consistency
-      const dailyPnls: Record<string, number> = {};
-      for (const t of trades) {
-        if (!t.openTime) continue;
-        const day = new Date(t.openTime).toISOString().split("T")[0];
-        dailyPnls[day] =
-          (dailyPnls[day] || 0) + parseFloat(t.profit?.toString() || "0");
-      }
-      const dpVals = Object.values(dailyPnls);
-      const greenDays = dpVals.filter((p) => p > 0).length;
-      const greenDayRate =
-        dpVals.length > 0 ? (greenDays / dpVals.length) * 100 : 0;
-
-      // Max drawdown approximation
-      let peak = 0;
-      let maxDD = 0;
-      let equity = 0;
-      for (const p of pnls) {
-        equity += p;
-        if (equity > peak) peak = equity;
-        const dd = peak - equity;
-        if (dd > maxDD) maxDD = dd;
-      }
-      const balance =
-        accounts.reduce((sum, account) => {
-          const value =
-            account.liveBalance?.toString() ||
-            account.initialBalance?.toString() ||
-            "0";
-          return sum + parseFloat(value);
-        }, 0) || 10000;
-      const ddPct = balance > 0 ? (maxDD / balance) * 100 : 0;
-
-      // Score components (0-20 each, max 100)
-      const wrScore = Math.min(20, (winRate / 60) * 20);
-      const pfScore = Math.min(20, (Math.min(pf, 3) / 3) * 20);
-      const rrScore = Math.min(20, (Math.min(Math.max(avgRR, 0), 3) / 3) * 20);
-      const consistencyScore = Math.min(20, (greenDayRate / 70) * 20);
-      const ddScore = Math.min(20, Math.max(0, 20 - (ddPct / 15) * 20)); // Lower DD = higher score
-
-      const totalScore = Math.round(
-        wrScore + pfScore + rrScore + consistencyScore + ddScore
-      );
-
-      return {
-        score: totalScore,
-        grade:
-          totalScore >= 80
-            ? "A"
-            : totalScore >= 65
-            ? "B"
-            : totalScore >= 50
-            ? "C"
-            : totalScore >= 35
-            ? "D"
-            : "F",
-        factors: {
-          winRate: {
-            score: Math.round(wrScore),
-            value: winRate,
-            label: "Win Rate",
-          },
-          profitFactor: {
-            score: Math.round(pfScore),
-            value: pf,
-            label: "Profit Factor",
-          },
-          riskReward: {
-            score: Math.round(rrScore),
-            value: avgRR,
-            label: "Avg R:R",
-          },
-          consistency: {
-            score: Math.round(consistencyScore),
-            value: greenDayRate,
-            label: "Consistency",
-          },
-          drawdown: {
-            score: Math.round(ddScore),
-            value: ddPct,
-            label: "Drawdown Control",
-          },
-        },
-        trades: trades.length,
-        period: "90 days",
-      };
-    }),
+  healthScore: healthScoreProcedure,
 
   /**
    * EA Health Dashboard
    * Check EA sync status, latency, and connection health across accounts
    */
-  eaHealth: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-
-    const accounts = await db
-      .select({
-        id: tradingAccount.id,
-        name: tradingAccount.name,
-        accountNumber: tradingAccount.accountNumber,
-        broker: tradingAccount.broker,
-        isVerified: tradingAccount.isVerified,
-        lastSyncedAt: tradingAccount.lastSyncedAt,
-        liveBalance: tradingAccount.liveBalance,
-        liveEquity: tradingAccount.liveEquity,
-      })
-      .from(tradingAccount)
-      .where(eq(tradingAccount.userId, userId));
-
-    const now = new Date();
-
-    const eaAccounts = accounts
-      .filter((a) => a.lastSyncedAt) // Only EA-connected accounts
-      .map((a) => {
-        const lastSync = new Date(a.lastSyncedAt!);
-        const secondsAgo = Math.floor(
-          (now.getTime() - lastSync.getTime()) / 1000
-        );
-        const minutesAgo = Math.floor(secondsAgo / 60);
-
-        let status: "connected" | "stale" | "disconnected";
-        if (minutesAgo < 2) status = "connected";
-        else if (minutesAgo < 10) status = "stale";
-        else status = "disconnected";
-
-        return {
-          id: a.id,
-          name: a.name,
-          accountNumber: a.accountNumber,
-          broker: a.broker,
-          isVerified: a.isVerified,
-          lastSyncedAt: lastSync.toISOString(),
-          secondsAgo,
-          status,
-          balance: parseFloat(a.liveBalance?.toString() || "0"),
-          equity: parseFloat(a.liveEquity?.toString() || "0"),
-        };
-      });
-
-    const connected = eaAccounts.filter((a) => a.status === "connected").length;
-    const stale = eaAccounts.filter((a) => a.status === "stale").length;
-    const disconnected = eaAccounts.filter(
-      (a) => a.status === "disconnected"
-    ).length;
-
-    return {
-      accounts: eaAccounts,
-      summary: {
-        total: eaAccounts.length,
-        connected,
-        stale,
-        disconnected,
-        overallStatus:
-          disconnected > 0 ? "issue" : stale > 0 ? "warning" : "healthy",
-      },
-    };
-  }),
+  eaHealth: eaHealthProcedure,
 
   // Archive / Unarchive an account (stores in user widgetPreferences)
-  toggleArchive: protectedProcedure
-    .input(z.object({ accountId: z.string(), archive: z.boolean() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      // Verify ownership
-      const acc = await db
-        .select({ id: tradingAccount.id })
-        .from(tradingAccount)
-        .where(
-          and(
-            eq(tradingAccount.id, input.accountId),
-            eq(tradingAccount.userId, userId)
-          )
-        )
-        .limit(1);
-      if (acc.length === 0)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Account not found",
-        });
-
-      // Get current preferences
-      const rows = await db
-        .select({ widgetPreferences: userTable.widgetPreferences })
-        .from(userTable)
-        .where(eq(userTable.id, userId))
-        .limit(1);
-      const prefs = (rows[0]?.widgetPreferences as any) || {};
-      const archived: string[] = Array.isArray(prefs.archivedAccounts)
-        ? prefs.archivedAccounts
-        : [];
-
-      let next: string[];
-      if (input.archive) {
-        next = archived.includes(input.accountId)
-          ? archived
-          : [...archived, input.accountId];
-      } else {
-        next = archived.filter((id: string) => id !== input.accountId);
-      }
-
-      await db
-        .update(userTable)
-        .set({
-          widgetPreferences: { ...prefs, archivedAccounts: next },
-        })
-        .where(eq(userTable.id, userId));
-
-      return { ok: true, archivedAccounts: next };
-    }),
+  toggleArchive: toggleArchiveProcedure,
 
   // Get archived account IDs
-  getArchivedIds: protectedProcedure.query(async ({ ctx }) => {
-    const userId = ctx.session.user.id;
-    const rows = await db
-      .select({ widgetPreferences: userTable.widgetPreferences })
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .limit(1);
-    const prefs = (rows[0]?.widgetPreferences as any) || {};
-    return {
-      archivedAccounts: Array.isArray(prefs.archivedAccounts)
-        ? (prefs.archivedAccounts as string[])
-        : [],
-    };
-  }),
+  getArchivedIds: getArchivedIdsProcedure,
 
   // ============== VERIFIED TRACK RECORD ==============
 
-  generateTrackRecord: protectedProcedure
-    .input(z.object({ accountId: z.string() }))
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
+  generateTrackRecord: generateTrackRecordProcedure,
 
-      // Verify ownership
-      const accounts = await db
-        .select()
-        .from(tradingAccount)
-        .where(
-          and(
-            eq(tradingAccount.id, input.accountId),
-            eq(tradingAccount.userId, userId)
-          )
-        )
-        .limit(1);
-      if (!accounts.length) throw new TRPCError({ code: "NOT_FOUND" });
-      const account = accounts[0];
-
-      // Get trades
-      const allTrades = await db
-        .select()
-        .from(trade)
-        .where(eq(trade.accountId, input.accountId))
-        .orderBy(desc(trade.closeTime));
-
-      if (allTrades.length < 10) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Need at least 10 trades for a verified track record",
-        });
-      }
-
-      // Compute stats
-      const profits = allTrades.map((t: any) =>
-        parseFloat(t.profit?.toString() || "0")
-      );
-      const totalPnl = profits.reduce((s: number, v: number) => s + v, 0);
-      const wins = allTrades.filter(
-        (t: any) => t.outcome === "Win" || t.outcome === "PW"
-      ).length;
-      const winRate = Math.round((wins / allTrades.length) * 1000) / 10;
-
-      const grossProfit = profits
-        .filter((p) => p > 0)
-        .reduce((s, p) => s + p, 0);
-      const grossLoss = Math.abs(
-        profits.filter((p) => p < 0).reduce((s, p) => s + p, 0)
-      );
-      const profitFactor =
-        grossLoss > 0
-          ? Math.round((grossProfit / grossLoss) * 100) / 100
-          : grossProfit > 0
-          ? 999
-          : 0;
-
-      const rrs = allTrades
-        .filter((t: any) => t.realisedRR != null)
-        .map((t: any) => parseFloat(t.realisedRR));
-      const avgRR =
-        rrs.length > 0
-          ? Math.round(
-              (rrs.reduce((s: number, v: number) => s + v, 0) / rrs.length) *
-                100
-            ) / 100
-          : 0;
-
-      // Max drawdown
-      let peak = 0;
-      let maxDD = 0;
-      let running = 0;
-      for (const p of profits) {
-        running += p;
-        if (running > peak) peak = running;
-        const dd = peak - running;
-        if (dd > maxDD) maxDD = dd;
-      }
-
-      const firstDate =
-        allTrades[allTrades.length - 1]?.openTime ||
-        allTrades[allTrades.length - 1]?.closeTime;
-      const lastDate = allTrades[0]?.closeTime || allTrades[0]?.openTime;
-
-      const stats = {
-        totalTrades: allTrades.length,
-        winRate,
-        profitFactor,
-        avgRR,
-        totalPnl: Math.round(totalPnl * 100) / 100,
-        maxDrawdown: Math.round(maxDD * 100) / 100,
-        startDate: firstDate?.toISOString().slice(0, 10) || "",
-        endDate: lastDate?.toISOString().slice(0, 10) || "",
-        verificationLevel: account.isVerified === 1 ? "ea_synced" : "manual",
-      };
-
-      // Generate verification hash
-      const hashInput = `${input.accountId}|${stats.totalTrades}|${stats.winRate}|${stats.profitFactor}|${stats.totalPnl}|${stats.startDate}|${stats.endDate}`;
-      const encoder = new TextEncoder();
-      const hashBuffer = await crypto.subtle.digest(
-        "SHA-256",
-        encoder.encode(hashInput)
-      );
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const verificationHash = hashArray
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("")
-        .slice(0, 16);
-
-      // Generate share ID
-      const shareId = `vtr_${verificationHash}`;
-
-      // Store in user's widget preferences
-      const userRows = await db
-        .select({ widgetPreferences: userTable.widgetPreferences })
-        .from(userTable)
-        .where(eq(userTable.id, userId))
-        .limit(1);
-      const prefs = (userRows[0]?.widgetPreferences as any) || {};
-      const trackRecords = Array.isArray(prefs.trackRecords)
-        ? prefs.trackRecords
-        : [];
-
-      // Upsert
-      const existing = trackRecords.findIndex(
-        (r: any) => r.accountId === input.accountId
-      );
-      const record = {
-        accountId: input.accountId,
-        accountName: account.name,
-        broker: account.broker,
-        shareId,
-        verificationHash,
-        stats,
-        generatedAt: new Date().toISOString(),
-      };
-      if (existing >= 0) {
-        trackRecords[existing] = record;
-      } else {
-        trackRecords.push(record);
-      }
-
-      await db
-        .update(userTable)
-        .set({ widgetPreferences: { ...prefs, trackRecords } })
-        .where(eq(userTable.id, userId));
-
-      return { shareId, verificationHash, stats };
-    }),
-
-  getTrackRecord: publicProcedure
-    .input(z.object({ shareId: z.string() }))
-    .query(async ({ input }) => {
-      // Search all users' widget preferences for this track record
-      const allUsers = await db
-        .select({
-          id: userTable.id,
-          name: userTable.name,
-          username: userTable.username,
-          image: userTable.image,
-          widgetPreferences: userTable.widgetPreferences,
-        })
-        .from(userTable);
-
-      for (const u of allUsers) {
-        const prefs = (u.widgetPreferences as any) || {};
-        const trackRecords = Array.isArray(prefs.trackRecords)
-          ? prefs.trackRecords
-          : [];
-        const record = trackRecords.find(
-          (r: any) => r.shareId === input.shareId
-        );
-        if (record) {
-          return {
-            ...record,
-            trader: {
-              name: u.name,
-              username: u.username,
-              image: u.image,
-            },
-          };
-        }
-      }
-
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "Track record not found",
-      });
-    }),
+  getTrackRecord: getTrackRecordProcedure,
 
   // ============== SAMPLE / DEMO ACCOUNT ==============
 
   resetDemoWorkspace: protectedProcedure.mutation(async ({ ctx }) => {
-    return resetDemoWorkspaceForUser(ctx.session.user.id);
+    return resetDemoWorkspaceForUser(ctx.session.user.id, seedSampleAccount);
   }),
 
   createSampleAccount: protectedProcedure.mutation(async ({ ctx }) => {
@@ -2407,146 +1849,13 @@ export const accountsRouter = router({
   }),
 });
 
-const DEMO_ACCOUNT_NAME = "Demo Account";
-const DEMO_BROKER = "ProfitEdge Demo";
-const DEMO_BROKER_SERVER = "ProfitEdge-Demo01";
-const DEMO_ACCOUNT_PREFIX = "DEMO-";
-const DEMO_REPORT_DESCRIPTION =
-  "Seeded assistant history for the ProfitEdge demo workspace.";
-
-function isSeededDemoAccount(account: {
-  name: string | null;
-  broker: string | null;
-  brokerServer: string | null;
-  accountNumber: string | null;
-}) {
-  return (
-    account.name === DEMO_ACCOUNT_NAME &&
-    account.broker === DEMO_BROKER &&
-    account.brokerServer === DEMO_BROKER_SERVER &&
-    (account.accountNumber?.startsWith(DEMO_ACCOUNT_PREFIX) ?? false)
-  );
-}
-
-async function resetDemoWorkspaceForUser(userId: string) {
-  const demoAccounts = await db
-    .select({
-      id: tradingAccount.id,
-      name: tradingAccount.name,
-      broker: tradingAccount.broker,
-      brokerServer: tradingAccount.brokerServer,
-      accountNumber: tradingAccount.accountNumber,
-    })
-    .from(tradingAccount)
-    .where(eq(tradingAccount.userId, userId));
-
-  const demoAccountIds = demoAccounts
-    .filter(isSeededDemoAccount)
-    .map((account) => account.id);
-
-  if (demoAccountIds.length > 0) {
-    const demoTradeRows = await db
-      .select({ id: trade.id })
-      .from(trade)
-      .where(inArray(trade.accountId, demoAccountIds));
-    const demoTradeIds = demoTradeRows.map((row) => row.id);
-
-    const tradeReviewEntries = await db
-      .select({
-        id: journalEntry.id,
-        linkedTradeIds: journalEntry.linkedTradeIds,
-        accountIds: journalEntry.accountIds,
-      })
-      .from(journalEntry)
-      .where(
-        and(
-          eq(journalEntry.userId, userId),
-          eq(journalEntry.entryType, "trade_review")
-        )
-      );
-
-    const entryIdsToDelete = tradeReviewEntries
-      .filter((entry) => {
-        const linkedTradeIds = Array.isArray(entry.linkedTradeIds)
-          ? entry.linkedTradeIds
-          : [];
-        const accountIds = Array.isArray(entry.accountIds)
-          ? entry.accountIds
-          : [];
-
-        return (
-          linkedTradeIds.some((tradeId) => demoTradeIds.includes(tradeId)) ||
-          accountIds.some((accountId) => demoAccountIds.includes(accountId))
-        );
-      })
-      .map((entry) => entry.id);
-
-    if (entryIdsToDelete.length > 0) {
-      await db
-        .delete(journalEntry)
-        .where(inArray(journalEntry.id, entryIdsToDelete));
-    }
-
-    const demoReports = await db
-      .select({ id: aiReport.id })
-      .from(aiReport)
-      .where(
-        and(
-          eq(aiReport.userId, userId),
-          inArray(aiReport.accountId, demoAccountIds)
-        )
-      );
-    const demoReportIds = demoReports.map((row) => row.id);
-
-    if (demoReportIds.length > 0) {
-      const demoMessageRows = await db
-        .select({ id: aiChatMessage.id })
-        .from(aiChatMessage)
-        .where(inArray(aiChatMessage.reportId, demoReportIds));
-      const demoMessageIds = demoMessageRows.map((row) => row.id);
-
-      if (demoMessageIds.length > 0) {
-        await db
-          .delete(aiActionLog)
-          .where(
-            and(
-              eq(aiActionLog.userId, userId),
-              inArray(aiActionLog.messageId, demoMessageIds)
-            )
-          );
-      }
-
-      await db
-        .delete(aiReport)
-        .where(
-          and(eq(aiReport.userId, userId), inArray(aiReport.id, demoReportIds))
-        );
-    }
-
-    await db
-      .delete(tradingAccount)
-      .where(
-        and(
-          eq(tradingAccount.userId, userId),
-          inArray(tradingAccount.id, demoAccountIds)
-        )
-      );
-  }
-
-  const seeded = await seedSampleAccount(userId);
-  return {
-    ...seeded,
-    resetCount: demoAccountIds.length,
-  };
-}
-
 async function seedSampleAccount(userId: string) {
   const accountId = crypto.randomUUID();
   const now = Date.now();
   const nowDate = new Date(now);
   const initialBalance = 100_000;
   const tradeCount = 120;
-  const openTradeCount = 3;
+  const openTradeCount = 5 + Math.floor(Math.random() * 9); // random 5-13
   const accountNumber = `${DEMO_ACCOUNT_PREFIX}${Math.floor(
     10_000_000 + Math.random() * 90_000_000
   )}`;
@@ -2804,8 +2113,10 @@ async function seedSampleAccount(userId: string) {
   };
   const closedTradeWindowStart = subtractUtcMonths(nowDate, 6);
   const closedTradeWindowEnd = previousTradingDay(nowDate);
-  const availableTradingDays =
-    getTradingDaysBetween(closedTradeWindowStart, closedTradeWindowEnd);
+  const availableTradingDays = getTradingDaysBetween(
+    closedTradeWindowStart,
+    closedTradeWindowEnd
+  );
 
   const closedTrades: (typeof trade.$inferInsert)[] = [];
   let runningBalance = initialBalance;
@@ -2914,11 +2225,16 @@ async function seedSampleAccount(userId: string) {
         );
         openTs = buildSessionTimestamp(currentTradingDay, session);
       } else {
-        openTs = previousCloseTs + (4 + Math.floor(Math.random() * 9)) * 60 * 1000;
+        openTs =
+          previousCloseTs + (4 + Math.floor(Math.random() * 9)) * 60 * 1000;
       }
     }
 
-    const holdSeconds = 12 * 60 + Math.floor(Math.random() * (6 * 60 * 60));
+    // ~12% of trades are swing trades held overnight (1-3 nights) to generate realistic swap costs
+    const isSwingTrade = Math.random() < 0.12;
+    const holdSeconds = isSwingTrade
+      ? 22 * 3600 + Math.floor(Math.random() * 50 * 3600) // 22h–72h, always crosses ≥1 midnight
+      : 12 * 60 + Math.floor(Math.random() * (6 * 60 * 60)); // 12min–6.2h intraday
     const closeTs: number = openTs + holdSeconds * 1000;
     const openTime = new Date(openTs);
     const closeTime = new Date(closeTs);
@@ -3121,13 +2437,18 @@ async function seedSampleAccount(userId: string) {
     const poorExecutionBias =
       phase.name === "leak-cluster" || alignment !== "aligned";
     const commissionCost = roundTo(volume * (isGold ? 7.2 : 6.1), 2);
-    const swapValue = roundTo(
-      (Math.random() - 0.72) *
-        volume *
-        (holdSeconds / 86_400) *
-        (isGold ? 5.5 : 1.8),
-      2
-    );
+    // Swap is charged once per midnight the position crosses — intraday trades get 0
+    const nightsCrossed = Math.floor(holdSeconds / 86_400);
+    const swapValue =
+      nightsCrossed === 0
+        ? 0
+        : roundTo(
+            nightsCrossed *
+              (Math.random() - 0.72) *
+              volume *
+              (isGold ? 5.5 : 1.8),
+            2
+          );
     const grossProfit = resultPips * volume * pipValue;
     const netProfit = roundTo(grossProfit - commissionCost + swapValue, 2);
     const entryMargin = roundTo(
@@ -3194,6 +2515,33 @@ async function seedSampleAccount(userId: string) {
     );
     const alphaWeightedMpe = 0.3;
     const beThresholdPips = isGold ? 1 : 0.5;
+
+    // EA metadata for realism
+    const exitReason =
+      outcomeBucket === "win"
+        ? Math.random() > 0.18
+          ? "tp"
+          : "expert"
+        : outcomeBucket === "loss"
+        ? Math.random() > 0.18
+          ? "sl"
+          : "expert"
+        : "client";
+    const tradeComment = `[ProfitEdge] ${exitReason}`;
+    const tradeBrokerMeta = {
+      comment: tradeComment,
+      magicNumber: 11001,
+      entryDeal: {
+        dealId: 200000 + i,
+        reason: "expert",
+        type: tradeDirection === "long" ? "buy" : "sell",
+      },
+      exitDeal: {
+        dealId: 200001 + i,
+        reason: exitReason,
+        type: tradeDirection === "long" ? "sell" : "buy",
+      },
+    };
 
     const advanced = calculateAllAdvancedMetrics(
       {
@@ -3330,6 +2678,7 @@ async function seedSampleAccount(userId: string) {
           : null,
       killzone: session,
       killzoneColor: sessionColors[session],
+      brokerMeta: tradeBrokerMeta,
       createdAt: closeTime,
     });
 
@@ -3887,7 +3236,6 @@ async function seedSampleAccount(userId: string) {
       : 0;
   const journalRate = (reviewTradeIds.length / closedTrades.length) * 100;
   const ruleCompliance = (alignedTradeCount / closedTrades.length) * 100;
-  const edgeTradeRate = 100;
   const breakAfterLoss =
     totalLosses > 0 ? (properBreaks / totalLosses) * 100 : 100;
   const winRate =
@@ -3907,909 +3255,66 @@ async function seedSampleAccount(userId: string) {
     closedTrades.at(-1)?.closeTime instanceof Date
       ? formatDay(closedTrades.at(-1)!.closeTime as Date)
       : formatDay(previousTradingDay(nowDate));
-  const latestTradeDayKey = tradeDayKeys.at(-1) ?? fallbackGoalDay;
-  const latestTradeDayIndex = Math.max(tradeDayKeys.length - 1, 0);
-  const getTradeDayKeyAt = (ratio: number) =>
-    tradeDayKeys[
-      Math.max(
-        0,
-        Math.min(
-          latestTradeDayIndex,
-          Math.floor(latestTradeDayIndex * clampNumber(ratio, 0, 1))
-        )
-      )
-    ] ?? latestTradeDayKey;
-  const getTradeDayKeyWithOffset = (startKey: string, offset: number) => {
-    const startIndex = Math.max(0, tradeDayKeys.indexOf(startKey));
-    return (
-      tradeDayKeys[
-        Math.max(
-          0,
-          Math.min(latestTradeDayIndex, startIndex + Math.max(0, offset))
-        )
-      ] ?? latestTradeDayKey
-    );
-  };
-  const buildGoalWindow = ({
-    startRatio,
-    spanTradingDays,
-    currentValue,
-    targetValue,
-    progressLabel,
-    startValue = 0,
-  }: {
-    startRatio: number;
-    spanTradingDays: number;
-    currentValue: number;
-    targetValue: number;
-    progressLabel: string;
-    startValue?: number;
-  }) => {
-    const startDate = getTradeDayKeyAt(startRatio);
-    const deadline = getTradeDayKeyWithOffset(startDate, spanTradingDays);
-    const deadlineIndex = Math.max(0, tradeDayKeys.indexOf(deadline));
-    const status =
-      latestTradeDayIndex > deadlineIndex
-        ? currentValue >= targetValue
-          ? "achieved"
-          : "failed"
-        : "active";
-    const progressDate = status === "active" ? latestTradeDayKey : deadline;
-    const startIndex = Math.max(0, tradeDayKeys.indexOf(startDate));
-    const progressIndex = Math.max(startIndex, tradeDayKeys.indexOf(progressDate));
-    const midpointDate = getTradeDayKeyWithOffset(
-      startDate,
-      Math.max(1, Math.floor((progressIndex - startIndex) / 2))
-    );
-    const midpointValue = roundTo(
-      startValue + (currentValue - startValue) * 0.55,
-      2
-    );
-    const progressHistory = [
-      { label: "start", value: roundTo(startValue, 2), at: startDate },
-      { label: "checkpoint", value: midpointValue, at: midpointDate },
-      {
-        label: progressLabel,
-        value: roundTo(currentValue, 2),
-        at: progressDate,
-      },
-    ].filter(
-      (entry, index, entries) =>
-        entries.findIndex((candidate) => candidate.at === entry.at) === index
-    );
-
-    return {
-      startDate,
-      deadline,
-      status,
-      completedAt:
-        status === "active" ? null : new Date(`${deadline}T18:00:00.000Z`),
-      progressHistory,
-    } as const;
-  };
-
-  const monthlyProfitWindow = buildGoalWindow({
-    startRatio: 0.16,
-    spanTradingDays: 22,
-    currentValue: totalProfit,
-    targetValue: 3500,
-    progressLabel: "profit",
-    startValue: 0,
-  });
-  const weeklyJournalWindow = buildGoalWindow({
-    startRatio: 0.93,
-    spanTradingDays: 5,
-    currentValue: journalRate,
-    targetValue: 60,
-    progressLabel: "journaled",
-    startValue: Math.max(0, journalRate - 18),
-  });
-  const weeklyRuleWindow = buildGoalWindow({
-    startRatio: 0.58,
-    spanTradingDays: 5,
-    currentValue: ruleCompliance,
-    targetValue: 75,
-    progressLabel: "compliance",
-    startValue: Math.max(0, ruleCompliance - 16),
-  });
-  const weeklyChecklistWindow = buildGoalWindow({
-    startRatio: 0.74,
-    spanTradingDays: 5,
-    currentValue: checklistCompletionRate,
-    targetValue: 85,
-    progressLabel: "checklist",
-    startValue: Math.max(0, checklistCompletionRate - 14),
-  });
-  const weeklyBreakWindow = buildGoalWindow({
-    startRatio: 0.97,
-    spanTradingDays: 5,
-    currentValue: breakAfterLoss,
-    targetValue: 80,
-    progressLabel: "post-loss pause",
-    startValue: Math.max(0, breakAfterLoss - 25),
-  });
-  const monthlyWinRateWindow = buildGoalWindow({
-    startRatio: 0.36,
-    spanTradingDays: 22,
-    currentValue: winRate,
-    targetValue: 55,
-    progressLabel: "win-rate",
-    startValue: Math.max(0, winRate - 7),
-  });
-  const monthlyRRWindow = buildGoalWindow({
-    startRatio: 0.82,
-    spanTradingDays: 22,
-    currentValue: averageRR,
-    targetValue: 1.5,
-    progressLabel: "avg-r",
-    startValue: Math.max(0.6, averageRR - 0.35),
-  });
-
-  const goals: (typeof goalTable.$inferInsert)[] = [
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "monthly",
-      targetType: "profit",
-      targetValue: "3500",
-      currentValue: totalProfit.toFixed(2),
-      startDate: monthlyProfitWindow.startDate,
-      deadline: monthlyProfitWindow.deadline,
-      status: monthlyProfitWindow.status,
-      title: "Build a $3.5k month without stretching risk",
-      description: "Demo target seeded to exercise the outcome-goal dashboard.",
-      achievements: ["Process first", "No oversized recovery trades"],
-      progressHistory: monthlyProfitWindow.progressHistory,
-      isCustom: false,
-      completedAt: monthlyProfitWindow.completedAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "weekly",
-      targetType: "journalRate",
-      targetValue: "60",
-      currentValue: journalRate.toFixed(2),
-      startDate: weeklyJournalWindow.startDate,
-      deadline: weeklyJournalWindow.deadline,
-      status: weeklyJournalWindow.status,
-      title: "Review at least 60% of trades this week",
-      description: "Close the reflection gap between execution and review.",
-      progressHistory: weeklyJournalWindow.progressHistory,
-      isCustom: false,
-      completedAt: weeklyJournalWindow.completedAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "weekly",
-      targetType: "ruleCompliance",
-      targetValue: "75",
-      currentValue: ruleCompliance.toFixed(2),
-      startDate: weeklyRuleWindow.startDate,
-      deadline: weeklyRuleWindow.deadline,
-      status: weeklyRuleWindow.status,
-      title: "Keep rule compliance above 75%",
-      description: "Use the process scorecard to tighten discipline.",
-      progressHistory: weeklyRuleWindow.progressHistory,
-      isCustom: false,
-      completedAt: weeklyRuleWindow.completedAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "weekly",
-      targetType: "checklistCompletion",
-      targetValue: "85",
-      currentValue: checklistCompletionRate.toFixed(2),
-      startDate: weeklyChecklistWindow.startDate,
-      deadline: weeklyChecklistWindow.deadline,
-      status: weeklyChecklistWindow.status,
-      title: "Complete 85% of pre-trade checklist items",
-      description: "Make execution deliberate before the click.",
-      progressHistory: weeklyChecklistWindow.progressHistory,
-      isCustom: false,
-      completedAt: weeklyChecklistWindow.completedAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "weekly",
-      targetType: "breakAfterLoss",
-      targetValue: "80",
-      currentValue: breakAfterLoss.toFixed(2),
-      startDate: weeklyBreakWindow.startDate,
-      deadline: weeklyBreakWindow.deadline,
-      status: weeklyBreakWindow.status,
-      title: "Pause properly after losses",
-      description: "Protect the next trade from emotional carryover.",
-      progressHistory: weeklyBreakWindow.progressHistory,
-      isCustom: false,
-      completedAt: weeklyBreakWindow.completedAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "monthly",
-      targetType: "winRate",
-      targetValue: "55",
-      currentValue: winRate.toFixed(2),
-      startDate: monthlyWinRateWindow.startDate,
-      deadline: monthlyWinRateWindow.deadline,
-      status: monthlyWinRateWindow.status,
-      title: "Hold win rate above 55%",
-      description:
-        "Use this as a stability checkpoint, not a reason to force trades.",
-      progressHistory: monthlyWinRateWindow.progressHistory,
-      isCustom: false,
-      completedAt: monthlyWinRateWindow.completedAt,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      type: "monthly",
-      targetType: "rr",
-      targetValue: "1.50",
-      currentValue: averageRR.toFixed(2),
-      startDate: monthlyRRWindow.startDate,
-      deadline: monthlyRRWindow.deadline,
-      status: monthlyRRWindow.status,
-      title: "Keep average R above 1.5",
-      description:
-        "Measure whether the model and exits still support positive asymmetry.",
-      progressHistory: monthlyRRWindow.progressHistory,
-      isCustom: false,
-      completedAt: monthlyRRWindow.completedAt,
-    },
-  ];
-
-  await db.insert(goalTable).values(goals);
-
-  const alertRules: (typeof performanceAlertRule.$inferInsert)[] = [
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      name: "Daily loss warning",
-      ruleType: "daily_loss",
-      thresholdValue: "3",
-      thresholdUnit: "percent",
-      alertSeverity: "warning",
-      notifyInApp: true,
-      notifyEmail: false,
-      cooldownMinutes: 120,
-      lastTriggeredAt: new Date(now - 6 * 60 * 60 * 1000),
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      name: "Loss streak breaker",
-      ruleType: "loss_streak",
-      thresholdValue: "3",
-      thresholdUnit: "count",
-      alertSeverity: "critical",
-      notifyInApp: true,
-      notifyEmail: false,
-      cooldownMinutes: 240,
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      name: "Consecutive green days",
-      ruleType: "consecutive_green",
-      thresholdValue: "3",
-      thresholdUnit: "count",
-      alertSeverity: "info",
-      notifyInApp: true,
-      notifyEmail: false,
-      cooldownMinutes: 720,
-    },
-  ];
-
-  await db.insert(performanceAlertRule).values(alertRules);
-
-  await db.insert(performanceAlert).values([
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      ruleId: alertRules[0].id,
-      alertType: "daily_loss",
-      severity: "warning",
-      title: "Daily loss getting tight",
-      message:
-        "The demo account hit 2.4% drawdown intraday. Reduce size before the next push.",
-      currentValue: "2.4",
-      thresholdValue: "3",
-      acknowledged: false,
-      metadata: { source: "demo-seed", session: "New York" },
-      createdAt: new Date(now - 5 * 60 * 60 * 1000),
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      ruleId: alertRules[1].id,
-      alertType: "loss_streak",
-      severity: "critical",
-      title: "Three-loss cluster detected",
-      message:
-        "Losses stacked without enough cooldown. Treat the next session as execution rehab, not recovery.",
-      currentValue: "3",
-      thresholdValue: "3",
-      acknowledged: false,
-      metadata: {
-        source: "demo-seed",
-        reviewPath: "/dashboard/journal?entryType=trade_review",
-      },
-      createdAt: new Date(now - 26 * 60 * 60 * 1000),
-    },
-    {
-      id: crypto.randomUUID(),
-      userId,
-      accountId,
-      ruleId: alertRules[2].id,
-      alertType: "consecutive_green",
-      severity: "info",
-      title: "Consistency streak",
-      message:
-        "Three positive days in a row. Maintain process instead of pressing for size.",
-      currentValue: "3",
-      thresholdValue: "3",
-      acknowledged: true,
-      metadata: { source: "demo-seed" },
-      createdAt: new Date(now - 3 * 24 * 60 * 60 * 1000),
-    },
-  ]);
-
-  const makeBacktestTrades = (
-    sessionId: string,
-    symbol: "EURUSD" | "XAUUSD",
-    basePrice: number,
-    timeframeMinutes: number,
-    tradeTotal: number,
-    startingBalance: number,
-    startAt: Date
-  ) => {
-    const pipSize = pipSizes[symbol];
-    const pipValue = pipValuePerLot[symbol];
-    const isGold = symbol === "XAUUSD";
-    const rows: (typeof backtestTrade.$inferInsert)[] = [];
-    let balance = startingBalance;
-    let wins = 0;
-    let losses = 0;
-    let grossProfit = 0;
-    let grossLoss = 0;
-    let peakBalance = startingBalance;
-    let maxDrawdown = 0;
-    let currentWinStreak = 0;
-    let currentLossStreak = 0;
-    let longestWinStreak = 0;
-    let longestLossStreak = 0;
-    let holdSecondsTotal = 0;
-    const pnlSeries: number[] = [];
-
-    for (let i = 0; i < tradeTotal; i++) {
-      const direction = Math.random() > 0.45 ? "long" : "short";
-      const directionFactor = direction === "long" ? 1 : -1;
-      const entryTime = new Date(
-        startAt.getTime() + i * timeframeMinutes * 18 * 60 * 1000
-      );
-      const entryPrice =
-        basePrice + (Math.random() - 0.5) * pipSize * (isGold ? 120 : 80);
-      const slPips = roundTo(
-        isGold ? 35 + Math.random() * 45 : 10 + Math.random() * 16,
-        1
-      );
-      const tpPips = roundTo(slPips * (1.4 + Math.random() * 1.4), 1);
-      const volume = roundTo(
-        isGold ? 0.2 + Math.random() * 0.4 : 0.2 + Math.random() * 0.8,
-        2
-      );
-      const mfePips = roundTo(tpPips * (0.5 + Math.random() * 0.7), 1);
-      const maePips = roundTo(slPips * (0.2 + Math.random() * 0.6), 1);
-      const resultSeed = Math.random();
-      const realizedRR =
-        resultSeed < 0.56
-          ? roundTo(0.9 + Math.random() * 1.8, 2)
-          : -roundTo(0.35 + Math.random() * 0.65, 2);
-      const pnlPips = roundTo(slPips * realizedRR, 1);
-      const exitPrice = entryPrice + directionFactor * pnlPips * pipSize;
-      const holdTimeSeconds = 8 * 60 + Math.floor(Math.random() * 90 * 60);
-      const exitTime = new Date(entryTime.getTime() + holdTimeSeconds * 1000);
-      const pnl = roundTo(pnlPips * volume * pipValue, 2);
-      const pnlPercent = roundTo((pnl / balance) * 100, 2);
-      const isWin = pnl > 0;
-
-      rows.push({
-        id: crypto.randomUUID(),
-        sessionId,
-        direction,
-        entryPrice: formatPrice(symbol, entryPrice),
-        entryTime,
-        entryTimeUnix: Math.floor(entryTime.getTime() / 1000),
-        entryBalance: balance.toFixed(2),
-        exitPrice: formatPrice(symbol, exitPrice),
-        exitTime,
-        exitTimeUnix: Math.floor(exitTime.getTime() / 1000),
-        exitType: isWin ? "tp" : "sl",
-        sl: formatPrice(
-          symbol,
-          entryPrice - directionFactor * slPips * pipSize
-        ),
-        tp: formatPrice(
-          symbol,
-          entryPrice + directionFactor * tpPips * pipSize
-        ),
-        slPips: slPips.toFixed(1),
-        tpPips: tpPips.toFixed(1),
-        riskPercent: "1.00",
-        volume: volume.toFixed(2),
-        pipValue: pipValue.toFixed(2),
-        status: "closed",
-        pnl: pnl.toFixed(2),
-        pnlPercent: pnlPercent.toFixed(2),
-        pnlPips: pnlPips.toFixed(1),
-        realizedRR: realizedRR.toFixed(2),
-        mfePips: mfePips.toFixed(1),
-        maePips: maePips.toFixed(1),
-        holdTimeSeconds,
-        notes: isWin
-          ? "Held the winner without cutting it early."
-          : "Entry was valid but execution deteriorated after the first adverse push.",
-        tags: [
-          symbol,
-          direction,
-          isWin ? "A-setup" : "execution-review",
-          i % 3 === 0 ? "London" : "New York",
-        ],
-        entryIndicatorValues: {
-          rsi: roundTo(38 + Math.random() * 28, 2),
-          macd: roundTo((Math.random() - 0.5) * 1.8, 3),
-          macdSignal: roundTo((Math.random() - 0.5) * 1.4, 3),
-          atr: roundTo(
-            isGold ? 8 + Math.random() * 6 : 0.0008 + Math.random() * 0.0012,
-            isGold ? 2 : 5
-          ),
-          ema1: roundTo(
-            entryPrice + (Math.random() - 0.5) * pipSize * 24,
-            isGold ? 2 : symbol === "USDJPY" ? 3 : 5
-          ),
-        },
-        createdAt: exitTime,
-      });
-
-      balance = roundTo(balance + pnl, 2);
-      peakBalance = Math.max(peakBalance, balance);
-      maxDrawdown = Math.max(maxDrawdown, roundTo(peakBalance - balance, 2));
-      pnlSeries.push(pnl);
-      holdSecondsTotal += holdTimeSeconds;
-
-      if (isWin) {
-        wins++;
-        grossProfit += pnl;
-        currentWinStreak++;
-        currentLossStreak = 0;
-      } else {
-        losses++;
-        grossLoss += Math.abs(pnl);
-        currentLossStreak++;
-        currentWinStreak = 0;
-      }
-      longestWinStreak = Math.max(longestWinStreak, currentWinStreak);
-      longestLossStreak = Math.max(longestLossStreak, currentLossStreak);
-    }
-
-    const finalBalance = balance;
-    const totalPnL = roundTo(finalBalance - startingBalance, 2);
-    const totalPnLPercent = roundTo((totalPnL / startingBalance) * 100, 2);
-    const winRate = tradeTotal > 0 ? roundTo((wins / tradeTotal) * 100, 2) : 0;
-    const profitFactor =
-      grossLoss > 0 ? roundTo(grossProfit / grossLoss, 2) : null;
-    const maxDrawdownPercent =
-      peakBalance > 0 ? roundTo((maxDrawdown / peakBalance) * 100, 2) : 0;
-    const averageRR =
-      rows.reduce((sum, row) => sum + Number(row.realizedRR || 0), 0) /
-      rows.length;
-    const averageWin = wins > 0 ? roundTo(grossProfit / wins, 2) : 0;
-    const averageLoss = losses > 0 ? roundTo(grossLoss / losses, 2) : 0;
-    const largestWin = roundTo(Math.max(...pnlSeries), 2);
-    const largestLoss = roundTo(Math.min(...pnlSeries), 2);
-    const mean =
-      pnlSeries.reduce((sum, value) => sum + value, 0) / pnlSeries.length;
-    const variance =
-      pnlSeries.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
-      Math.max(pnlSeries.length, 1);
-    const stdDev = Math.sqrt(variance);
-    const sharpeRatio = stdDev > 0 ? roundTo(mean / stdDev, 2) : null;
-
-    return {
-      trades: rows,
-      summary: {
-        finalBalance,
-        totalPnL,
-        totalPnLPercent,
-        totalTrades: tradeTotal,
-        winningTrades: wins,
-        losingTrades: losses,
-        winRate,
-        profitFactor,
-        maxDrawdown,
-        maxDrawdownPercent,
-        sharpeRatio,
-        averageRR: roundTo(averageRR, 2),
-        averageWin,
-        averageLoss,
-        largestWin,
-        largestLoss,
-        longestWinStreak,
-        longestLoseStreak: longestLossStreak,
-        averageHoldTimeSeconds: Math.round(holdSecondsTotal / rows.length),
-      },
-    };
-  };
-
-  const backtestSeeds = [
-    {
-      id: crypto.randomUUID(),
-      name: "London Momentum Drill",
-      description: "Replay focused on structured London continuation entries.",
-      symbol: "EURUSD" as const,
-      timeframe: "m5" as const,
-      initialBalance: 10000,
-      startDate: new Date(now - 60 * 24 * 60 * 60 * 1000),
-      endDate: new Date(now - 52 * 24 * 60 * 60 * 1000),
-    },
-    {
-      id: crypto.randomUUID(),
-      name: "XAUUSD Reversal Replay",
-      description:
-        "Completed gold replay with tagged execution notes and mixed conditions.",
-      symbol: "XAUUSD" as const,
-      timeframe: "m15" as const,
-      initialBalance: 15000,
-      startDate: new Date(now - 34 * 24 * 60 * 60 * 1000),
-      endDate: new Date(now - 28 * 24 * 60 * 60 * 1000),
-    },
-  ];
-
-  for (const [index, seed] of backtestSeeds.entries()) {
-    const generated = makeBacktestTrades(
-      seed.id,
-      seed.symbol,
-      basePrices[seed.symbol],
-      seed.timeframe === "m5" ? 5 : 15,
-      index === 0 ? 26 : 18,
-      seed.initialBalance,
-      seed.startDate
-    );
-
-    await db.insert(backtestSession).values({
-      id: seed.id,
-      userId,
-      name: seed.name,
-      description: seed.description,
-      status: "completed",
-      symbol: seed.symbol,
-      timeframe: seed.timeframe,
-      startDate: seed.startDate,
-      endDate: seed.endDate,
-      initialBalance: seed.initialBalance.toFixed(2),
-      currency: "USD",
-      riskPercent: "1.00",
-      defaultSLPips: seed.symbol === "XAUUSD" ? 60 : 20,
-      defaultTPPips: seed.symbol === "XAUUSD" ? 120 : 40,
-      finalBalance: generated.summary.finalBalance.toFixed(2),
-      finalEquity: generated.summary.finalBalance.toFixed(2),
-      totalPnL: generated.summary.totalPnL.toFixed(2),
-      totalPnLPercent: generated.summary.totalPnLPercent.toFixed(2),
-      totalTrades: generated.summary.totalTrades,
-      winningTrades: generated.summary.winningTrades,
-      losingTrades: generated.summary.losingTrades,
-      winRate: generated.summary.winRate.toFixed(2),
-      profitFactor:
-        generated.summary.profitFactor != null
-          ? generated.summary.profitFactor.toFixed(2)
-          : null,
-      maxDrawdown: generated.summary.maxDrawdown.toFixed(2),
-      maxDrawdownPercent: generated.summary.maxDrawdownPercent.toFixed(2),
-      sharpeRatio:
-        generated.summary.sharpeRatio != null
-          ? generated.summary.sharpeRatio.toFixed(2)
-          : null,
-      averageRR: generated.summary.averageRR.toFixed(2),
-      averageWin: generated.summary.averageWin.toFixed(2),
-      averageLoss: generated.summary.averageLoss.toFixed(2),
-      largestWin: generated.summary.largestWin.toFixed(2),
-      largestLoss: generated.summary.largestLoss.toFixed(2),
-      longestWinStreak: generated.summary.longestWinStreak,
-      longestLoseStreak: generated.summary.longestLoseStreak,
-      averageHoldTimeSeconds: generated.summary.averageHoldTimeSeconds,
-      indicatorConfig: {
-        ema1: { enabled: true, period: 20, color: "#14B8A6" },
-        sma1: { enabled: true, period: 50, color: "#F59E0B" },
-        rsi: { enabled: true, period: 14 },
-        atr: { enabled: true, period: 14 },
-      },
-      lastCandleIndex: generated.summary.totalTrades * 12,
-      playbackSpeed: "4",
-      dataSource: "simulated",
-      completedAt: new Date(seed.endDate.getTime() + 3 * 60 * 60 * 1000),
-    });
-
-    for (let i = 0; i < generated.trades.length; i += 25) {
-      await db.insert(backtestTrade).values(generated.trades.slice(i, i + 25));
-    }
-  }
-
-  const aggregateProfitBy = (
-    key: "symbol" | "sessionTag" | "modelTag" | "protocolAlignment"
-  ) => {
-    const totals = new Map<
-      string,
-      { totalProfit: number; trades: number; wins: number }
-    >();
-
-    for (const row of closedTrades) {
-      const label = row[key];
-      if (!label) continue;
-
-      const current = totals.get(label) || {
-        totalProfit: 0,
-        trades: 0,
-        wins: 0,
-      };
-      const profit = Number(row.profit || 0);
-      current.totalProfit += profit;
-      current.trades += 1;
-      if (profit > 0) current.wins += 1;
-      totals.set(label, current);
-    }
-
-    return [...totals.entries()]
-      .map(([label, stats]) => ({
-        label,
-        totalProfit: roundTo(stats.totalProfit, 2),
-        trades: stats.trades,
-        winRate:
-          stats.trades > 0 ? roundTo((stats.wins / stats.trades) * 100, 1) : 0,
-      }))
-      .sort((a, b) => b.totalProfit - a.totalProfit);
-  };
-
-  const symbolLeaders = aggregateProfitBy("symbol");
-  const sessionLeaders = aggregateProfitBy("sessionTag");
-  const modelLeaders = aggregateProfitBy("modelTag");
-  const protocolLeaders = aggregateProfitBy("protocolAlignment");
-
-  const bestSymbol = symbolLeaders[0];
-  const weakestSymbol = symbolLeaders.at(-1);
-  const bestSession = sessionLeaders[0];
-  const weakestSession = sessionLeaders.at(-1);
-  const bestModel = modelLeaders[0];
-  const weakestProtocol =
-    protocolLeaders.find((row) => row.label !== "aligned") ||
-    protocolLeaders.at(-1);
-
-  const seededWeeklyDigest: typeof traderDigest.$inferInsert = {
-    id: crypto.randomUUID(),
-    accountId,
+  await seedDemoGoalsAndAlerts({
     userId,
-    digestType: "weekly",
-    content: {
-      review: {
-        tradesToday: closedTrades.length,
-        winRate,
-        pnl: totalProfit,
-        bestTrade: bestSymbol
-          ? `${bestSymbol.label} led with $${bestSymbol.totalProfit.toFixed(2)}`
-          : undefined,
-        worstTrade: weakestSymbol
-          ? `${
-              weakestSymbol.label
-            } dragged with $${weakestSymbol.totalProfit.toFixed(2)}`
-          : undefined,
-        edgeMatches: alignedTradeCount,
-        leakMatches: totalLosses,
-      },
-      progress: {
-        weeklyWinRate: winRate,
-        weeklyPnL: totalProfit,
-        vs30DayAvgWR: roundTo(winRate - 52, 1),
-        vs30DayAvgPnL: roundTo(totalProfit - 2100, 2),
-        trend: totalProfit >= 0 ? "improving" : "declining",
-      },
-      focusItem: weakestProtocol
-        ? {
-            title: `Tighten ${weakestProtocol.label} execution`,
-            message: `${weakestProtocol.label} trades are underperforming. Bring them back to rule-aligned size and session quality.`,
-            type: weakestProtocol.label === "aligned" ? "edge" : "rule",
-          }
-        : {
-            title: "Protect the edge",
-            message:
-              "Keep leaning into the conditions that are already paying you.",
-            type: "edge",
-          },
-      narrative: [
-        `Weekly checkpoint: ${
-          closedTrades.length
-        } seeded trades, ${winRate.toFixed(
-          1
-        )}% win rate, and $${totalProfit.toFixed(2)} total P&L.`,
-        bestSession
-          ? `${
-              bestSession.label
-            } is the cleanest session so far at ${bestSession.winRate.toFixed(
-              1
-            )}% win rate across ${bestSession.trades} trades.`
-          : "No clear session edge yet.",
-        weakestSession
-          ? `${weakestSession.label} needs review before you size it up again.`
-          : "Session quality is holding up.",
-      ].join(" "),
+    accountId,
+    now,
+    tradeDayKeys,
+    fallbackGoalDay,
+    totalProfit,
+    journalRate,
+    ruleCompliance,
+    checklistCompletionRate,
+    breakAfterLoss,
+    winRate,
+    averageRR,
+  });
+  await seedDemoBacktestSessions({
+    userId,
+    now,
+    basePrices: {
+      EURUSD: basePrices.EURUSD,
+      XAUUSD: basePrices.XAUUSD,
     },
-    createdAt: new Date(now - 12 * 60 * 60 * 1000),
-  };
-
-  await db.insert(traderDigest).values(seededWeeklyDigest);
-
-  const morningDigest = await generateMorningBriefing(accountId, userId);
-  if (morningDigest) {
-    await db.insert(traderDigest).values({
-      ...morningDigest,
-      id: crypto.randomUUID(),
-      createdAt: new Date(now - 2 * 60 * 60 * 1000),
-    });
-  }
-
-  const lastClosedTradeId = closedTrades.at(-1)?.id;
-  if (lastClosedTradeId) {
-    const tradeFeedbackDigest = await generateTradeFeedback(
-      accountId,
-      userId,
-      lastClosedTradeId
-    );
-    if (tradeFeedbackDigest) {
-      await db.insert(traderDigest).values({
-        ...tradeFeedbackDigest,
-        id: crypto.randomUUID(),
-        createdAt: new Date(now - 35 * 60 * 1000),
-      });
-    }
-  }
-
-  const seededReports = [
-    {
-      id: crypto.randomUUID(),
-      title: "Find my edge right now",
-      description: DEMO_REPORT_DESCRIPTION,
-      createdAt: new Date(now - 20 * 60 * 60 * 1000),
-      updatedAt: new Date(now - 19 * 60 * 60 * 1000),
-      intent: "edge_analysis",
-      prompt:
-        "What is my edge right now, and where should I focus if I want to press only on quality?",
-      response: [
-        bestSession
-          ? `${
-              bestSession.label
-            } is your cleanest session so far with ${bestSession.winRate.toFixed(
-              1
-            )}% wins across ${bestSession.trades} trades.`
-          : "Session quality is still mixed.",
-        bestSymbol
-          ? `${
-              bestSymbol.label
-            } is your best symbol at $${bestSymbol.totalProfit.toFixed(
-              2
-            )} total profit.`
-          : "There is no standout symbol yet.",
-        bestModel
-          ? `${bestModel.label} is the strongest model in the sample, so it deserves first look when conditions line up.`
-          : "Model quality is still clustering too tightly to rank cleanly.",
-      ].join(" "),
-      actionTitle: "Rank edge conditions",
-      actionResult: {
-        bestSession,
-        bestSymbol,
-        bestModel,
-      },
+    pipSizes: {
+      EURUSD: pipSizes.EURUSD,
+      XAUUSD: pipSizes.XAUUSD,
     },
-    {
-      id: crypto.randomUUID(),
-      title: "Leak review",
-      description: DEMO_REPORT_DESCRIPTION,
-      createdAt: new Date(now - 8 * 60 * 60 * 1000),
-      updatedAt: new Date(now - 7 * 60 * 60 * 1000),
-      intent: "leak_analysis",
-      prompt: "Where am I leaking money, and what should I cut first?",
-      response: [
-        weakestSymbol
-          ? `${
-              weakestSymbol.label
-            } is the first asset to review because it is dragging the sample at $${weakestSymbol.totalProfit.toFixed(
-              2
-            )}.`
-          : "No single asset leak stands out yet.",
-        weakestSession
-          ? `${weakestSession.label} is the weakest session by P&L, so reduce size there until the execution quality improves.`
-          : "Session leakage is not isolated to one block yet.",
-        weakestProtocol
-          ? `${weakestProtocol.label} trades are the discipline leak to remove first.`
-          : "Discipline leakage is not yet clear enough to isolate.",
-      ].join(" "),
-      actionTitle: "Map money leaks",
-      actionResult: {
-        weakestSymbol,
-        weakestSession,
-        weakestProtocol,
-      },
+    pipValuePerLot: {
+      EURUSD: pipValuePerLot.EURUSD,
+      XAUUSD: pipValuePerLot.XAUUSD,
     },
-  ] as const;
+  });
 
-  for (const reportSeed of seededReports) {
-    await db.insert(aiReport).values({
-      id: reportSeed.id,
-      userId,
-      accountId,
-      title: reportSeed.title,
-      description: reportSeed.description,
-      createdAt: reportSeed.createdAt,
-      updatedAt: reportSeed.updatedAt,
-    });
+  const {
+    bestSession,
+    bestSymbol,
+    bestModel,
+    weakestSymbol,
+    weakestSession,
+    weakestProtocol,
+  } = await seedDemoDigests({
+    userId,
+    accountId,
+    now,
+    closedTrades,
+    totalProfit,
+    winRate,
+    alignedTradeCount,
+    totalLosses,
+  });
 
-    const userMessageId = crypto.randomUUID();
-    const assistantMessageId = crypto.randomUUID();
-
-    await db.insert(aiChatMessage).values([
-      {
-        id: userMessageId,
-        reportId: reportSeed.id,
-        role: "user",
-        content: reportSeed.prompt,
-        intent: reportSeed.intent,
-        confidence: "0.99",
-        status: "completed",
-        createdAt: reportSeed.createdAt,
-      },
-      {
-        id: assistantMessageId,
-        reportId: reportSeed.id,
-        role: "assistant",
-        content: reportSeed.response,
-        intent: reportSeed.intent,
-        confidence: "0.99",
-        data: {
-          seeded: true,
-          summary: reportSeed.actionResult,
-        },
-        status: "completed",
-        createdAt: reportSeed.updatedAt,
-      },
-    ]);
-
-    await db.insert(aiActionLog).values({
-      id: crypto.randomUUID(),
-      userId,
-      messageId: assistantMessageId,
-      title: reportSeed.actionTitle,
-      intent: reportSeed.intent,
-      userMessage: reportSeed.prompt,
-      status: "completed",
-      result: reportSeed.actionResult,
-      startedAt: reportSeed.createdAt,
-      completedAt: reportSeed.updatedAt,
-    });
-  }
+  await seedDemoAiHistory({
+    userId,
+    accountId,
+    now,
+    bestSession,
+    bestSymbol,
+    bestModel,
+    weakestSymbol,
+    weakestSession,
+    weakestProtocol,
+  });
 
   return {
     account,

@@ -13,11 +13,13 @@ import { eq, and, inArray, notInArray, sql, gte, count } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createHash } from "crypto";
 import { nanoid } from "nanoid";
+import { notifyEarnedAchievements } from "../lib/achievements";
 import { updateTradePostExitPeak } from "../lib/manipulation-calculator";
 import { cache, cacheKeys } from "../lib/cache";
 import { createNotification } from "../lib/notifications";
 import { createAutoTradeReviewEntry } from "../lib/auto-journal";
 import { buildAutoPropAccountFields } from "../lib/prop-firm-detection";
+import { ensurePropChallengeLineageForAccount } from "../lib/prop-challenge-lineage";
 import { equitySnapshot } from "../db/schema/connections";
 import { insertHistoricalPriceSnapshots } from "../lib/price-ingestion";
 import {
@@ -25,6 +27,7 @@ import {
   saveInsights,
   refreshProfileIfStale,
 } from "../lib/ai/engine";
+import { syncPropAccountState } from "../lib/prop-rule-monitor";
 import {
   ackCopySignalExecution,
   claimPendingCopySignalsForAccount,
@@ -52,9 +55,7 @@ type VerifiedApiKeyCacheEntry = {
   cachedAt: number;
 };
 
-const API_KEY_CACHE_TTL_MS = Number(
-  process.env.API_KEY_CACHE_TTL_MS ?? 60_000
-);
+const API_KEY_CACHE_TTL_MS = Number(process.env.API_KEY_CACHE_TTL_MS ?? 60_000);
 const API_KEY_LAST_USED_UPDATE_MS = Number(
   process.env.API_KEY_LAST_USED_UPDATE_MS ?? 15 * 60_000
 );
@@ -82,7 +83,11 @@ function cleanupVerifiedApiKeyCache(now: number) {
 
 function isRetryableApiKeyStoreError(error: unknown) {
   const message =
-    error instanceof Error ? error.message : typeof error === "string" ? error : "";
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+      ? error
+      : "";
 
   return (
     message.includes("data transfer quota") ||
@@ -230,8 +235,7 @@ async function verifyApiKey(key: string): Promise<string> {
   }
 
   const shouldTouchLastUsed =
-    !lastUsedAt ||
-    now - lastUsedAt.getTime() >= API_KEY_LAST_USED_UPDATE_MS;
+    !lastUsedAt || now - lastUsedAt.getTime() >= API_KEY_LAST_USED_UPDATE_MS;
   const touchedAt = shouldTouchLastUsed
     ? await maybeTouchApiKeyLastUsed(hash, now, lastUsedAt)
     : lastUsedAt;
@@ -302,11 +306,11 @@ export const webhookRouter = router({
                   eq(tradingAccount.userId, userId)
                 )
               : input.accountNumber
-                ? and(
-                    eq(tradingAccount.userId, userId),
-                    eq(tradingAccount.accountNumber, input.accountNumber)
-                  )
-                : eq(tradingAccount.userId, userId)
+              ? and(
+                  eq(tradingAccount.userId, userId),
+                  eq(tradingAccount.accountNumber, input.accountNumber)
+                )
+              : eq(tradingAccount.userId, userId)
           )
           .limit(input.accountId || input.accountNumber ? 1 : 2);
 
@@ -527,6 +531,10 @@ export const webhookRouter = router({
         createdAt: new Date(),
       });
 
+      if (autoPropFields.isPropAccount) {
+        await ensurePropChallengeLineageForAccount(accountId);
+      }
+
       await createNotification({
         userId,
         accountId,
@@ -620,6 +628,8 @@ export const webhookRouter = router({
               updatedAt: new Date(),
             },
           });
+
+        await syncPropAccountState(result[0].id, { saveAlerts: true });
 
         const hourKey = new Date().toISOString().slice(0, 13);
         await createNotification({
@@ -846,6 +856,7 @@ export const webhookRouter = router({
 
         // Invalidate cache for this account
         cache.invalidate(cacheKeys.liveMetrics(accountId));
+        await syncPropAccountState(accountId, { saveAlerts: true });
 
         if (input.trades.length > 0) {
           const hourKey = new Date().toISOString().slice(0, 13);
@@ -1354,6 +1365,8 @@ export const webhookRouter = router({
               )
             ).catch((err) => console.error("Feed event batch failed:", err));
           }
+
+          await syncPropAccountState(accountId, { saveAlerts: true });
         }
 
         stage = "autoBackfillPostExit";
@@ -1393,6 +1406,14 @@ export const webhookRouter = router({
               count: insertedRecords.length,
               tickets: insertedRecords.map((record) => record.ticket),
             },
+          });
+
+          void notifyEarnedAchievements({
+            userId,
+            accountId,
+            source: "webhook-sync",
+          }).catch((error) => {
+            console.error("[Webhook] Achievement notification failed:", error);
           });
 
           // Fire-and-forget: Generate trade close insights + refresh profile

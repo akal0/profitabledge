@@ -15,8 +15,10 @@ export type NotificationType =
   | "settings_updated"
   | "goal_achieved"
   | "goal_progress"
+  | "achievement_earned"
   | "alert_triggered"
   | "prop_violation"
+  | "prop_journey"
   | "prop_phase_advanced"
   | "leaderboard_update"
   | "copier_signal"
@@ -57,10 +59,7 @@ export function mergeNotificationPreferences(
   return { ...defaultNotificationPreferences, ...(prefs || {}) };
 }
 
-function isTypeEnabled(
-  prefs: NotificationPreferences,
-  type: NotificationType
-) {
+function isTypeEnabled(prefs: NotificationPreferences, type: NotificationType) {
   switch (type) {
     case "trade_closed":
       return prefs.tradeClosed;
@@ -74,9 +73,11 @@ function isTypeEnabled(
       return prefs.news;
     case "goal_achieved":
     case "goal_progress":
+    case "achievement_earned":
       return prefs.goals;
     case "alert_triggered":
     case "prop_violation":
+    case "prop_journey":
     case "prop_phase_advanced":
       return prefs.alerts;
     case "leaderboard_update":
@@ -120,7 +121,12 @@ export async function createNotification(input: {
     const existing = await db
       .select({ id: notification.id })
       .from(notification)
-      .where(and(eq(notification.userId, userId), eq(notification.dedupeKey, dedupeKey)))
+      .where(
+        and(
+          eq(notification.userId, userId),
+          eq(notification.dedupeKey, dedupeKey)
+        )
+      )
       .limit(1);
     if (existing.length) {
       return { skipped: true } as const;

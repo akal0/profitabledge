@@ -11,12 +11,12 @@ import {
 } from "../../db/schema/connections";
 import { trade, tradingAccount } from "../../db/schema/trading";
 import { eq, and } from "drizzle-orm";
-import {
-  decryptCredentials,
-  encryptCredentials,
-} from "./credential-cipher";
+import { decryptCredentials, encryptCredentials } from "./credential-cipher";
 import { getProvider } from "./registry";
 import { normalizeToTradeInsert } from "./trade-normalizer";
+import { notifyEarnedAchievements } from "../achievements";
+import { createNotification } from "../notifications";
+import { syncPropAccountState } from "../prop-rule-monitor";
 
 export interface SyncResult {
   connectionId: string;
@@ -29,7 +29,11 @@ export interface SyncResult {
 }
 
 export async function syncConnection(
-  connectionId: string
+  connectionId: string,
+  options: {
+    notifySuccess?: boolean;
+    source?: "manual" | "scheduled";
+  } = {}
 ): Promise<SyncResult> {
   const startTime = Date.now();
 
@@ -86,9 +90,7 @@ export async function syncConnection(
       provider.refreshToken
     ) {
       credentials = await provider.refreshToken(credentials);
-      const { encrypted, iv } = encryptCredentials(
-        JSON.stringify(credentials)
-      );
+      const { encrypted, iv } = encryptCredentials(JSON.stringify(credentials));
       const expiresAt = credentials.expiresAt
         ? new Date(credentials.expiresAt)
         : null;
@@ -187,13 +189,13 @@ export async function syncConnection(
         },
       });
 
+    await syncPropAccountState(accountId, { saveAlerts: true });
+
     // Advance sync cursor
     const newCursor =
       normalizedTrades.length > 0
         ? new Date(
-            Math.max(
-              ...normalizedTrades.map((t) => t.closeTime.getTime())
-            )
+            Math.max(...normalizedTrades.map((t) => t.closeTime.getTime()))
           )
         : conn.syncCursor;
 
@@ -210,9 +212,20 @@ export async function syncConnection(
       .where(eq(platformConnection.id, connectionId));
 
     result.status = "success";
+
+    if (result.tradesInserted > 0) {
+      try {
+        await notifyEarnedAchievements({
+          userId: conn.userId,
+          accountId,
+          source: options.source ?? "scheduled-sync",
+        });
+      } catch (error) {
+        console.error("[SyncEngine] Achievement notification failed:", error);
+      }
+    }
   } catch (err: unknown) {
-    const message =
-      err instanceof Error ? err.message : "Unknown sync error";
+    const message = err instanceof Error ? err.message : "Unknown sync error";
     result.errorMessage = message;
 
     await db
@@ -223,6 +236,31 @@ export async function syncConnection(
         updatedAt: new Date(),
       })
       .where(eq(platformConnection.id, connectionId));
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    try {
+      await createNotification({
+        userId: conn.userId,
+        accountId: conn.accountId ?? null,
+        type: "webhook_sync",
+        title: "Connection sync failed",
+        body: `${conn.displayName}: ${message}`,
+        metadata: {
+          connectionId,
+          provider: conn.provider,
+          displayName: conn.displayName,
+          status: "error",
+          errorMessage: message,
+          url: "/dashboard/settings/connections",
+        },
+        dedupeKey: `connection-sync-error:${connectionId}:${todayKey}:${message}`,
+      });
+    } catch (notificationError) {
+      console.error(
+        "[SyncEngine] Sync failure notification failed:",
+        notificationError
+      );
+    }
   }
 
   result.durationMs = Date.now() - startTime;
@@ -238,6 +276,39 @@ export async function syncConnection(
     errorMessage: result.errorMessage,
     durationMs: result.durationMs,
   });
+
+  if (result.status === "success" && options.notifySuccess) {
+    const body =
+      result.tradesInserted > 0
+        ? `${conn.displayName} synced ${result.tradesInserted} new trade${
+            result.tradesInserted === 1 ? "" : "s"
+          }.`
+        : `${conn.displayName} sync completed with no new trades.`;
+
+    try {
+      await createNotification({
+        userId: conn.userId,
+        accountId: conn.accountId ?? null,
+        type: "webhook_sync",
+        title: "Connection synced",
+        body,
+        metadata: {
+          connectionId,
+          provider: conn.provider,
+          displayName: conn.displayName,
+          tradesInserted: result.tradesInserted,
+          tradesDuplicated: result.tradesDuplicated,
+          status: "success",
+          url: "/dashboard/settings/connections",
+        },
+      });
+    } catch (notificationError) {
+      console.error(
+        "[SyncEngine] Sync success notification failed:",
+        notificationError
+      );
+    }
+  }
 
   return result;
 }

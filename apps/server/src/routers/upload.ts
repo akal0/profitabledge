@@ -3,8 +3,11 @@ import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
 import { tradingAccount, trade } from "../db/schema/trading";
 import { randomUUID } from "crypto";
+import { notifyEarnedAchievements } from "../lib/achievements";
 import { createNotification } from "../lib/notifications";
 import { buildAutoPropAccountFields } from "../lib/prop-firm-detection";
+import { ensurePropChallengeLineageForAccount } from "../lib/prop-challenge-lineage";
+import { syncPropAccountState } from "../lib/prop-rule-monitor";
 
 function parseCsv(content: string): Array<Record<string, string>> {
   const lines = content.trim().split(/\r?\n/).filter(Boolean);
@@ -103,6 +106,10 @@ export const uploadRouter = router({
         initialCurrency: input.initialCurrency ?? null,
         ...autoPropFields,
       });
+
+      if (autoPropFields.isPropAccount) {
+        await ensurePropChallengeLineageForAccount(accountId);
+      }
 
       const inserts = rows.map((r) => {
         const typeRaw = (r["Type"] || "").toLowerCase();
@@ -217,6 +224,8 @@ export const uploadRouter = router({
             )
           ).catch((err) => console.error("Feed event batch failed:", err));
         }
+
+        await syncPropAccountState(accountId, { saveAlerts: true });
       }
 
       await createNotification({
@@ -232,6 +241,16 @@ export const uploadRouter = router({
           tradesImported: inserts.length,
         },
       });
+
+      if (inserts.length > 0) {
+        void notifyEarnedAchievements({
+          userId,
+          accountId,
+          source: "csv-import",
+        }).catch((error) => {
+          console.error("[Upload] Achievement notification failed:", error);
+        });
+      }
 
       return { accountId };
     }),

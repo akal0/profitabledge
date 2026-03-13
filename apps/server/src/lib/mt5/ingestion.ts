@@ -19,6 +19,7 @@ import {
 import { openTrade, trade, tradingAccount } from "../../db/schema/trading";
 import { cache, cacheKeys } from "../cache";
 import { cacheNamespaces, enhancedCache } from "../enhanced-cache";
+import { notifyEarnedAchievements } from "../achievements";
 import { generateFeedEventForTrade } from "../feed-event-generator";
 import { insertHistoricalPriceSnapshots } from "../price-ingestion";
 import { createNotification } from "../notifications";
@@ -26,6 +27,8 @@ import {
   enrichProjectedMt5Trades,
   refreshRecentMt5TradeAnalytics,
 } from "./enrichment";
+import { syncPropAccountState } from "../prop-rule-monitor";
+import { ensurePropChallengeLineageForAccount } from "../prop-challenge-lineage";
 import {
   canonicalizeBrokerSymbol,
   normalizeBrokerSymbol,
@@ -310,9 +313,9 @@ function isCopiedTradeComment(comment: string | null | undefined) {
   return typeof comment === "string" && comment.trim().startsWith("Copied:");
 }
 
-function buildSymbolSpecMap<
-  T extends Mt5SymbolSpec | MtSymbolSpecLike
->(symbolSpecs: T[]) {
+function buildSymbolSpecMap<T extends Mt5SymbolSpec | MtSymbolSpecLike>(
+  symbolSpecs: T[]
+) {
   const symbolSpecsBySymbol = new Map<string, T>();
 
   for (const symbolSpec of symbolSpecs) {
@@ -408,9 +411,7 @@ function toPositiveNumberOrNull(value: unknown): number | null {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }
 
-function pickLatestPositiveNumber(
-  ...values: Array<unknown>
-): number | null {
+function pickLatestPositiveNumber(...values: Array<unknown>): number | null {
   for (const value of values) {
     const numeric = toPositiveNumberOrNull(value);
     if (numeric != null) {
@@ -532,9 +533,9 @@ function buildTradeStateFallback(input: {
     removedOpenTrade?.tradeType === "short"
       ? removedOpenTrade.tradeType
       : latestPositionSnapshot?.side === "buy" ||
-          latestPositionSnapshot?.side === "sell"
-        ? normalizeTradeSide(latestPositionSnapshot.side as "buy" | "sell")
-        : null;
+        latestPositionSnapshot?.side === "sell"
+      ? normalizeTradeSide(latestPositionSnapshot.side as "buy" | "sell")
+      : null;
   const fallback: Mt5TradeStateFallback = {
     tradeKey: input.tradeKey,
     symbol: removedOpenTrade?.symbol ?? latestPositionSnapshot?.symbol ?? null,
@@ -588,7 +589,9 @@ function sanitizeMt5SyncFrame(rawInput: unknown): unknown {
   const positions = Array.isArray(input.positions) ? input.positions : [];
   const deals = Array.isArray(input.deals) ? input.deals : [];
   const orders = Array.isArray(input.orders) ? input.orders : [];
-  const ledgerEvents = Array.isArray(input.ledgerEvents) ? input.ledgerEvents : [];
+  const ledgerEvents = Array.isArray(input.ledgerEvents)
+    ? input.ledgerEvents
+    : [];
   const executionContexts = Array.isArray(input.executionContexts)
     ? input.executionContexts
     : [];
@@ -600,7 +603,11 @@ function sanitizeMt5SyncFrame(rawInput: unknown): unknown {
   return {
     ...input,
     positions: positions.filter((position) => {
-      if (!position || typeof position !== "object" || Array.isArray(position)) {
+      if (
+        !position ||
+        typeof position !== "object" ||
+        Array.isArray(position)
+      ) {
         return false;
       }
 
@@ -617,8 +624,7 @@ function sanitizeMt5SyncFrame(rawInput: unknown): unknown {
 
       const record = deal as Record<string, unknown>;
       return (
-        isNonEmptyString(record.remoteDealId) &&
-        isNonEmptyString(record.symbol)
+        isNonEmptyString(record.remoteDealId) && isNonEmptyString(record.symbol)
       );
     }),
     orders: orders.filter((order) => {
@@ -639,7 +645,9 @@ function sanitizeMt5SyncFrame(rawInput: unknown): unknown {
 
       const record = event as Record<string, unknown>;
       const amount =
-        typeof record.amount === "number" ? record.amount : Number(record.amount);
+        typeof record.amount === "number"
+          ? record.amount
+          : Number(record.amount);
 
       return (
         isNonEmptyString(record.remoteDealId) &&
@@ -660,18 +668,25 @@ function sanitizeMt5SyncFrame(rawInput: unknown): unknown {
       );
     }),
     symbolSpecs: symbolSpecs.filter((symbolSpec) => {
-      if (!symbolSpec || typeof symbolSpec !== "object" || Array.isArray(symbolSpec)) {
+      if (
+        !symbolSpec ||
+        typeof symbolSpec !== "object" ||
+        Array.isArray(symbolSpec)
+      ) {
         return false;
       }
 
       const record = symbolSpec as Record<string, unknown>;
       return (
-        isNonEmptyString(record.symbol) &&
-        isNonEmptyString(record.snapshotTime)
+        isNonEmptyString(record.symbol) && isNonEmptyString(record.snapshotTime)
       );
     }),
     priceSnapshots: priceSnapshots.filter((snapshot) => {
-      if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+      if (
+        !snapshot ||
+        typeof snapshot !== "object" ||
+        Array.isArray(snapshot)
+      ) {
         return false;
       }
 
@@ -691,8 +706,14 @@ function sanitizeMt5SyncFrame(rawInput: unknown): unknown {
   };
 }
 
-function getRawPayloadRecord(rawPayload: unknown): Record<string, unknown> | null {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+function getRawPayloadRecord(
+  rawPayload: unknown
+): Record<string, unknown> | null {
+  if (
+    !rawPayload ||
+    typeof rawPayload !== "object" ||
+    Array.isArray(rawPayload)
+  ) {
     return null;
   }
 
@@ -725,10 +746,7 @@ function getRawPayloadNumber(
   return null;
 }
 
-function getEventSortTimestamp(row: {
-  eventTime: Date;
-  rawPayload?: unknown;
-}) {
+function getEventSortTimestamp(row: { eventTime: Date; rawPayload?: unknown }) {
   const millis = getRawPayloadNumber(
     row.rawPayload,
     "time_msc",
@@ -744,10 +762,7 @@ function getEventSortTimestamp(row: {
   return row.eventTime.getTime();
 }
 
-function getEventDate(row: {
-  eventTime: Date;
-  rawPayload?: unknown;
-}) {
+function getEventDate(row: { eventTime: Date; rawPayload?: unknown }) {
   return new Date(getEventSortTimestamp(row));
 }
 
@@ -981,7 +996,10 @@ function collectLevelTrail(
     }
 
     modifications += 1;
-    if ((side === "long" && level > previous) || (side === "short" && level < previous)) {
+    if (
+      (side === "long" && level > previous) ||
+      (side === "short" && level < previous)
+    ) {
       favorableMoves += 1;
     }
     previous = level;
@@ -1036,7 +1054,10 @@ function buildTradeBrokerMeta(input: {
       row.entryType === "inout"
   );
   const firstEntry = entryRows[0] ?? sortedDeals[0] ?? null;
-  const lastExit = exitRows[exitRows.length - 1] ?? sortedDeals[sortedDeals.length - 1] ?? null;
+  const lastExit =
+    exitRows[exitRows.length - 1] ??
+    sortedDeals[sortedDeals.length - 1] ??
+    null;
 
   const entryReasonCode = firstEntry
     ? getRawPayloadNumber(firstEntry.rawPayload, "reason")
@@ -1046,8 +1067,8 @@ function buildTradeBrokerMeta(input: {
     lastExit != null
       ? getRawPayloadNumber(lastExit.rawPayload, "reason")
       : lastOrder != null
-        ? getRawPayloadNumber(lastOrder.rawPayload, "reason")
-        : null;
+      ? getRawPayloadNumber(lastOrder.rawPayload, "reason")
+      : null;
 
   const entryReason = firstEntry
     ? normalizeMt5ReasonToken(
@@ -1062,11 +1083,11 @@ function buildTradeBrokerMeta(input: {
           "deal"
         )
       : lastOrder != null
-        ? normalizeMt5ReasonToken(
-            getRawPayloadString(lastOrder.rawPayload, "reason") ?? exitReasonCode,
-            "order"
-          )
-        : null;
+      ? normalizeMt5ReasonToken(
+          getRawPayloadString(lastOrder.rawPayload, "reason") ?? exitReasonCode,
+          "order"
+        )
+      : null;
 
   const protectionEvents = [
     ...sortedOrders.map((row) => ({
@@ -1136,9 +1157,10 @@ function buildTradeBrokerMeta(input: {
     brokerMeta: {
       platform: "mt5",
       tradeKey: input.tradeKey,
-      positionId:
-        firstEntry?.positionId ?? lastExit?.positionId ?? null,
-      remoteOrderIds: [...new Set(sortedDeals.map((row) => row.remoteOrderId).filter(Boolean))],
+      positionId: firstEntry?.positionId ?? lastExit?.positionId ?? null,
+      remoteOrderIds: [
+        ...new Set(sortedDeals.map((row) => row.remoteOrderId).filter(Boolean)),
+      ],
       remoteDealIds: sortedDeals.map((row) => row.remoteDealId),
       magicNumber,
       executionMode,
@@ -1272,37 +1294,41 @@ function calculateExecutionQualityMetrics(input: {
   const exitSpreadPips =
     executionContext.exitReferenceBid != null &&
     executionContext.exitReferenceAsk != null
-      ? (executionContext.exitReferenceAsk - executionContext.exitReferenceBid) /
+      ? (executionContext.exitReferenceAsk -
+          executionContext.exitReferenceBid) /
         pipSize
       : executionContext.lastBid != null && executionContext.lastAsk != null
-        ? (executionContext.lastAsk - executionContext.lastBid) / pipSize
-        : null;
+      ? (executionContext.lastAsk - executionContext.lastBid) / pipSize
+      : null;
   const entrySlippagePips =
     executionContext.entryExpectedPrice != null
       ? isLong
-        ? Math.abs(input.openPrice - executionContext.entryExpectedPrice) / pipSize
-        : Math.abs(executionContext.entryExpectedPrice - input.openPrice) / pipSize
+        ? Math.abs(input.openPrice - executionContext.entryExpectedPrice) /
+          pipSize
+        : Math.abs(executionContext.entryExpectedPrice - input.openPrice) /
+          pipSize
       : null;
   const exitSlippagePips =
-    executionContext.exitReferenceBid != null || executionContext.exitReferenceAsk != null
+    executionContext.exitReferenceBid != null ||
+    executionContext.exitReferenceAsk != null
       ? isLong
         ? executionContext.exitReferenceBid != null
           ? Math.abs(input.closePrice - executionContext.exitReferenceBid) /
             pipSize
           : null
         : executionContext.exitReferenceAsk != null
-          ? Math.abs(executionContext.exitReferenceAsk - input.closePrice) /
-            pipSize
-          : null
+        ? Math.abs(executionContext.exitReferenceAsk - input.closePrice) /
+          pipSize
+        : null
       : executionContext.lastBid != null || executionContext.lastAsk != null
-        ? isLong
-          ? executionContext.lastBid != null
-            ? Math.abs(input.closePrice - executionContext.lastBid) / pipSize
-            : null
-          : executionContext.lastAsk != null
-            ? Math.abs(executionContext.lastAsk - input.closePrice) / pipSize
-            : null
-        : null;
+      ? isLong
+        ? executionContext.lastBid != null
+          ? Math.abs(input.closePrice - executionContext.lastBid) / pipSize
+          : null
+        : executionContext.lastAsk != null
+        ? Math.abs(executionContext.lastAsk - input.closePrice) / pipSize
+        : null
+      : null;
 
   return {
     entrySpreadPips,
@@ -1382,6 +1408,10 @@ async function ensureMt5TradingAccount(
         .where(eq(platformConnection.id, connectionId));
     }
 
+    if (autoPropFields.isPropAccount) {
+      await ensurePropChallengeLineageForAccount(existing.id);
+    }
+
     return {
       connection,
       accountId: existing.id,
@@ -1396,6 +1426,10 @@ async function ensureMt5TradingAccount(
     initialBalance: account.balance.toString(),
     ...commonUpdates,
   });
+
+  if (autoPropFields.isPropAccount) {
+    await ensurePropChallengeLineageForAccount(accountId);
+  }
 
   await db
     .update(platformConnection)
@@ -1426,7 +1460,9 @@ async function upsertBrokerSession(
       workerHostId: session.workerHostId ?? null,
       sessionKey: session.sessionKey ?? null,
       status: session.status ?? "syncing",
-      heartbeatAt: session.heartbeatAt ? parseDate(session.heartbeatAt) : new Date(),
+      heartbeatAt: session.heartbeatAt
+        ? parseDate(session.heartbeatAt)
+        : new Date(),
       lastLoginAt: session.lastLoginAt ? parseDate(session.lastLoginAt) : null,
       lastError: session.lastError ?? null,
       meta: session.meta ?? null,
@@ -1439,8 +1475,12 @@ async function upsertBrokerSession(
         workerHostId: session.workerHostId ?? null,
         sessionKey: session.sessionKey ?? null,
         status: session.status ?? "syncing",
-        heartbeatAt: session.heartbeatAt ? parseDate(session.heartbeatAt) : new Date(),
-        lastLoginAt: session.lastLoginAt ? parseDate(session.lastLoginAt) : null,
+        heartbeatAt: session.heartbeatAt
+          ? parseDate(session.heartbeatAt)
+          : new Date(),
+        lastLoginAt: session.lastLoginAt
+          ? parseDate(session.lastLoginAt)
+          : null,
         lastError: session.lastError ?? null,
         meta: session.meta ?? null,
         updatedAt: new Date(),
@@ -1548,10 +1588,9 @@ async function projectSymbolSpecs(
       deduped.set(normalized, {
         ...symbolSpec,
         symbol: normalized,
-        canonicalSymbol:
-          symbolSpec.canonicalSymbol
-            ? normalizeBrokerSymbol(symbolSpec.canonicalSymbol)
-            : canonicalizeBrokerSymbol(symbolSpec.symbol),
+        canonicalSymbol: symbolSpec.canonicalSymbol
+          ? normalizeBrokerSymbol(symbolSpec.canonicalSymbol)
+          : canonicalizeBrokerSymbol(symbolSpec.symbol),
       });
     }
   }
@@ -1561,10 +1600,9 @@ async function projectSymbolSpecs(
     accountId,
     platform: "mt5" as const,
     symbol: normalizeBrokerSymbol(symbolSpec.symbol),
-    canonicalSymbol:
-      symbolSpec.canonicalSymbol
-        ? normalizeBrokerSymbol(symbolSpec.canonicalSymbol)
-        : canonicalizeBrokerSymbol(symbolSpec.symbol),
+    canonicalSymbol: symbolSpec.canonicalSymbol
+      ? normalizeBrokerSymbol(symbolSpec.canonicalSymbol)
+      : canonicalizeBrokerSymbol(symbolSpec.symbol),
     digits: symbolSpec.digits ?? null,
     pointSize: toDecimal(symbolSpec.pointSize),
     tickSize: toDecimal(symbolSpec.tickSize),
@@ -1633,9 +1671,14 @@ async function projectOpenPositions(
   const existingOpenTrades = await db.query.openTrade.findMany({
     where: eq(openTrade.accountId, accountId),
   });
-  const existingTickets = new Set(existingOpenTrades.map((openPosition) => openPosition.ticket));
+  const existingTickets = new Set(
+    existingOpenTrades.map((openPosition) => openPosition.ticket)
+  );
   const existingOpenTradeByTicket = new Map(
-    existingOpenTrades.map((openPosition) => [openPosition.ticket, openPosition])
+    existingOpenTrades.map((openPosition) => [
+      openPosition.ticket,
+      openPosition,
+    ])
   );
   const openedPositions: OpenedPositionSeed[] = [];
   const modifiedPositions: ModifiedPositionSeed[] = [];
@@ -1648,11 +1691,13 @@ async function projectOpenPositions(
         inArray(brokerDealEvent.positionId, positionIds)
       ),
     });
-    const remoteOrderIds = [...new Set(
-      dealRows
-        .map((row) => row.remoteOrderId)
-        .filter((value): value is string => Boolean(value))
-    )];
+    const remoteOrderIds = [
+      ...new Set(
+        dealRows
+          .map((row) => row.remoteOrderId)
+          .filter((value): value is string => Boolean(value))
+      ),
+    ];
     const orderRows = await db.query.brokerOrderEvent.findMany({
       where: and(
         eq(brokerOrderEvent.accountId, accountId),
@@ -1717,7 +1762,9 @@ async function projectOpenPositions(
     );
     const removedOpenTrades = removedTradeKeys
       .map((ticket) => existingOpenTradeByTicket.get(ticket))
-      .filter((row): row is NonNullable<(typeof existingOpenTrades)[number]> => Boolean(row));
+      .filter((row): row is NonNullable<(typeof existingOpenTrades)[number]> =>
+        Boolean(row)
+      );
 
     for (const position of positions) {
       const tradeKey = position.remotePositionId;
@@ -1738,7 +1785,10 @@ async function projectOpenPositions(
           comment: position.comment ?? null,
           magicNumber: position.magicNumber ?? null,
         });
-      } else if (existingOpenTrade.sl !== nextSl || existingOpenTrade.tp !== nextTp) {
+      } else if (
+        existingOpenTrade.sl !== nextSl ||
+        existingOpenTrade.tp !== nextTp
+      ) {
         modifiedPositions.push({
           ticket: tradeKey,
           newSl: position.sl ?? null,
@@ -1753,16 +1803,20 @@ async function projectOpenPositions(
       const tradeMetrics = buildTradeLifecycleMetrics({
         tradeKey,
         tradeType: normalizeTradeSide(position.side),
-        dealRows: (dealRowsByPosition.get(position.remotePositionId) ?? []).map((row) => ({
-          remoteDealId: row.remoteDealId,
-          remoteOrderId: row.remoteOrderId ?? null,
-          positionId: row.positionId ?? null,
-          entryType: row.entryType ?? null,
-          eventTime: row.eventTime,
-          volume: row.volume,
-          rawPayload: row.rawPayload ?? null,
-        })),
-        orderRows: (orderRowsByPosition.get(position.remotePositionId) ?? []).map((row) => ({
+        dealRows: (dealRowsByPosition.get(position.remotePositionId) ?? []).map(
+          (row) => ({
+            remoteDealId: row.remoteDealId,
+            remoteOrderId: row.remoteOrderId ?? null,
+            positionId: row.positionId ?? null,
+            entryType: row.entryType ?? null,
+            eventTime: row.eventTime,
+            volume: row.volume,
+            rawPayload: row.rawPayload ?? null,
+          })
+        ),
+        orderRows: (
+          orderRowsByPosition.get(position.remotePositionId) ?? []
+        ).map((row) => ({
           remoteOrderId: row.remoteOrderId,
           positionId: row.positionId ?? null,
           state: row.state ?? null,
@@ -1809,13 +1863,13 @@ async function projectOpenPositions(
           position.rawPayload && typeof position.rawPayload === "object"
             ? mergeBrokerMetaExecutionContext(
                 {
-                ...(tradeMetrics.brokerMeta ?? {}),
-                platform: "mt5",
-                positionId: position.remotePositionId,
-                magicNumber: position.magicNumber ?? null,
-                sessionTag,
-                sessionTagColor,
-                raw: position.rawPayload,
+                  ...(tradeMetrics.brokerMeta ?? {}),
+                  platform: "mt5",
+                  positionId: position.remotePositionId,
+                  magicNumber: position.magicNumber ?? null,
+                  sessionTag,
+                  sessionTagColor,
+                  raw: position.rawPayload,
                 },
                 executionContext
               )
@@ -1869,7 +1923,10 @@ async function projectOpenPositions(
     await db
       .delete(openTrade)
       .where(
-        and(eq(openTrade.accountId, accountId), notInArray(openTrade.ticket, tickets))
+        and(
+          eq(openTrade.accountId, accountId),
+          notInArray(openTrade.ticket, tickets)
+        )
       );
 
     return {
@@ -1955,9 +2012,7 @@ async function insertDealEvents(
             },
           })
           .returning({ id: brokerDealEvent.id })
-      : await query
-          .onConflictDoNothing()
-          .returning({ id: brokerDealEvent.id });
+      : await query.onConflictDoNothing().returning({ id: brokerDealEvent.id });
 
     if (result.length > 0) {
       inserted += 1;
@@ -2171,9 +2226,7 @@ function deriveProjectedTrade(
     return null;
   }
 
-  const tradeType = normalizeTradeSide(
-    seed.side === "buy" ? "buy" : "sell"
-  );
+  const tradeType = normalizeTradeSide(seed.side === "buy" ? "buy" : "sell");
   const tradeKey =
     tradeKeyOverride ??
     getTradeKey({
@@ -2181,15 +2234,25 @@ function deriveProjectedTrade(
       remoteOrderId: seed.remoteOrderId,
       remoteDealId: seed.remoteDealId,
     });
-  const openPrice = weightedAveragePrice(entryRows.length > 0 ? entryRows : [seed]);
-  const closePrice = weightedAveragePrice(exitRows.length > 0 ? exitRows : [last]);
+  const openPrice = weightedAveragePrice(
+    entryRows.length > 0 ? entryRows : [seed]
+  );
+  const closePrice = weightedAveragePrice(
+    exitRows.length > 0 ? exitRows : [last]
+  );
 
   if (openPrice == null || closePrice == null) {
     return null;
   }
 
-  const entryVolume = entryRows.reduce((sum, row) => sum + toNumber(row.volume), 0);
-  const exitVolume = exitRows.reduce((sum, row) => sum + toNumber(row.volume), 0);
+  const entryVolume = entryRows.reduce(
+    (sum, row) => sum + toNumber(row.volume),
+    0
+  );
+  const exitVolume = exitRows.reduce(
+    (sum, row) => sum + toNumber(row.volume),
+    0
+  );
   const lifecycleSummary = summarizeDealLifecycle(
     sorted.map((row) => ({
       remoteDealId: row.remoteDealId,
@@ -2206,7 +2269,10 @@ function deriveProjectedTrade(
     0
   );
   const swap = sorted.reduce((sum, row) => sum + toNumber(row.swap), 0);
-  const grossProfit = sorted.reduce((sum, row) => sum + toNumber(row.profit), 0);
+  const grossProfit = sorted.reduce(
+    (sum, row) => sum + toNumber(row.profit),
+    0
+  );
   const profit = grossProfit + commissions + swap;
   const slRows = [...sorted]
     .reverse()
@@ -2413,7 +2479,9 @@ function deriveProvisionalProjectedTrade(input: {
   const firstEntry = entryRows[0] ?? null;
   const tradeType =
     seedTradeType ??
-    (firstEntry?.side ? normalizeTradeSide(firstEntry.side as "buy" | "sell") : null);
+    (firstEntry?.side
+      ? normalizeTradeSide(firstEntry.side as "buy" | "sell")
+      : null);
 
   if (!tradeType) {
     return null;
@@ -2463,8 +2531,7 @@ function deriveProvisionalProjectedTrade(input: {
   const volume =
     input.removedOpenTrade?.volume != null
       ? toNumber(input.removedOpenTrade.volume)
-      : fallbackState?.volume ??
-        toNumber(closeOrder.requestedVolume);
+      : fallbackState?.volume ?? toNumber(closeOrder.requestedVolume);
   const provisionalProfit =
     input.removedOpenTrade?.profit != null
       ? toNumber(input.removedOpenTrade.profit)
@@ -2510,8 +2577,7 @@ function deriveProvisionalProjectedTrade(input: {
     entryDealCount: entryRows.length,
     exitDealCount: 0,
     entryVolume:
-      entryRows.reduce((sum, row) => sum + toNumber(row.volume), 0) ||
-      volume,
+      entryRows.reduce((sum, row) => sum + toNumber(row.volume), 0) || volume,
     exitVolume: toNumber(closeOrder.requestedVolume) || volume,
     scaleInCount: Math.max(entryRows.length - 1, 0),
     scaleOutCount: 0,
@@ -2701,7 +2767,9 @@ async function projectClosedTrades(
       }
 
       const segmentStart = getEventSortTimestamp(segment.rows[0]!);
-      const segmentEnd = getEventSortTimestamp(segment.rows[segment.rows.length - 1]!);
+      const segmentEnd = getEventSortTimestamp(
+        segment.rows[segment.rows.length - 1]!
+      );
       const segmentOrderRows =
         orderInputs.filter((row) => {
           const eventTs = getEventSortTimestamp(row);
@@ -2800,7 +2868,9 @@ async function projectClosedTrades(
         });
         const executionContext =
           executionContextsByTradeKey.get(tradeKey) ??
-          getExecutionContextFromBrokerMeta(removedOpenTrade?.brokerMeta ?? null);
+          getExecutionContextFromBrokerMeta(
+            removedOpenTrade?.brokerMeta ?? null
+          );
         const executionMetrics = calculateExecutionQualityMetrics({
           tradeType: provisional.tradeType,
           symbol: provisional.symbol,
@@ -2834,7 +2904,9 @@ async function projectClosedTrades(
       continue;
     }
 
-    const desiredTickets = new Set(projectedRows.map(({ projected }) => projected.tradeKey));
+    const desiredTickets = new Set(
+      projectedRows.map(({ projected }) => projected.tradeKey)
+    );
     const staleTradeIds: string[] = [];
     for (const existingTrade of existingTrades) {
       const ticket = existingTrade.ticket;
@@ -2863,7 +2935,9 @@ async function projectClosedTrades(
       executionMetrics,
       brokerMeta,
     } of projectedRows) {
-      const { sessionTag, sessionTagColor } = deriveSessionTagAt(projected.openTime);
+      const { sessionTag, sessionTagColor } = deriveSessionTagAt(
+        projected.openTime
+      );
       const existingRows = existingTradesByTicket.get(projected.tradeKey) ?? [];
       const existingTrade = existingRows[0] ?? null;
       const duplicateTradeIds = existingRows.slice(1).map((row) => row.id);
@@ -2990,21 +3064,23 @@ async function collectAllMt5TradeKeysForAccount(input: {
         : eq(brokerOrderEvent.accountId, input.accountId)
     );
 
-  return [...new Set([
-    ...dealRows.map((row) =>
-      getTradeKey({
-        positionId: row.positionId ?? null,
-        remoteOrderId: row.remoteOrderId ?? null,
-        remoteDealId: row.remoteDealId,
-      })
-    ),
-    ...orderRows.map((row) =>
-      getOrderTradeKey({
-        positionId: row.positionId ?? null,
-        remoteOrderId: row.remoteOrderId,
-      })
-    ),
-  ])];
+  return [
+    ...new Set([
+      ...dealRows.map((row) =>
+        getTradeKey({
+          positionId: row.positionId ?? null,
+          remoteOrderId: row.remoteOrderId ?? null,
+          remoteDealId: row.remoteDealId,
+        })
+      ),
+      ...orderRows.map((row) =>
+        getOrderTradeKey({
+          positionId: row.positionId ?? null,
+          remoteOrderId: row.remoteOrderId,
+        })
+      ),
+    ]),
+  ];
 }
 
 async function updateCheckpoint(
@@ -3028,14 +3104,15 @@ async function updateCheckpoint(
       lastDealTime: input.checkpoint?.lastDealTime
         ? parseDate(input.checkpoint.lastDealTime)
         : lastDeal
-          ? parseDate(lastDeal.eventTime)
-          : null,
-      lastDealId: input.checkpoint?.lastDealId ?? lastDeal?.remoteDealId ?? null,
+        ? parseDate(lastDeal.eventTime)
+        : null,
+      lastDealId:
+        input.checkpoint?.lastDealId ?? lastDeal?.remoteDealId ?? null,
       lastOrderTime: input.checkpoint?.lastOrderTime
         ? parseDate(input.checkpoint.lastOrderTime)
         : lastOrder
-          ? parseDate(lastOrder.eventTime)
-          : null,
+        ? parseDate(lastOrder.eventTime)
+        : null,
       lastPositionPollAt: input.checkpoint?.lastPositionPollAt
         ? parseDate(input.checkpoint.lastPositionPollAt)
         : parseDate(input.account.snapshotTime),
@@ -3054,15 +3131,15 @@ async function updateCheckpoint(
         lastDealTime: input.checkpoint?.lastDealTime
           ? parseDate(input.checkpoint.lastDealTime)
           : lastDeal
-            ? parseDate(lastDeal.eventTime)
-            : null,
+          ? parseDate(lastDeal.eventTime)
+          : null,
         lastDealId:
           input.checkpoint?.lastDealId ?? lastDeal?.remoteDealId ?? null,
         lastOrderTime: input.checkpoint?.lastOrderTime
           ? parseDate(input.checkpoint.lastOrderTime)
           : lastOrder
-            ? parseDate(lastOrder.eventTime)
-            : null,
+          ? parseDate(lastOrder.eventTime)
+          : null,
         lastPositionPollAt: input.checkpoint?.lastPositionPollAt
           ? parseDate(input.checkpoint.lastPositionPollAt)
           : parseDate(input.account.snapshotTime),
@@ -3118,7 +3195,17 @@ async function emitMt5ClosedTradeSideEffects(input: {
       source: "mt5-terminal",
       tradeIds,
     },
-    dedupeKey: `mt5-trade-closed:${input.accountId}:${tradeIds.sort().join(",")}`,
+    dedupeKey: `mt5-trade-closed:${input.accountId}:${tradeIds
+      .sort()
+      .join(",")}`,
+  });
+
+  void notifyEarnedAchievements({
+    userId: input.userId,
+    accountId: input.accountId,
+    source: "mt5-terminal",
+  }).catch((error) => {
+    console.error("[MT5] Achievement notification failed:", error);
   });
 
   for (const tradeId of tradeIds) {
@@ -3305,7 +3392,11 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
     removedOpenTrades: [...removedOpenTradesByKey.values()],
   });
   const tradeKeysToProject = [
-    ...new Set([...affectedTradeKeys, ...affectedOrderTradeKeys, ...removedTradeKeys]),
+    ...new Set([
+      ...affectedTradeKeys,
+      ...affectedOrderTradeKeys,
+      ...removedTradeKeys,
+    ]),
   ];
   const fullReconcileTradeKeys =
     reconcileMode === "full-reconcile"
@@ -3317,15 +3408,12 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
   const projectionTradeKeys = [
     ...new Set([...tradeKeysToProject, ...fullReconcileTradeKeys]),
   ];
-  const { tradesProjected, tradeIds, createdTradeIds } = await projectClosedTrades(
-    accountId,
-    projectionTradeKeys,
-    {
+  const { tradesProjected, tradeIds, createdTradeIds } =
+    await projectClosedTrades(accountId, projectionTradeKeys, {
       removedOpenTradesByKey,
       executionContextsByTradeKey,
       symbolSpecsBySymbol,
-    }
-  );
+    });
   const { tradesEnriched } = await enrichProjectedMt5Trades({
     accountId,
     tradeIds,
@@ -3382,6 +3470,7 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
     cacheNamespaces.TRADES,
     `account:${accountId}`,
   ]);
+  await syncPropAccountState(accountId, { saveAlerts: true });
 
   const result = {
     connectionId: input.connectionId,
@@ -3502,14 +3591,21 @@ export async function backfillMt5ProjectedTrades(input?: {
   }> = [];
 
   for (const [accountId, bucket] of buckets.entries()) {
-    const { tradesProjected: projectedCount, tradeIds, createdTradeIds } =
-      await projectClosedTrades(accountId, [...bucket.tradeKeys]);
+    const {
+      tradesProjected: projectedCount,
+      tradeIds,
+      createdTradeIds,
+    } = await projectClosedTrades(accountId, [...bucket.tradeKeys]);
     const { tradesEnriched: enrichedCount } = await enrichProjectedMt5Trades({
       accountId,
       tradeIds,
     });
 
-    if (input?.emitSideEffects && createdTradeIds.length > 0 && bucket.connectionId) {
+    if (
+      input?.emitSideEffects &&
+      createdTradeIds.length > 0 &&
+      bucket.connectionId
+    ) {
       const connection = await db.query.platformConnection.findFirst({
         where: eq(platformConnection.id, bucket.connectionId),
         columns: {

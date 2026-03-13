@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Bell, Check, Dot, Newspaper, 
-  TrendingUp, TrendingDown, AlertTriangle, 
-  Target, Users, Settings, Activity,
-  DollarSign, Trophy, MessageCircle
-} from "lucide-react";
+import { Bell, Check, Dot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -15,36 +10,73 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tabs,
+  TabsContent,
+  TabsListUnderlined,
+  TabsTriggerUnderlined,
+} from "@/components/ui/tabs";
 import { useTRPC } from "@/utils/trpc";
 
 type NotificationPriority = "urgent" | "high" | "normal" | "low";
 
 type ImpactLevel = "High" | "Medium" | "Low" | "Holiday";
 
-const priorityConfig: Record<NotificationPriority, { color: string; icon: React.ReactNode; label: string }> = {
+type KnownNotificationType =
+  | "trade_closed"
+  | "trade_opened"
+  | "post_exit_ready"
+  | "webhook_sync"
+  | "news_upcoming"
+  | "trade_imported"
+  | "api_key"
+  | "settings_updated"
+  | "goal_achieved"
+  | "goal_progress"
+  | "achievement_earned"
+  | "alert_triggered"
+  | "prop_violation"
+  | "prop_journey"
+  | "prop_phase_advanced"
+  | "leaderboard_update"
+  | "copier_signal"
+  | "system_maintenance"
+  | "system_update";
+
+type NotificationTab =
+  | "all"
+  | "trades"
+  | "review-ready"
+  | "goals"
+  | "alerts"
+  | "news"
+  | "social"
+  | "system";
+
+type FilterableNotificationTab = Exclude<NotificationTab, "all">;
+
+const priorityConfig: Record<
+  NotificationPriority,
+  { color: string; label: string }
+> = {
   urgent: {
     color: "text-red-400 bg-red-500/10 border-red-500/20",
-    icon: <AlertTriangle className="w-3 h-3" />,
-    label: "Urgent"
+    label: "Urgent",
   },
   high: {
     color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
-    icon: <Activity className="w-3 h-3" />,
-    label: "High"
+    label: "High",
   },
   normal: {
     color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
-    icon: <Bell className="w-3 h-3" />,
-    label: "Normal"
+    label: "Normal",
   },
   low: {
     color: "text-white/40 bg-white/5 border-white/10",
-    icon: <Dot className="w-3 h-3" />,
-    label: "Low"
-  }
+    label: "Low",
+  },
 };
 
 function getNotificationPriority(type?: string | null): NotificationPriority {
@@ -52,8 +84,11 @@ function getNotificationPriority(type?: string | null): NotificationPriority {
     case "alert_triggered":
     case "prop_violation":
       return "urgent";
+    case "prop_journey":
+      return "normal";
     case "trade_closed":
     case "goal_achieved":
+    case "achievement_earned":
     case "prop_phase_advanced":
       return "high";
     case "trade_opened":
@@ -73,10 +108,42 @@ type NotificationMetadata = {
   title?: string;
   url?: string;
   accountId?: string;
+  accountNumber?: string;
+  broker?: string;
   journalEntryId?: string;
+  journalEntryIds?: string[];
+  linkedTradeIds?: string[];
   eventCount?: number;
   eventTitles?: string[];
+  count?: number;
+  fromWebhook?: number;
+  backfilled?: number;
+  reviewCount?: number;
+  keyId?: string;
+  keyPrefix?: string;
+  name?: string;
+  previousName?: string;
+  expiresAt?: Date | string | null;
+  updatedFields?: string[];
+  ruleCount?: number;
+  alertType?: string;
+  severity?: string;
+  currentValue?: number;
+  thresholdValue?: number;
+  tickets?: string[];
+  balance?: number;
+  equity?: number;
+  phaseOrder?: number;
+  nextPhase?: number;
+  theme?: string | null;
 };
+
+function isFundedPropNotification(item: NotificationItem) {
+  return (
+    item.type === "prop_phase_advanced" &&
+    (item.metadata?.theme === "gold" || item.metadata?.nextPhase === 0)
+  );
+}
 
 type NotificationItem = {
   id: string;
@@ -88,7 +155,102 @@ type NotificationItem = {
   createdAt: Date | string;
 };
 
-type NotificationCategory = "all" | "trades" | "goals" | "alerts" | "news" | "social" | "system";
+const NOTIFICATION_TABS = [
+  "all",
+  "trades",
+  "review-ready",
+  "goals",
+  "alerts",
+  "news",
+  "social",
+  "system",
+] as const satisfies readonly NotificationTab[];
+
+const knownNotificationTypes = [
+  "trade_closed",
+  "trade_opened",
+  "post_exit_ready",
+  "webhook_sync",
+  "news_upcoming",
+  "trade_imported",
+  "api_key",
+  "settings_updated",
+  "goal_achieved",
+  "goal_progress",
+  "achievement_earned",
+  "alert_triggered",
+  "prop_violation",
+  "prop_journey",
+  "prop_phase_advanced",
+  "leaderboard_update",
+  "copier_signal",
+  "system_maintenance",
+  "system_update",
+] as const satisfies readonly KnownNotificationType[];
+
+const notificationTabLabels: Record<NotificationTab, string> = {
+  all: "All",
+  trades: "Trades",
+  "review-ready": "Review ready",
+  goals: "Goals",
+  alerts: "Alerts",
+  news: "News",
+  social: "Social",
+  system: "System",
+};
+
+const notificationTabEmptyStates: Record<NotificationTab, string> = {
+  all: "No notifications yet.",
+  trades:
+    "No trade notifications. Closed trades, imports, and execution updates will land here.",
+  "review-ready":
+    "No review-ready notifications. Auto-generated post-trade reviews will show up here.",
+  goals:
+    "No goal notifications. Goal milestones, achievements, and progress updates will land here.",
+  alerts:
+    "No alert notifications. Triggered alerts and prop-account violations will land here.",
+  news: "No news notifications. Economic calendar events and impact updates will land here.",
+  social:
+    "No social notifications. Copier signals and leaderboard activity will land here.",
+  system:
+    "No system notifications. Sync status, API keys, settings changes, and platform updates will land here.",
+};
+
+const notificationTabBadgeClasses: Record<NotificationTab, string> = {
+  all: "bg-teal-500/15 text-teal-300",
+  trades: "bg-white/5 text-white/60",
+  "review-ready": "bg-teal-500/15 text-teal-300",
+  goals: "bg-emerald-500/15 text-emerald-300",
+  alerts: "bg-red-500/15 text-red-300",
+  news: "bg-amber-500/15 text-amber-300",
+  social: "bg-sky-500/15 text-sky-300",
+  system: "bg-white/5 text-white/60",
+};
+
+const notificationTypePrimaryTab: Record<
+  KnownNotificationType,
+  FilterableNotificationTab
+> = {
+  trade_closed: "trades",
+  trade_opened: "trades",
+  post_exit_ready: "review-ready",
+  webhook_sync: "system",
+  news_upcoming: "news",
+  trade_imported: "trades",
+  api_key: "system",
+  settings_updated: "system",
+  goal_achieved: "goals",
+  goal_progress: "goals",
+  achievement_earned: "goals",
+  alert_triggered: "alerts",
+  prop_violation: "alerts",
+  prop_journey: "alerts",
+  prop_phase_advanced: "alerts",
+  leaderboard_update: "social",
+  copier_signal: "social",
+  system_maintenance: "system",
+  system_update: "system",
+};
 
 const impactBadgeClasses: Record<ImpactLevel, string> = {
   High: "bg-red-500/20 text-red-200 ring-red-500/30",
@@ -136,7 +298,9 @@ function getDateGroup(value: Date | string): DateGroup {
   return "older";
 }
 
-function groupByDate(items: NotificationItem[]): { group: DateGroup; items: NotificationItem[] }[] {
+function groupByDate(
+  items: NotificationItem[]
+): { group: DateGroup; items: NotificationItem[] }[] {
   const groups: Record<DateGroup, NotificationItem[]> = {
     today: [],
     yesterday: [],
@@ -150,50 +314,79 @@ function groupByDate(items: NotificationItem[]): { group: DateGroup; items: Noti
   }
 
   const result: { group: DateGroup; items: NotificationItem[] }[] = [];
-  if (groups.today.length > 0) result.push({ group: "today", items: groups.today });
-  if (groups.yesterday.length > 0) result.push({ group: "yesterday", items: groups.yesterday });
-  if (groups.thisWeek.length > 0) result.push({ group: "thisWeek", items: groups.thisWeek });
-  if (groups.older.length > 0) result.push({ group: "older", items: groups.older });
+  if (groups.today.length > 0)
+    result.push({ group: "today", items: groups.today });
+  if (groups.yesterday.length > 0)
+    result.push({ group: "yesterday", items: groups.yesterday });
+  if (groups.thisWeek.length > 0)
+    result.push({ group: "thisWeek", items: groups.thisWeek });
+  if (groups.older.length > 0)
+    result.push({ group: "older", items: groups.older });
 
   return result;
 }
 
 const dateGroupLabels: Record<DateGroup, string> = {
-  today: "Today",
-  yesterday: "Yesterday",
-  thisWeek: "This Week",
-  older: "Earlier",
+  today: "today",
+  yesterday: "yesterday",
+  thisWeek: "this week",
+  older: "earlier",
 };
 
-function categorizeNotification(type?: string | null): NotificationCategory {
-  if (!type) return "system";
+function isKnownNotificationType(
+  type?: string | null
+): type is KnownNotificationType {
+  return Boolean(
+    type && knownNotificationTypes.includes(type as KnownNotificationType)
+  );
+}
 
-  switch (type) {
-    case "trade_closed":
-    case "trade_opened":
-    case "post_exit_ready":
-    case "trade_imported":
-      return "trades";
-    case "goal_achieved":
-    case "goal_progress":
-      return "goals";
-    case "alert_triggered":
-    case "prop_violation":
-    case "prop_phase_advanced":
-      return "alerts";
-    case "news_upcoming":
-      return "news";
-    case "leaderboard_update":
-    case "copier_signal":
-      return "social";
-    case "webhook_sync":
-    case "api_key":
-    case "settings_updated":
-    case "system_maintenance":
-    case "system_update":
-    default:
-      return "system";
+function getNotificationPrimaryTab(
+  type?: string | null
+): FilterableNotificationTab {
+  if (!isKnownNotificationType(type)) {
+    return "system";
   }
+
+  return notificationTypePrimaryTab[type];
+}
+
+function buildReviewReadyUrl(item: NotificationItem) {
+  if (item.metadata?.url?.startsWith("/dashboard/journal")) {
+    const [path, rawQuery] = item.metadata.url.split("?");
+    const params = new URLSearchParams(rawQuery ?? "");
+
+    if (!params.has("tab")) {
+      params.set("tab", "review-ready");
+    }
+
+    const query = params.toString();
+    return query ? `${path}?${query}` : path;
+  }
+
+  return item.metadata?.journalEntryId
+    ? `/dashboard/journal?tab=review-ready&entryId=${item.metadata.journalEntryId}&entryType=trade_review`
+    : "/dashboard/journal?tab=review-ready&entryType=trade_review";
+}
+
+function buildSettingsUpdatedUrl(metadata?: NotificationMetadata | null) {
+  if (metadata?.alertType || metadata?.severity) {
+    return "/dashboard/settings/alerts";
+  }
+
+  if (typeof metadata?.ruleCount === "number") {
+    return "/dashboard/settings/compliance";
+  }
+
+  if (Array.isArray(metadata?.updatedFields) && metadata.updatedFields.length) {
+    return "/dashboard/settings/metrics";
+  }
+
+  if (metadata?.broker || metadata?.accountNumber) {
+    return "/dashboard/settings/connections";
+  }
+
+  return "/dashboard/settings";
 }
 
 function buildCalendarUrl(metadata?: NotificationMetadata | null) {
@@ -210,6 +403,10 @@ function buildCalendarUrl(metadata?: NotificationMetadata | null) {
 }
 
 function buildNotificationUrl(item: NotificationItem) {
+  if (item.type === "post_exit_ready") {
+    return buildReviewReadyUrl(item);
+  }
+
   if (item.metadata?.url) {
     return item.metadata.url;
   }
@@ -217,21 +414,34 @@ function buildNotificationUrl(item: NotificationItem) {
   switch (item.type) {
     case "trade_closed":
     case "trade_opened":
+    case "trade_imported":
       return "/dashboard/trades";
-    case "post_exit_ready":
-      return item.metadata?.journalEntryId
-        ? `/dashboard/journal?entryId=${item.metadata.journalEntryId}&entryType=trade_review`
-        : "/dashboard/journal?entryType=trade_review";
     case "goal_achieved":
     case "goal_progress":
       return "/dashboard/goals";
+    case "achievement_earned":
+      return "/dashboard/achievements";
     case "prop_violation":
+    case "prop_journey":
     case "prop_phase_advanced":
       return item.metadata?.accountId
         ? `/dashboard/prop-tracker/${item.metadata.accountId}`
         : "/dashboard/prop-tracker";
     case "alert_triggered":
       return "/dashboard/settings/alerts";
+    case "leaderboard_update":
+      return "/dashboard/leaderboard";
+    case "copier_signal":
+      return "/dashboard/copier";
+    case "api_key":
+      return "/dashboard/settings/api";
+    case "webhook_sync":
+      return "/dashboard/settings/connections";
+    case "settings_updated":
+      return buildSettingsUpdatedUrl(item.metadata);
+    case "system_maintenance":
+    case "system_update":
+      return "/dashboard/settings/notifications";
     default:
       return null;
   }
@@ -250,125 +460,181 @@ function NotificationsList({
 
   return (
     <>
-      {groupedItems.map((group) => (
+      {groupedItems.map((group, groupIndex) => (
         <div key={group.group}>
+          {groupIndex > 0 && <Separator />}
           {/* Date Group Header */}
-          <div className="sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm px-3 py-1.5 border-b border-white/5">
+          <div className="sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm px-3 py-1.5">
             <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
               {dateGroupLabels[group.group]}
             </span>
           </div>
-          {group.items.map((item, index) => {
-            const isNews = item.type === "news_upcoming";
-            const targetUrl = isNews ? buildCalendarUrl(item.metadata) : buildNotificationUrl(item);
-            const impact =
-              isNews && item.metadata?.impact
-                ? normalizeImpact(item.metadata.impact)
-                : null;
-            const eventCount = isNews ? (item.metadata?.eventCount ?? 1) : 0;
-            const priority = getNotificationPriority(item.type);
-            const priorityStyle = priorityConfig[priority];
-            const isUrgent = priority === "urgent";
-            const isHigh = priority === "high";
+          <Separator />
+          <div className="px-1.5 py-1">
+            {group.items.map((item, index) => {
+              const isNews = item.type === "news_upcoming";
+              const targetUrl = isNews
+                ? buildCalendarUrl(item.metadata)
+                : buildNotificationUrl(item);
+              const impact =
+                isNews && item.metadata?.impact
+                  ? normalizeImpact(item.metadata.impact)
+                  : null;
+              const eventCount = isNews ? item.metadata?.eventCount ?? 1 : 0;
+              const priority = getNotificationPriority(item.type);
+              const priorityStyle = priorityConfig[priority];
+              const isUrgent = priority === "urgent";
+              const isHigh = priority === "high";
+              const isFundedMilestone = isFundedPropNotification(item);
 
-            return (
-              <div key={item.id}>
-                {index > 0 ? (
-                  <DropdownMenuSeparator className="bg-white/5 my-1" />
-                ) : null}
-                <DropdownMenuItem
-                  className={cn(
-                    "p-2.5 flex flex-col items-start gap-1 hover:bg-sidebar-accent! rounded-sm",
-                    targetUrl && "cursor-pointer",
-                    isUrgent && "border-l-2 border-red-500/50 bg-red-500/5"
-                  )}
-                  onSelect={(event) => event.preventDefault()}
-                  onClick={() => {
-                    if (!item.readAt) {
-                      markRead.mutate({ ids: [item.id] });
-                    }
-                    if (targetUrl) {
-                      onNavigate(targetUrl);
-                    }
-                  }}
-                >
-                  <div className="flex items-center gap-1.5 w-full">
-                    {!item.readAt ? (
-                      <Dot className={cn("size-4 shrink-0", isUrgent ? "text-red-400" : isHigh ? "text-orange-400" : "text-teal-400")} />
-                    ) : (
-                      <Check className="size-3.5 text-white/30 shrink-0" />
-                    )}
-                    {isNews && (
-                      <Newspaper className="size-3.5 text-white/40 shrink-0" />
-                    )}
-                    {isUrgent && (
-                      <AlertTriangle className="size-3.5 text-red-400 shrink-0" />
-                    )}
-                    {priority === "high" && !isUrgent && (
-                      <Activity className="size-3.5 text-orange-400 shrink-0" />
-                    )}
-                    <span
-                      className={cn(
-                        "text-xs font-semibold flex-1",
-                        item.readAt ? "text-white/50" : isUrgent ? "text-red-100" : "text-white"
-                      )}
-                    >
-                      {item.title}
-                    </span>
-                    {impact && (
-                      <span
-                        className={cn(
-                          "inline-flex items-center rounded-sm ring px-2 py-1 text-[9px] font-medium tracking-wide shrink-0",
-                          impactBadgeClasses[impact]
-                        )}
-                      >
-                        {impact}
-                      </span>
-                    )}
-                    {isNews && eventCount > 1 && (
-                      <span className="inline-flex items-center rounded-sm bg-white/5 px-1.5 py-0.5 text-[9px] font-medium text-white/50 shrink-0">
-                        {eventCount}
-                      </span>
-                    )}
-                    {!isNews && (priority === "urgent" || priority === "high") && (
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[9px] font-medium shrink-0",
-                          priorityStyle.color
-                        )}
-                      >
-                        {priorityStyle.icon}
-                        {priorityStyle.label}
-                      </span>
-                    )}
-                  </div>
-                  {item.body ? (
-                    <span className="text-[11px] text-white/60 line-clamp-2 pl-5">
-                      {item.body}
-                    </span>
+              return (
+                <div key={item.id}>
+                  {index > 0 ? (
+                    <div className="-mx-1.5 my-1">
+                      <Separator />
+                    </div>
                   ) : null}
-                  {targetUrl && (
-                    <span className="text-[10px] text-teal-400/70 pl-5">
-                      Click to open →
+                  <DropdownMenuItem
+                    className={cn(
+                      "p-2.5 flex flex-col items-start gap-1 hover:bg-sidebar-accent! rounded-sm",
+                      targetUrl && "cursor-pointer",
+                      isUrgent && "border-l-2 border-red-500/50 bg-red-500/5",
+                      isFundedMilestone &&
+                        " border-amber-400/50 bg-amber-400/8 hover:bg-amber-400/15!"
+                    )}
+                    onSelect={(event) => event.preventDefault()}
+                    onClick={() => {
+                      if (!item.readAt) {
+                        markRead.mutate({ ids: [item.id] });
+                      }
+                      if (targetUrl) {
+                        onNavigate(targetUrl);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-1.5 w-full">
+                      {!item.readAt ? (
+                        <Dot
+                          className={cn(
+                            "size-4 shrink-0",
+                            isUrgent
+                              ? "text-red-400"
+                              : isFundedMilestone
+                              ? "text-amber-300"
+                              : isHigh
+                              ? "text-orange-400"
+                              : "text-teal-400"
+                          )}
+                        />
+                      ) : (
+                        <Check className="size-3.5 text-white/30 shrink-0" />
+                      )}
+                      <span
+                        className={cn(
+                          "text-xs font-semibold flex-1",
+                          item.readAt
+                            ? "text-white/50"
+                            : isUrgent
+                            ? "text-red-100"
+                            : isFundedMilestone
+                            ? "text-amber-100"
+                            : "text-white"
+                        )}
+                      >
+                        {item.title}
+                      </span>
+                      {impact && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-sm ring px-2 py-1 text-[9px] font-medium tracking-wide shrink-0",
+                            impactBadgeClasses[impact]
+                          )}
+                        >
+                          {impact}
+                        </span>
+                      )}
+                      {isNews && eventCount > 1 && (
+                        <span className="inline-flex items-center rounded-sm bg-white/5 px-1.5 py-0.5 text-[9px] font-medium text-white/50 shrink-0">
+                          {eventCount}
+                        </span>
+                      )}
+                      {!isNews &&
+                        (isFundedMilestone ||
+                          priority === "urgent" ||
+                          priority === "high") && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-medium shrink-0",
+                              isFundedMilestone
+                                ? "border border-amber-300/25 bg-amber-300/10 text-amber-100"
+                                : priorityStyle.color
+                            )}
+                          >
+                            {isFundedMilestone ? "Funded" : priorityStyle.label}
+                          </span>
+                        )}
+                    </div>
+                    {item.body ? (
+                      <span className="text-[11px] text-white/60 line-clamp-2 pl-5">
+                        {item.body}
+                      </span>
+                    ) : null}
+                    {targetUrl && (
+                      <span className="text-[10px] text-teal-400/70 pl-5">
+                        Click to open →
+                      </span>
+                    )}
+                    <span className="text-[10px] text-white/40 pl-5">
+                      {formatTimestamp(item.createdAt)}
                     </span>
-                  )}
-                  <span className="text-[10px] text-white/40 pl-5">
-                    {formatTimestamp(item.createdAt)}
-                  </span>
-                </DropdownMenuItem>
-              </div>
-            );
-          })}
+                  </DropdownMenuItem>
+                </div>
+              );
+            })}
+          </div>
         </div>
       ))}
     </>
   );
 }
 
+function NotificationTabPanel({
+  value,
+  items,
+  emptyMessage,
+  markRead,
+  onNavigate,
+}: {
+  value: NotificationTab;
+  items: NotificationItem[];
+  emptyMessage: string;
+  markRead: any;
+  onNavigate: (url: string) => void;
+}) {
+  return (
+    <TabsContent
+      value={value}
+      className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
+    >
+      {items.length === 0 ? (
+        <div className="px-3 py-12 text-center text-xs text-white/40">
+          {emptyMessage}
+        </div>
+      ) : (
+        <NotificationsList
+          items={items}
+          markRead={markRead}
+          onNavigate={onNavigate}
+        />
+      )}
+    </TabsContent>
+  );
+}
+
 export default function NotificationsHub() {
   const router = useRouter();
   const trpc = useTRPC();
-  const [activeTab, setActiveTab] = useState<NotificationCategory>("all");
+  const [activeTab, setActiveTab] = useState<NotificationTab>("all");
   const [open, setOpen] = useState(false);
   const { data: notifications = [], refetch } =
     trpc.notifications.list.useQuery(
@@ -390,52 +656,42 @@ export default function NotificationsHub() {
 
   const items = notifications as NotificationItem[];
 
-  // Categorize notifications
-  const categorizedNotifications = useMemo(() => {
-    const categories: Record<NotificationCategory, NotificationItem[]> = {
+  const notificationsByTab = useMemo(() => {
+    const grouped: Record<NotificationTab, NotificationItem[]> = {
       all: items,
-      trades: items.filter(
-        (item) => categorizeNotification(item.type) === "trades"
-      ),
-      goals: items.filter(
-        (item) => categorizeNotification(item.type) === "goals"
-      ),
-      alerts: items.filter(
-        (item) => categorizeNotification(item.type) === "alerts"
-      ),
-      news: items.filter(
-        (item) => categorizeNotification(item.type) === "news"
-      ),
-      social: items.filter(
-        (item) => categorizeNotification(item.type) === "social"
-      ),
-      system: items.filter(
-        (item) => categorizeNotification(item.type) === "system"
-      ),
+      trades: [],
+      "review-ready": [],
+      goals: [],
+      alerts: [],
+      news: [],
+      social: [],
+      system: [],
     };
-    return categories;
+
+    for (const item of items) {
+      grouped[getNotificationPrimaryTab(item.type)].push(item);
+    }
+
+    return grouped;
   }, [items]);
 
-  // Count unread per category
   const unreadCounts = useMemo(() => {
-    const counts: Record<NotificationCategory, number> = {
+    const counts: Record<NotificationTab, number> = {
       all: items.filter((item) => !item.readAt).length,
-      trades: categorizedNotifications.trades.filter((item) => !item.readAt)
-        .length,
-      goals: categorizedNotifications.goals.filter((item) => !item.readAt)
-        .length,
-      alerts: categorizedNotifications.alerts.filter((item) => !item.readAt)
-        .length,
-      news: categorizedNotifications.news.filter((item) => !item.readAt).length,
-      social: categorizedNotifications.social.filter((item) => !item.readAt)
-        .length,
-      system: categorizedNotifications.system.filter((item) => !item.readAt)
-        .length,
+      trades: notificationsByTab.trades.filter((item) => !item.readAt).length,
+      "review-ready": notificationsByTab["review-ready"].filter(
+        (item) => !item.readAt
+      ).length,
+      goals: notificationsByTab.goals.filter((item) => !item.readAt).length,
+      alerts: notificationsByTab.alerts.filter((item) => !item.readAt).length,
+      news: notificationsByTab.news.filter((item) => !item.readAt).length,
+      social: notificationsByTab.social.filter((item) => !item.readAt).length,
+      system: notificationsByTab.system.filter((item) => !item.readAt).length,
     };
     return counts;
-  }, [items, categorizedNotifications]);
+  }, [items, notificationsByTab]);
 
-  const unreadCount = unreadCounts.all;
+  const unreadCount = items.filter((item) => !item.readAt).length;
 
   const handleNavigate = (url: string) => {
     setOpen(false);
@@ -485,238 +741,76 @@ export default function NotificationsHub() {
         align="end"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+        <div className="flex items-center justify-between px-4 py-3">
           <span className="text-sm font-semibold text-white/80">
             Notifications
           </span>
 
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[10px] rounded-sm text-white/50 hover:text-white hover:bg-sidebar-accent"
-              onClick={() => {
-                setOpen(false);
-                router.push("/dashboard/settings/notifications");
-              }}
-            >
-              <Settings className="size-3.5 mr-1" />
-              Settings
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-[10px] rounded-sm text-white/50 hover:text-white hover:bg-sidebar-accent"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending || unreadCount === 0}
-            >
-              <Check className="size-3.5 mr-1" />
-              Mark all
-            </Button>
-          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[10px] rounded-sm text-white/50 hover:text-white hover:bg-sidebar-accent"
+            onClick={() => markAllRead.mutate()}
+            disabled={markAllRead.isPending || unreadCount === 0}
+          >
+            <Check className="size-3" />
+            Mark all
+          </Button>
         </div>
+        <Separator />
 
         {/* Tabs */}
         <Tabs
           value={activeTab}
-          onValueChange={(val) => setActiveTab(val as NotificationCategory)}
+          onValueChange={(value) => {
+            if (NOTIFICATION_TABS.includes(value as NotificationTab)) {
+              setActiveTab(value as NotificationTab);
+            }
+          }}
           className="flex-1 flex flex-col overflow-hidden"
         >
-          <TabsList className="w-full grid grid-cols-7 rounded-none bg-sidebar border-b border-white/5 h-10 p-0 text-[10px]">
-            <TabsTrigger
-              value="all"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>All</span>
-              {unreadCounts.all > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-teal-500/20 text-[8px] font-semibold text-teal-400 px-0.5">
-                  {unreadCounts.all}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="trades"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>Trades</span>
-              {unreadCounts.trades > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-teal-500/20 text-[8px] font-semibold text-teal-400 px-0.5">
-                  {unreadCounts.trades}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="goals"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>Goals</span>
-              {unreadCounts.goals > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-teal-500/20 text-[8px] font-semibold text-teal-400 px-0.5">
-                  {unreadCounts.goals}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="alerts"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>Alerts</span>
-              {unreadCounts.alerts > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-red-500/20 text-[8px] font-semibold text-red-400 px-0.5">
-                  {unreadCounts.alerts}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="news"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>News</span>
-              {unreadCounts.news > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-teal-500/20 text-[8px] font-semibold text-teal-400 px-0.5">
-                  {unreadCounts.news}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="social"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>Social</span>
-              {unreadCounts.social > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-teal-500/20 text-[8px] font-semibold text-teal-400 px-0.5">
-                  {unreadCounts.social}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger
-              value="system"
-              className="rounded-none text-[10px] data-[state=active]:bg-sidebar-accent data-[state=active]:text-white relative h-10 flex items-center justify-center gap-1 px-1"
-            >
-              <span>System</span>
-              {unreadCounts.system > 0 && (
-                <span className="flex h-3.5 min-w-3.5 items-center justify-center rounded-sm bg-teal-500/20 text-[8px] font-semibold text-teal-400 px-0.5">
-                  {unreadCounts.system}
-                </span>
-              )}
-            </TabsTrigger>
-          </TabsList>
+          <div className="shrink-0">
+            <div className="overflow-x-auto px-4 overscroll-x-contain">
+              <TabsListUnderlined className="inline-flex h-auto min-w-max items-stretch gap-5 border-b-0 pr-4">
+                {NOTIFICATION_TABS.map((tab) => {
+                  const unread = unreadCounts[tab];
+
+                  return (
+                    <TabsTriggerUnderlined
+                      key={tab}
+                      value={tab}
+                      className="h-10 shrink-0 gap-2 pb-0 pt-0 text-xs font-medium text-white/50 hover:text-white/80 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                    >
+                      <span>{notificationTabLabels[tab]}</span>
+                      {unread > 0 ? (
+                        <span
+                          className={cn(
+                            "flex h-4 min-w-4 items-center justify-center rounded-sm px-1 text-[9px] font-semibold",
+                            notificationTabBadgeClasses[tab]
+                          )}
+                        >
+                          {unread > 9 ? "9+" : unread}
+                        </span>
+                      ) : null}
+                    </TabsTriggerUnderlined>
+                  );
+                })}
+              </TabsListUnderlined>
+            </div>
+            <Separator />
+          </div>
 
           <div className="flex-1 overflow-auto min-h-[300px]">
-            <TabsContent
-              value="all"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {items.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No notifications yet.
-                </div>
-              ) : (
-                <NotificationsList items={items} markRead={markRead} onNavigate={handleNavigate} />
-              )}
-            </TabsContent>
-
-            <TabsContent
-              value="trades"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {categorizedNotifications.trades.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No trade notifications.
-                </div>
-              ) : (
-                <NotificationsList
-                  items={categorizedNotifications.trades}
-                  markRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              )}
-            </TabsContent>
-
-            <TabsContent
-              value="system"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {categorizedNotifications.system.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No system notifications.
-                </div>
-              ) : (
-                <NotificationsList
-                  items={categorizedNotifications.system}
-                  markRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              )}
-            </TabsContent>
-
-            <TabsContent
-              value="news"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {categorizedNotifications.news.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No news notifications.
-                </div>
-              ) : (
-                <NotificationsList
-                  items={categorizedNotifications.news}
-                  markRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              )}
-            </TabsContent>
-
-            <TabsContent
-              value="goals"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {categorizedNotifications.goals.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No goal notifications.
-                </div>
-              ) : (
-                <NotificationsList
-                  items={categorizedNotifications.goals}
-                  markRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              )}
-            </TabsContent>
-
-            <TabsContent
-              value="alerts"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {categorizedNotifications.alerts.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No alert notifications.
-                </div>
-              ) : (
-                <NotificationsList
-                  items={categorizedNotifications.alerts}
-                  markRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              )}
-            </TabsContent>
-
-            <TabsContent
-              value="social"
-              className="m-0 p-0 overflow-x-hidden focus-visible:outline-none"
-            >
-              {categorizedNotifications.social.length === 0 ? (
-                <div className="px-3 py-12 text-xs text-white/40 text-center">
-                  No social notifications.
-                </div>
-              ) : (
-                <NotificationsList
-                  items={categorizedNotifications.social}
-                  markRead={markRead}
-                  onNavigate={handleNavigate}
-                />
-              )}
-            </TabsContent>
+            {NOTIFICATION_TABS.map((tab) => (
+              <NotificationTabPanel
+                key={tab}
+                value={tab}
+                items={notificationsByTab[tab]}
+                emptyMessage={notificationTabEmptyStates[tab]}
+                markRead={markRead}
+                onNavigate={handleNavigate}
+              />
+            ))}
           </div>
         </Tabs>
       </DropdownMenuContent>

@@ -16,15 +16,23 @@ export type NotificationType =
   | "settings_updated"
   | "goal_achieved"
   | "goal_progress"
+  | "achievement_earned"
   | "alert_triggered"
   | "prop_violation"
+  | "prop_journey"
   | "prop_phase_advanced"
   | "copier_signal"
   | "leaderboard_update"
   | "system_maintenance"
   | "system_update";
 
-export type NotificationCategory = "trades" | "goals" | "alerts" | "news" | "system" | "social";
+export type NotificationCategory =
+  | "trades"
+  | "goals"
+  | "alerts"
+  | "news"
+  | "system"
+  | "social";
 
 export type NotificationPriority = "low" | "normal" | "high" | "urgent";
 
@@ -84,7 +92,9 @@ export function mergeNotificationPreferences(
   return { ...defaultNotificationPreferences, ...(prefs || {}) };
 }
 
-export function getNotificationCategory(type: NotificationType): NotificationCategory {
+export function getNotificationCategory(
+  type: NotificationType
+): NotificationCategory {
   switch (type) {
     case "trade_closed":
     case "trade_opened":
@@ -93,9 +103,11 @@ export function getNotificationCategory(type: NotificationType): NotificationCat
       return "trades";
     case "goal_achieved":
     case "goal_progress":
+    case "achievement_earned":
       return "goals";
     case "alert_triggered":
     case "prop_violation":
+    case "prop_journey":
     case "prop_phase_advanced":
       return "alerts";
     case "news_upcoming":
@@ -108,13 +120,18 @@ export function getNotificationCategory(type: NotificationType): NotificationCat
   }
 }
 
-export function getNotificationPriority(type: NotificationType): NotificationPriority {
+export function getNotificationPriority(
+  type: NotificationType
+): NotificationPriority {
   switch (type) {
     case "alert_triggered":
     case "prop_violation":
       return "urgent";
+    case "prop_journey":
+      return "normal";
     case "trade_closed":
     case "goal_achieved":
+    case "achievement_earned":
     case "prop_phase_advanced":
       return "high";
     case "trade_opened":
@@ -126,7 +143,10 @@ export function getNotificationPriority(type: NotificationType): NotificationPri
   }
 }
 
-function isTypeEnabled(prefs: NotificationPreferences, type: NotificationType): boolean {
+function isTypeEnabled(
+  prefs: NotificationPreferences,
+  type: NotificationType
+): boolean {
   switch (type) {
     case "trade_closed":
       return prefs.tradeClosed;
@@ -140,9 +160,11 @@ function isTypeEnabled(prefs: NotificationPreferences, type: NotificationType): 
       return prefs.news;
     case "goal_achieved":
     case "goal_progress":
+    case "achievement_earned":
       return prefs.goals;
     case "alert_triggered":
     case "prop_violation":
+    case "prop_journey":
     case "prop_phase_advanced":
       return prefs.alerts;
     case "leaderboard_update":
@@ -162,7 +184,17 @@ class NotificationHub {
   }
 
   async create(input: NotificationInput): Promise<NotificationResult> {
-    const { userId, accountId, type, title, body, metadata, dedupeKey, priority, expiresAt } = input;
+    const {
+      userId,
+      accountId,
+      type,
+      title,
+      body,
+      metadata,
+      dedupeKey,
+      priority,
+      expiresAt,
+    } = input;
 
     const rows = await db
       .select({ notificationPreferences: userTable.notificationPreferences })
@@ -171,7 +203,8 @@ class NotificationHub {
       .limit(1);
 
     const prefs = mergeNotificationPreferences(
-      (rows[0]?.notificationPreferences as Partial<NotificationPreferences>) || null
+      (rows[0]?.notificationPreferences as Partial<NotificationPreferences>) ||
+        null
     );
 
     if (!prefs.inApp || !isTypeEnabled(prefs, type)) {
@@ -182,7 +215,12 @@ class NotificationHub {
       const existing = await db
         .select({ id: notification.id })
         .from(notification)
-        .where(and(eq(notification.userId, userId), eq(notification.dedupeKey, dedupeKey)))
+        .where(
+          and(
+            eq(notification.userId, userId),
+            eq(notification.dedupeKey, dedupeKey)
+          )
+        )
         .limit(1);
 
       if (existing.length) {
@@ -215,7 +253,9 @@ class NotificationHub {
     return { skipped: false, notificationId };
   }
 
-  async createBatch(inputs: NotificationInput[]): Promise<NotificationResult[]> {
+  async createBatch(
+    inputs: NotificationInput[]
+  ): Promise<NotificationResult[]> {
     return Promise.all(inputs.map((input) => this.create(input)));
   }
 
@@ -240,7 +280,10 @@ class NotificationHub {
       try {
         await this.createBatch(inputs);
       } catch (error) {
-        console.error(`[NotificationHub] Failed to flush notifications for user ${userId}:`, error);
+        console.error(
+          `[NotificationHub] Failed to flush notifications for user ${userId}:`,
+          error
+        );
         for (const input of inputs) {
           this.queue(input);
         }
@@ -256,7 +299,7 @@ class NotificationHub {
       categories?: NotificationCategory[];
       types?: NotificationType[];
     }
-  ): Promise<typeof notification.$inferSelect[]> {
+  ): Promise<(typeof notification.$inferSelect)[]> {
     const { limit = 25, unreadOnly, categories, types } = options || {};
 
     const conditions = [eq(notification.userId, userId)];
@@ -282,7 +325,10 @@ class NotificationHub {
       .update(notification)
       .set({ readAt: new Date() })
       .where(
-        and(eq(notification.userId, userId), inArray(notification.id, notificationIds))
+        and(
+          eq(notification.userId, userId),
+          inArray(notification.id, notificationIds)
+        )
       );
   }
 
@@ -334,7 +380,10 @@ class NotificationHub {
     await db
       .delete(notification)
       .where(
-        and(eq(notification.userId, userId), inArray(notification.id, notificationIds))
+        and(
+          eq(notification.userId, userId),
+          inArray(notification.id, notificationIds)
+        )
       );
   }
 
@@ -374,7 +423,9 @@ class NotificationHub {
 
 export const notificationHub = new NotificationHub();
 
-export async function createNotification(input: NotificationInput): Promise<NotificationResult> {
+export async function createNotification(
+  input: NotificationInput
+): Promise<NotificationResult> {
   return notificationHub.create(input);
 }
 

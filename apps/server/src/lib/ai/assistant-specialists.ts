@@ -1,19 +1,18 @@
-import { and, desc, eq, sql } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm";
 
-import { db } from "../../db"
-import { backtestSession } from "../../db/schema/backtest"
-import { journalEntry } from "../../db/schema/journal"
+import { db } from "../../db";
+import { backtestSession } from "../../db/schema/backtest";
+import { journalEntry } from "../../db/schema/journal";
 import {
   propAlert,
-  propChallengeRule,
   propDailySnapshot,
-  propFirm,
   tradingAccount,
-} from "../../db/schema/trading"
-import type { CondensedProfile } from "./engine/types"
-import { compareBacktestToLive } from "../backtest-profile-comparison"
-import { isAllAccountsScope } from "../account-scope"
-import { checkPropRules } from "../prop-rule-monitor"
+} from "../../db/schema/trading";
+import type { CondensedProfile } from "./engine/types";
+import { compareBacktestToLive } from "../backtest-profile-comparison";
+import { isAllAccountsScope } from "../account-scope";
+import { checkPropRules } from "../prop-rule-monitor";
+import { getChallengeRuleById, getPropFirmById } from "../prop-firm-detection";
 
 export type AssistantSurface =
   | "dashboard"
@@ -24,39 +23,39 @@ export type AssistantSurface =
   | "trades"
   | "settings"
   | "assistant"
-  | "unknown"
+  | "unknown";
 
 export interface AssistantPageContext {
-  pathname?: string
-  surface?: AssistantSurface
-  backtestSessionId?: string | null
-  propAccountId?: string | null
-  journalEntryId?: string | null
-  dashboardWidgetIds?: string[]
-  dashboardChartWidgetIds?: string[]
-  focusedWidgetId?: string | null
-  accountScope?: "single" | "all"
-  source?: string
+  pathname?: string;
+  surface?: AssistantSurface;
+  backtestSessionId?: string | null;
+  propAccountId?: string | null;
+  journalEntryId?: string | null;
+  dashboardWidgetIds?: string[];
+  dashboardChartWidgetIds?: string[];
+  focusedWidgetId?: string | null;
+  accountScope?: "single" | "all";
+  source?: string;
 }
 
 export interface AssistantSpecialistContext {
-  userId: string
-  accountId: string
-  pageContext?: AssistantPageContext
-  condensed?: CondensedProfile
-  fullProfile?: any
-  tiltStatus?: any
-  mentalScore?: any
-  sessionState?: any
-  coachingNudges?: any[]
+  userId: string;
+  accountId: string;
+  pageContext?: AssistantPageContext;
+  condensed?: CondensedProfile;
+  fullProfile?: any;
+  tiltStatus?: any;
+  mentalScore?: any;
+  sessionState?: any;
+  coachingNudges?: any[];
 }
 
 export interface AssistantSpecialistResult {
-  handled: boolean
-  domain?: string
-  message?: string
-  data?: any
-  analysisBlocks?: any[]
+  handled: boolean;
+  domain?: string;
+  message?: string;
+  data?: any;
+  analysisBlocks?: any[];
 }
 
 type AssistantDomain =
@@ -66,12 +65,12 @@ type AssistantDomain =
   | "prop"
   | "journal"
   | "backtest"
-  | "dashboard"
+  | "dashboard";
 
 const SUMMARY_QUERY_RE =
-  /\b(summary|summarize|overview|headline|readout|what stands out|what matters|how am i doing|how's it going|where should i focus|what should i focus on|next focus|biggest issue|main thing)\b/i
+  /\b(summary|summarize|overview|headline|readout|what stands out|what matters|how am i doing|how's it going|where should i focus|what should i focus on|next focus|biggest issue|main thing)\b/i;
 const DASHBOARD_EXPLAIN_RE =
-  /\b(explain|interpret|read|understand|what does this|what is this|why is this|this widget|this chart|this card|this panel)\b/i
+  /\b(explain|interpret|read|understand|what does this|what is this|why is this|this widget|this chart|this card|this panel)\b/i;
 
 const DASHBOARD_WIDGET_LABELS: Record<string, string> = {
   "edge-summary": "Edge Summary",
@@ -90,141 +89,165 @@ const DASHBOARD_WIDGET_LABELS: Record<string, string> = {
   "equity-curve": "Equity Curve",
   drawdown: "Drawdown",
   "monte-carlo": "Monte Carlo",
-}
+};
 
-export function inferAssistantSurface(pathname?: string | null): AssistantSurface {
-  if (!pathname) return "unknown"
-  if (pathname === "/assistant") return "assistant"
-  if (pathname.startsWith("/dashboard/psychology")) return "psychology"
-  if (pathname.startsWith("/dashboard/prop-tracker")) return "prop-tracker"
-  if (pathname.startsWith("/dashboard/backtest") || pathname.startsWith("/backtest")) return "backtest"
-  if (pathname.startsWith("/dashboard/journal")) return "journal"
-  if (pathname.startsWith("/dashboard/trades")) return "trades"
-  if (pathname.startsWith("/dashboard/settings")) return "settings"
-  if (pathname.startsWith("/dashboard")) return "dashboard"
-  return "unknown"
+export function inferAssistantSurface(
+  pathname?: string | null
+): AssistantSurface {
+  if (!pathname) return "unknown";
+  if (pathname === "/assistant") return "assistant";
+  if (pathname.startsWith("/dashboard/psychology")) return "psychology";
+  if (pathname.startsWith("/dashboard/prop-tracker")) return "prop-tracker";
+  if (
+    pathname.startsWith("/dashboard/backtest") ||
+    pathname.startsWith("/backtest")
+  )
+    return "backtest";
+  if (pathname.startsWith("/dashboard/journal")) return "journal";
+  if (pathname.startsWith("/dashboard/trades")) return "trades";
+  if (pathname.startsWith("/dashboard/settings")) return "settings";
+  if (pathname.startsWith("/dashboard")) return "dashboard";
+  return "unknown";
 }
 
 export function normalizeAssistantPageContext(
   pageContext?: AssistantPageContext | null
 ): AssistantPageContext {
   if (!pageContext) {
-    return { surface: "unknown" }
+    return { surface: "unknown" };
   }
 
   return {
     ...pageContext,
     surface:
-      pageContext.surface || inferAssistantSurface(pageContext.pathname || undefined),
+      pageContext.surface ||
+      inferAssistantSurface(pageContext.pathname || undefined),
     dashboardWidgetIds: Array.isArray(pageContext.dashboardWidgetIds)
-      ? pageContext.dashboardWidgetIds.filter((value): value is string => Boolean(value))
+      ? pageContext.dashboardWidgetIds.filter((value): value is string =>
+          Boolean(value)
+        )
       : undefined,
     dashboardChartWidgetIds: Array.isArray(pageContext.dashboardChartWidgetIds)
-      ? pageContext.dashboardChartWidgetIds.filter((value): value is string => Boolean(value))
+      ? pageContext.dashboardChartWidgetIds.filter((value): value is string =>
+          Boolean(value)
+        )
       : undefined,
     focusedWidgetId:
       typeof pageContext.focusedWidgetId === "string"
         ? pageContext.focusedWidgetId
         : null,
-  }
+  };
 }
 
 function isBroadSummaryQuery(message: string): boolean {
-  return SUMMARY_QUERY_RE.test(message)
+  return SUMMARY_QUERY_RE.test(message);
 }
 
 export function isPsychologyQuery(message: string): boolean {
   return /\b(psychology|psychological|tilt|tilted|revenge|emotional|discipline|disciplined|confidence|mindset|mental|fear|greed|focus)\b/i.test(
     message
-  )
+  );
 }
 
 export function isSessionQuery(message: string): boolean {
-  const lower = message.toLowerCase()
+  const lower = message.toLowerCase();
   if (
     /\b(active trades?|current streak|should i stop|am i overtrading|how.?s this session|current session|live session)\b/i.test(
       message
     )
   ) {
-    return true
+    return true;
   }
 
   return (
     /\bsession\b/i.test(message) ||
-    /\b(today|right now)\b/i.test(message) &&
-      /\b(trading|trade|session|streak|overtrading|stop)\b/i.test(lower)
-  )
+    (/\b(today|right now)\b/i.test(message) &&
+      /\b(trading|trade|session|streak|overtrading|stop)\b/i.test(lower))
+  );
 }
 
-function isPropQuery(message: string, pageContext: AssistantPageContext): boolean {
+function isPropQuery(
+  message: string,
+  pageContext: AssistantPageContext
+): boolean {
   return (
     /\b(prop|challenge|funded|pass probability|risk of failure|daily loss limit|max loss|phase|ftmo|fundednext|e8)\b/i.test(
       message
     ) ||
     (pageContext.surface === "prop-tracker" && isBroadSummaryQuery(message))
-  )
+  );
 }
 
-function isJournalQuery(message: string, pageContext: AssistantPageContext): boolean {
+function isJournalQuery(
+  message: string,
+  pageContext: AssistantPageContext
+): boolean {
   return (
     /\b(journal|journaling|reflection|reflect|entries|entry|review notes|lessons learned|what did i learn|what should i write)\b/i.test(
       message
     ) ||
     (pageContext.surface === "journal" && isBroadSummaryQuery(message))
-  )
+  );
 }
 
-function isBacktestQuery(message: string, pageContext: AssistantPageContext): boolean {
+function isBacktestQuery(
+  message: string,
+  pageContext: AssistantPageContext
+): boolean {
   return (
     /\b(backtest|backtesting|replay|simulated|session review|drift|compare to live|practice session|historical session)\b/i.test(
       message
     ) ||
     (pageContext.surface === "backtest" && isBroadSummaryQuery(message))
-  )
+  );
 }
 
-function isDashboardQuery(message: string, pageContext: AssistantPageContext): boolean {
+function isDashboardQuery(
+  message: string,
+  pageContext: AssistantPageContext
+): boolean {
   return (
     /\b(dashboard|overview|headline|top priority|what matters today|where am i leaking|where am i losing money|what'?s costing me|what is costing me|what am i doing well|what should i focus on today|edge summary|biggest leak|money leak|bleeding money)\b/i.test(
       message
     ) ||
     (pageContext.surface === "dashboard" &&
       (isBroadSummaryQuery(message) ||
-        (Boolean(pageContext.focusedWidgetId) && DASHBOARD_EXPLAIN_RE.test(message))))
-  )
+        (Boolean(pageContext.focusedWidgetId) &&
+          DASHBOARD_EXPLAIN_RE.test(message))))
+  );
 }
 
 function isUnsupportedAssistantQuery(message: string): boolean {
   return /\b(price right now|current price|live price|market news|news today|economic news|cpi|nfp|fomc|should i buy|should i sell|entry signal|signal right now|prediction)\b/i.test(
     message
-  )
+  );
 }
 
 export function detectAssistantDomain(
   message: string,
   pageContext?: AssistantPageContext | null
 ): AssistantDomain | null {
-  const normalized = normalizeAssistantPageContext(pageContext)
+  const normalized = normalizeAssistantPageContext(pageContext);
 
-  if (isUnsupportedAssistantQuery(message)) return "unsupported"
+  if (isUnsupportedAssistantQuery(message)) return "unsupported";
   if (
     isPsychologyQuery(message) ||
     (normalized.surface === "psychology" && isBroadSummaryQuery(message))
   ) {
-    return "psychology"
+    return "psychology";
   }
-  if (isPropQuery(message, normalized)) return "prop"
-  if (isJournalQuery(message, normalized)) return "journal"
-  if (isBacktestQuery(message, normalized)) return "backtest"
-  if (isDashboardQuery(message, normalized)) return "dashboard"
-  if (isSessionQuery(message)) return "session"
-  return null
+  if (isPropQuery(message, normalized)) return "prop";
+  if (isJournalQuery(message, normalized)) return "journal";
+  if (isBacktestQuery(message, normalized)) return "backtest";
+  if (isDashboardQuery(message, normalized)) return "dashboard";
+  if (isSessionQuery(message)) return "session";
+  return null;
 }
 
 function toNumber(value: unknown): number {
-  if (value == null) return 0
-  const parsed = typeof value === "number" ? value : Number(value)
-  return Number.isFinite(parsed) ? parsed : 0
+  if (value == null) return 0;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function formatUsd(value: number): string {
@@ -232,11 +255,11 @@ function formatUsd(value: number): string {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,
-  })
+  });
 }
 
 function formatPct(value: number, digits = 1): string {
-  return `${Number.isFinite(value) ? value.toFixed(digits) : "0.0"}%`
+  return `${Number.isFinite(value) ? value.toFixed(digits) : "0.0"}%`;
 }
 
 function pickTopLabels(
@@ -246,76 +269,92 @@ function pickTopLabels(
   return Array.from(map.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
-    .map(([label, count]) => ({ label, count }))
+    .map(([label, count]) => ({ label, count }));
 }
 
 function getDashboardWidgetLabel(widgetId?: string | null): string | null {
-  if (!widgetId) return null
+  if (!widgetId) return null;
   return (
     DASHBOARD_WIDGET_LABELS[widgetId] ||
     widgetId
       .split("-")
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(" ")
-  )
+  );
 }
 
 function buildFocusedDashboardInsight(
   widgetId: string | null | undefined,
   context: AssistantSpecialistContext
 ): string | null {
-  if (!widgetId || !context.condensed) return null
+  if (!widgetId || !context.condensed) return null;
 
-  const topEdge = context.fullProfile?.edges?.[0]
-  const topLeak = context.fullProfile?.leaks?.[0]
+  const topEdge = context.fullProfile?.edges?.[0];
+  const topLeak = context.fullProfile?.leaks?.[0];
 
   switch (widgetId) {
     case "edge-summary":
       return topEdge
-        ? `The edge summary is pointing to ${topEdge.label.toLowerCase()} as your best repeatable condition, while ${topLeak?.label.toLowerCase() || "your weakest condition"} is still the biggest drag.`
-        : "The edge summary needs more tagged trades before it can separate repeatable edge from noise."
+        ? `The edge summary is pointing to ${topEdge.label.toLowerCase()} as your best repeatable condition, while ${
+            topLeak?.label.toLowerCase() || "your weakest condition"
+          } is still the biggest drag.`
+        : "The edge summary needs more tagged trades before it can separate repeatable edge from noise.";
     case "benchmark":
-      return "The benchmark card is for relative standing, not absolute quality. Use it to see whether your current win rate and expectancy are exceptional or just average for the verified cohort."
+      return "The benchmark card is for relative standing, not absolute quality. Use it to see whether your current win rate and expectancy are exceptional or just average for the verified cohort.";
     case "risk-intelligence":
-      return `Risk intelligence matters most when expectancy is ${formatUsd(context.condensed.expectancy)} per trade. Protecting downside matters more than forcing additional frequency.`
+      return `Risk intelligence matters most when expectancy is ${formatUsd(
+        context.condensed.expectancy
+      )} per trade. Protecting downside matters more than forcing additional frequency.`;
     case "session-coach":
       return context.sessionState?.isActive
         ? `The session coach is grounded in your live streak and current session state. Right now it is reacting to ${context.sessionState.tradeCount} trades in the active session.`
-        : "The session coach is idle because there is no active session. It becomes more useful once trades are actively flowing."
+        : "The session coach is idle because there is no active session. It becomes more useful once trades are actively flowing.";
     case "rule-compliance":
       return topLeak
         ? `Rule compliance should be read through the lens of ${topLeak.label.toLowerCase()}. If that leak is recurring, tighten the rule around it before adding more rules.`
-        : "Use rule compliance to enforce the behavior you already know produces your best outcomes."
+        : "Use rule compliance to enforce the behavior you already know produces your best outcomes.";
     case "daily-net":
     case "equity-curve":
     case "drawdown":
-      return "This chart is about path quality, not just endpoint profit. Read it to see whether gains are compounding cleanly or being earned through unstable swings."
+      return "This chart is about path quality, not just endpoint profit. Read it to see whether gains are compounding cleanly or being earned through unstable swings.";
     default:
-      return null
+      return null;
   }
 }
 
-function summarizeDashboardCoverage(pageContext: AssistantPageContext): string | null {
-  const widgets = pageContext.dashboardWidgetIds || []
-  const charts = pageContext.dashboardChartWidgetIds || []
-  const focusedLabel = getDashboardWidgetLabel(pageContext.focusedWidgetId)
+function summarizeDashboardCoverage(
+  pageContext: AssistantPageContext
+): string | null {
+  const widgets = pageContext.dashboardWidgetIds || [];
+  const charts = pageContext.dashboardChartWidgetIds || [];
+  const focusedLabel = getDashboardWidgetLabel(pageContext.focusedWidgetId);
 
   if (widgets.length === 0 && charts.length === 0 && !focusedLabel) {
-    return null
+    return null;
   }
 
-  const parts: string[] = []
+  const parts: string[] = [];
   if (focusedLabel) {
-    parts.push(`Focused widget: ${focusedLabel}.`)
+    parts.push(`Focused widget: ${focusedLabel}.`);
   }
   if (widgets.length > 0) {
-    parts.push(`Primary cards loaded: ${widgets.slice(0, 4).map((widgetId) => getDashboardWidgetLabel(widgetId)).join(", ")}${widgets.length > 4 ? ", ..." : ""}.`)
+    parts.push(
+      `Primary cards loaded: ${widgets
+        .slice(0, 4)
+        .map((widgetId) => getDashboardWidgetLabel(widgetId))
+        .join(", ")}${widgets.length > 4 ? ", ..." : ""}.`
+    );
   }
   if (charts.length > 0) {
-    parts.push(`Chart context: ${charts.slice(0, 3).map((widgetId) => getDashboardWidgetLabel(widgetId)).join(", ")}${charts.length > 3 ? ", ..." : ""}.`)
+    parts.push(
+      `Chart context: ${charts
+        .slice(0, 3)
+        .map((widgetId) => getDashboardWidgetLabel(widgetId))
+        .join(", ")}${charts.length > 3 ? ", ..." : ""}.`
+    );
   }
 
-  return parts.join(" ")
+  return parts.join(" ");
 }
 
 function buildUnsupportedResponse(): AssistantSpecialistResult {
@@ -329,11 +368,10 @@ function buildUnsupportedResponse(): AssistantSpecialistResult {
         type: "callout",
         tone: "warning",
         title: "Outside current coverage",
-        body:
-          "Ask about your edge, leaks, session behavior, journal patterns, backtest drift, or prop-risk status. For live market/news questions, this assistant needs a separate market-data source.",
+        body: "Ask about your edge, leaks, session behavior, journal patterns, backtest drift, or prop-risk status. For live market/news questions, this assistant needs a separate market-data source.",
       },
     ],
-  }
+  };
 }
 
 export function buildPsychologyMarkdown(
@@ -341,26 +379,31 @@ export function buildPsychologyMarkdown(
   mentalScore: any
 ): string {
   if (!tiltStatus && !mentalScore) {
-    return "Not enough psychology data yet. Tag emotions and complete more reviewed trades first."
+    return "Not enough psychology data yet. Tag emotions and complete more reviewed trades first.";
   }
 
   const indicators = tiltStatus?.indicators?.length
     ? tiltStatus.indicators
         .slice(0, 3)
-        .map((indicator: any) => indicator.label ?? indicator.message ?? "Tilt signal")
+        .map(
+          (indicator: any) =>
+            indicator.label ?? indicator.message ?? "Tilt signal"
+        )
         .join(", ")
-    : "no major tilt markers"
-  const mentalTotal = mentalScore?.totalScore ?? mentalScore?.overall
+    : "no major tilt markers";
+  const mentalTotal = mentalScore?.totalScore ?? mentalScore?.overall;
 
   const action =
     tiltStatus?.tiltScore >= 40
       ? "Reduce size or stop for the session."
       : tiltStatus?.tiltScore >= 20
-        ? "Slow down and trade only A-grade setups."
-        : "Psychology is stable. Keep execution strict."
+      ? "Slow down and trade only A-grade setups."
+      : "Psychology is stable. Keep execution strict.";
 
   return [
-    `Tilt status: ${tiltStatus?.level || "stable"} (${Math.round(tiltStatus?.tiltScore || 0)}/100).`,
+    `Tilt status: ${tiltStatus?.level || "stable"} (${Math.round(
+      tiltStatus?.tiltScore || 0
+    )}/100).`,
     mentalTotal != null
       ? `Mental performance: ${Math.round(mentalTotal)}/100.`
       : null,
@@ -368,7 +411,7 @@ export function buildPsychologyMarkdown(
     action,
   ]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 }
 
 export function buildSessionMarkdown(
@@ -376,21 +419,25 @@ export function buildSessionMarkdown(
   coachingNudges: any[]
 ): string {
   if (!sessionState?.isActive) {
-    return "No active trading session detected right now."
+    return "No active trading session detected right now.";
   }
 
-  const topNudge = coachingNudges?.[0]
+  const topNudge = coachingNudges?.[0];
   const streak = sessionState.currentStreak?.type
     ? `${sessionState.currentStreak.count} ${sessionState.currentStreak.type} streak`
-    : "no active streak"
+    : "no active streak";
 
   return [
-    `Current session: ${sessionState.tradeCount} trades, ${sessionState.wins}W/${sessionState.losses}L, P&L ${sessionState.runningPnL >= 0 ? "+" : ""}$${Number(sessionState.runningPnL || 0).toFixed(2)}.`,
+    `Current session: ${sessionState.tradeCount} trades, ${
+      sessionState.wins
+    }W/${sessionState.losses}L, P&L ${
+      sessionState.runningPnL >= 0 ? "+" : ""
+    }$${Number(sessionState.runningPnL || 0).toFixed(2)}.`,
     `State: ${streak}.`,
     topNudge ? `Coach: ${topNudge.title} - ${topNudge.message}` : null,
   ]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 }
 
 function buildPsychologyResult(
@@ -413,7 +460,7 @@ function buildPsychologyResult(
           },
         ]
       : [],
-  }
+  };
 }
 
 function buildSessionResult(
@@ -438,7 +485,7 @@ function buildSessionResult(
           },
         ]
       : [],
-  }
+  };
 }
 
 async function resolvePropAccount(
@@ -452,8 +499,8 @@ async function resolvePropAccount(
         eq(tradingAccount.id, pageContext.propAccountId),
         eq(tradingAccount.userId, userId)
       ),
-    })
-    if (explicit?.isPropAccount) return explicit
+    });
+    if (explicit?.isPropAccount) return explicit;
   }
 
   if (!isAllAccountsScope(accountId)) {
@@ -462,8 +509,8 @@ async function resolvePropAccount(
         eq(tradingAccount.id, accountId),
         eq(tradingAccount.userId, userId)
       ),
-    })
-    if (current?.isPropAccount) return current
+    });
+    if (current?.isPropAccount) return current;
   }
 
   const propAccounts = await db
@@ -473,7 +520,12 @@ async function resolvePropAccount(
       isPropAccount: tradingAccount.isPropAccount,
     })
     .from(tradingAccount)
-    .where(and(eq(tradingAccount.userId, userId), eq(tradingAccount.isPropAccount, true)))
+    .where(
+      and(
+        eq(tradingAccount.userId, userId),
+        eq(tradingAccount.isPropAccount, true)
+      )
+    );
 
   if (propAccounts.length === 1) {
     return db.query.tradingAccount.findFirst({
@@ -481,10 +533,10 @@ async function resolvePropAccount(
         eq(tradingAccount.id, propAccounts[0].id),
         eq(tradingAccount.userId, userId)
       ),
-    })
+    });
   }
 
-  return null
+  return null;
 }
 
 function estimatePropPassProbability(
@@ -492,39 +544,43 @@ function estimatePropPassProbability(
   challengeRule: any,
   snapshots: any[]
 ): {
-  passPercentage: number
-  riskOfFailure: number
-  daysToTarget: number | null
+  passPercentage: number;
+  riskOfFailure: number;
+  daysToTarget: number | null;
 } | null {
-  if (!challengeRule || snapshots.length < 5) return null
+  if (!challengeRule || snapshots.length < 5) return null;
 
-  const phases = Array.isArray(challengeRule.phases) ? challengeRule.phases : []
-  const currentPhase = phases.find((phase: any) => phase.order === account.propCurrentPhase)
-  if (!currentPhase || currentPhase.profitTarget == null) return null
+  const phases = Array.isArray(challengeRule.phases)
+    ? challengeRule.phases
+    : [];
+  const currentPhase = phases.find(
+    (phase: any) => phase.order === account.propCurrentPhase
+  );
+  if (!currentPhase || currentPhase.profitTarget == null) return null;
 
   const dailyReturns = snapshots
     .map((snapshot) => toNumber(snapshot.dailyProfitPercent))
-    .filter((value) => Number.isFinite(value))
+    .filter((value) => Number.isFinite(value));
 
-  if (dailyReturns.length < 5) return null
+  if (dailyReturns.length < 5) return null;
 
   const avgDailyReturn =
-    dailyReturns.reduce((sum, value) => sum + value, 0) / dailyReturns.length
+    dailyReturns.reduce((sum, value) => sum + value, 0) / dailyReturns.length;
   const variance =
     dailyReturns.reduce(
       (sum, value) => sum + Math.pow(value - avgDailyReturn, 2),
       0
-    ) / dailyReturns.length
-  const stdDev = Math.sqrt(variance)
-  const simulations = 500
-  let passCount = 0
-  const daysToTarget: number[] = []
+    ) / dailyReturns.length;
+  const stdDev = Math.sqrt(variance);
+  const simulations = 500;
+  let passCount = 0;
+  const daysToTarget: number[] = [];
 
   for (let i = 0; i < simulations; i++) {
-    let profitPct = toNumber(account.propPhaseCurrentProfitPercent)
-    let worstDrawdown = 0
-    let completed = false
-    const dayLimit = currentPhase.timeLimitDays || 365
+    let profitPct = toNumber(account.propPhaseCurrentProfitPercent);
+    let worstDrawdown = 0;
+    let completed = false;
+    const dayLimit = currentPhase.timeLimitDays || 365;
 
     for (let day = 0; day < dayLimit; day++) {
       const gaussianish =
@@ -535,38 +591,38 @@ function estimatePropPassProbability(
           Math.random() +
           Math.random() -
           3) /
-        Math.sqrt(3)
-      const simulatedReturn = avgDailyReturn + stdDev * gaussianish
+        Math.sqrt(3);
+      const simulatedReturn = avgDailyReturn + stdDev * gaussianish;
 
       if (
         currentPhase.dailyLossLimit != null &&
         Math.abs(Math.min(simulatedReturn, 0)) > currentPhase.dailyLossLimit
       ) {
-        completed = true
-        break
+        completed = true;
+        break;
       }
 
-      profitPct += simulatedReturn
-      worstDrawdown = Math.max(worstDrawdown, -Math.min(profitPct, 0))
+      profitPct += simulatedReturn;
+      worstDrawdown = Math.max(worstDrawdown, -Math.min(profitPct, 0));
 
       if (
         currentPhase.maxLoss != null &&
         worstDrawdown > currentPhase.maxLoss
       ) {
-        completed = true
-        break
+        completed = true;
+        break;
       }
 
       if (profitPct >= currentPhase.profitTarget) {
-        passCount += 1
-        daysToTarget.push(day + 1)
-        completed = true
-        break
+        passCount += 1;
+        daysToTarget.push(day + 1);
+        completed = true;
+        break;
       }
     }
 
     if (!completed) {
-      continue
+      continue;
     }
   }
 
@@ -580,20 +636,29 @@ function estimatePropPassProbability(
               daysToTarget.length
           )
         : null,
-  }
+  };
 }
 
 async function handlePropQuery(
   context: AssistantSpecialistContext,
   pageContext: AssistantPageContext
 ): Promise<AssistantSpecialistResult> {
-  const account = await resolvePropAccount(context.userId, context.accountId, pageContext)
+  const account = await resolvePropAccount(
+    context.userId,
+    context.accountId,
+    pageContext
+  );
 
   if (!account) {
     const propAccounts = await db
       .select({ id: tradingAccount.id, name: tradingAccount.name })
       .from(tradingAccount)
-      .where(and(eq(tradingAccount.userId, context.userId), eq(tradingAccount.isPropAccount, true)))
+      .where(
+        and(
+          eq(tradingAccount.userId, context.userId),
+          eq(tradingAccount.isPropAccount, true)
+        )
+      );
 
     if (propAccounts.length === 0) {
       return {
@@ -606,11 +671,10 @@ async function handlePropQuery(
             type: "callout",
             tone: "warning",
             title: "No prop account linked",
-            body:
-              "Connect or mark a trading account as a prop challenge first. Then I can track rule headroom, breach risk, and pass progress.",
+            body: "Connect or mark a trading account as a prop challenge first. Then I can track rule headroom, breach risk, and pass progress.",
           },
         ],
-      }
+      };
     }
 
     return {
@@ -628,19 +692,17 @@ async function handlePropQuery(
           })),
         },
       ],
-    }
+    };
   }
 
   const [ruleCheck, firmRow, challengeRuleRow, recentAlerts, snapshots] =
     await Promise.all([
       checkPropRules(account.id),
       account.propFirmId
-        ? db.query.propFirm.findFirst({ where: eq(propFirm.id, account.propFirmId) })
+        ? getPropFirmById(account.propFirmId)
         : Promise.resolve(null),
       account.propChallengeRuleId
-        ? db.query.propChallengeRule.findFirst({
-            where: eq(propChallengeRule.id, account.propChallengeRuleId),
-          })
+        ? getChallengeRuleById(account.propChallengeRuleId)
         : Promise.resolve(null),
       db.query.propAlert.findMany({
         where: eq(propAlert.accountId, account.id),
@@ -652,20 +714,26 @@ async function handlePropQuery(
         orderBy: desc(propDailySnapshot.date),
         limit: 15,
       }),
-    ])
+    ]);
 
   const phases = Array.isArray(challengeRuleRow?.phases)
     ? challengeRuleRow?.phases
-    : []
-  const currentPhase = phases.find((phase: any) => phase.order === account.propCurrentPhase)
-  const probability = estimatePropPassProbability(account, challengeRuleRow, snapshots)
-  const topAlert = recentAlerts[0] || ruleCheck.alerts[0]
-  const targetPct = currentPhase?.profitTarget ?? null
+    : [];
+  const currentPhase = phases.find(
+    (phase: any) => phase.order === account.propCurrentPhase
+  );
+  const probability = estimatePropPassProbability(
+    account,
+    challengeRuleRow,
+    snapshots
+  );
+  const topAlert = recentAlerts[0] || ruleCheck.alerts[0];
+  const targetPct = currentPhase?.profitTarget ?? null;
 
   const remainingToTarget =
     targetPct != null
       ? Math.max(0, targetPct - ruleCheck.metrics.currentProfitPercent)
-      : null
+      : null;
 
   const statsRows = [
     { label: "Account", value: account.name },
@@ -724,44 +792,69 @@ async function handlePropQuery(
               : undefined,
         }
       : null,
-  ].filter(Boolean)
+  ].filter(Boolean);
 
-  const recommendations: string[] = []
+  const recommendations: string[] = [];
   if (topAlert?.severity === "critical") {
-    recommendations.push("Challenge is in breach territory. Stop trading until you reset the risk state.")
+    recommendations.push(
+      "Challenge is in breach territory. Stop trading until you reset the risk state."
+    );
   } else if (ruleCheck.metrics.dailyDrawdownPercent > 0) {
-    recommendations.push("Trade smaller until daily drawdown headroom resets.")
+    recommendations.push("Trade smaller until daily drawdown headroom resets.");
   }
   if (remainingToTarget != null && remainingToTarget > 0) {
     recommendations.push(
-      `You still need ${formatPct(remainingToTarget, 2)} to hit the target. Protect downside first and avoid forcing size.`
-    )
+      `You still need ${formatPct(
+        remainingToTarget,
+        2
+      )} to hit the target. Protect downside first and avoid forcing size.`
+    );
   }
   if (
     currentPhase?.minTradingDays &&
     ruleCheck.metrics.tradingDays < currentPhase.minTradingDays
   ) {
     recommendations.push(
-      `You still need ${currentPhase.minTradingDays - ruleCheck.metrics.tradingDays} trading day(s) to satisfy the minimum-day rule.`
-    )
+      `You still need ${
+        currentPhase.minTradingDays - ruleCheck.metrics.tradingDays
+      } trading day(s) to satisfy the minimum-day rule.`
+    );
   }
   if (recommendations.length === 0) {
-    recommendations.push("Risk state is stable. The priority is clean execution, not speed.")
+    recommendations.push(
+      "Risk state is stable. The priority is clean execution, not speed."
+    );
   }
 
   const message = [
-    `${account.name} ${firmRow?.displayName || firmRow?.name || "prop"} readout: ${formatPct(ruleCheck.metrics.currentProfitPercent, 2)} progress${targetPct != null ? ` toward a ${formatPct(targetPct, 2)} target` : ""}.`,
-    `Daily drawdown is ${formatPct(ruleCheck.metrics.dailyDrawdownPercent, 2)} and max drawdown is ${formatPct(ruleCheck.metrics.maxDrawdownPercent, 2)}.`,
+    `${account.name} ${
+      firmRow?.displayName || firmRow?.name || "prop"
+    } readout: ${formatPct(
+      ruleCheck.metrics.currentProfitPercent,
+      2
+    )} progress${
+      targetPct != null ? ` toward a ${formatPct(targetPct, 2)} target` : ""
+    }.`,
+    `Daily drawdown is ${formatPct(
+      ruleCheck.metrics.dailyDrawdownPercent,
+      2
+    )} and max drawdown is ${formatPct(
+      ruleCheck.metrics.maxDrawdownPercent,
+      2
+    )}.`,
     ruleCheck.metrics.daysRemaining != null
       ? `${ruleCheck.metrics.daysRemaining} day(s) remain in the current phase.`
       : null,
     probability
-      ? `Estimated pass probability is ${formatPct(probability.passPercentage, 0)}.`
+      ? `Estimated pass probability is ${formatPct(
+          probability.passPercentage,
+          0
+        )}.`
       : null,
     topAlert ? `Top risk: ${topAlert.message}` : recommendations[0],
   ]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 
   return {
     handled: true,
@@ -794,7 +887,7 @@ async function handlePropQuery(
         items: recommendations,
       },
     ].filter(Boolean),
-  }
+  };
 }
 
 async function handleJournalQuery(
@@ -816,9 +909,14 @@ async function handleJournalQuery(
       wordCount: journalEntry.wordCount,
     })
     .from(journalEntry)
-    .where(and(eq(journalEntry.userId, context.userId), eq(journalEntry.isArchived, false)))
+    .where(
+      and(
+        eq(journalEntry.userId, context.userId),
+        eq(journalEntry.isArchived, false)
+      )
+    )
     .orderBy(desc(journalEntry.updatedAt))
-    .limit(12)
+    .limit(12);
 
   if (entries.length === 0) {
     return {
@@ -831,105 +929,120 @@ async function handleJournalQuery(
           type: "callout",
           tone: "warning",
           title: "No journal coverage yet",
-          body:
-            "Create a few daily or trade-review entries first. Once they exist, I can summarize recurring strengths, weaknesses, and psychology patterns.",
+          body: "Create a few daily or trade-review entries first. Once they exist, I can summarize recurring strengths, weaknesses, and psychology patterns.",
         },
       ],
-    }
+    };
   }
 
-  const tagCounts = new Map<string, number>()
-  const topicCounts = new Map<string, number>()
-  const patternCounts = new Map<string, number>()
-  const weaknessPatterns = new Map<string, number>()
-  const strengthPatterns = new Map<string, number>()
-  const phaseCounts = new Map<string, number>()
-  let totalFocus = 0
-  let totalConfidence = 0
-  let totalFear = 0
-  let totalGreed = 0
-  let psychSamples = 0
+  const tagCounts = new Map<string, number>();
+  const topicCounts = new Map<string, number>();
+  const patternCounts = new Map<string, number>();
+  const weaknessPatterns = new Map<string, number>();
+  const strengthPatterns = new Map<string, number>();
+  const phaseCounts = new Map<string, number>();
+  let totalFocus = 0;
+  let totalConfidence = 0;
+  let totalFear = 0;
+  let totalGreed = 0;
+  let psychSamples = 0;
 
   for (const entry of entries) {
     for (const tag of (entry.tags as string[] | null) || []) {
-      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1)
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
     }
     for (const topic of (entry.aiTopics as string[] | null) || []) {
-      topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1)
+      topicCounts.set(topic, (topicCounts.get(topic) || 0) + 1);
     }
     for (const pattern of (entry.aiPatterns as any[] | null) || []) {
-      if (!pattern?.title) continue
-      patternCounts.set(pattern.title, (patternCounts.get(pattern.title) || 0) + 1)
+      if (!pattern?.title) continue;
+      patternCounts.set(
+        pattern.title,
+        (patternCounts.get(pattern.title) || 0) + 1
+      );
       if (pattern.type === "weakness" || pattern.type === "recommendation") {
         weaknessPatterns.set(
           pattern.title,
           (weaknessPatterns.get(pattern.title) || 0) + 1
-        )
+        );
       }
       if (pattern.type === "strength") {
         strengthPatterns.set(
           pattern.title,
           (strengthPatterns.get(pattern.title) || 0) + 1
-        )
+        );
       }
     }
     if (entry.tradePhase) {
-      phaseCounts.set(entry.tradePhase, (phaseCounts.get(entry.tradePhase) || 0) + 1)
+      phaseCounts.set(
+        entry.tradePhase,
+        (phaseCounts.get(entry.tradePhase) || 0) + 1
+      );
     }
-    const psychology = entry.psychology as any
+    const psychology = entry.psychology as any;
     if (psychology) {
-      totalFocus += toNumber(psychology.focus)
-      totalConfidence += toNumber(psychology.confidence)
-      totalFear += toNumber(psychology.fear)
-      totalGreed += toNumber(psychology.greed)
-      psychSamples += 1
+      totalFocus += toNumber(psychology.focus);
+      totalConfidence += toNumber(psychology.confidence);
+      totalFear += toNumber(psychology.fear);
+      totalGreed += toNumber(psychology.greed);
+      psychSamples += 1;
     }
   }
 
-  const topTags = pickTopLabels(tagCounts)
-  const topTopics = pickTopLabels(topicCounts)
-  const topPatterns = pickTopLabels(patternCounts)
-  const topWeaknesses = pickTopLabels(weaknessPatterns, 2)
-  const topStrengths = pickTopLabels(strengthPatterns, 2)
-  const topPhase = pickTopLabels(phaseCounts, 1)[0]
+  const topTags = pickTopLabels(tagCounts);
+  const topTopics = pickTopLabels(topicCounts);
+  const topPatterns = pickTopLabels(patternCounts);
+  const topWeaknesses = pickTopLabels(weaknessPatterns, 2);
+  const topStrengths = pickTopLabels(strengthPatterns, 2);
+  const topPhase = pickTopLabels(phaseCounts, 1)[0];
 
-  const avgFocus = psychSamples > 0 ? totalFocus / psychSamples : 0
-  const avgConfidence = psychSamples > 0 ? totalConfidence / psychSamples : 0
-  const avgFear = psychSamples > 0 ? totalFear / psychSamples : 0
-  const avgGreed = psychSamples > 0 ? totalGreed / psychSamples : 0
+  const avgFocus = psychSamples > 0 ? totalFocus / psychSamples : 0;
+  const avgConfidence = psychSamples > 0 ? totalConfidence / psychSamples : 0;
+  const avgFear = psychSamples > 0 ? totalFear / psychSamples : 0;
+  const avgGreed = psychSamples > 0 ? totalGreed / psychSamples : 0;
 
-  const insights: string[] = []
+  const insights: string[] = [];
   if (topPatterns.length > 0) {
     insights.push(
       `Most repeated pattern: ${topPatterns[0].label} (${topPatterns[0].count} entries).`
-    )
+    );
   }
   if (topTopics.length > 0) {
     insights.push(
       `Recurring topics: ${topTopics.map((item) => item.label).join(", ")}.`
-    )
+    );
   }
   if (avgFear > avgConfidence && psychSamples > 0) {
     insights.push(
-      `Your journaled fear level is running above confidence (${avgFear.toFixed(1)} vs ${avgConfidence.toFixed(1)}).`
-    )
+      `Your journaled fear level is running above confidence (${avgFear.toFixed(
+        1
+      )} vs ${avgConfidence.toFixed(1)}).`
+    );
   }
   if (avgFocus > 0) {
-    insights.push(`Average reported focus is ${avgFocus.toFixed(1)}/10.`)
+    insights.push(`Average reported focus is ${avgFocus.toFixed(1)}/10.`);
   }
 
-  const recommendations: string[] = []
+  const recommendations: string[] = [];
   if (topWeaknesses.length > 0) {
-    recommendations.push(`Work on ${topWeaknesses[0].label.toLowerCase()} first.`)
+    recommendations.push(
+      `Work on ${topWeaknesses[0].label.toLowerCase()} first.`
+    );
   }
   if (avgFocus > 0 && avgFocus < 7) {
-    recommendations.push("Use the journal to note pre-session focus blockers before you trade.")
+    recommendations.push(
+      "Use the journal to note pre-session focus blockers before you trade."
+    );
   }
   if (topStrengths.length > 0) {
-    recommendations.push(`Keep reinforcing ${topStrengths[0].label.toLowerCase()}.`)
+    recommendations.push(
+      `Keep reinforcing ${topStrengths[0].label.toLowerCase()}.`
+    );
   }
   if (recommendations.length === 0) {
-    recommendations.push("Keep writing post-trade reviews with explicit lessons and next-session actions.")
+    recommendations.push(
+      "Keep writing post-trade reviews with explicit lessons and next-session actions."
+    );
   }
 
   const message = [
@@ -946,7 +1059,7 @@ async function handleJournalQuery(
     recommendations[0],
   ]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 
   return {
     handled: true,
@@ -997,14 +1110,14 @@ async function handleJournalQuery(
           }
         : null,
     ].filter(Boolean),
-  }
+  };
 }
 
 async function handleBacktestQuery(
   context: AssistantSpecialistContext,
   pageContext: AssistantPageContext
 ): Promise<AssistantSpecialistResult> {
-  const selectedSessionId = pageContext.backtestSessionId || null
+  const selectedSessionId = pageContext.backtestSessionId || null;
   const sessionRows = await db
     .select({
       id: backtestSession.id,
@@ -1029,7 +1142,7 @@ async function handleBacktestQuery(
       )
     )
     .orderBy(desc(backtestSession.updatedAt))
-    .limit(12)
+    .limit(12);
 
   if (sessionRows.length === 0) {
     return {
@@ -1042,60 +1155,65 @@ async function handleBacktestQuery(
           type: "callout",
           tone: "warning",
           title: "No backtest coverage yet",
-          body:
-            "Run a few replay/backtest sessions first. Then I can compare practice performance to live execution and flag drift.",
+          body: "Run a few replay/backtest sessions first. Then I can compare practice performance to live execution and flag drift.",
         },
       ],
-    }
+    };
   }
 
   const selectedSession = selectedSessionId
     ? sessionRows.find((session) => session.id === selectedSessionId) || null
-    : null
+    : null;
 
-  const completedSessions = sessionRows.filter((session) => session.status === "completed")
-  const baseSessions = selectedSession ? [selectedSession] : sessionRows
+  const completedSessions = sessionRows.filter(
+    (session) => session.status === "completed"
+  );
+  const baseSessions = selectedSession ? [selectedSession] : sessionRows;
   const totalTrades = baseSessions.reduce(
     (sum, session) => sum + toNumber(session.totalTrades),
     0
-  )
+  );
   const totalPnL = baseSessions.reduce(
     (sum, session) => sum + toNumber(session.totalPnL),
     0
-  )
+  );
   const avgWinRate =
     baseSessions.length > 0
-      ? baseSessions.reduce((sum, session) => sum + toNumber(session.winRate), 0) /
-        baseSessions.length
-      : 0
+      ? baseSessions.reduce(
+          (sum, session) => sum + toNumber(session.winRate),
+          0
+        ) / baseSessions.length
+      : 0;
   const avgProfitFactor =
     baseSessions.length > 0
       ? baseSessions.reduce(
           (sum, session) => sum + toNumber(session.profitFactor),
           0
         ) / baseSessions.length
-      : 0
+      : 0;
 
   const bestSession = [...completedSessions].sort(
     (a, b) => toNumber(b.totalPnL) - toNumber(a.totalPnL)
-  )[0]
+  )[0];
   const topSymbol = Array.from(
-    sessionRows.reduce((map, session) => {
-      map.set(session.symbol, (map.get(session.symbol) || 0) + 1)
-      return map
-    }, new Map<string, number>()).entries()
-  ).sort((a, b) => b[1] - a[1])[0]
+    sessionRows
+      .reduce((map, session) => {
+        map.set(session.symbol, (map.get(session.symbol) || 0) + 1);
+        return map;
+      }, new Map<string, number>())
+      .entries()
+  ).sort((a, b) => b[1] - a[1])[0];
 
   const drift = await compareBacktestToLive(
     context.userId,
     context.accountId,
     selectedSession?.id
-  ).catch(() => null)
+  ).catch(() => null);
 
   const severeDrift = drift?.driftItems
     ?.filter((item) => item.severity === "significant")
     .slice(0, 3)
-    .map((item) => item.insight)
+    .map((item) => item.insight);
 
   const recommendations = severeDrift?.length
     ? severeDrift
@@ -1103,20 +1221,28 @@ async function handleBacktestQuery(
         selectedSession
           ? "Compare this session's execution rhythm to your live trades before changing the setup."
           : "Use completed session reviews to isolate where your live execution drifts from practice.",
-      ]
+      ];
 
   const message = [
     selectedSession
-      ? `Backtest session ${selectedSession.name} (${selectedSession.symbol} ${selectedSession.timeframe}) logged ${toNumber(selectedSession.totalTrades)} trades and ${formatUsd(toNumber(selectedSession.totalPnL))}.`
+      ? `Backtest session ${selectedSession.name} (${selectedSession.symbol} ${
+          selectedSession.timeframe
+        }) logged ${toNumber(
+          selectedSession.totalTrades
+        )} trades and ${formatUsd(toNumber(selectedSession.totalPnL))}.`
       : `Backtest book: ${sessionRows.length} sessions and ${totalTrades} closed trades across replay history.`,
-    `Average win rate is ${formatPct(avgWinRate)} with profit factor ${avgProfitFactor.toFixed(2)}.`,
+    `Average win rate is ${formatPct(
+      avgWinRate
+    )} with profit factor ${avgProfitFactor.toFixed(2)}.`,
     bestSession
-      ? `Best completed session: ${bestSession.name} at ${formatUsd(toNumber(bestSession.totalPnL))}.`
+      ? `Best completed session: ${bestSession.name} at ${formatUsd(
+          toNumber(bestSession.totalPnL)
+        )}.`
       : null,
     drift?.summary || recommendations[0],
   ]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 
   return {
     handled: true,
@@ -1133,7 +1259,10 @@ async function handleBacktestQuery(
           { label: "Average win rate", value: formatPct(avgWinRate) },
           { label: "Average profit factor", value: avgProfitFactor.toFixed(2) },
           topSymbol
-            ? { label: "Most tested symbol", value: `${topSymbol[0]} (${topSymbol[1]} sessions)` }
+            ? {
+                label: "Most tested symbol",
+                value: `${topSymbol[0]} (${topSymbol[1]} sessions)`,
+              }
             : null,
         ].filter(Boolean),
       },
@@ -1153,7 +1282,7 @@ async function handleBacktestQuery(
         items: recommendations,
       },
     ].filter(Boolean),
-  }
+  };
 }
 
 function handleDashboardQuery(
@@ -1161,18 +1290,18 @@ function handleDashboardQuery(
   pageContext: AssistantPageContext
 ): AssistantSpecialistResult {
   if (!context.condensed || !context.fullProfile?.profile) {
-    return { handled: false }
+    return { handled: false };
   }
 
-  const profile = context.fullProfile.profile
-  const topEdge = context.fullProfile.edges?.[0]
-  const topLeak = context.fullProfile.leaks?.[0]
-  const topNudge = context.coachingNudges?.[0]
-  const dashboardCoverage = summarizeDashboardCoverage(pageContext)
+  const profile = context.fullProfile.profile;
+  const topEdge = context.fullProfile.edges?.[0];
+  const topLeak = context.fullProfile.leaks?.[0];
+  const topNudge = context.coachingNudges?.[0];
+  const dashboardCoverage = summarizeDashboardCoverage(pageContext);
   const focusedWidgetInsight = buildFocusedDashboardInsight(
     pageContext.focusedWidgetId,
     context
-  )
+  );
 
   const recommendations = [
     topLeak
@@ -1183,10 +1312,14 @@ function handleDashboardQuery(
       : "Keep tagging trades so the edge profile sharpens.",
     topNudge?.message ||
       "Treat the next session as execution practice, not a P&L target.",
-  ]
+  ];
 
   const message = [
-    `Dashboard readout: ${formatPct(context.condensed.winRate)} win rate, profit factor ${context.condensed.profitFactor.toFixed(2)}, expectancy ${formatUsd(context.condensed.expectancy)} per trade.`,
+    `Dashboard readout: ${formatPct(
+      context.condensed.winRate
+    )} win rate, profit factor ${context.condensed.profitFactor.toFixed(
+      2
+    )}, expectancy ${formatUsd(context.condensed.expectancy)} per trade.`,
     focusedWidgetInsight,
     topEdge ? `Best edge: ${topEdge.label}.` : null,
     topLeak ? `Main leak: ${topLeak.label}.` : null,
@@ -1196,7 +1329,7 @@ function handleDashboardQuery(
     recommendations[0],
   ]
     .filter(Boolean)
-    .join(" ")
+    .join(" ");
 
   return {
     handled: true,
@@ -1210,7 +1343,10 @@ function handleDashboardQuery(
         rows: [
           {
             label: "Scope",
-            value: pageContext.accountScope === "all" ? "All accounts" : "Single account",
+            value:
+              pageContext.accountScope === "all"
+                ? "All accounts"
+                : "Single account",
           },
           { label: "Win rate", value: formatPct(context.condensed.winRate) },
           {
@@ -1228,10 +1364,16 @@ function handleDashboardQuery(
           pageContext.focusedWidgetId
             ? {
                 label: "Focused widget",
-                value: getDashboardWidgetLabel(pageContext.focusedWidgetId) || "Dashboard",
+                value:
+                  getDashboardWidgetLabel(pageContext.focusedWidgetId) ||
+                  "Dashboard",
               }
             : null,
-        ].filter(Boolean) as Array<{ label: string; value: string; note?: string }>,
+        ].filter(Boolean) as Array<{
+          label: string;
+          value: string;
+          note?: string;
+        }>,
       },
       dashboardCoverage
         ? {
@@ -1245,18 +1387,22 @@ function handleDashboardQuery(
         ? {
             type: "edgeConditions",
             title: "Current edge map",
-            edges: (context.fullProfile.edges || []).slice(0, 4).map((edge: any) => ({
-              label: edge.label,
-              winRate: edge.winRate,
-              trades: edge.trades,
-              confidence: edge.confidence,
-            })),
-            leaks: (context.fullProfile.leaks || []).slice(0, 4).map((leak: any) => ({
-              label: leak.label,
-              winRate: leak.winRate,
-              trades: leak.trades,
-              confidence: leak.confidence,
-            })),
+            edges: (context.fullProfile.edges || [])
+              .slice(0, 4)
+              .map((edge: any) => ({
+                label: edge.label,
+                winRate: edge.winRate,
+                trades: edge.trades,
+                confidence: edge.confidence,
+              })),
+            leaks: (context.fullProfile.leaks || [])
+              .slice(0, 4)
+              .map((leak: any) => ({
+                label: leak.label,
+                winRate: leak.winRate,
+                trades: leak.trades,
+                confidence: leak.confidence,
+              })),
           }
         : null,
       {
@@ -1265,36 +1411,39 @@ function handleDashboardQuery(
         items: recommendations,
       },
     ].filter(Boolean),
-  }
+  };
 }
 
 export async function maybeHandleSpecialistQuery(
   userMessage: string,
   context: AssistantSpecialistContext
 ): Promise<AssistantSpecialistResult> {
-  const pageContext = normalizeAssistantPageContext(context.pageContext)
-  const domain = detectAssistantDomain(userMessage, pageContext)
+  const pageContext = normalizeAssistantPageContext(context.pageContext);
+  const domain = detectAssistantDomain(userMessage, pageContext);
 
   if (!domain) {
-    return { handled: false }
+    return { handled: false };
   }
 
   switch (domain) {
     case "unsupported":
-      return buildUnsupportedResponse()
+      return buildUnsupportedResponse();
     case "psychology":
-      return buildPsychologyResult(context.tiltStatus, context.mentalScore)
+      return buildPsychologyResult(context.tiltStatus, context.mentalScore);
     case "session":
-      return buildSessionResult(context.sessionState, context.coachingNudges || [])
+      return buildSessionResult(
+        context.sessionState,
+        context.coachingNudges || []
+      );
     case "prop":
-      return handlePropQuery(context, pageContext)
+      return handlePropQuery(context, pageContext);
     case "journal":
-      return handleJournalQuery(context)
+      return handleJournalQuery(context);
     case "backtest":
-      return handleBacktestQuery(context, pageContext)
+      return handleBacktestQuery(context, pageContext);
     case "dashboard":
-      return handleDashboardQuery(context, pageContext)
+      return handleDashboardQuery(context, pageContext);
     default:
-      return { handled: false }
+      return { handled: false };
   }
 }

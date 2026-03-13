@@ -1,6 +1,13 @@
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq, isNull, or } from "drizzle-orm";
 import { db } from "../db";
-import { propFirm, tradingAccount } from "../db/schema/trading";
+import {
+  openTrade,
+  propChallengeRule,
+  propFirm,
+  trade,
+  tradingAccount,
+} from "../db/schema/trading";
+import { ensurePropChallengeLineageForAccount } from "./prop-challenge-lineage";
 
 /**
  * Prop Firm Detection Library
@@ -17,8 +24,12 @@ export interface PropFirmDetectionResult {
 
 type TradingAccountInsert = typeof tradingAccount.$inferInsert;
 type TradingAccountSelect = typeof tradingAccount.$inferSelect;
+type PropFirmRecord = typeof propFirm.$inferSelect;
+type PropChallengeRuleRecord = typeof propChallengeRule.$inferSelect;
 
 type AutoPropAccountSeed = {
+  accountId?: string | null;
+  id?: string | null;
   broker: string | null;
   brokerServer: string | null;
   initialBalance?: string | number | null;
@@ -33,6 +44,162 @@ export interface AutoPropClassificationResult {
 }
 
 const DEFAULT_PROP_START_BALANCE = 100_000;
+const BUILTIN_PROP_TIMESTAMP = new Date("2025-01-01T00:00:00.000Z");
+
+const BUILTIN_PROP_FIRMS: PropFirmRecord[] = [
+  {
+    id: "ftmo",
+    createdByUserId: null,
+    name: "FTMO",
+    displayName: "FTMO",
+    description:
+      "One of the world's leading prop trading firms with a proven track record since 2015.",
+    logo: "/brokers/FTMO.png",
+    website: "https://ftmo.com",
+    supportedPlatforms: ["mt4", "mt5", "ctrader"],
+    brokerDetectionPatterns: [
+      "FTMO",
+      "ftmo",
+      "FTMO-Demo",
+      "FTMO-Live",
+      "FTMO-Server",
+    ],
+    active: true,
+    createdAt: BUILTIN_PROP_TIMESTAMP,
+    updatedAt: BUILTIN_PROP_TIMESTAMP,
+  },
+];
+
+const BUILTIN_PROP_CHALLENGE_RULES: Record<string, PropChallengeRuleRecord[]> =
+  {
+    ftmo: [
+      {
+        id: "ftmo-2step",
+        createdByUserId: null,
+        propFirmId: "ftmo",
+        challengeType: "standard",
+        displayName: "FTMO 2-Step Challenge",
+        phases: [
+          {
+            order: 1,
+            name: "Phase 1 - FTMO Challenge",
+            profitTarget: 10,
+            profitTargetType: "percentage",
+            dailyLossLimit: 5,
+            maxLoss: 10,
+            maxLossType: "absolute",
+            timeLimitDays: null,
+            minTradingDays: 4,
+            consistencyRule: null,
+            customRules: {
+              description:
+                "Achieve 10% profit while staying within risk limits",
+            },
+          },
+          {
+            order: 2,
+            name: "Phase 2 - Verification",
+            profitTarget: 5,
+            profitTargetType: "percentage",
+            dailyLossLimit: 5,
+            maxLoss: 10,
+            maxLossType: "absolute",
+            timeLimitDays: null,
+            minTradingDays: 4,
+            consistencyRule: null,
+            customRules: {
+              description: "Achieve 5% profit to unlock your funded account",
+            },
+          },
+          {
+            order: 0,
+            name: "Funded Account",
+            profitTarget: null,
+            profitTargetType: "percentage",
+            dailyLossLimit: 5,
+            maxLoss: 10,
+            maxLossType: "absolute",
+            timeLimitDays: null,
+            minTradingDays: 0,
+            consistencyRule: null,
+            customRules: {
+              profitSplit: 80,
+              profitSplitScaled: 90,
+              description: "80% profit split (90% after scaling)",
+            },
+          },
+        ],
+        active: true,
+        createdAt: BUILTIN_PROP_TIMESTAMP,
+        updatedAt: BUILTIN_PROP_TIMESTAMP,
+      },
+    ],
+  };
+
+function sortPropFirms(records: PropFirmRecord[]) {
+  return [...records].sort((left, right) =>
+    left.displayName.localeCompare(right.displayName)
+  );
+}
+
+function sortPropChallengeRules(records: PropChallengeRuleRecord[]) {
+  return [...records].sort((left, right) =>
+    left.challengeType.localeCompare(right.challengeType)
+  );
+}
+
+function mergePropFirmsWithBuiltIns(records: PropFirmRecord[]) {
+  const byId = new Map<string, PropFirmRecord>(
+    BUILTIN_PROP_FIRMS.map((firm) => [firm.id, firm])
+  );
+
+  for (const record of records) {
+    byId.set(record.id, record);
+  }
+
+  return sortPropFirms(Array.from(byId.values()));
+}
+
+function mergeChallengeRulesWithBuiltIns(
+  propFirmId: string,
+  records: PropChallengeRuleRecord[]
+) {
+  const byId = new Map<string, PropChallengeRuleRecord>(
+    (BUILTIN_PROP_CHALLENGE_RULES[propFirmId] || []).map((rule) => [
+      rule.id,
+      rule,
+    ])
+  );
+
+  for (const record of records) {
+    byId.set(record.id, record);
+  }
+
+  return sortPropChallengeRules(Array.from(byId.values()));
+}
+
+function buildPropFirmAccessCondition(userId?: string | null) {
+  if (userId === undefined) {
+    return undefined;
+  }
+
+  return userId
+    ? or(isNull(propFirm.createdByUserId), eq(propFirm.createdByUserId, userId))
+    : isNull(propFirm.createdByUserId);
+}
+
+function buildChallengeRuleAccessCondition(userId?: string | null) {
+  if (userId === undefined) {
+    return undefined;
+  }
+
+  return userId
+    ? or(
+        isNull(propChallengeRule.createdByUserId),
+        eq(propChallengeRule.createdByUserId, userId)
+      )
+    : isNull(propChallengeRule.createdByUserId);
+}
 
 function toFiniteNumber(
   value: string | number | null | undefined
@@ -44,18 +211,81 @@ function toFiniteNumber(
 
 function getPropStartMetrics(seed: AutoPropAccountSeed) {
   const startBalance =
-    toFiniteNumber(seed.liveBalance) ??
     toFiniteNumber(seed.initialBalance) ??
+    toFiniteNumber(seed.liveBalance) ??
     DEFAULT_PROP_START_BALANCE;
   const startEquity =
+    toFiniteNumber(seed.initialBalance) ??
     toFiniteNumber(seed.liveEquity) ??
     toFiniteNumber(seed.liveBalance) ??
-    toFiniteNumber(seed.initialBalance) ??
     DEFAULT_PROP_START_BALANCE;
 
   return {
     startBalance,
     startEquity,
+  };
+}
+
+function formatDayValue(value: Date) {
+  return value.toISOString().split("T")[0];
+}
+
+async function getEarliestAccountActivityDate(accountId?: string | null) {
+  if (!accountId) return null;
+
+  const [firstClosedTrade, firstOpenTrade] = await Promise.all([
+    db.query.trade.findFirst({
+      where: eq(trade.accountId, accountId),
+      columns: {
+        openTime: true,
+        closeTime: true,
+      },
+      orderBy: (table) => [asc(table.openTime), asc(table.closeTime)],
+    }),
+    db.query.openTrade.findFirst({
+      where: eq(openTrade.accountId, accountId),
+      columns: {
+        openTime: true,
+      },
+      orderBy: (table) => [asc(table.openTime)],
+    }),
+  ]);
+
+  const candidates = [
+    firstClosedTrade?.openTime,
+    firstClosedTrade?.closeTime,
+    firstOpenTrade?.openTime,
+  ].filter((value): value is Date => value instanceof Date);
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  return new Date(Math.min(...candidates.map((value) => value.getTime())));
+}
+
+export async function resolvePropTrackingSeed(
+  seed: AutoPropAccountSeed,
+  options: {
+    phaseStartDate?: string | null;
+  } = {}
+) {
+  const { startBalance, startEquity } = getPropStartMetrics(seed);
+  const earliestActivityDate = await getEarliestAccountActivityDate(
+    seed.accountId ?? seed.id ?? null
+  );
+  const preferredStartDate = options.phaseStartDate
+    ? new Date(options.phaseStartDate)
+    : null;
+  const phaseStartDate = formatDayValue(
+    earliestActivityDate ?? preferredStartDate ?? new Date()
+  );
+
+  return {
+    phaseStartDate,
+    startBalance,
+    startEquity,
+    inferredFromHistory: Boolean(earliestActivityDate),
   };
 }
 
@@ -80,9 +310,11 @@ export async function detectPropFirm(
   }
 
   // Fetch all active prop firms with their detection patterns
-  const propFirms = await db.query.propFirm.findMany({
-    where: (propFirm, { eq }) => eq(propFirm.active, true),
-  });
+  const propFirms = mergePropFirmsWithBuiltIns(
+    await db.query.propFirm.findMany({
+      where: and(eq(propFirm.active, true), isNull(propFirm.createdByUserId)),
+    })
+  );
 
   const searchText = `${broker || ""} ${brokerServer || ""}`.toLowerCase();
 
@@ -170,8 +402,8 @@ export async function buildAutoPropAccountFields(
     };
   }
 
-  const today = new Date().toISOString().split("T")[0];
-  const { startBalance, startEquity } = getPropStartMetrics(seed);
+  const { phaseStartDate, startBalance, startEquity } =
+    await resolvePropTrackingSeed(seed);
 
   return {
     detection,
@@ -180,11 +412,11 @@ export async function buildAutoPropAccountFields(
       propFirmId: detection.propFirmId,
       propChallengeRuleId: defaultRule.id,
       propCurrentPhase: 1,
-      propPhaseStartDate: today,
-      propPhaseStartBalance: startBalance.toString(),
-      propPhaseStartEquity: startEquity.toString(),
-      propDailyHighWaterMark: startEquity.toString(),
-      propPhaseHighWaterMark: startEquity.toString(),
+      propPhaseStartDate: phaseStartDate,
+      propPhaseStartBalance: startBalance.toFixed(2),
+      propPhaseStartEquity: startEquity.toFixed(2),
+      propDailyHighWaterMark: startEquity.toFixed(2),
+      propPhaseHighWaterMark: startEquity.toFixed(2),
       propPhaseCurrentProfit: "0",
       propPhaseCurrentProfitPercent: "0",
       propPhaseTradingDays: 0,
@@ -276,6 +508,10 @@ export async function syncAutoPropClassificationForUser(userId: string) {
       .set(updates)
       .where(eq(tradingAccount.id, account.id));
 
+    if (updates.isPropAccount) {
+      await ensurePropChallengeLineageForAccount(account.id);
+    }
+
     updatedCount += 1;
   }
 
@@ -289,33 +525,89 @@ export async function syncAutoPropClassificationForUser(userId: string) {
  * Get all active prop firms
  */
 export async function getAllPropFirms() {
-  return db.query.propFirm.findMany({
-    where: (propFirm, { eq }) => eq(propFirm.active, true),
+  const rows = await db.query.propFirm.findMany({
+    where: and(eq(propFirm.active, true), buildPropFirmAccessCondition(null)),
     orderBy: (propFirm, { asc }) => [asc(propFirm.displayName)],
   });
+
+  return mergePropFirmsWithBuiltIns(rows);
+}
+
+export async function getAccessiblePropFirms(userId: string) {
+  const rows = await db.query.propFirm.findMany({
+    where: and(eq(propFirm.active, true), buildPropFirmAccessCondition(userId)),
+    orderBy: (propFirm, { asc }) => [asc(propFirm.displayName)],
+  });
+
+  return mergePropFirmsWithBuiltIns(rows);
 }
 
 /**
  * Get prop firm by ID
  */
-export async function getPropFirmById(id: string) {
-  return db.query.propFirm.findFirst({
-    where: (propFirm, { eq }) => eq(propFirm.id, id),
+export async function getPropFirmById(id: string, userId?: string | null) {
+  const row = await db.query.propFirm.findFirst({
+    where:
+      userId === undefined
+        ? eq(propFirm.id, id)
+        : and(eq(propFirm.id, id), buildPropFirmAccessCondition(userId)),
   });
+
+  if (row) {
+    return row;
+  }
+
+  return BUILTIN_PROP_FIRMS.find((firm) => firm.id === id) ?? null;
+}
+
+export async function getChallengeRuleById(id: string, userId?: string | null) {
+  const row = await db.query.propChallengeRule.findFirst({
+    where:
+      userId === undefined
+        ? eq(propChallengeRule.id, id)
+        : and(
+            eq(propChallengeRule.id, id),
+            buildChallengeRuleAccessCondition(userId)
+          ),
+  });
+
+  if (row) {
+    return row;
+  }
+
+  for (const rules of Object.values(BUILTIN_PROP_CHALLENGE_RULES)) {
+    const match = rules.find((rule) => rule.id === id);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
 }
 
 /**
  * Get challenge rules for a prop firm
  */
-export async function getChallengeRulesForFirm(propFirmId: string) {
-  return db.query.propChallengeRule.findMany({
+export async function getChallengeRulesForFirm(
+  propFirmId: string,
+  userId?: string | null
+) {
+  const rows = await db.query.propChallengeRule.findMany({
     where: (propChallengeRule, { eq, and }) =>
-      and(
-        eq(propChallengeRule.propFirmId, propFirmId),
-        eq(propChallengeRule.active, true)
-      ),
+      userId === undefined
+        ? and(
+            eq(propChallengeRule.propFirmId, propFirmId),
+            eq(propChallengeRule.active, true)
+          )
+        : and(
+            eq(propChallengeRule.propFirmId, propFirmId),
+            eq(propChallengeRule.active, true),
+            buildChallengeRuleAccessCondition(userId)
+          ),
     orderBy: (propChallengeRule, { asc }) => [
       asc(propChallengeRule.challengeType),
     ],
   });
+
+  return mergeChallengeRulesWithBuiltIns(propFirmId, rows);
 }

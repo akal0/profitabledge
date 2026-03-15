@@ -22,7 +22,6 @@ import {
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
@@ -801,28 +800,35 @@ export function CopyGroupCard({ group, onUpdate }: CopyGroupProps) {
       </Card>
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="bg-sidebar border border-white/5 rounded-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete copy group</AlertDialogTitle>
-            <AlertDialogDescription className="text-white/45">
-              This removes the master-to-slave route, all stored copier stats, and its signal history.
-              The action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white/60 hover:text-white text-xs duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5">
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-xs duration-250 rounded-sm px-5 border border-rose-500/25 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 hover:text-rose-200"
-              onClick={() => {
-                deleteGroup.mutate({ groupId: group.id });
-                setDeleteDialogOpen(false);
-              }}
-            >
-              Delete group
-            </AlertDialogAction>
-          </AlertDialogFooter>
+        <AlertDialogContent className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md [&>button]:hidden">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Trash2 className="h-3.5 w-3.5 text-rose-400" />
+              </div>
+              <div className="min-w-0">
+                <AlertDialogTitle className="text-sm font-medium text-white">Delete copy group</AlertDialogTitle>
+                <AlertDialogDescription className="mt-1 text-xs leading-relaxed text-white/40">
+                  This removes the master-to-slave route, all stored copier stats, and its signal history. The action cannot be undone.
+                </AlertDialogDescription>
+              </div>
+            </div>
+            <div className="h-px bg-white/5" />
+            <AlertDialogFooter className="flex items-center justify-end gap-2 px-5 py-3">
+              <AlertDialogCancel className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-rose-500/25 bg-rose-500/10 px-3 py-2 h-9 text-xs text-rose-300 transition-all duration-250 active:scale-95 hover:bg-rose-500/20 hover:text-rose-200 shadow-none"
+                onClick={() => {
+                  deleteGroup.mutate({ groupId: group.id });
+                  setDeleteDialogOpen(false);
+                }}
+              >
+                Delete group
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 

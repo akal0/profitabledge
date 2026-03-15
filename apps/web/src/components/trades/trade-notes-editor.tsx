@@ -55,23 +55,7 @@ export function TradeNotesEditor({
 
   const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleContentChange = useCallback(
-    (blocks: JournalBlock[], html: string) => {
-      setContent(blocks);
-      setHasChanges(true);
-
-      if (autoSaveRef.current) {
-        clearTimeout(autoSaveRef.current);
-      }
-
-      autoSaveRef.current = setTimeout(() => {
-        handleSave(blocks, html);
-      }, 3000);
-    },
-    [tradeId]
-  );
-
-  const handleSave = async (blocks?: JournalBlock[], html?: string) => {
+  const handleSave = useCallback(async (blocks?: JournalBlock[], html?: string) => {
     const contentToSave = blocks || content;
     if (contentToSave.length === 0) return;
 
@@ -94,7 +78,23 @@ export function TradeNotesEditor({
     } catch (error) {
       toast.error("Failed to save notes");
     }
-  };
+  }, [content, tradeId, upsertNote]);
+
+  const handleContentChange = useCallback(
+    (blocks: JournalBlock[], html: string) => {
+      setContent(blocks);
+      setHasChanges(true);
+
+      if (autoSaveRef.current) {
+        clearTimeout(autoSaveRef.current);
+      }
+
+      autoSaveRef.current = setTimeout(() => {
+        handleSave(blocks, html);
+      }, 3000);
+    },
+    [handleSave]
+  );
 
   const handleManualSave = () => {
     handleSave();

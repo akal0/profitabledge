@@ -1,10 +1,20 @@
 "use client";
 
 import React from "react";
-import { useDateRangeStore } from "@/stores/date-range";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatSignedCurrency } from "./dashboard-chart-ui";
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+  formatSignedCurrency,
+} from "./dashboard-chart-ui";
+import { useChartDateRange } from "./use-chart-date-range";
 import { useChartTrades } from "./use-chart-trades";
 
 type HeatmapCell = {
@@ -17,14 +27,56 @@ type HeatmapCell = {
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const DAY_LABELS: Record<(typeof DAYS)[number], string> = {
+  Sun: "Sunday",
+  Mon: "Monday",
+  Tue: "Tuesday",
+  Wed: "Wednesday",
+  Thu: "Thursday",
+  Fri: "Friday",
+  Sat: "Saturday",
+};
+const HEATMAP_COLUMN_TEMPLATE = "2rem repeat(24, minmax(0, 1fr))";
+const HEATMAP_ROW_TEMPLATE = "1rem repeat(7, minmax(0, 1fr))";
+
+function getHeatmapBackground(
+  avgProfit: number,
+  count: number,
+  maxProfit: number,
+  minProfit: number
+) {
+  if (count === 0) {
+    return "rgba(255, 255, 255, 0.03)";
+  }
+
+  const absMax = Math.max(Math.abs(maxProfit), Math.abs(minProfit));
+  const intensity = absMax > 0 ? Math.abs(avgProfit) / absMax : 0;
+  const alpha = Math.max(0.18, Math.min(0.82, intensity * 0.82));
+
+  if (avgProfit > 0) {
+    return `rgba(20, 184, 166, ${alpha})`;
+  }
+
+  if (avgProfit < 0) {
+    return `rgba(244, 63, 94, ${alpha})`;
+  }
+
+  return "rgba(255, 255, 255, 0.03)";
+}
+
+function formatHourSlot(hour: number) {
+  const endHour = (hour + 1) % 24;
+  return `${hour.toString().padStart(2, "0")}:00 - ${endHour
+    .toString()
+    .padStart(2, "0")}:00`;
+}
 
 export function PerformanceHeatmap({
   accountId,
 }: {
   accountId?: string;
 }) {
-  const { start, end, min, max } = useDateRangeStore();
-  const [hoveredCell, setHoveredCell] = React.useState<string | null>(null);
+  const { start, end, min, max } = useChartDateRange();
 
   const resolvedRange = React.useMemo(() => {
     const minD = min ? new Date(min) : undefined;
@@ -52,20 +104,6 @@ export function PerformanceHeatmap({
     return { start: startUTC, end: endUTC };
   }, [start, end, min, max]);
 
-  const dateRangeText = React.useMemo(() => {
-    if (!resolvedRange) return "";
-    const startStr = resolvedRange.start.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
-    const endStr = resolvedRange.end.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    return `${startStr} - ${endStr}`;
-  }, [resolvedRange]);
-
   const rangeOverride = React.useMemo(
     () =>
       resolvedRange
@@ -79,7 +117,7 @@ export function PerformanceHeatmap({
 
   const { trades, isLoading } = useChartTrades(accountId, rangeOverride);
 
-  const { data, maxProfit, minProfit } = React.useMemo(() => {
+  const { cellMap, maxProfit, minProfit } = React.useMemo(() => {
     const grid: Record<string, { profit: number; count: number }> = {};
 
     trades.forEach((trade) => {
@@ -98,7 +136,7 @@ export function PerformanceHeatmap({
       grid[key].count += 1;
     });
 
-    const cells: HeatmapCell[] = [];
+    const nextCellMap: Record<string, HeatmapCell> = {};
     let maxValue = 0;
     let minValue = 0;
 
@@ -108,13 +146,13 @@ export function PerformanceHeatmap({
         const cell = grid[key] || { profit: 0, count: 0 };
         const avgProfit = cell.count > 0 ? cell.profit / cell.count : 0;
 
-        cells.push({
+        nextCellMap[`${dayName}-${hour}`] = {
           hour,
           day: dayName,
           profit: cell.profit,
           count: cell.count,
           avgProfit,
-        });
+        };
 
         if (avgProfit > maxValue) maxValue = avgProfit;
         if (avgProfit < minValue) minValue = avgProfit;
@@ -122,7 +160,7 @@ export function PerformanceHeatmap({
     });
 
     return {
-      data: cells,
+      cellMap: nextCellMap,
       maxProfit: maxValue,
       minProfit: minValue,
     };
@@ -130,8 +168,7 @@ export function PerformanceHeatmap({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-2 h-full justify-center">
-        <Skeleton className="h-4 w-32 rounded-none bg-sidebar" />
+      <div className="flex h-full items-center justify-center">
         <Skeleton className="h-full w-full rounded-none bg-sidebar" />
       </div>
     );
@@ -145,101 +182,120 @@ export function PerformanceHeatmap({
     );
   }
 
-  const getColor = (avgProfit: number, count: number) => {
-    if (count === 0) return "bg-sidebar-accent/20";
-
-    const absMax = Math.max(Math.abs(maxProfit), Math.abs(minProfit));
-    const intensity = absMax > 0 ? Math.abs(avgProfit) / absMax : 0;
-
-    if (avgProfit > 0) {
-      // Green for profit
-      const opacity = Math.min(intensity * 100, 100);
-      return `bg-teal-500/${Math.max(20, Math.round(opacity))}`;
-    } else if (avgProfit < 0) {
-      // Red for loss
-      const opacity = Math.min(intensity * 100, 100);
-      return `bg-rose-500/${Math.max(20, Math.round(opacity))}`;
-    }
-
-    return "bg-sidebar-accent/20";
-  };
-
   return (
-    <div className="flex h-full flex-col gap-6 overflow-hidden py-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm text-white/60">Performance by Hour & Day</span>
-        <span className="text-xs text-white/40">{dateRangeText}</span>
-      </div>
-
-      <div className="grid grid-cols-[auto_repeat(24,1fr)] gap-0.5 text-[10px] flex-1 overflow-auto">
-        {/* Header: Hours */}
-        <div></div>
-        {HOURS.map((hour) => (
+    <TooltipProvider>
+      <div className="flex h-full min-h-0 w-full flex-col gap-2 overflow-hidden py-1">
+        <div className="min-h-0 flex-1 overflow-hidden">
           <div
-            key={hour}
-            className="text-center text-white/40 py-0.5 text-[9px]"
+            className="grid h-full w-full gap-0.5 text-[10px]"
+            style={{
+              gridTemplateColumns: HEATMAP_COLUMN_TEMPLATE,
+              gridTemplateRows: HEATMAP_ROW_TEMPLATE,
+            }}
           >
-            {hour % 6 === 0 ? hour : ""}
-          </div>
-        ))}
+            <div />
+            {HOURS.map((hour) => (
+              <div
+                key={hour}
+                className="flex items-end justify-center pb-0.5 text-[8px] leading-none text-white/40"
+              >
+                {hour % 6 === 0 ? hour : ""}
+              </div>
+            ))}
 
-        {/* Rows: Days */}
-        {DAYS.map((day, dayIndex) => (
-          <React.Fragment key={day}>
-            <div className="text-white/60 pr-1.5 py-0.5 flex items-center justify-end text-[10px]">
-              {day}
-            </div>
-            {HOURS.map((hour) => {
-              const cell = data.find(
-                (d) => d.day === day && d.hour === hour
-              );
-              if (!cell) return <div key={hour} className="aspect-square" />;
-
-              const cellKey = `${day}-${hour}`;
-              const isHovered = hoveredCell === cellKey;
-
-              return (
-                <div
-                  key={hour}
-                  className={cn(
-                    "aspect-square border border-white/5 cursor-pointer hover:border-white/20 transition-all relative",
-                    getColor(cell.avgProfit, cell.count)
-                  )}
-                  onMouseEnter={() => setHoveredCell(cellKey)}
-                  onMouseLeave={() => setHoveredCell(null)}
-                >
-                  {/* Tooltip on hover - only show for this cell */}
-                  {isHovered && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-sidebar border border-white/10 text-white text-xs px-2 py-1 rounded pointer-events-none whitespace-nowrap z-[100]">
-                      {day} {hour}:00
-                      <br />
-                      {cell.count} trades
-                      <br />
-                      Avg: {formatSignedCurrency(cell.avgProfit, 2)}
-                    </div>
-                  )}
+            {DAYS.map((day) => (
+              <React.Fragment key={day}>
+                <div className="flex items-center justify-end pr-1 text-[9px] text-white/60">
+                  {day}
                 </div>
-              );
-            })}
-          </React.Fragment>
-        ))}
-      </div>
+                {HOURS.map((hour) => {
+                  const cell = cellMap[`${day}-${hour}`];
+                  if (!cell) return <div key={hour} className="h-full w-full" />;
 
-      {/* Legend */}
-      <div className="flex items-center gap-3 text-xs text-white/40">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 bg-rose-500/60"></div>
-          <span>Loss</span>
+                  const title = `${DAY_LABELS[day]} • ${formatHourSlot(hour)}`;
+                  const totalTone =
+                    cell.profit > 0
+                      ? "positive"
+                      : cell.profit < 0
+                        ? "negative"
+                        : "default";
+                  const averageTone =
+                    cell.avgProfit > 0
+                      ? "positive"
+                      : cell.avgProfit < 0
+                        ? "negative"
+                        : "default";
+
+                  return (
+                    <Tooltip key={hour}>
+                      <TooltipTrigger asChild>
+                        <div
+                          tabIndex={0}
+                          className={cn(
+                            "relative h-full min-h-0 w-full cursor-pointer rounded-[2px] border border-white/5 transition-all hover:border-white/20 focus-visible:border-white/25 focus-visible:outline-none data-[state=closed]:border-white/5 data-[state=delayed-open]:border-white/25 data-[state=instant-open]:border-white/25"
+                          )}
+                          style={{
+                            backgroundColor: getHeatmapBackground(
+                              cell.avgProfit,
+                              cell.count,
+                              maxProfit,
+                              minProfit
+                            ),
+                          }}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        align="center"
+                        sideOffset={8}
+                        className="border-0 bg-transparent p-0 shadow-none"
+                      >
+                        <DashboardChartTooltipFrame
+                          title={title}
+                          className="min-w-[14rem]"
+                        >
+                          <DashboardChartTooltipRow
+                            label="Trades"
+                            value={cell.count.toLocaleString()}
+                            dimmed={cell.count === 0}
+                          />
+                          <DashboardChartTooltipRow
+                            label="Net P&L"
+                            value={formatSignedCurrency(cell.profit, 2)}
+                            tone={totalTone}
+                            dimmed={cell.count === 0}
+                          />
+                          <DashboardChartTooltipRow
+                            label="Avg per trade"
+                            value={formatSignedCurrency(cell.avgProfit, 2)}
+                            tone={averageTone}
+                            dimmed={cell.count === 0}
+                          />
+                        </DashboardChartTooltipFrame>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 bg-sidebar-accent/20"></div>
-          <span>No trades</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 bg-teal-500/60"></div>
-          <span>Profit</span>
+
+        <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-white/40">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-rose-500/60" />
+            <span>Loss</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-sidebar-accent/20" />
+            <span>No trades</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-[2px] bg-teal-500/60" />
+            <span>Profit</span>
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

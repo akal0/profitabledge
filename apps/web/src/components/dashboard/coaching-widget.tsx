@@ -11,8 +11,10 @@ import {
   Shield,
 } from "lucide-react";
 import { Skeleton } from "../ui/skeleton";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { WidgetWrapper } from "./widget-wrapper";
+import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
+import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 
 interface CoachingInsight {
   type: "edge" | "warning" | "tip" | "goal";
@@ -35,15 +37,39 @@ const insightColors = {
   goal: "text-purple-400 bg-purple-500/10",
 };
 
+function formatCoachingInsightTitle(title: string): string {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return title;
+
+  const acronymPattern = /^[A-Z0-9:+/-]+$/;
+
+  return words
+    .map((word, index) => {
+      if (acronymPattern.test(word)) {
+        return word;
+      }
+
+      if (index === 0) {
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      }
+
+      return word.toLowerCase();
+    })
+    .join(" ");
+}
+
 export function CoachingWidget({
   accountId,
   isEditing = false,
   className,
+  currencyCode,
 }: {
   accountId?: string;
   isEditing?: boolean;
   className?: string;
+  currencyCode?: string;
 }) {
+  const widgetRef = useRef<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const { data: profileData, isLoading: profileLoading } =
@@ -71,7 +97,11 @@ export function CoachingWidget({
       insights.push({
         type: "edge",
         title: "Trade Your Edge",
-        message: `Your best edge is "${topEdge.label}" with ${topEdge.winRate.toFixed(0)}% win rate. Focus more trades here.`,
+        message: `Your best edge is "${
+          topEdge.label
+        }" with ${topEdge.winRate.toFixed(
+          0
+        )}% win rate. Focus more trades here.`,
         priority: 1,
       });
     }
@@ -82,7 +112,16 @@ export function CoachingWidget({
       insights.push({
         type: "warning",
         title: "Avoid This Leak",
-        message: `"${topLeak.label}" has only ${topLeak.winRate.toFixed(0)}% WR with -$${Math.abs(topLeak.avgLoss).toFixed(0)} avg loss. Consider avoiding.`,
+        message: `"${topLeak.label}" has only ${topLeak.winRate.toFixed(
+          0
+        )}% WR with ${formatSignedCurrencyValue(
+          -Math.abs(topLeak.avgLoss),
+          currencyCode,
+          {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }
+        )} avg loss. Consider avoiding.`,
         priority: 2,
       });
     }
@@ -92,14 +131,18 @@ export function CoachingWidget({
       insights.push({
         type: "tip",
         title: "Improve Win Rate",
-        message: `Your win rate is ${profile.winRate.toFixed(0)}%. Focus on higher-probability setups and tighter entry criteria.`,
+        message: `Your win rate is ${profile.winRate.toFixed(
+          0
+        )}%. Focus on higher-probability setups and tighter entry criteria.`,
         priority: 3,
       });
     } else if (profile.winRate > 60) {
       insights.push({
         type: "tip",
         title: "Optimize Winners",
-        message: `Your ${profile.winRate.toFixed(0)}% win rate is strong. Consider holding winners longer to maximize R:R.`,
+        message: `Your ${profile.winRate.toFixed(
+          0
+        )}% win rate is strong. Consider holding winners longer to maximize RR.`,
         priority: 3,
       });
     }
@@ -109,8 +152,10 @@ export function CoachingWidget({
     if (avgRR < 1 && avgRR > 0) {
       insights.push({
         type: "warning",
-        title: "R:R Below 1",
-        message: `Average R:R is ${avgRR.toFixed(2)}. Aim for at least 1:1 to maintain profitability with your win rate.`,
+        title: "RR Below 1",
+        message: `Average RR is ${avgRR.toFixed(
+          2
+        )}. Aim for at least 1:1 to maintain profitability with your win rate.`,
         priority: 2,
       });
     }
@@ -121,7 +166,9 @@ export function CoachingWidget({
       insights.push({
         type: "tip",
         title: "Build Consistency",
-        message: `Consistency score is ${consistency.toFixed(0)}. Try to trade the same setups at similar sizes each day.`,
+        message: `Consistency score is ${consistency.toFixed(
+          0
+        )}. Try to trade the same setups at similar sizes each day.`,
         priority: 3,
       });
     }
@@ -131,7 +178,9 @@ export function CoachingWidget({
       insights.push({
         type: "warning",
         title: "Thin Edge",
-        message: `Profit factor is ${profile.profitFactor.toFixed(2)}. Cut losers faster or let winners run to improve this.`,
+        message: `Profit factor is ${profile.profitFactor.toFixed(
+          2
+        )}. Cut losers faster or let winners run to improve this.`,
         priority: 2,
       });
     }
@@ -153,11 +202,17 @@ export function CoachingWidget({
   if (isLoading) {
     return (
       <WidgetWrapper
+        rootRef={widgetRef}
         isEditing={isEditing}
         className={className}
         icon={Brain}
-        title="Edge Coach"
+        title="Edge coach"
         showHeader
+        headerRight={
+          !isEditing ? (
+            <WidgetShareButton targetRef={widgetRef} title="Edge coach" />
+          ) : null
+        }
         contentClassName="flex-col justify-end p-3.5"
       >
         <Skeleton className="flex-1" />
@@ -168,15 +223,23 @@ export function CoachingWidget({
   if (!displayInsights.length) {
     return (
       <WidgetWrapper
+        rootRef={widgetRef}
         isEditing={isEditing}
         className={className}
         icon={Brain}
-        title="Edge Coach"
+        title="Edge coach"
         showHeader
+        headerRight={
+          !isEditing ? (
+            <WidgetShareButton targetRef={widgetRef} title="Edge coach" />
+          ) : null
+        }
         contentClassName="flex-col items-center justify-center p-3.5"
       >
         <Shield className="size-8 text-white/10 mb-2" />
-        <p className="text-xs text-white/40">Keep trading to unlock coaching insights</p>
+        <p className="text-xs text-white/40">
+          Keep trading to unlock coaching insights
+        </p>
       </WidgetWrapper>
     );
   }
@@ -185,40 +248,45 @@ export function CoachingWidget({
 
   return (
     <WidgetWrapper
+      rootRef={widgetRef}
       isEditing={isEditing}
       className={className}
       icon={Brain}
-      title="Edge Coach"
+      title="Edge coach"
       showHeader
       contentClassName="flex-col justify-end"
       headerRight={
-        <span className="text-[10px] text-white/20">
-          {activeIndex + 1}/{displayInsights.length}
-        </span>
+        <>
+          <span className="text-[11px] text-white/20">
+            {activeIndex + 1}/{displayInsights.length}
+          </span>
+          {!isEditing ? (
+            <WidgetShareButton targetRef={widgetRef} title="Edge coach" />
+          ) : null}
+        </>
       }
     >
       <div className="flex-1 flex flex-col p-3.5">
         <div
-          className="flex-1 flex flex-col gap-2 cursor-pointer"
+          className="flex-1 flex flex-col items-center justify-center gap-2 cursor-pointer"
           onClick={() =>
             !isEditing &&
             setActiveIndex((i) => (i + 1) % displayInsights.length)
           }
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <div
               className={cn(
-                "flex items-center justify-center size-6 rounded-sm",
+                "flex items-center justify-center w-full px-3 py-0.5 rounded-sm",
                 insightColors[currentInsight.type]
               )}
             >
-              <Icon className="size-3.5" />
+              <span className="text-lg font-bold tracking-[-0.04em] text-white">
+                {formatCoachingInsightTitle(currentInsight.title)}
+              </span>
             </div>
-            <span className="text-xs font-medium text-white/90">
-              {currentInsight.title}
-            </span>
           </div>
-          <p className="text-[11px] text-white/50 leading-relaxed">
+          <p className="text-xs font-medium tracking-[-0.04em] text-white/40 sm:text-sm text-center">
             {currentInsight.message}
           </p>
         </div>

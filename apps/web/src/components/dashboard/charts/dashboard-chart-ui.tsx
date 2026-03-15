@@ -56,21 +56,31 @@ export function DashboardChartTooltipRow({
   value,
   tone = "default",
   dimmed = false,
+  indicatorColor,
 }: {
   label: ReactNode;
   value: ReactNode;
   tone?: DashboardTooltipTone;
   dimmed?: boolean;
+  indicatorColor?: string;
 }) {
   return (
     <div
       className={cn(
-        "flex w-full items-center justify-between gap-6 font-semibold",
+        "flex w-full items-center gap-2 font-semibold",
         dimmed && "opacity-50"
       )}
     >
-      <span className="text-white/80">{label}</span>
-      <span className={getDashboardTooltipToneClass(tone)}>{value}</span>
+      {indicatorColor ? (
+        <span
+          className="size-2.5 shrink-0 rounded-[2px]"
+          style={{ backgroundColor: indicatorColor }}
+        />
+      ) : null}
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-6">
+        <span className="text-white/80">{label}</span>
+        <span className={getDashboardTooltipToneClass(tone)}>{value}</span>
+      </div>
     </div>
   );
 }

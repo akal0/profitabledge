@@ -117,7 +117,7 @@ export function BenchmarkWidget({
       ...getPercentile(metricBenchmarks.profitFactor.percentile),
     },
     {
-      label: "Avg R:R",
+      label: "Avg RR",
       icon: BarChart3,
       value: userStats.avgRR.toFixed(2),
       ...getPercentile(metricBenchmarks.avgRR.percentile),

@@ -16,7 +16,6 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import React from "react";
-import { useDateRangeStore } from "@/stores/date-range";
 import {
   useComparisonStore,
   type WidgetComparisonMode,
@@ -29,6 +28,7 @@ import {
   DashboardChartTooltipRow,
   formatSignedCurrency,
 } from "./dashboard-chart-ui";
+import { useChartDateRange } from "./use-chart-date-range";
 
 // Slightly nudge X-axis tick labels to the right without shifting the chart domain
 const WeekdayXAxisTick: React.FC<{
@@ -139,7 +139,7 @@ export function PerformanceWeekdayChart({
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }) {
-  const { start, end, min, max } = useDateRangeStore();
+  const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
   // Clipped area interaction state
@@ -241,11 +241,11 @@ export function PerformanceWeekdayChart({
   React.useEffect(() => {
     (async () => {
       if (!accountId || !resolvedRange) return;
-      const data: DayPoint[] = await trpcClient.accounts.recentByDay.query({
+      const data = (await trpcClient.accounts.recentByDay.query({
         accountId,
         startISO: resolvedRange.start.toISOString(),
         endISO: resolvedRange.end.toISOString(),
-      });
+      })) as DayPoint[];
 
       const agg: Record<WeekdayKey, number> = {
         Mon: 0,
@@ -267,12 +267,11 @@ export function PerformanceWeekdayChart({
         return;
       }
 
-      const comparisonData: DayPoint[] =
-        await trpcClient.accounts.recentByDay.query({
+      const comparisonData = (await trpcClient.accounts.recentByDay.query({
           accountId,
           startISO: comparisonRange.start.toISOString(),
           endISO: comparisonRange.end.toISOString(),
-        });
+        })) as DayPoint[];
       const nextCompareAgg: Record<WeekdayKey, number> = {
         Mon: 0,
         Tue: 0,
@@ -402,7 +401,7 @@ export function PerformanceWeekdayChart({
         >
           <AreaChart
             data={dataForChart}
-            margin={{ left: 44, right: 12, top: 12, bottom: 18 }}
+            margin={{ left: 36, right: 0, top: 12, bottom: -4 }}
             onMouseMove={(state: any) => {
               const x = state?.activeCoordinate?.x;
               const payload: any[] = state?.activePayload ?? [];
@@ -438,7 +437,7 @@ export function PerformanceWeekdayChart({
               domain={[niceScale.min, niceScale.max]}
               tickLine={false}
               axisLine={false}
-              width={36}
+              width={20}
               tickMargin={6}
               tickFormatter={currencyTick}
               ticks={niceScale.ticks}
@@ -446,7 +445,7 @@ export function PerformanceWeekdayChart({
             <XAxis
               dataKey="weekday"
               tickLine={false}
-              tickMargin={16}
+              tickMargin={10}
               axisLine={false}
               tick={<WeekdayXAxisTick />}
             />
@@ -617,6 +616,15 @@ export function PerformanceWeekdayChart({
                           label={label}
                           value={formatSignedCurrency(v, 0)}
                           tone={v < 0 ? "negative" : "positive"}
+                          indicatorColor={
+                            typeof item.color === "string"
+                              ? item.color
+                              : key === "compare"
+                                ? "#FCA070"
+                                : v < 0
+                                  ? "#fb7185"
+                                  : "#2dd4bf"
+                          }
                         />
                       );
                     })}

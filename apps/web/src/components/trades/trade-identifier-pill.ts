@@ -2,33 +2,33 @@ import type { CSSProperties } from "react";
 import Color from "color";
 
 export const TRADE_IDENTIFIER_PILL_CLASS =
-  "inline-flex min-h-7 w-max max-w-full items-center gap-1.5 rounded-sm border px-2.5 py-1 text-[11px] font-medium leading-none tracking-wide whitespace-nowrap shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors";
+  "inline-flex min-h-7 w-max max-w-full items-center gap-1.5 rounded-sm ring-1 px-2.5 py-1 text-[11px] font-medium leading-none tracking-wide whitespace-nowrap transition-colors";
 
 export const TRADE_IDENTIFIER_BUTTON_CLASS =
-  "h-7 rounded-sm border border-white/8 bg-white/[0.03] px-2.5 text-[11px] font-medium text-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-white/[0.06] hover:text-white";
+  "h-7 rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-2.5 text-[11px] font-medium text-white/60 hover:bg-white/[0.06] hover:text-white";
 
 export const TRADE_ACTION_BUTTON_CLASS =
-  "h-8 rounded-sm border border-white/8 bg-white/[0.03] px-3 text-xs font-medium text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:bg-white/[0.06] hover:text-white disabled:opacity-50 disabled:hover:bg-white/[0.03]";
+  "h-8 rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-3 text-xs font-medium text-white/70 hover:bg-white/[0.06] hover:text-white disabled:opacity-50 disabled:hover:bg-white/[0.03]";
 
 export const TRADE_ACTION_BUTTON_PRIMARY_CLASS =
-  "h-8 rounded-sm border border-white/10 bg-white/[0.08] px-3 text-xs font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] hover:bg-white/[0.12] disabled:opacity-50 disabled:hover:bg-white/[0.08]";
+  "h-8 rounded-sm ring-1 ring-white/10 bg-white/[0.08] px-3 text-xs font-medium text-white hover:bg-white/[0.12] disabled:opacity-50 disabled:hover:bg-white/[0.08]";
 
 export const TRADE_ACTION_ICON_BUTTON_CLASS =
-  "rounded-sm border border-white/10 bg-black/45 text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:bg-black/60 hover:text-white disabled:opacity-50";
+  "rounded-sm ring-1 ring-white/10 bg-black/45 text-white/80 hover:bg-black/60 hover:text-white disabled:opacity-50";
 
 export const TRADE_SURFACE_CARD_CLASS =
-  "rounded-sm border border-white/8 bg-white/[0.03] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+  "rounded-sm ring-1 ring-white/8 bg-white/[0.03]";
 
 export const TRADE_IDENTIFIER_TONES = {
-  subdued: "border-white/8 bg-white/[0.025] text-white/45",
-  neutral: "border-white/10 bg-white/[0.035] text-white/65",
-  positive: "border-teal-400/20 bg-teal-400/12 text-teal-200",
-  negative: "border-rose-400/20 bg-rose-400/12 text-rose-200",
-  warning: "border-yellow-400/20 bg-yellow-400/12 text-yellow-200",
-  amber: "border-amber-400/20 bg-amber-400/12 text-amber-200",
-  info: "border-blue-400/20 bg-blue-400/12 text-blue-200",
-  live: "border-cyan-400/20 bg-cyan-400/12 text-cyan-200",
-  violet: "border-violet-400/20 bg-violet-400/12 text-violet-200",
+  subdued: "ring-white/0 bg-white/[0.025] text-white/45",
+  neutral: "ring-white/10 bg-white/[0.035] text-white/65",
+  positive: "ring-teal-400/20 bg-teal-400/12 text-teal-200",
+  negative: "ring-rose-400/20 bg-rose-400/12 text-rose-200",
+  warning: "ring-yellow-400/20 bg-yellow-400/12 text-yellow-200",
+  amber: "ring-amber-400/20 bg-amber-400/12 text-amber-200",
+  info: "ring-blue-400/20 bg-blue-400/12 text-blue-200",
+  live: "ring-cyan-400/20 bg-cyan-400/12 text-cyan-200",
+  violet: "ring-violet-400/20 bg-violet-400/12 text-violet-200",
 } as const;
 
 export function getTradeIdentifierColorStyle(color: string): CSSProperties {
@@ -44,11 +44,14 @@ export function getTradeIdentifierColorStyle(color: string): CSSProperties {
       ? lightText
       : darkText;
 
-  return {
+  const style: CSSProperties & Record<"--tw-ring-color", string> = {
     backgroundColor: background.hex(),
     borderColor: border.hex(),
     color: textColor.hex(),
+    "--tw-ring-color": border.hex(),
   };
+
+  return style;
 }
 
 export function getTradeDirectionTone(direction: string | null | undefined) {

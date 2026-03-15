@@ -185,7 +185,7 @@ export function EdgeSummaryWidget({
           </div>
           <p className="mt-2 text-[11px] leading-relaxed text-white/70">
             Trade more of <span className="text-white">{topSymbol?.symbol || "your top symbol"}</span>
-            {topSession ? ` during ${topSession.session}` : ""}, keep planned R:R near{" "}
+            {topSession ? ` during ${topSession.session}` : ""}, keep planned RR near{" "}
             <span className="text-white">
               {sweetSpot.sweetSpotMin.toFixed(1)}-{sweetSpot.sweetSpotMax.toFixed(1)}R
             </span>

@@ -14,7 +14,7 @@ import {
   AlertCircle,
   Minus,
   Code,
-  Image,
+  Image as ImageIcon,
   Link,
   LineChart,
   BarChart3,
@@ -32,6 +32,7 @@ import {
   Youtube,
   ExternalLink,
   Brain,
+  Sparkles,
 } from "lucide-react";
 import type { ChartEmbedType } from "./types";
 
@@ -59,6 +60,7 @@ interface SlashCommandsMenuProps {
   onInsertLink: () => void;
   onInsertEmbed: () => void;
   onInsertPsychology: () => void;
+  onOpenAICapture?: () => void;
 }
 
 const iconClass = "h-4 w-4";
@@ -77,6 +79,7 @@ export function SlashCommandsMenu({
   onInsertLink,
   onInsertEmbed,
   onInsertPsychology,
+  onOpenAICapture,
 }: SlashCommandsMenuProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -163,7 +166,11 @@ export function SlashCommandsMenu({
       icon: <AlertCircle className={iconClass} />,
       category: "text",
       keywords: ["alert", "note", "info", "warning"],
-      action: () => onInsertBlock("callout", { calloutEmoji: "💡", calloutColor: "#f59e0b" }),
+      action: () =>
+        onInsertBlock("callout", {
+          calloutEmoji: "💡",
+          calloutColor: "#f59e0b",
+        }),
     },
     {
       id: "divider",
@@ -190,7 +197,16 @@ export function SlashCommandsMenu({
       icon: <Table className={iconClass} />,
       category: "text",
       keywords: ["grid", "data"],
-      action: () => onInsertBlock("table", { tableData: { rows: [["", ""], ["", ""]], headers: ["Column 1", "Column 2"] } }),
+      action: () =>
+        onInsertBlock("table", {
+          tableData: {
+            rows: [
+              ["", ""],
+              ["", ""],
+            ],
+            headers: ["Column 1", "Column 2"],
+          },
+        }),
     },
 
     // Media
@@ -198,7 +214,7 @@ export function SlashCommandsMenu({
       id: "image",
       label: "Image",
       description: "Upload or embed an image",
-      icon: <Image className={iconClass} />,
+      icon: <ImageIcon className={iconClass} />,
       category: "media",
       keywords: ["picture", "photo", "upload"],
       action: onInsertImage,
@@ -288,7 +304,7 @@ export function SlashCommandsMenu({
     },
     {
       id: "chart-r-multiple",
-      label: "R-Multiple Distribution",
+      label: "R-multiple distribution",
       description: "Distribution of R-multiples",
       icon: <Target className={iconClass} />,
       category: "analytics",
@@ -297,7 +313,7 @@ export function SlashCommandsMenu({
     },
     {
       id: "chart-mae-mfe",
-      label: "MAE/MFE Scatter",
+      label: "MAE / MFE scatter",
       description: "Maximum adverse/favorable excursion",
       icon: <LineChart className={iconClass} />,
       category: "analytics",
@@ -342,6 +358,20 @@ export function SlashCommandsMenu({
       keywords: ["mood", "mindset", "mental", "psychology", "emotion", "focus"],
       action: onInsertPsychology,
     },
+    ...(onOpenAICapture
+      ? [
+          {
+            id: "ai-capture",
+            label: "AI Capture",
+            description:
+              "Turn one natural-language note into structured journal fields",
+            icon: <Sparkles className={iconClass} />,
+            category: "trading" as const,
+            keywords: ["ai", "capture", "parse", "journal", "metadata"],
+            action: onOpenAICapture,
+          },
+        ]
+      : []),
   ];
 
   // Filter commands based on query
@@ -357,16 +387,13 @@ export function SlashCommandsMenu({
     : allCommands;
 
   // Group commands by category
-  const groupedCommands = filteredCommands.reduce(
-    (acc, cmd) => {
-      if (!acc[cmd.category]) {
-        acc[cmd.category] = [];
-      }
-      acc[cmd.category].push(cmd);
-      return acc;
-    },
-    {} as Record<string, SlashCommandItem[]>
-  );
+  const groupedCommands = filteredCommands.reduce((acc, cmd) => {
+    if (!acc[cmd.category]) {
+      acc[cmd.category] = [];
+    }
+    acc[cmd.category].push(cmd);
+    return acc;
+  }, {} as Record<string, SlashCommandItem[]>);
 
   const categoryLabels: Record<string, string> = {
     text: "Basic blocks",
@@ -433,53 +460,68 @@ export function SlashCommandsMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 w-80 max-h-96 overflow-y-auto bg-sidebar border border-white/10 shadow-xl"
+      className="fixed z-50 w-72 max-h-80 overflow-y-auto rounded-md border border-white/5 bg-sidebar/95 p-1.5 shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl"
       style={{
         top: position.top,
         left: position.left,
       }}
     >
-      {categoryOrder.map((category) => {
-        const commands = groupedCommands[category];
-        if (!commands || commands.length === 0) return null;
+      {(() => {
+        let firstRendered = true;
+        return categoryOrder.map((category) => {
+          const commands = groupedCommands[category];
+          if (!commands || commands.length === 0) return null;
+          const isFirst = firstRendered;
+          firstRendered = false;
 
-        return (
-          <div key={category}>
-            <div className="px-3 py-2 text-xs font-medium text-white/40 uppercase tracking-wider sticky top-0 bg-sidebar">
-              {categoryLabels[category]}
+          const sep = (
+            <div className="-mx-1.5 h-px bg-[#000000]/50 border-b border-[#222225]" />
+          );
+
+          return (
+            <div key={category}>
+              {!isFirst && sep}
+              <div className="px-2 pb-2 pt-3 first:pt-2">
+                <div className="text-[11px] font-semibold text-white/55">
+                  {categoryLabels[category]}
+                </div>
+              </div>
+              {sep}
+              <div className="py-1">
+                {commands.map((cmd) => {
+                  const currentIndex = globalIndex++;
+                  return (
+                    <button
+                      key={cmd.id}
+                      data-index={currentIndex}
+                      className={cn(
+                        "flex w-full cursor-pointer items-center gap-2.5 rounded-sm px-2.5 py-2 text-left transition-colors",
+                        currentIndex === selectedIndex
+                          ? "bg-sidebar-accent/80 text-white"
+                          : "text-white/75 hover:bg-sidebar-accent/80 hover:text-white"
+                      )}
+                      onClick={() => onSelect(cmd)}
+                      onMouseEnter={() => setSelectedIndex(currentIndex)}
+                    >
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50">
+                        {cmd.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium leading-tight">
+                          {cmd.label}
+                        </div>
+                        <div className="truncate text-[11px] text-white/40 leading-tight mt-0.5">
+                          {cmd.description}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            {commands.map((cmd) => {
-              const currentIndex = globalIndex++;
-              return (
-                <button
-                  key={cmd.id}
-                  data-index={currentIndex}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
-                    currentIndex === selectedIndex
-                      ? "bg-white/10"
-                      : "hover:bg-white/5"
-                  )}
-                  onClick={() => onSelect(cmd)}
-                  onMouseEnter={() => setSelectedIndex(currentIndex)}
-                >
-                  <div className="flex items-center justify-center w-8 h-8 bg-white/5 text-white/70">
-                    {cmd.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white truncate">
-                      {cmd.label}
-                    </div>
-                    <div className="text-xs text-white/40 truncate">
-                      {cmd.description}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        );
-      })}
+          );
+        });
+      })()}
     </div>
   );
 }

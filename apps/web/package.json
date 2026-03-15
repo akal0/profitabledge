@@ -6,6 +6,7 @@
     "dev": "next dev --turbopack --port=3001",
     "build": "next build",
     "start": "next start",
+    "check-types": "tsc -p tsconfig.json --noEmit --pretty false",
     "lint": "next lint"
   },
   "dependencies": {

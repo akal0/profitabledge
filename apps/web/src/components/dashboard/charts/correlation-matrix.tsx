@@ -196,72 +196,81 @@ export function CorrelationMatrix({
   return (
     <div className="flex h-full w-full flex-col">
       <div className="relative min-h-0 flex-1 overflow-x-auto overflow-y-visible">
-        <table className="h-full w-full border-collapse">
-          <thead>
-            <tr>
-              <th className="sticky left-0 top-0 z-20 bg-sidebar-accent" />
-              {cols.map((colValue) => (
-                <th
-                  key={colValue}
-                  className="sticky top-0 z-10 bg-sidebar-accent px-1 pb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-white/35"
-                >
-                  {colValue.length > 10
-                    ? `${colValue.slice(0, 9)}…`
-                    : colValue}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((rowValue) => (
-              <tr key={rowValue}>
-                <td className="sticky left-0 z-10 bg-sidebar-accent pr-2 text-right text-[10px] font-medium text-white/50">
-                  {rowValue.length > 12
-                    ? `${rowValue.slice(0, 11)}…`
-                    : rowValue}
-                </td>
-                {cols.map((colValue) => {
-                  const value = matrix[rowValue]?.[colValue];
-                  const isEmpty = Number.isNaN(value);
-                  const hoverKey = `${rowValue}:${colValue}`;
-                  const isHovered = hoveredCell?.key === hoverKey;
-                  return (
-                    <td
+        <div className="grid min-h-full min-w-full">
+          <div className="my-auto">
+            <table className="mx-auto h-auto w-max border-collapse">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 top-0 z-20 bg-sidebar-accent" />
+                  {cols.map((colValue) => (
+                    <th
                       key={colValue}
-                      className="p-[2px]"
-                      onMouseEnter={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setHoveredCell({
-                          key: hoverKey,
-                          rect: { top: rect.top, left: rect.left, width: rect.width },
-                        });
-                      }}
-                      onMouseLeave={() => setHoveredCell(null)}
+                      className="sticky top-0 z-10 min-w-[10rem] whitespace-nowrap bg-sidebar-accent px-3 pb-2 text-center text-[10px] font-medium uppercase tracking-wider text-white/35"
                     >
-                      <div
-                        className={cn(
-                          "flex h-full min-h-[36px] items-center justify-center rounded transition-all",
-                          isEmpty
-                            ? "bg-white/[0.02]"
-                            : heatColor(value, minVal, maxVal),
-                          isHovered && !isEmpty && "ring-1 ring-white/20 brightness-125"
-                        )}
-                      >
-                        {isEmpty ? (
-                          <span className="text-[10px] text-white/8">—</span>
-                        ) : (
-                          <span className="text-[11px] font-semibold tabular-nums text-white/90">
-                            {formatMetricValue(metric, value)}
-                          </span>
-                        )}
-                      </div>
+                      {colValue}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((rowValue) => (
+                  <tr key={rowValue}>
+                    <td className="sticky left-0 z-10 whitespace-nowrap bg-sidebar-accent pr-4 text-right text-[10px] font-medium text-white/50">
+                      {rowValue}
                     </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    {cols.map((colValue) => {
+                      const value = matrix[rowValue]?.[colValue];
+                      const isEmpty = Number.isNaN(value);
+                      const hoverKey = `${rowValue}:${colValue}`;
+                      const isHovered = hoveredCell?.key === hoverKey;
+                      return (
+                        <td
+                          key={colValue}
+                          className="p-[3px]"
+                          onMouseEnter={(e) => {
+                            const rect =
+                              e.currentTarget.getBoundingClientRect();
+                            setHoveredCell({
+                              key: hoverKey,
+                              rect: {
+                                top: rect.top,
+                                left: rect.left,
+                                width: rect.width,
+                              },
+                            });
+                          }}
+                          onMouseLeave={() => setHoveredCell(null)}
+                        >
+                          <div
+                            className={cn(
+                              "flex min-h-[6rem] min-w-[10rem] items-center justify-center rounded px-2 py-2 transition-all",
+                              isEmpty
+                                ? "bg-white/[0.02]"
+                                : heatColor(value, minVal, maxVal),
+                              isHovered &&
+                                !isEmpty &&
+                                "ring-1 ring-white/20 brightness-125"
+                            )}
+                          >
+                            {isEmpty ? (
+                              <span className="text-[10px] text-white/8">
+                                —
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-semibold leading-tight tabular-nums text-white/90">
+                                {formatMetricValue(metric, value)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       {hoveredCell &&

@@ -508,10 +508,10 @@ export function TradeComparisonSheet({
           {trades.some((t) => t.openText || t.closeText) && (
             <>
               <Separator className="bg-white/10" />
-              <div className="space-y-3">
-                <h3 className="text-xs font-semibold text-white/70 uppercase tracking-wide">
-                  Notes
-                </h3>
+                <div className="space-y-3">
+                  <h3 className="text-xs font-semibold text-white/70 uppercase tracking-wide">
+                    Entry and exit comments
+                  </h3>
                 <div className="grid gap-4" style={gridColumnsStyle}>
                   {trades.map((trade) => (
                     <div key={trade.id} className="space-y-2 text-xs">

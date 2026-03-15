@@ -130,13 +130,12 @@ export function RiskAdjustedChart({
       dataPoints.push({
         trade: i,
         value: parseFloat(value.toFixed(3)),
-        date: new Date(lastTrade.openTime || lastTrade.open || 0).toLocaleDateString(
-          "en-US",
-          {
-            month: "short",
-            day: "numeric",
-          }
-        ),
+        date: new Date(
+          lastTrade.openTime || lastTrade.open || 0
+        ).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
       });
     }
 
@@ -149,7 +148,7 @@ export function RiskAdjustedChart({
 
   if (trades.length < 20) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-white/30">
+      <div className="flex w-full h-full items-center justify-center text-sm text-white/30">
         Need at least 20 trades for risk-adjusted analysis
       </div>
     );
@@ -187,7 +186,10 @@ export function RiskAdjustedChart({
 
       <div className="min-h-0 flex-1">
         <ChartContainer config={chartConfig} className="h-full w-full">
-          <LineChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+          <LineChart
+            data={chartData}
+            margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
+          >
             <CartesianGrid strokeDasharray="8 8" vertical={false} />
             <XAxis
               dataKey="date"

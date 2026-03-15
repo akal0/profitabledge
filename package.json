@@ -10,6 +10,8 @@
     "dev:all": "mprocs",
     "build": "turbo build",
     "check-types": "turbo check-types",
+    "lint": "turbo lint",
+    "test": "bun test apps/server/src apps/web/src",
     "ai:validate:deterministic": "turbo -F server ai:validate:deterministic",
     "mt5:backfill": "bun run --cwd apps/server mt5:backfill",
     "mt5:mock-sync": "bun run --cwd apps/server mt5:mock-sync",

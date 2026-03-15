@@ -6,6 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
+    "check-types": "tsc -p tsconfig.json --noEmit --pretty false",
+    "lint": "bun run check-types",
     "ai:validate:deterministic": "bun run src/scripts/validate-ai-regressions.ts",
     "ai:validate:assistant": "bun run src/scripts/validate-assistant-regressions.ts",
     "ai:validate:plan": "bun run src/scripts/validate-plan-suite.ts",

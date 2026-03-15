@@ -157,7 +157,7 @@ export function JournalCalendarTab({
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-        <div className="overflow-hidden rounded-sm border border-white/5 bg-white dark:bg-sidebar">
+        <div className="max-h-[760px] overflow-auto rounded-sm border border-white/5 bg-white dark:bg-sidebar">
           <div className="grid grid-cols-7 gap-[1px] bg-sidebar-accent">
             {isLoading
               ? Array.from({ length: calendarDays.length }).map((_, index) => (

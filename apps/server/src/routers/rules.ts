@@ -432,7 +432,7 @@ export const rulesRouter = router({
           passedRules: tradeRuleEvaluation.passedRules,
           failedRules: tradeRuleEvaluation.failedRules,
           totalRules: tradeRuleEvaluation.totalRules,
-          pnl: trade.netPnl,
+          pnl: trade.profit,
           rr: trade.realisedRR,
         })
         .from(tradeRuleEvaluation)

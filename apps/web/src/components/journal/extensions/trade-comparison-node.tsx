@@ -6,8 +6,12 @@ import React, { useState } from "react";
 import { cn } from "@/lib/utils";
 import { GitCompare, Plus, X, TrendingUp, TrendingDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { TradeSelectorDialog } from "../trade-selector";
+import {
+  getTradeDirectionTone,
+  getTradeOutcomeTone,
+  TRADE_IDENTIFIER_PILL_CLASS,
+} from "@/components/trades/trade-identifier-pill";
 
 // ============================================================================
 // Types
@@ -23,29 +27,84 @@ interface TradeData {
   outcome?: string | null;
 }
 
+function normalizeTradeOutcome(outcome: string | null | undefined, profit: number | null) {
+  const normalized = (outcome || "").trim().toLowerCase();
+
+  if (normalized === "win") return "Win";
+  if (normalized === "loss") return "Loss";
+  if (normalized === "breakeven" || normalized === "be") return "BE";
+  if (normalized === "pw" || normalized === "partial win") return "PW";
+
+  if (profit == null) {
+    return null;
+  }
+
+  if (profit > 0) return "Win";
+  if (profit < 0) return "Loss";
+  return "BE";
+}
+
+function normalizeTradeData(
+  trade: Partial<TradeData> & { closeTime?: unknown }
+): TradeData {
+  const tradeRecord = trade as Record<string, unknown>;
+  const profit =
+    trade.profit == null || Number.isNaN(Number(trade.profit))
+      ? null
+      : Number(trade.profit);
+  const pips =
+    trade.pips == null || Number.isNaN(Number(trade.pips))
+      ? null
+      : Number(trade.pips);
+  const close =
+    typeof trade.close === "string"
+      ? trade.close
+      : typeof tradeRecord.closeTime === "string"
+        ? tradeRecord.closeTime
+        : null;
+
+  return {
+    id: String(trade.id || ""),
+    symbol: typeof trade.symbol === "string" ? trade.symbol : null,
+    tradeDirection: trade.tradeDirection === "short" ? "short" : "long",
+    profit,
+    pips,
+    close,
+    outcome: normalizeTradeOutcome(
+      typeof trade.outcome === "string" ? trade.outcome : null,
+      profit
+    ),
+  };
+}
+
 // ============================================================================
 // Trade Comparison Node View Component
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected }: any) {
   const { trades: savedTrades = [] } = node.attrs;
   const [showSelector, setShowSelector] = useState(false);
-  const [selectedTrades, setSelectedTrades] = useState<TradeData[]>(savedTrades);
+  const [selectedTrades, setSelectedTrades] = useState<TradeData[]>(
+    Array.isArray(savedTrades) ? savedTrades.map(normalizeTradeData) : []
+  );
 
   // Sync state with node attrs when they change (e.g., loading from DB)
   React.useEffect(() => {
-    if (savedTrades && savedTrades.length > 0) {
-      setSelectedTrades(savedTrades);
+    if (!Array.isArray(savedTrades)) {
+      setSelectedTrades([]);
+      return;
     }
+
+    setSelectedTrades(savedTrades.map(normalizeTradeData));
   }, [savedTrades]);
 
   const handleAddTrades = (newTrades: TradeData[]) => {
     // Combine existing with new, up to 4 total
     const combined = [...selectedTrades];
     for (const trade of newTrades) {
-      if (!combined.find(t => t.id === trade.id) && combined.length < 4) {
-        combined.push(trade);
+      const normalizedTrade = normalizeTradeData(trade);
+      if (!combined.find(t => t.id === normalizedTrade.id) && combined.length < 4) {
+        combined.push(normalizedTrade);
       }
     }
     setSelectedTrades(combined);
@@ -68,6 +127,26 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
     }).format(value);
   };
 
+  const getOutcomeLabel = (
+    outcome: string | null | undefined,
+    profit: number | null
+  ) => {
+    const normalizedOutcome = normalizeTradeOutcome(outcome, profit);
+
+    switch (normalizedOutcome) {
+      case "BE":
+        return "Breakeven";
+      case "PW":
+        return "Partial win";
+      case "Win":
+        return "Win";
+      case "Loss":
+        return "Loss";
+      default:
+        return "N/A";
+    }
+  };
+
   // Empty state - show add trades prompt
   if (selectedTrades.length === 0) {
     return (
@@ -87,7 +166,7 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
 
           <div className="flex flex-col items-center justify-center text-center">
             <GitCompare className="h-10 w-10 text-white/30 mb-3" />
-            <h3 className="text-sm font-medium text-white mb-1">Trade Comparison</h3>
+            <h3 className="text-sm font-medium text-white mb-1">Trade comparison</h3>
             <p className="text-xs text-white/40 mb-4 max-w-xs">
               Compare up to 4 trades side by side to analyze patterns and differences
             </p>
@@ -96,7 +175,7 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
               className="bg-teal-500 hover:bg-teal-600"
             >
               <Plus className="h-4 w-4 mr-1" />
-              Add Trades
+              Add trades
             </Button>
           </div>
 
@@ -106,7 +185,7 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
             onClose={() => setShowSelector(false)}
             onSelect={handleAddTrades}
             multiple={true}
-            title="Select Trades to Compare"
+            title="Select trades to compare"
             description="Choose up to 4 trades to compare side by side"
           />
         </div>
@@ -128,7 +207,7 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
           <div className="flex items-center gap-2">
             <GitCompare className="h-4 w-4 text-teal-400" />
             <span className="text-sm font-medium text-white">
-              Trade Comparison ({selectedTrades.length} trades)
+              Trade comparison ({selectedTrades.length} trades)
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -191,17 +270,20 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
                 <td className="p-3 text-white/60">Direction</td>
                 {selectedTrades.map((trade) => (
                   <td key={trade.id} className="p-3">
-                    <Badge
-                      variant="outline"
+                    <span
                       className={cn(
-                        "text-xs",
-                        trade.tradeDirection === "long"
-                          ? "border-teal-500/30 text-teal-400"
-                          : "border-red-500/30 text-red-400"
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        getTradeDirectionTone(trade.tradeDirection),
+                        "capitalize"
                       )}
                     >
-                      {(trade.tradeDirection || "N/A").toUpperCase()}
-                    </Badge>
+                      {trade.tradeDirection || "N/A"}
+                      {trade.tradeDirection === "long" ? (
+                        <TrendingUp className="size-3" />
+                      ) : trade.tradeDirection === "short" ? (
+                        <TrendingDown className="size-3" />
+                      ) : null}
+                    </span>
                   </td>
                 ))}
               </tr>
@@ -228,9 +310,9 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
                   <td key={trade.id} className="p-3">
                     <span className={cn(
                       "font-medium",
-                      (trade.pips || 0) >= 0 ? "text-teal-400" : "text-red-400"
+                      (trade.pips ?? 0) >= 0 ? "text-teal-400" : "text-red-400"
                     )}>
-                      {trade.pips?.toFixed(1) || "-"}
+                      {trade.pips == null ? "-" : `${trade.pips > 0 ? "+" : ""}${trade.pips.toFixed(1)}`}
                     </span>
                   </td>
                 ))}
@@ -241,19 +323,14 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
                 <td className="p-3 text-white/60">Outcome</td>
                 {selectedTrades.map((trade) => (
                   <td key={trade.id} className="p-3">
-                    <Badge
-                      variant="outline"
+                    <span
                       className={cn(
-                        "text-xs",
-                        trade.outcome === "win"
-                          ? "border-teal-500/30 text-teal-400"
-                          : trade.outcome === "loss"
-                          ? "border-red-500/30 text-red-400"
-                          : "border-white/20 text-white/60"
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        getTradeOutcomeTone(normalizeTradeOutcome(trade.outcome, trade.profit))
                       )}
                     >
-                      {trade.outcome?.toUpperCase() || "N/A"}
-                    </Badge>
+                      {getOutcomeLabel(trade.outcome, trade.profit)}
+                    </span>
                   </td>
                 ))}
               </tr>
@@ -280,7 +357,7 @@ function TradeComparisonNodeView({ node, updateAttributes, deleteNode, selected 
           onClose={() => setShowSelector(false)}
           onSelect={handleAddTrades}
           multiple={true}
-          title="Add More Trades"
+          title="Add more trades"
           description={`Select trades to add (${4 - selectedTrades.length} remaining)`}
         />
       </div>

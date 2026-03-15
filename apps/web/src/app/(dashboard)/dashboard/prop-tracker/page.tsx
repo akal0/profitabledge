@@ -40,11 +40,13 @@ const HEADER_BADGE_CLASS = "h-7 rounded-sm px-1.5 text-[10px] font-medium";
 const FTMO_PROP_FIRM_ID = "ftmo";
 const FTMO_IMAGE_SRC = "/brokers/FTMO.png";
 const GOALS_SURFACE_OUTER_CLASS =
-  "group flex flex-col rounded-sm border border-white/5 bg-sidebar p-1.5";
+  "group flex flex-col rounded-lg border border-white/5 bg-sidebar p-1";
 const GOALS_SURFACE_INNER_CLASS =
-  "flex flex-1 flex-col rounded-sm bg-sidebar-accent transition-all duration-250 group-hover:brightness-120";
-const GOALS_PANEL_BODY_CLASS = "px-4 py-4 sm:px-5 sm:py-5";
-const PANEL_ROW_PADDING_CLASS = "px-4 py-2.5 sm:px-5 sm:py-3";
+  "flex flex-1 flex-col rounded-sm bg-white ring ring-white/5 transition-all duration-250 dark:bg-sidebar-accent dark:group-hover:brightness-120";
+const GOALS_PANEL_HEADER_CLASS =
+  "widget-header flex w-full items-start gap-1.5 px-3.5 py-3.5";
+const GOALS_PANEL_BODY_CLASS = "px-3.5 py-3.5";
+const PANEL_ROW_PADDING_CLASS = "px-3.5 py-2.5 sm:px-3.5 sm:py-3";
 
 function formatUsd(value: number) {
   return value.toLocaleString("en-US", {
@@ -134,13 +136,13 @@ function OverviewStatCard({
 }) {
   return (
     <div className={GOALS_SURFACE_OUTER_CLASS}>
-      <div className={cn(GOALS_SURFACE_INNER_CLASS, "p-4")}>
-        <div className="mb-4 flex items-center gap-2">
+      <div className={cn(GOALS_SURFACE_INNER_CLASS, "p-3.5")}>
+        <div className="flex items-center gap-2">
           <Icon className={cn("h-4 w-4 text-white/60", iconClassName)} />
           <span className="text-xs text-white/50">{label}</span>
         </div>
         <Separator
-          className={cn(WIDGET_CONTENT_SEPARATOR_CLASS, "mb-4 -mx-4")}
+          className={cn(WIDGET_CONTENT_SEPARATOR_CLASS, "mb-3.5 mt-3.5")}
         />
         <div
           className={cn("text-2xl font-semibold text-white", valueClassName)}
@@ -171,19 +173,19 @@ function OverviewPanel({
   return (
     <div className={GOALS_SURFACE_OUTER_CLASS}>
       <div className={cn(GOALS_SURFACE_INNER_CLASS, "h-full")}>
-        <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-5">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-sm border border-white/5 bg-sidebar p-2">
-              <Icon className="h-4 w-4 text-white/60" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-white">{title}</h2>
+        <div className={cn(GOALS_PANEL_HEADER_CLASS, "justify-between")}>
+          <div className="flex min-w-0 flex-1 items-start gap-1.5">
+            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-white/50 transition-all duration-250 group-hover:text-white" />
+            <div className="min-w-0">
+              <h2 className="text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
+                {title}
+              </h2>
               <p className="mt-0.5 text-xs text-white/40">{description}</p>
             </div>
           </div>
-          {badge ? <div className="shrink-0">{badge}</div> : null}
+          {badge ? <div className="ml-auto shrink-0">{badge}</div> : null}
         </div>
-        <Separator />
+        <Separator className={WIDGET_CONTENT_SEPARATOR_CLASS} />
         <div
           className={cn(
             "flex-1 overflow-hidden",
@@ -646,9 +648,9 @@ export default function PropTrackerIndexPage() {
           {[1, 2, 3, 4].map((key) => (
             <div
               key={key}
-              className="rounded-sm border border-white/5 bg-sidebar p-1.5"
+              className="rounded-lg border border-white/5 bg-sidebar p-1"
             >
-              <div className="h-28 animate-pulse rounded-sm bg-sidebar-accent" />
+              <div className="h-28 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
             </div>
           ))}
         </div>
@@ -657,9 +659,9 @@ export default function PropTrackerIndexPage() {
           {[1, 2].map((key) => (
             <div
               key={key}
-              className="rounded-sm border border-white/5 bg-sidebar p-1.5"
+              className="rounded-lg border border-white/5 bg-sidebar p-1"
             >
-              <div className="h-56 animate-pulse rounded-sm bg-sidebar-accent" />
+              <div className="h-56 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
             </div>
           ))}
         </div>

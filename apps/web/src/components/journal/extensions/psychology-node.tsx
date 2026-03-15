@@ -24,6 +24,18 @@ interface PsychologyNodeAttrs {
   notes: string;
 }
 
+function decodeStoredNotes(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 const defaultPsychology: PsychologyNodeAttrs = {
   mood: 5,
   confidence: 5,
@@ -80,65 +92,73 @@ function PsychologyNodeView({ node, updateAttributes, deleteNode, selected }: an
     <NodeViewWrapper className="my-4">
       <div
         className={cn(
-          "relative rounded-lg border bg-gradient-to-br from-purple-500/5 to-blue-500/5 border-purple-500/20",
-          selected && "ring-2 ring-purple-400/50"
+          "relative overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-[0_0_0_1px_rgba(255,255,255,0.01)]",
+          selected && "ring-2 ring-teal-400/30"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <div
-          className="flex items-center justify-between px-4 py-3 cursor-pointer border-b border-purple-500/10"
-          onClick={() => setIsExpanded(!isExpanded)}
-          contentEditable={false}
-        >
-          <div className="flex items-center gap-2">
-            <Brain className="h-4 w-4 text-purple-400" />
-            <span className="text-sm font-medium text-white">Psychology Check-in</span>
-            <span className="text-xs text-muted-foreground">— Track your mental state</span>
+        <div className="overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div
+            className="flex cursor-pointer items-start justify-between gap-3 border-b border-white/5 px-4 py-3"
+            onClick={() => setIsExpanded(!isExpanded)}
+            contentEditable={false}
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Brain className="h-3.5 w-3.5 text-teal-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Psychology snapshot</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Track the mental state behind this journal entry.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {isHovered && (
+                <>
+                  <div
+                    className="cursor-grab active:cursor-grabbing text-white/30 hover:text-white/50 p-1"
+                    data-drag-handle
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 p-0 text-red-400 hover:text-red-400 hover:bg-red-400/10"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteNode();
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
+              <svg
+                className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            {isHovered && (
-              <>
-                <div
-                  className="cursor-grab active:cursor-grabbing text-white/30 hover:text-white/50 p-1"
-                  data-drag-handle
-                >
-                  <GripVertical className="h-4 w-4" />
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-red-400 hover:text-red-400 hover:bg-red-400/10"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteNode();
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            )}
-            <svg
-              className={cn("h-4 w-4 text-muted-foreground transition-transform", isExpanded && "rotate-180")}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </div>
-        </div>
 
-        {isExpanded ? (
-          <div className="p-4" contentEditable={false}>
-            <PsychologyTracker value={psychology} onChange={handleChange} />
-          </div>
-        ) : (
-          <div className="px-4 py-3" contentEditable={false}>
-            <PsychologySummary psychology={psychology} compact />
-          </div>
-        )}
+          {isExpanded ? (
+            <div className="p-4" contentEditable={false}>
+              <PsychologyTracker value={psychology} onChange={handleChange} />
+            </div>
+          ) : (
+            <div className="px-4 py-3" contentEditable={false}>
+              <PsychologySummary psychology={psychology} compact />
+            </div>
+          )}
+        </div>
       </div>
     </NodeViewWrapper>
   );
@@ -185,7 +205,7 @@ export const PsychologyNode = Node.create({
           sleepQuality: parseInt(element.getAttribute('data-sleep-quality') || '5'),
           distractions: element.getAttribute('data-distractions') === 'true',
           marketCondition: element.getAttribute('data-market-condition') as PsychologySnapshot["marketCondition"] || 'unsure',
-          notes: element.getAttribute('data-notes') || '',
+          notes: decodeStoredNotes(element.getAttribute('data-notes')),
         };
       },
     }];
@@ -206,7 +226,7 @@ export const PsychologyNode = Node.create({
       'data-sleep-quality': attrs.sleepQuality || 5,
       'data-distractions': attrs.distractions ? 'true' : 'false',
       'data-market-condition': attrs.marketCondition || '',
-      'data-notes': attrs.notes || '',
+      'data-notes': encodeURIComponent(attrs.notes || ''),
     })];
   },
 

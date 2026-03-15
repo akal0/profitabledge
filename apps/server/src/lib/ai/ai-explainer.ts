@@ -6,8 +6,35 @@
  */
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateMeteredGeminiContent } from "./gemini";
+import { logAIProviderError } from "./provider-errors";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+type AIBillingContext = {
+  userId?: string;
+  accountId?: string | null;
+};
+
+async function generateExplainerContent(input: {
+  prompt: string;
+  featureKey: string;
+  billingContext?: AIBillingContext;
+}) {
+  if (input.billingContext?.userId) {
+    return generateMeteredGeminiContent({
+      userId: input.billingContext.userId,
+      accountId: input.billingContext.accountId ?? null,
+      featureKey: input.featureKey,
+      model: "gemini-2.5-flash",
+      request: input.prompt,
+    });
+  }
+
+  return genAI
+    .getGenerativeModel({ model: "gemini-2.5-flash" })
+    .generateContent(input.prompt);
+}
 
 export interface MetricExplanationContext {
   metricName: string;
@@ -24,10 +51,9 @@ export interface MetricExplanationContext {
  * Generate AI explanation for a complex metric
  */
 export async function explainMetric(
-  context: MetricExplanationContext
+  context: MetricExplanationContext,
+  billingContext?: AIBillingContext
 ): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
   const prompt = `You are a professional trading coach explaining a metric to a trader.
 
 Metric: ${context.metricName}
@@ -55,10 +81,14 @@ Provide a concise explanation (2-3 sentences) that:
 Keep it practical and trader-focused. Use markdown formatting for emphasis.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateExplainerContent({
+      prompt,
+      featureKey: "assistant.explainer.metric",
+      billingContext,
+    });
     return result.response.text().trim();
   } catch (error) {
-    console.error("AI explanation failed:", error);
+    logAIProviderError("Metric explanation", error);
     return "";
   }
 }
@@ -75,9 +105,7 @@ export async function generatePerformanceInsight(data: {
     overall?: number;
     benchmark?: number;
   };
-}): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
+}, billingContext?: AIBillingContext): Promise<string> {
   const prompt = `You are analyzing trading performance data. Provide a short, actionable insight.
 
 Metric: ${data.metric}
@@ -96,10 +124,14 @@ Use these symbols for clarity:
 Format with markdown bold for emphasis.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateExplainerContent({
+      prompt,
+      featureKey: "assistant.explainer.performance_insight",
+      billingContext,
+    });
     return result.response.text().trim();
   } catch (error) {
-    console.error("AI insight failed:", error);
+    logAIProviderError("Performance insight generation", error);
     return "";
   }
 }
@@ -111,9 +143,7 @@ export async function generateComparisonAnalysis(comparison: {
   metric: string;
   group1: { name: string; value: number; count: number };
   group2: { name: string; value: number; count: number };
-}): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
+}, billingContext?: AIBillingContext): Promise<string> {
   const difference = comparison.group1.value - comparison.group2.value;
   const percentDiff = ((difference / comparison.group2.value) * 100).toFixed(1);
 
@@ -135,10 +165,14 @@ Provide ONE clear insight (1-2 sentences). Focus on what action the trader shoul
 Use ✓ for good findings, ⚠ for warnings. Bold key words.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateExplainerContent({
+      prompt,
+      featureKey: "assistant.explainer.comparison",
+      billingContext,
+    });
     return result.response.text().trim();
   } catch (error) {
-    console.error("AI comparison failed:", error);
+    logAIProviderError("Comparison analysis generation", error);
     return "";
   }
 }
@@ -149,7 +183,8 @@ Use ✓ for good findings, ⚠ for warnings. Bold key words.`;
 export async function explainComplexMetric(
   metricName: string,
   userValue?: number,
-  tradeCount?: number
+  tradeCount?: number,
+  billingContext?: AIBillingContext
 ): Promise<string> {
   const metricDefinitions: Record<string, string> = {
     "manipulation pips": `The size of the liquidity grab or stop hunt that preceded your entry. Measured from the manipulation high to manipulation low in pips.`,
@@ -184,8 +219,6 @@ export async function explainComplexMetric(
   }
 
   // Generate AI-powered contextual explanation
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
   const prompt = `Explain this trading metric to a trader in simple, practical terms.
 
 Metric: ${metricName}
@@ -201,7 +234,11 @@ Provide:
 Keep it conversational and practical. Use markdown bold for emphasis.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateExplainerContent({
+      prompt,
+      featureKey: "assistant.explainer.complex_metric",
+      billingContext,
+    });
     const aiExplanation = result.response.text().trim();
 
     return `**${metricName}**
@@ -211,7 +248,7 @@ ${definition}
 **Your Performance:**
 ${aiExplanation}`;
   } catch (error) {
-    console.error("AI explanation failed:", error);
+    logAIProviderError("Complex metric explanation", error);
     return `**${metricName}**\n\n${definition}`;
   }
 }
@@ -220,10 +257,9 @@ ${aiExplanation}`;
  * Generate recommendations based on multiple metrics
  */
 export async function generateRecommendations(
-  metrics: Array<{ name: string; value: number; target?: number }>
+  metrics: Array<{ name: string; value: number; target?: number }>,
+  billingContext?: AIBillingContext
 ): Promise<string[]> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
   const metricsText = metrics
     .map(
       (m) =>
@@ -245,7 +281,11 @@ Requirements:
 Return ONLY the 3 recommendations, one per line, without numbering.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateExplainerContent({
+      prompt,
+      featureKey: "assistant.explainer.recommendations",
+      billingContext,
+    });
     const text = result.response.text().trim();
 
     // Split by newlines and filter empty
@@ -257,7 +297,7 @@ Return ONLY the 3 recommendations, one per line, without numbering.`;
 
     return recommendations;
   } catch (error) {
-    console.error("AI recommendations failed:", error);
+    logAIProviderError("Recommendation generation", error);
     return [
       "Review your trading journal regularly for patterns",
       "Focus on improving your risk management",
@@ -277,9 +317,7 @@ export async function generateStatsSummary(stats: {
   avgLoss: number;
   profitFactor?: number;
   expectancy?: number;
-}): Promise<string> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-
+}, billingContext?: AIBillingContext): Promise<string> {
   const prompt = `Summarize these trading statistics in 2-3 clear, conversational sentences.
 
 Total Trades: ${stats.totalTrades}
@@ -298,10 +336,14 @@ Provide:
 Be honest and direct. Use markdown bold for key numbers.`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateExplainerContent({
+      prompt,
+      featureKey: "assistant.explainer.stats_summary",
+      billingContext,
+    });
     return result.response.text().trim();
   } catch (error) {
-    console.error("AI summary failed:", error);
+    logAIProviderError("Stats summary generation", error);
 
     // Fallback to deterministic summary
     const profitable = stats.avgProfit > 0;

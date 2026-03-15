@@ -144,7 +144,8 @@ export async function orchestrateQuery(
       userMessage,
       context.conversationHistory,
       context.accountId,
-      condensed
+      condensed,
+      context.userId
     );
 
     if (!planResult.success || !planResult.plan) {
@@ -156,6 +157,14 @@ export async function orchestrateQuery(
           success: false,
           message:
             "I couldn't map that request to your trade fields. Try rephrasing or mention the metric you want to analyze.",
+          debug,
+        };
+      }
+
+      if (planResult.error?.startsWith("AI ")) {
+        return {
+          success: false,
+          message: planResult.error,
           debug,
         };
       }

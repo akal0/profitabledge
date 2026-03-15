@@ -79,18 +79,26 @@ export function AssistantShell({
 
   // Update assistant message with stream state
   useEffect(() => {
-    if (messages.length > 0) {
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage.role === "assistant") {
-        const fullContent = [...state.lines, state.lineBuffer].filter(Boolean).join("\n");
-        setMessages(prev => prev.map(m => 
-          m.id === lastMessage.id 
-            ? { ...m, content: fullContent, streamState: state }
-            : m
-        ));
-      }
+    if (messages.length === 0) return;
+
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.role !== "assistant") return;
+
+    const fullContent = [...state.lines, state.lineBuffer]
+      .filter(Boolean)
+      .join("\n");
+    if (lastMessage.content === fullContent && lastMessage.streamState === state) {
+      return;
     }
-  }, [state.lines, state.lineBuffer, messages.length]);
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === lastMessage.id
+          ? { ...message, content: fullContent, streamState: state }
+          : message
+      )
+    );
+  }, [messages, state]);
 
   const handleClosePanel = useCallback(() => {
     setPanelOpen(false);

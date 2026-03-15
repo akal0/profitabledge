@@ -8,13 +8,13 @@
  * - Scheduled reflections (daily/weekly)
  */
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "../db";
 import { journalPromptQueue, journalEntry } from "../db/schema/journal";
 import { trade, goal, tradingAccount } from "../db/schema/trading";
 import { eq, and, gte, lte, desc, sql, isNull } from "drizzle-orm";
+import { generateMeteredGeminiContent } from "./ai/gemini";
+import { logAIProviderError } from "./ai/provider-errors";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const JOURNAL_PROMPTS_MODEL = "gemini-2.5-flash";
 
 export type PromptType = 'trade_review' | 'daily_reflection' | 'pattern_inquiry' | 'goal_progress' | 'psychology_check';
@@ -28,7 +28,10 @@ export interface GeneratedPrompt {
   goalId?: string;
 }
 
-export async function generateTradeClosePrompt(tradeId: string): Promise<GeneratedPrompt | null> {
+export async function generateTradeClosePrompt(
+  tradeId: string,
+  userId: string
+): Promise<GeneratedPrompt | null> {
   const [tradeData] = await db
     .select()
     .from(trade)
@@ -36,8 +39,6 @@ export async function generateTradeClosePrompt(tradeId: string): Promise<Generat
     .limit(1);
 
   if (!tradeData) return null;
-
-  const model = genAI.getGenerativeModel({ model: JOURNAL_PROMPTS_MODEL });
 
   const isWin = Number(tradeData.profit || 0) > 0;
   const isLoss = Number(tradeData.profit || 0) < 0;
@@ -69,10 +70,19 @@ Respond in JSON format:
 {
   "title": "string - catchy title for the prompt",
   "questions": ["string - question 1", "string - question 2", ...]
-}`;
+  }`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateMeteredGeminiContent({
+      userId,
+      accountId: tradeData.accountId,
+      featureKey: "journal.prompt.trade_close",
+      model: JOURNAL_PROMPTS_MODEL,
+      request: prompt,
+      metadata: {
+        tradeId,
+      },
+    });
     const response = result.response.text();
     
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -87,7 +97,7 @@ Respond in JSON format:
       tradeId
     };
   } catch (error) {
-    console.error("Error generating trade close prompt:", error);
+    logAIProviderError("Journal trade-close prompt generation", error);
     
     return {
       type: 'trade_review',
@@ -112,7 +122,8 @@ Respond in JSON format:
 
 export async function generateGoalProgressPrompt(
   goalId: string,
-  progressPercent: number
+  progressPercent: number,
+  userId: string
 ): Promise<GeneratedPrompt | null> {
   const [goalData] = await db
     .select()
@@ -121,8 +132,6 @@ export async function generateGoalProgressPrompt(
     .limit(1);
 
   if (!goalData) return null;
-
-  const model = genAI.getGenerativeModel({ model: JOURNAL_PROMPTS_MODEL });
 
   const prompt = `Generate a journaling prompt for a trader working toward a goal.
 
@@ -147,10 +156,19 @@ Respond in JSON format:
 {
   "title": "string",
   "questions": ["string - question 1", "string - question 2", ...]
-}`;
+  }`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateMeteredGeminiContent({
+      userId,
+      featureKey: "journal.prompt.goal_progress",
+      model: JOURNAL_PROMPTS_MODEL,
+      request: prompt,
+      metadata: {
+        goalId,
+        progressPercent,
+      },
+    });
     const response = result.response.text();
     
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -165,7 +183,7 @@ Respond in JSON format:
       goalId
     };
   } catch (error) {
-    console.error("Error generating goal progress prompt:", error);
+    logAIProviderError("Journal goal-progress prompt generation", error);
     
     return {
       type: 'goal_progress',
@@ -181,10 +199,9 @@ Respond in JSON format:
 }
 
 export async function generatePatternPrompt(
-  pattern: { type: string; title: string; description: string }
+  pattern: { type: string; title: string; description: string },
+  userId: string
 ): Promise<GeneratedPrompt> {
-  const model = genAI.getGenerativeModel({ model: JOURNAL_PROMPTS_MODEL });
-
   const prompt = `Generate a journaling prompt for a trader based on a detected pattern.
 
 Pattern:
@@ -201,10 +218,18 @@ Respond in JSON format:
 {
   "title": "string",
   "questions": ["string - question 1", "string - question 2", ...]
-}`;
+  }`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateMeteredGeminiContent({
+      userId,
+      featureKey: "journal.prompt.pattern",
+      model: JOURNAL_PROMPTS_MODEL,
+      request: prompt,
+      metadata: {
+        patternType: pattern.type,
+      },
+    });
     const response = result.response.text();
     
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -236,9 +261,9 @@ function getDefaultPatternPrompt(pattern: { type: string; title: string; descrip
   };
 }
 
-export async function generateDailyReflectionPrompt(): Promise<GeneratedPrompt> {
-  const model = genAI.getGenerativeModel({ model: JOURNAL_PROMPTS_MODEL });
-
+export async function generateDailyReflectionPrompt(
+  userId: string
+): Promise<GeneratedPrompt> {
   const prompt = `Generate a daily trading reflection prompt with 3-4 questions.
 
 The questions should cover:
@@ -251,10 +276,15 @@ Respond in JSON format:
 {
   "title": "string - e.g., 'End of Day Reflection'",
   "questions": ["string - question 1", "string - question 2", ...]
-}`;
+  }`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateMeteredGeminiContent({
+      userId,
+      featureKey: "journal.prompt.daily_reflection",
+      model: JOURNAL_PROMPTS_MODEL,
+      request: prompt,
+    });
     const response = result.response.text();
     
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -379,7 +409,7 @@ export async function autoQueueTradeClosePrompts(userId: string): Promise<void> 
   for (const { trade: t } of recentClosedTrades) {
     if (!t.id) continue;
 
-    const prompt = await generateTradeClosePrompt(t.id);
+    const prompt = await generateTradeClosePrompt(t.id, userId);
     if (prompt) {
       await queuePrompt(userId, prompt, 'trade_close', {
         symbol: t.symbol,

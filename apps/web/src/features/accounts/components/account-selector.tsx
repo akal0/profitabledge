@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { Check, ChevronsUpDown, CheckCircle2 } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  CheckCircle2,
+  FlaskConical,
+  Plug,
+} from "lucide-react";
 import Image from "next/image";
 
 import {
@@ -9,7 +15,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import {
   SidebarMenu,
@@ -19,47 +24,38 @@ import {
 } from "@/components/ui/sidebar";
 import { AddAccountSheet, type NewAccount } from "./add-account-sheet";
 import {
+  accountIsEaSynced,
+  isDemoWorkspaceAccount,
+} from "@/features/accounts/lib/account-metadata";
+import {
   ALL_ACCOUNTS_ID,
   isAllAccountsScope,
   useAccountStore,
 } from "@/stores/account";
-import { useEffect, useState } from "react";
-import { useTRPC, trpcClient, trpcOptions } from "@/utils/trpc";
+import { useEffect } from "react";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import {
+  pickPreferredAccountConnection,
+  type ConnectionRow,
+} from "@/features/dashboard-shell/lib/connection-status";
 
 export type Account = {
   id: string;
   name: string;
   image: string;
   broker?: string | null;
+  brokerType?: string | null;
   brokerServer?: string | null;
-  accountNumber?: string | null;
+  accountNumber?: string | number | null;
+  isVerified?: number | boolean | null;
+  verificationLevel?: string | null;
+  lastImportedAt?: string | Date | null;
 };
 
-const DEMO_ACCOUNT_NAME = "Demo Account";
-const DEMO_BROKER = "ProfitEdge Demo";
-const DEMO_BROKER_SERVER = "ProfitEdge-Demo01";
-const DEMO_ACCOUNT_PREFIX = "DEMO-";
-
-function isDemoWorkspaceAccount(account: Partial<Account>) {
-  return (
-    account.name === DEMO_ACCOUNT_NAME &&
-    account.broker === DEMO_BROKER &&
-    account.brokerServer === DEMO_BROKER_SERVER &&
-    String(account.accountNumber || "").startsWith(DEMO_ACCOUNT_PREFIX)
-  );
-}
-
-const AccountSwitcher = ({
-  accounts,
-  defaultAccount,
-}: {
-  accounts: Account[];
-  defaultAccount?: Account;
-}) => {
-  const trpc = useTRPC();
+const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   const { isMobile, state } = useSidebar();
   const [items, setItems] = React.useState<Account[]>(accounts);
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
@@ -147,12 +143,15 @@ const AccountSwitcher = ({
     staleTime: 4000,
     refetchInterval: 5000,
   });
+  const { data: rawConnections } = useQuery(
+    trpcOptions.connections.list.queryOptions()
+  );
 
   // Derive accountMetrics from queries (no setState needed - prevents infinite loop)
   // Create stable dependency array
   const queriesData = React.useMemo(
     () => metricsQueries.map((q) => q.data),
-    [metricsQueries.map((q) => q.dataUpdatedAt).join(",")]
+    [metricsQueries]
   );
 
   const accountMetrics = React.useMemo(() => {
@@ -167,6 +166,11 @@ const AccountSwitcher = ({
     }
     return metrics;
   }, [aggregatedStats, queriesData, items]);
+
+  const accountConnections = React.useMemo(
+    () => (rawConnections as ConnectionRow[] | undefined) ?? [],
+    [rawConnections]
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -213,10 +217,10 @@ const AccountSwitcher = ({
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               className={cn(
-                "!h-full cursor-pointer items-center gap-2 bg-sidebar-accent text-xs shadow-sm ring-1! ring-white/5 transition-all duration-150 active:scale-95 hover:!brightness-110",
+                "cursor-pointer items-center gap-2 bg-sidebar-accent text-xs shadow-sm ring-1! ring-white/5 transition-all duration-150 active:scale-95 hover:!brightness-110",
                 isCollapsed
-                  ? "size-8 justify-center rounded-lg px-2"
-                  : "rounded-lg px-5"
+                  ? "!h-10 !w-12 justify-center rounded-lg p-0"
+                  : "!h-full rounded-lg px-5"
               )}
             >
               <div className="size-3.5 relative shrink-0 rounded-full overflow-hidden">
@@ -233,8 +237,8 @@ const AccountSwitcher = ({
               </p>
               {!isAllAccountsScope(selectorItems[selectedIndex].id) &&
               isDemoWorkspaceAccount(selectorItems[selectedIndex]) ? (
-                <span className="hidden md:inline-flex items-center rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-amber-300 group-data-[collapsible=icon]:hidden">
-                  Demo workspace
+                <span className="hidden md:inline-flex items-center rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-300 group-data-[collapsible=icon]:hidden ml-0.5">
+                  Demo
                 </span>
               ) : null}
 
@@ -250,9 +254,6 @@ const AccountSwitcher = ({
               {selectorItems.map((account, idx) => {
                 const metrics = accountMetrics[account.id];
                 const isAggregate = isAllAccountsScope(account.id);
-                const isVerified = isAggregate
-                  ? false
-                  : metrics?.isVerified ?? false;
                 const lastSyncedAt = isAggregate ? null : metrics?.lastSyncedAt;
                 const lastSyncedText = lastSyncedAt
                   ? formatDistanceToNow(new Date(lastSyncedAt), {
@@ -266,10 +267,37 @@ const AccountSwitcher = ({
                   : null;
                 const isDemoWorkspace =
                   !isAggregate && isDemoWorkspaceAccount(account);
+                const hasConnection =
+                  !isAggregate &&
+                  Boolean(
+                    pickPreferredAccountConnection(
+                      accountConnections,
+                      account.id
+                    )
+                  );
+                const isEaSynced =
+                  !isAggregate &&
+                  !hasConnection &&
+                  accountIsEaSynced({
+                    isVerified: metrics?.isVerified ?? account.isVerified,
+                    verificationLevel: account.verificationLevel,
+                  });
+                const StatusIcon = isDemoWorkspace
+                  ? FlaskConical
+                  : hasConnection
+                  ? Plug
+                  : isEaSynced
+                  ? CheckCircle2
+                  : null;
+                const statusIconClassName = isDemoWorkspace
+                  ? "text-violet-400"
+                  : hasConnection
+                  ? "text-sky-400"
+                  : "text-teal-400";
 
                 return (
                   <DropdownMenuItem
-                    className={`flex flex-col items-start gap-1 py-2.5 text-xs ${
+                    className={`flex flex-col items-start gap-1 py-2.5 text-xs cursor-pointer ${
                       idx === selectedIndex && "font-bold"
                     }`}
                     key={account.id}
@@ -286,15 +314,15 @@ const AccountSwitcher = ({
                       </div>
                       <div className="flex flex-1 items-center gap-2 min-w-0">
                         <span className="truncate">{account.name}</span>
-                        {isDemoWorkspace ? (
-                          <span className="inline-flex items-center rounded-sm border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-amber-300">
-                            Demo workspace
-                          </span>
-                        ) : null}
                       </div>
-                      {isVerified && (
-                        <CheckCircle2 className="size-3.5 text-teal-400" />
-                      )}
+                      {StatusIcon ? (
+                        <StatusIcon
+                          className={cn(
+                            "size-3.5 shrink-0",
+                            statusIconClassName
+                          )}
+                        />
+                      ) : null}
                       {idx === selectedIndex && <Check className="size-4" />}
                     </div>
                     {aggregateText && (

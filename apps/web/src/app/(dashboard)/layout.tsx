@@ -81,13 +81,6 @@ export default function DashboardLayout({
 
   const connectionBadge = getConnectionBadge(currentAccountConnection);
   const breadcrumbs = getDashboardBreadcrumbs(safePathname);
-  const requiresOnboarding = Boolean(
-    billingState && !billingState.onboarding.isComplete
-  );
-  const hasBlockedBetaAccess = Boolean(
-    billingState?.access.privateBetaRequired &&
-      !billingState.access.hasPrivateBetaAccess
-  );
   const hasAdminAccess = billingState?.admin?.isAdmin === true;
   const hasAffiliateAccess = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
@@ -111,8 +104,6 @@ export default function DashboardLayout({
           !meetsRequirement(activePlanKey, r.plan)
       )
   );
-  const shouldRedirectToOnboarding = requiresOnboarding || hasBlockedBetaAccess;
-
   useAlphaPageTracking("dashboard");
   useSettingsAccountScopeGuard({
     pathname: safePathname,
@@ -123,9 +114,7 @@ export default function DashboardLayout({
   useAssistantShortcut(openFloatingAssistant);
 
   useEffect(() => {
-    if (shouldRedirectToOnboarding) {
-      router.replace("/onboarding");
-    } else if (hasBlockedAdminAccess) {
+    if (hasBlockedAdminAccess) {
       router.replace("/dashboard/growth");
     } else if (hasBlockedAffiliateAccess) {
       router.replace("/dashboard/referrals");
@@ -137,15 +126,9 @@ export default function DashboardLayout({
     hasBlockedAffiliateAccess,
     hasBlockedPlanAccess,
     router,
-    shouldRedirectToOnboarding,
   ]);
 
-  if (
-    shouldRedirectToOnboarding ||
-    hasBlockedAdminAccess ||
-    hasBlockedAffiliateAccess ||
-    hasBlockedPlanAccess
-  ) {
+  if (hasBlockedAdminAccess || hasBlockedAffiliateAccess || hasBlockedPlanAccess) {
     return null;
   }
 

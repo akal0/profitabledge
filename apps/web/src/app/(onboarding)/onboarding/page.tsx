@@ -716,9 +716,15 @@ function AddAccountStep() {
   });
   const [pendingCsvImportResolution, setPendingCsvImportResolution] =
     useState<PendingCsvImportResolution | null>(null);
+  const [hasPreparedDashboardExit, setHasPreparedDashboardExit] = useState(false);
   const onboardingStorageUserId = session?.user.id ?? null;
   const { accounts } = useAccountCatalog();
   const hasAccount = accounts.length > 0;
+  const accountsQueryKey = trpcOptions.accounts.list.queryOptions().queryKey;
+  const canContinueToDashboard =
+    hasAccount ||
+    hasPreparedDashboardExit ||
+    (accountStep === 2 && (form.method === "broker" || form.method === "ea"));
 
   const demoAccounts = useMemo(
     () => accounts.filter((account) => isDemoWorkspaceAccount(account)),
@@ -750,6 +756,12 @@ function AddAccountStep() {
       setPendingCsvImportResolution(null);
     }
   }, [form.broker, pendingCsvImportResolution]);
+
+  useEffect(() => {
+    if (hasAccount) {
+      setHasPreparedDashboardExit(true);
+    }
+  }, [hasAccount]);
 
   function resetAccountForm() {
     setAccountStep(1);
@@ -832,7 +844,8 @@ function AddAccountStep() {
         toast.success("Account created from CSV import");
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      setHasPreparedDashboardExit(true);
+      await queryClient.invalidateQueries({ queryKey: accountsQueryKey });
       resetAccountForm();
     } catch (e) {
       console.error(e);
@@ -860,19 +873,9 @@ function AddAccountStep() {
           : `Demo account created with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
       );
 
-      // Auto-complete onboarding and redirect
-      try {
-        await trpcClient.billing.syncFromPolar.mutate().catch(() => {});
-        await trpcClient.billing.markOnboardingComplete.mutate();
-      } catch {
-        // Non-blocking — account was created, let user proceed manually
-        await queryClient.invalidateQueries({ queryKey: ["accounts"] });
-        setIsSubmitting(false);
-        return;
-      }
-
-      clearStoredOnboardingStep(onboardingStorageUserId);
-      router.push("/dashboard");
+      setHasPreparedDashboardExit(true);
+      await queryClient.invalidateQueries({ queryKey: accountsQueryKey });
+      setIsSubmitting(false);
     } catch (e: any) {
       toast.error(
         e.message ||
@@ -1500,19 +1503,19 @@ function AddAccountStep() {
       <div className="flex w-full mt-6">
         <Button
           onClick={handleComplete}
-          disabled={!hasAccount || isSubmitting}
+          disabled={!canContinueToDashboard || isSubmitting}
           className={cn(
             TRADE_ACTION_BUTTON_PRIMARY_CLASS,
             "h-9 w-full",
-            hasAccount
+            canContinueToDashboard
               ? "!ring-emerald-600/90 !bg-emerald-600/72 !text-white hover:!bg-emerald-500/80"
               : "opacity-50"
           )}
         >
           {isSubmitting
             ? "Setting up..."
-            : hasAccount
-            ? "Go to Dashboard"
+            : canContinueToDashboard
+            ? "Go to dashboard"
             : "Add an account to continue"}
         </Button>
       </div>

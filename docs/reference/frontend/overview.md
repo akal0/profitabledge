@@ -18,7 +18,7 @@ The frontend lives in `apps/web` and is a Next.js App Router application using R
 - `apps/web/src/app/api/auth/[...all]/route.ts`
   - same-origin browser proxy for Better Auth routes into the server app
 - `apps/web/src/app/(dashboard)/layout.tsx`
-  - dashboard shell composition, sidebar, header, breadcrumbs, account context, and private-beta access redirect back to onboarding when billing state blocks dashboard access
+  - dashboard shell composition, sidebar, header, breadcrumbs, account context, and plan/admin/affiliate route guards
 
 ## Route layout
 
@@ -136,6 +136,8 @@ Current example:
 - onboarding now waits for any stored beta/referral access intent from sign-up to redeem before bootstrapping the current step, so brand-new users do not get pushed from `Profile` to `Select a plan` just because access redemption finishes a moment later
 - shared CSV upload surfaces now show the first three uploaded files inline and collapse any additional files behind a `+x more` hover tooltip, so onboarding and account-import flows stay compact without losing visibility into queued uploads
 - the onboarding shell now uses a scrollable responsive layout instead of a fixed-height desktop frame, so long profile/account-import forms remain usable on smaller screens and when CSV/account metadata expands vertically
+- the login page now lands directly on `/dashboard`, and the dashboard shell no longer force-bounces signed-in members back to onboarding just because billing/onboarding state is incomplete
+- the onboarding account step now flips its footer CTA to `Go to dashboard` as soon as CSV import, demo workspace creation, or broker/EA setup intent makes the member ready to continue, instead of waiting on a stale account-list refresh
 - the dashboard sidebar now exposes a `Growth` section with `/dashboard/growth`, `/dashboard/referrals`, `/dashboard/affiliate`, and `/dashboard/growth-admin` for admins, without introducing a second shell
 - the growth overview and growth-admin routes now live under a shared dashboard route-group layout that mounts a billing-style underlined admin tab strip directly beneath the header, while growth, referrals, affiliate, and growth-admin page bodies reuse the same shadowed settings-card shell language as Billing instead of bespoke route-local framing
 - the growth overview and growth admin surfaces now live on their own dashboard routes, while Billing keeps payout-method management inside Billing for approved affiliates

@@ -36,7 +36,7 @@ export const BROKER_OPTIONS: BrokerOption[] = [
   {
     value: "tradovate",
     label: "Tradovate",
-    image: "/brokers/tradovate.png",
+    image: "/brokers/tradovate.svg",
     supportsMultiCsvImport: true,
     supplementalCsvReports: [
       "Performance",
@@ -65,9 +65,14 @@ const DEMO_BROKER_SERVER = "Profitabledge-Demo01";
 const DEMO_ACCOUNT_PREFIX = "DEMO-";
 
 export function getBrokerImage(broker?: string | null): string {
-  switch (broker) {
+  switch (broker?.toLowerCase()) {
     case "ftmo":
       return "/brokers/FTMO.png";
+    case "metaquotes":
+    case "mt5":
+      return "/brokers/mt5.svg";
+    case "tradovate":
+      return "/brokers/tradovate.svg";
     default:
       return "/brokers/FTMO.png";
   }
@@ -92,12 +97,12 @@ export function getAccountImage(account?: AccountImageLike | null): string {
 
   // 1. Broker name match
   if (broker.includes("ftmo")) return "/brokers/FTMO.png";
-  if (broker.includes("metaquotes")) return "/brokers/mt5.png";
-  if (broker.includes("tradovate")) return "/brokers/tradovate.png";
+  if (broker.includes("metaquotes")) return "/brokers/mt5.svg";
+  if (broker.includes("tradovate")) return "/brokers/tradovate.svg";
 
   // 2. Broker type / connection method
-  if (account.brokerType === "mt5") return "/brokers/mt5.png";
-  if (account.brokerType === "tradovate") return "/brokers/tradovate.png";
+  if (account.brokerType === "mt5") return "/brokers/mt5.svg";
+  if (account.brokerType === "tradovate") return "/brokers/tradovate.svg";
 
   return "/brokers/FTMO.png";
 }

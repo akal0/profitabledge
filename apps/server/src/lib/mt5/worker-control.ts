@@ -16,6 +16,7 @@ import {
 import { resolveUniqueConnectionDisplayName } from "../connections/display-name";
 import { isMtTerminalProvider } from "./constants";
 import { buildMtConnectionCompleteness } from "./completeness";
+import { getServerEnv } from "../env";
 
 const ACTIVE_LEASE_MS = 60 * 1000;
 
@@ -65,7 +66,7 @@ export interface MtWorkerBootstrapPayload {
 }
 
 export function assertWorkerSecret(workerSecret: string | null | undefined) {
-  const expected = process.env.BROKER_WORKER_SECRET;
+  const expected = getServerEnv().BROKER_WORKER_SECRET;
 
   if (!expected) {
     throw new TRPCError({
@@ -312,7 +313,7 @@ export async function getMtConnectionBootstrap(connectionId: string) {
       })
     : [];
   const completeness = buildMtConnectionCompleteness({
-    checkpoint,
+    checkpoint: checkpoint ?? null,
     deals: scopedDeals,
     orders: scopedOrders,
     openTrades: scopedOpenTrades,

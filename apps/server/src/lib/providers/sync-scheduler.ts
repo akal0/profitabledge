@@ -14,6 +14,25 @@ const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 let schedulerInterval: ReturnType<typeof setInterval> | null = null;
 let isRunning = false;
 
+function registerSignalHandlers() {
+  process.off("SIGTERM", stopSyncScheduler);
+  process.off("SIGINT", stopSyncScheduler);
+  process.on("SIGTERM", stopSyncScheduler);
+  process.on("SIGINT", stopSyncScheduler);
+}
+
+export async function runDueConnectionsOnce(): Promise<void> {
+  if (isRunning) return;
+  isRunning = true;
+  try {
+    await runDueConnections();
+  } catch (err) {
+    console.error("[SyncScheduler] Unhandled error:", err);
+  } finally {
+    isRunning = false;
+  }
+}
+
 export function startSyncScheduler(): void {
   if (schedulerInterval) {
     return;
@@ -23,21 +42,11 @@ export function startSyncScheduler(): void {
     `[SyncScheduler] Starting (check every ${CHECK_INTERVAL_MS / 1000}s)`
   );
 
-  schedulerInterval = setInterval(async () => {
-    if (isRunning) return;
-    isRunning = true;
-    try {
-      await runDueConnections();
-    } catch (err) {
-      console.error("[SyncScheduler] Unhandled error:", err);
-    } finally {
-      isRunning = false;
-    }
+  schedulerInterval = setInterval(() => {
+    void runDueConnectionsOnce();
   }, CHECK_INTERVAL_MS);
 
-  // Graceful shutdown
-  process.on("SIGTERM", stopSyncScheduler);
-  process.on("SIGINT", stopSyncScheduler);
+  registerSignalHandlers();
 }
 
 export function stopSyncScheduler(): void {

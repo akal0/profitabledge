@@ -498,7 +498,8 @@ function NotificationsList({
                     className={cn(
                       "p-2.5 flex flex-col items-start gap-1 hover:bg-sidebar-accent! rounded-sm",
                       targetUrl && "cursor-pointer",
-                      isUrgent && "border-l-2 border-red-500/50 bg-red-500/5",
+                      isUrgent &&
+                        "ring ring-red-500/25 bg-red-500/5 hover:bg-red-500/10! transition duration-250",
                       isFundedMilestone &&
                         " border-amber-400/50 bg-amber-400/8 hover:bg-amber-400/15!"
                     )}

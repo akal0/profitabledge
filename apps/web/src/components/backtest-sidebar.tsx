@@ -20,7 +20,6 @@ import {
   LayoutDashboard,
   ListOrdered,
   BarChart3,
-  BookOpen,
 } from "lucide-react";
 
 type NavItem = {
@@ -46,7 +45,6 @@ const backtestNavSections: NavSection[] = [
     label: "Insights",
     items: [
       { title: "Analytics", href: "/backtest/analytics", icon: BarChart3 },
-      { title: "Journal", href: "/backtest/journal", icon: BookOpen },
     ],
   },
 ];

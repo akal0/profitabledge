@@ -8,6 +8,13 @@ import React, { useEffect, useRef } from "react";
 import { formatBytes, useFileUpload } from "@/hooks/use-file-upload";
 import { Button } from "@/components/ui/button";
 
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
+
 export type BaseMediaUploadProps = {
   accept?: string;
   maxSize?: number;
@@ -61,6 +68,8 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
   }, [files]);
 
   const file = files[0];
+  const visibleFiles = files.slice(0, 3);
+  const hiddenFiles = files.slice(3);
   const inputProps = getInputProps({ accept, multiple });
 
   return (
@@ -73,7 +82,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         data-dragging={isDragging || undefined}
-        className="border border-white/5 dark:bg-sidebar-accent hover:brightness-110 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-none p-4 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px] group transition duration-250"
+        className="border border-white/5 dark:bg-sidebar-accent hover:brightness-110 data-[dragging=true]:bg-accent/50 has-[input:focus]:border-ring has-[input:focus]:ring-ring/50 flex min-h-40 flex-col items-center justify-center rounded-lg p-4 has-disabled:pointer-events-none has-disabled:opacity-50 has-[input:focus]:ring-[3px] group transition duration-250 cursor-pointer"
       >
         <input
           {...inputProps}
@@ -84,7 +93,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
 
         <div className="flex flex-col items-center justify-center text-center gap-3 ">
           <div
-            className="bg-sidebar-accent shadow-primary-button flex size-12 shrink-0 items-center justify-center rounded-none border border-white/5 group-hover:brightness-110 transition duration-150"
+            className="bg-sidebar-accent shadow-secondary-button flex size-12 shrink-0 items-center justify-center rounded-lg border border-white/5 group-hover:brightness-110 transition duration-150"
             aria-hidden="true"
           >
             <UploadIcon className="size-4 opacity-60" />
@@ -113,10 +122,10 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
 
       {files.length > 0 && (
         <div className="space-y-2 mt-2">
-          {files.map((f) => (
+          {visibleFiles.map((f) => (
             <div
               key={f.id}
-              className="border border-white/5 flex items-center justify-between gap-2 px-4 py-1 bg-sidebar-accent"
+              className="border border-white/5 flex items-center justify-between gap-2 px-4 py-1 bg-sidebar-accent rounded-lg"
             >
               <div className="flex items-center gap-2.5 overflow-hidden">
                 <PaperclipIcon
@@ -141,6 +150,44 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
               </Button>
             </div>
           ))}
+
+          {hiddenFiles.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="border border-white/5 flex items-center gap-2 px-4 py-2 bg-sidebar-accent rounded-lg text-xs font-semibold text-white/75 transition duration-150 hover:brightness-110 cursor-pointer"
+                >
+                  <PaperclipIcon
+                    className="size-3 shrink-0 opacity-60"
+                    aria-hidden="true"
+                  />
+                  <span>+{hiddenFiles.length} more</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                sideOffset={8}
+                className="max-w-xs p-3 overflow-hidden"
+              >
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-white/45">
+                    Uploaded files
+                  </p>
+                  <Separator className="-mx-6" />
+                  <div className="space-y-2">
+                    {hiddenFiles.map((fileItem) => (
+                      <p
+                        key={fileItem.id}
+                        className="truncate text-xs font-medium text-white/80"
+                      >
+                        {fileItem.file.name}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          )}
         </div>
       )}
     </div>

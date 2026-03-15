@@ -11,13 +11,7 @@ import Plans from "./components/plans";
 import Personal from "./components/personal";
 import { authClient } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  AlertTriangle,
-  ExternalLink,
-  Plug,
-  Cpu,
-  Sparkles,
-} from "lucide-react";
+import { AlertTriangle, ExternalLink, Plug, Cpu, Sparkles } from "lucide-react";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -502,12 +496,12 @@ function OnboardingPageContent() {
   }
 
   return (
-    <div className="flex flex-col w-screen h-screen bg-sidebar">
+    <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-sidebar">
       <div className="flex flex-col">
-        <div className="w-full h-20 flex justify-between items-center px-25 text-xs">
+        <div className="flex w-full flex-col gap-4 px-4 py-4 text-xs sm:px-6 lg:px-10 xl:px-25 xl:h-20 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
           <p className="font-bold">profitabledge</p>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 xl:flex-1">
             {steps.map((step, index) => (
               <div key={step.id} className="flex items-center gap-2">
                 <h1
@@ -538,7 +532,7 @@ function OnboardingPageContent() {
 
           <Button
             onClick={handleLogout}
-            className="ring ring-white/10 rounded-md gap-2.5 h-max transition-all active:scale-95 bg-sidebar dark:hover:bg-sidebar text-white w-max text-xs hover:!brightness-110 duration-250 flex py-2 items-center justify-center cursor-pointer"
+            className="ring ring-white/10 rounded-md gap-2.5 h-max transition-all active:scale-95 bg-sidebar dark:hover:bg-sidebar text-white w-max text-xs hover:!brightness-110 duration-250 flex py-2 items-center justify-center cursor-pointer self-start xl:self-auto"
           >
             Log out
           </Button>
@@ -547,140 +541,141 @@ function OnboardingPageContent() {
         <Separator />
       </div>
 
-      <div
-        className={cn(
-          "px-25 h-full mx-auto flex flex-col items-center justify-center gap-8 w-full",
-          currentStep === 2 ? "max-w-[92rem]" : "max-w-7xl"
-        )}
-      >
-        <div className="flex flex-col items-center justify-center w-full max-w-2xl min-w-2xl gap-12">
-          {/* <h1 className="font-bold tracking-wide uppercase"> Profitabledge </h1> */}
+      <div className="flex-1 overflow-y-auto">
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-col items-center gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 xl:px-25",
+            currentStep === 2 ? "max-w-[92rem]" : "max-w-7xl"
+          )}
+        >
+          <div className="flex w-full max-w-2xl min-w-0 flex-col items-center justify-center gap-8 sm:gap-12">
+            {/* <h1 className="font-bold tracking-wide uppercase"> Profitabledge </h1> */}
 
-          <div className="flex gap-4 w-full">
-            {steps.map((step) => (
-              <div
-                key={step.id}
-                className="flex flex-col gap-4 flex-1 items-center"
-              >
-                <p
-                  className={`text-xs font-medium ${
-                    step.status === "current"
-                      ? "text-white"
-                      : step.status === "completed"
-                      ? "text-emerald-500"
-                      : "text-white/25"
-                  }`}
+            <div className="grid w-full gap-3 md:grid-cols-3 md:gap-4">
+              {steps.map((step) => (
+                <div
+                  key={step.id}
+                  className="flex min-w-0 flex-col gap-3 md:gap-4"
                 >
-                  {step.name}
-                </p>
-
-                <div className="relative h-2.5 bg-sidebar-accent rounded-full w-full shadow-sidebar-button overflow-hidden">
-                  <div
-                    className={`absolute inset-1 transition-all duration-1000 ease-out rounded-full shadow-sidebar-button ${
-                      step.status === "completed"
-                        ? "bg-emerald-500"
-                        : step.status === "current"
-                        ? "bg-amber-500"
-                        : "bg-sidebar"
-                    }`}
-                    style={{
-                      transformOrigin: "left",
-                      width:
-                        step.status === "completed" || step.status === "current"
-                          ? "calc(100% - 8px)"
-                          : "calc(100% - 8px)",
-                      animation:
-                        step.status === "current"
-                          ? "slideInLeftConstrained 0.8s ease-in-out forwards"
-                          : undefined,
-                    }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Step Content */}
-        {currentStep === 1 && <Personal onNext={() => setCurrentStep(2)} />}
-
-        {currentStep === 2 && (
-          <div className="flex flex-col items-center gap-8 w-full">
-            {billingConfigQuery.data && !accessLocked ? (
-              <>
-                <Plans
-                  plans={billingConfigQuery.data.plans}
-                  activePlanKey={activePlanKey}
-                  selectedPlanKey={selectedPlanKey}
-                  pendingPlanKey={pendingPlanKey}
-                  onSelectPlan={handlePlanSelection}
-                />
-              </>
-            ) : accessLocked ? (
-              <div className="w-full max-w-2xl">
-                <div className="bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button flex flex-col gap-5">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex size-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                      <AlertTriangle className="size-4" />
-                    </div>
-                    <div className="space-y-1">
-                      <h2 className="text-lg font-semibold text-white">
-                        Private beta access required
-                      </h2>
-                      <p className="text-sm text-white/55 leading-relaxed">
-                        Redeem your invite code to unlock plan selection and the
-                        rest of onboarding.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <Input
-                      value={activationCode}
-                      onChange={(event) => {
-                        setActivationCode(event.target.value.toUpperCase());
-                        setActivationMessage(null);
-                      }}
-                      placeholder="Enter your beta code"
-                      className="flex-1"
-                    />
-
-                    <Button
-                      onClick={handleRedeemAccess}
-                      disabled={completeGrowthAccess.isPending}
-                      className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-amber-600 hover:bg-amber-600 cursor-pointer text-white text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center sm:min-w-40"
-                    >
-                      {completeGrowthAccess.isPending
-                        ? "Activating..."
-                        : "Redeem access"}
-                    </Button>
-                  </div>
-
                   <p
-                    className={`text-xs ${
-                      billingStateQuery.data?.access.redemption
-                        ? "text-emerald-400"
-                        : activationMessage
-                        ? "text-amber-200"
-                        : "text-white/40"
+                    className={`text-center text-xs font-medium md:text-left ${
+                      step.status === "current"
+                        ? "text-white"
+                        : step.status === "completed"
+                        ? "text-emerald-500"
+                        : "text-white/25"
                     }`}
                   >
-                    {activationMessage ??
-                      "Beta access is enforced for this environment."}
+                    {step.name}
                   </p>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full max-w-2xl bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button text-center text-sm text-white/45">
-                Loading plan details...
-              </div>
-            )}
-          </div>
-        )}
 
-        {currentStep === 3 && (
-          <AddAccountStep />
-        )}
+                  <div className="relative h-2.5 bg-sidebar-accent rounded-full w-full shadow-sidebar-button overflow-hidden">
+                    <div
+                      className={`absolute inset-1 transition-all duration-1000 ease-out rounded-full shadow-sidebar-button ${
+                        step.status === "completed"
+                          ? "bg-emerald-500"
+                          : step.status === "current"
+                          ? "bg-amber-500"
+                          : "bg-sidebar"
+                      }`}
+                      style={{
+                        transformOrigin: "left",
+                        width:
+                          step.status === "completed" ||
+                          step.status === "current"
+                            ? "calc(100% - 8px)"
+                            : "calc(100% - 8px)",
+                        animation:
+                          step.status === "current"
+                            ? "slideInLeftConstrained 0.8s ease-in-out forwards"
+                            : undefined,
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Step Content */}
+          {currentStep === 1 && <Personal onNext={() => setCurrentStep(2)} />}
+
+          {currentStep === 2 && (
+            <div className="flex flex-col items-center gap-8 w-full">
+              {billingConfigQuery.data && !accessLocked ? (
+                <>
+                  <Plans
+                    plans={billingConfigQuery.data.plans}
+                    activePlanKey={activePlanKey}
+                    selectedPlanKey={selectedPlanKey}
+                    pendingPlanKey={pendingPlanKey}
+                    onSelectPlan={handlePlanSelection}
+                  />
+                </>
+              ) : accessLocked ? (
+                <div className="w-full max-w-2xl">
+                  <div className="bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button flex flex-col gap-5">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex size-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300">
+                        <AlertTriangle className="size-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <h2 className="text-lg font-semibold text-white">
+                          Private beta access required
+                        </h2>
+                        <p className="text-sm text-white/55 leading-relaxed">
+                          Redeem your invite code to unlock plan selection and
+                          the rest of onboarding.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <Input
+                        value={activationCode}
+                        onChange={(event) => {
+                          setActivationCode(event.target.value.toUpperCase());
+                          setActivationMessage(null);
+                        }}
+                        placeholder="Enter your beta code"
+                        className="flex-1"
+                      />
+
+                      <Button
+                        onClick={handleRedeemAccess}
+                        disabled={completeGrowthAccess.isPending}
+                        className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-amber-600 hover:bg-amber-600 cursor-pointer text-white text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center sm:min-w-40"
+                      >
+                        {completeGrowthAccess.isPending
+                          ? "Activating..."
+                          : "Redeem access"}
+                      </Button>
+                    </div>
+
+                    <p
+                      className={`text-xs ${
+                        billingStateQuery.data?.access.redemption
+                          ? "text-emerald-400"
+                          : activationMessage
+                          ? "text-amber-200"
+                          : "text-white/40"
+                      }`}
+                    >
+                      {activationMessage ??
+                        "Beta access is enforced for this environment."}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full max-w-2xl bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button text-center text-sm text-white/45">
+                  Loading plan details...
+                </div>
+              )}
+            </div>
+          )}
+
+          {currentStep === 3 && <AddAccountStep />}
+        </div>
       </div>
     </div>
   );
@@ -911,17 +906,17 @@ function AddAccountStep() {
     router.push("/dashboard");
   };
 
-  const sectionTitleClass =
-    "text-xs font-semibold text-white/70 tracking-wide";
+  const sectionTitleClass = "text-xs font-semibold text-white/70 tracking-wide";
   const fieldLabelClass = "text-xs text-white/50";
   const fieldInputClass =
-    "rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-white/25 hover:brightness-100";
-  const fieldSelectTriggerClass = "h-9 w-full px-4";
-  const fieldSelectContentClass = "";
-  const fieldSelectItemClass = "whitespace-normal";
+    "rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-4 text-xs text-white/80  placeholder:text-white/25 hover:brightness-100 border-none!";
+  const fieldSelectTriggerClass =
+    "h-9 w-full px-4 cursor-pointer bg-transparent! hover:bg-sidebar-accent! transition duration-250 text-xs ring-white/8!";
+  const fieldSelectContentClass = "mt-11 w-full";
+  const fieldSelectItemClass = "whitespace-normal cursor-pointer";
 
   return (
-    <div className="flex flex-col w-full max-w-2xl">
+    <div className="flex flex-col w-full max-w-2xl min-h-screen h-full">
       <div className="rounded-sm overflow-hidden ring-1 ring-white/8 bg-sidebar">
         {/* Header */}
         <div className="px-6 py-5">
@@ -1068,7 +1063,9 @@ function AddAccountStep() {
                     </p>
                     <p className="text-xs leading-relaxed text-white/45">
                       {demoAccounts.length > 0
-                        ? `Replace ${demoAccounts.length} seeded demo workspace${
+                        ? `Replace ${
+                            demoAccounts.length
+                          } seeded demo workspace${
                             demoAccounts.length === 1 ? "" : "s"
                           } with a fresh fully-populated trading environment.`
                         : "Create a fully-seeded demo account with historical trades and live positions."}
@@ -1160,8 +1157,8 @@ function AddAccountStep() {
                       Tradovate CSV import currently supports bundle uploads.
                       Start with{" "}
                       <span className="text-white/65">Performance</span> or{" "}
-                      <span className="text-white/65">Position History</span>{" "}
-                      as the base report, then add{" "}
+                      <span className="text-white/65">Position History</span> as
+                      the base report, then add{" "}
                       <span className="text-white/65">
                         {selectedBrokerSupplementalReports
                           .filter(
@@ -1190,7 +1187,7 @@ function AddAccountStep() {
                       <SelectTrigger
                         className={cn(
                           fieldSelectTriggerClass,
-                          "w-20 rounded-r-none"
+                          "w-18 rounded-r-none border-none! ring ring-white/10"
                         )}
                         style={{ borderRightWidth: 0 }}
                       >

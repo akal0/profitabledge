@@ -6,7 +6,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { cn } from "@/lib/utils";
 
 export const APP_TOOLTIP_SURFACE_CLASS =
-  "rounded-md border border-white/5 bg-sidebar text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.35)]";
+  "rounded-md border border-white/5 bg-sidebar text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.1)]";
 
 export const APP_TOOLTIP_CONTENT_CLASS =
   "animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit origin-(--radix-tooltip-content-transform-origin) px-3 py-2 text-xs text-balance";
@@ -84,9 +84,4 @@ function TooltipContent({
   );
 }
 
-export {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-  TooltipProvider,
-};
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };

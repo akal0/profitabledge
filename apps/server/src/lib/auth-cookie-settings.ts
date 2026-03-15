@@ -18,6 +18,8 @@ function toOrigin(value: string | undefined | null) {
 
 export function resolveAuthBaseUrl(env: NodeJS.ProcessEnv = process.env) {
   return (
+    normalizeOrigin(env.WEB_URL) ||
+    normalizeOrigin(env.NEXT_PUBLIC_WEB_URL) ||
     normalizeOrigin(env.BETTER_AUTH_URL) ||
     normalizeOrigin(env.NEXT_PUBLIC_SERVER_URL) ||
     "http://localhost:3000"

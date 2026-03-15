@@ -26,6 +26,7 @@ This repo is a Bun + Turborepo monorepo for a trading analytics product with a w
 Main responsibilities:
 
 - page routing
+- same-origin proxying of browser auth and tRPC traffic into the server app for split deployments
 - temporary root beta-gate and waitlist capture before authenticated onboarding
 - dashboard shell and navigation
 - React Query + tRPC client usage
@@ -38,6 +39,8 @@ Key files:
 - `apps/web/src/app/layout.tsx`
 - `apps/web/src/components/providers.tsx`
 - `apps/web/src/utils/trpc.ts`
+- `apps/web/src/app/trpc/[trpc]/route.ts`
+- `apps/web/src/app/api/auth/[...all]/route.ts`
 - `apps/web/src/app/(dashboard)/layout.tsx`
 
 ### Server app
@@ -57,6 +60,8 @@ Key files:
 - `apps/server/src/app/trpc/[trpc]/route.ts`
 - `apps/server/src/routers/index.ts`
 - `apps/server/src/lib/context.ts`
+- `apps/server/src/lib/auth.ts`
+- `apps/server/src/lib/auth-cookie-settings.ts`
 - `apps/server/src/lib/trpc.ts`
 - `apps/server/src/db/index.ts`
 - `apps/server/src/app/api/health/route.ts`
@@ -75,10 +80,16 @@ For most app features, the flow is:
 
 1. route page in `apps/web/src/app/...`
 2. feature components/hooks in `apps/web/src/features/...`
-3. tRPC client call via `apps/web/src/utils/trpc.ts`
+3. browser request through the web-origin proxy in `apps/web/src/app/trpc/[trpc]/route.ts`
 4. router procedure in `apps/server/src/routers/...`
 5. domain logic in `apps/server/src/lib/...`
 6. database access through `apps/server/src/db/...`
+
+Auth follows the same split-deployment rule:
+
+1. browser auth action hits `apps/web/src/app/api/auth/[...all]/route.ts`
+2. the web app forwards the request to the server auth handler
+3. Better Auth resolves its public base URL from the web origin in split deployments, so callbacks and session cookies stay first-party to the browser-facing app origin
 
 Example:
 

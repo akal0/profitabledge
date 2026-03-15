@@ -2,10 +2,13 @@ import { createAuthClient } from "better-auth/react";
 import { getOriginCandidates, rewriteRequestToBase } from "@profitabledge/platform";
 
 function inferAuthBases(): string[] {
+  if (typeof window !== "undefined") {
+    return [window.location.origin];
+  }
+
   const bases = getOriginCandidates({
     envUrl: process.env.NEXT_PUBLIC_SERVER_URL,
     fallbackPort: 3000,
-    location: typeof window !== "undefined" ? window.location : undefined,
   });
 
   if (bases.length === 0) {

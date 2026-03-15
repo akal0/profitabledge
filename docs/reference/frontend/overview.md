@@ -13,6 +13,10 @@ The frontend lives in `apps/web` and is a Next.js App Router application using R
 - `apps/web/src/utils/trpc.ts`
   - shared tRPC clients, query client, and `trpcOptions`
   - typed through `@profitabledge/contracts/trpc`, a source TypeScript module in `packages/contracts/src/trpc.ts` that points at the generated contract surface under `packages/contracts/generated/server`
+- `apps/web/src/app/trpc/[trpc]/route.ts`
+  - same-origin browser proxy for tRPC requests into the server app
+- `apps/web/src/app/api/auth/[...all]/route.ts`
+  - same-origin browser proxy for Better Auth routes into the server app
 - `apps/web/src/app/(dashboard)/layout.tsx`
   - dashboard shell composition, sidebar, header, breadcrumbs, account context, and private-beta access redirect back to onboarding when billing state blocks dashboard access
 
@@ -199,6 +203,7 @@ At runtime, browser-side server origin resolution is intentionally stricter than
 - set `NEXT_PUBLIC_SERVER_URL` to the bare server origin, for example `https://profitabledge-server.vercel.app`
 - trailing slashes are normalized away before tRPC/auth/proxy requests are built
 - localhost/LAN failover is only kept for local browser sessions; production browser sessions stay pinned to the configured server origin instead of retrying `localhost`
+- browser auth and tRPC traffic now terminates on the web app origin first (`/api/auth/...` and `/trpc/...`) and is proxied server-side, so split deployments do not depend on third-party browser cookies between separate `*.vercel.app` project domains
 
 ## When working on a new section
 

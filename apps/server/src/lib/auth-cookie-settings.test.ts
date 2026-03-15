@@ -36,12 +36,13 @@ describe("auth cookie settings", () => {
   it("normalizes the auth base url from env", () => {
     const env = {
       ...process.env,
+      WEB_URL: "https://profitabledge-web.vercel.app/",
       BETTER_AUTH_URL: "https://profitabledge-server.vercel.app/",
       NEXT_PUBLIC_SERVER_URL: "https://fallback.example.com/",
     };
 
     expect(
       resolveAuthBaseUrl(env)
-    ).toBe("https://profitabledge-server.vercel.app");
+    ).toBe("https://profitabledge-web.vercel.app");
   });
 });

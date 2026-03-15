@@ -12,10 +12,13 @@ import { toast } from "sonner";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
 
 function getCandidateBases(): string[] {
+  if (typeof window !== "undefined") {
+    return [window.location.origin];
+  }
+
   const candidates = getOriginCandidates({
     envUrl: process.env.NEXT_PUBLIC_SERVER_URL,
     fallbackPort: 3000,
-    location: typeof window !== "undefined" ? window.location : undefined,
   });
 
   if (candidates.length === 0) {

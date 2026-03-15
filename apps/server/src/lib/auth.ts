@@ -3,13 +3,20 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
 import * as schema from "../db/schema/auth";
 import { getAllowedWebOrigins } from "./origins";
+import {
+  getAuthCookieSettings,
+  resolveAuthBaseUrl,
+} from "./auth-cookie-settings";
+
+const trustedOrigins = getAllowedWebOrigins();
+const baseURL = resolveAuthBaseUrl();
 
 const authOptions = {
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: schema,
   }),
-  trustedOrigins: getAllowedWebOrigins(),
+  trustedOrigins,
   emailAndPassword: {
     enabled: true,
   },
@@ -26,10 +33,11 @@ const authOptions = {
     },
   },
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL:
-    process.env.BETTER_AUTH_URL ||
-    process.env.NEXT_PUBLIC_SERVER_URL ||
-    "http://localhost:3000",
+  baseURL,
+  advanced: getAuthCookieSettings({
+    baseUrl: baseURL,
+    allowedWebOrigins: trustedOrigins,
+  }),
 } satisfies BetterAuthOptions;
 
 // Type annotation to avoid TS2742 error with project references

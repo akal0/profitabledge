@@ -496,7 +496,7 @@ function OnboardingPageContent() {
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col overflow-x-hidden bg-sidebar">
+    <div className="flex h-screen w-full flex-col overflow-x-hidden bg-sidebar">
       <div className="flex flex-col">
         <div className="flex w-full flex-col gap-4 px-4 py-4 text-xs sm:px-6 lg:px-10 xl:px-25 xl:h-20 xl:flex-row xl:items-center xl:justify-between xl:gap-6">
           <p className="font-bold">profitabledge</p>
@@ -544,7 +544,7 @@ function OnboardingPageContent() {
       <div className="flex-1 overflow-y-auto">
         <div
           className={cn(
-            "mx-auto flex w-full flex-col items-center gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 xl:px-25",
+            "mx-auto flex min-h-full w-full flex-col items-center justify-center gap-8 px-4 py-6 sm:px-6 sm:py-8 lg:px-10 xl:px-25",
             currentStep === 2 ? "max-w-[92rem]" : "max-w-7xl"
           )}
         >
@@ -916,7 +916,7 @@ function AddAccountStep() {
   const fieldSelectItemClass = "whitespace-normal cursor-pointer";
 
   return (
-    <div className="flex flex-col w-full max-w-2xl min-h-screen h-full">
+    <div className="flex h-full w-full max-w-2xl flex-col">
       <div className="rounded-sm overflow-hidden ring-1 ring-white/8 bg-sidebar">
         {/* Header */}
         <div className="px-6 py-5">

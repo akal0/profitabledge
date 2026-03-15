@@ -12,7 +12,7 @@ The frontend lives in `apps/web` and is a Next.js App Router application using R
   - React Query, tRPC, theme, tooltip, and toaster providers
 - `apps/web/src/utils/trpc.ts`
   - shared tRPC clients, query client, and `trpcOptions`
-  - typed against the generated contract surface in `packages/contracts/generated/server`
+  - typed through `@profitabledge/contracts/trpc`, a source TypeScript module in `packages/contracts/src/trpc.ts` that points at the generated contract surface under `packages/contracts/generated/server`
 - `apps/web/src/app/(dashboard)/layout.tsx`
   - dashboard shell composition, sidebar, header, breadcrumbs, account context, and private-beta access redirect back to onboarding when billing state blocks dashboard access
 

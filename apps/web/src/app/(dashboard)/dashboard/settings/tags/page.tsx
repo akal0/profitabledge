@@ -51,7 +51,7 @@ export default function TagsSettingsPage() {
           <div className="flex items-center gap-2">
             <Clock className="size-4 text-blue-400" />
             <Label className="text-sm text-white/80 font-medium">
-              Session Tags
+              Session tags
             </Label>
           </div>
           <p className="text-xs text-white/40 mt-0.5">

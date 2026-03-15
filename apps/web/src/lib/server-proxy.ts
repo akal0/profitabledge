@@ -33,7 +33,17 @@ function buildResponseHeaders(
   const headers = new Headers();
 
   response.headers.forEach((value, key) => {
-    if (key.toLowerCase() === "set-cookie") {
+    const normalizedKey = key.toLowerCase();
+
+    // `fetch` may transparently decode upstream responses, so forwarding the
+    // original compression and transfer headers can make the browser try to
+    // decode an already-decoded body.
+    if (
+      normalizedKey === "set-cookie" ||
+      normalizedKey === "content-encoding" ||
+      normalizedKey === "content-length" ||
+      normalizedKey === "transfer-encoding"
+    ) {
       return;
     }
     headers.append(key, value);

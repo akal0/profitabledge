@@ -209,6 +209,8 @@ At runtime, browser-side server origin resolution is intentionally stricter than
 - trailing slashes are normalized away before tRPC/auth/proxy requests are built
 - localhost/LAN failover is only kept for local browser sessions; production browser sessions stay pinned to the configured server origin instead of retrying `localhost`
 - browser auth and tRPC traffic now terminates on the web app origin first (`/api/auth/...` and `/trpc/...`) and is proxied server-side, so split deployments do not depend on third-party browser cookies between separate `*.vercel.app` project domains
+- the server proxy strips upstream compression and transfer headers before returning proxied auth/tRPC responses, so browsers do not attempt to decode already-decoded bodies on split deployments
+- the assistant surface lives at `/assistant`, and the legacy `/ai` path is kept as a redirect so stale bundles or old navigation links do not 404 in production
 
 ## When working on a new section
 

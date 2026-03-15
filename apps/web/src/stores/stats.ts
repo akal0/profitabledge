@@ -21,6 +21,7 @@ export type AccountStats = {
   isVerified?: boolean;
   liveBalance?: number | null;
   liveEquity?: number | null;
+  brokerType?: string | null;
   lastSyncedAt?: string | null;
   isLiveDataFresh?: boolean;
 };

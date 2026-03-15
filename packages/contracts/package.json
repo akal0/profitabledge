@@ -1,0 +1,13 @@
+{
+  "name": "@profitabledge/contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "../../node_modules/.bin/tsc -p tsconfig.json --noEmit --pretty false"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./uploadthing": "./src/uploadthing.ts",
+    "./trpc": "./src/trpc.d.ts"
+  }
+}

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { resetServerEnvForTests } from "../env";
-import { assertWorkerSecret } from "./worker-control";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -19,11 +18,13 @@ describe("assertWorkerSecret", () => {
     resetServerEnvForTests();
   });
 
-  it("accepts the configured worker secret", () => {
+  it("accepts the configured worker secret", async () => {
+    const { assertWorkerSecret } = await import("./worker-control");
     expect(() => assertWorkerSecret("worker-secret")).not.toThrow();
   });
 
-  it("rejects an invalid worker secret", () => {
+  it("rejects an invalid worker secret", async () => {
+    const { assertWorkerSecret } = await import("./worker-control");
     expect(() => assertWorkerSecret("wrong-secret")).toThrow("Invalid worker secret");
   });
 });

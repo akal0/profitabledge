@@ -1,5 +1,5 @@
 import { generateReactHelpers } from "@uploadthing/react";
-import type { OurFileRouter } from "../../../server/src/app/api/uploadthing/core";
+import type { OurFileRouter } from "@profitabledge/contracts/uploadthing";
 
 const baseEnv = (process.env.NEXT_PUBLIC_SERVER_URL || "").replace(/\/$/, "");
 if (!baseEnv) {

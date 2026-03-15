@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 interface BaseCalendarProps {
   className?: string;
+  fullWidth?: boolean;
 }
 
 type CalendarProps = ComponentProps<typeof CalendarRac> & BaseCalendarProps;
@@ -44,24 +45,41 @@ function CalendarHeader() {
   );
 }
 
-function CalendarGridComponent({ isRange = false }: { isRange?: boolean }) {
+function CalendarGridComponent({
+  isRange = false,
+  fullWidth = false,
+}: {
+  isRange?: boolean;
+  fullWidth?: boolean;
+}) {
   const now = today(getLocalTimeZone());
 
   return (
-    <CalendarGridRac>
+    <CalendarGridRac
+      className={cn(
+        "border-collapse",
+        fullWidth ? "w-full table-fixed" : "w-fit"
+      )}
+    >
       <CalendarGridHeaderRac>
         {(day) => (
-          <CalendarHeaderCellRac className="text-muted-foreground/80 size-9 rounded-none p-0 text-xs font-medium">
+          <CalendarHeaderCellRac
+            className={cn(
+              "text-muted-foreground/80 rounded-none p-0 text-xs font-medium",
+              fullWidth ? "h-9 w-full" : "size-9"
+            )}
+          >
             {day}
           </CalendarHeaderCellRac>
         )}
       </CalendarGridHeaderRac>
-      <CalendarGridBodyRac className="[&_td]:px-0 [&_td]:py-px">
+      <CalendarGridBodyRac className="[&_td]:cursor-pointer [&_td]:px-0 [&_td]:py-px">
         {(date) => (
           <CalendarCellRac
             date={date}
             className={cn(
-              "text-foreground data-hovered:bg-accent data-selected:bg-primary data-hovered:text-foreground data-selected:text-primary-foreground data-focus-visible:ring-ring/50 relative flex size-9 items-center justify-center rounded-none p-0 text-sm font-normal whitespace-nowrap [transition-property:color,background-color,border-radius,box-shadow] duration-150 outline-none data-disabled:pointer-events-none data-disabled:opacity-30 data-focus-visible:z-10 data-focus-visible:ring-[3px] data-unavailable:pointer-events-none data-unavailable:line-through data-unavailable:opacity-30 cursor-pointer",
+              "text-foreground data-hovered:bg-accent data-selected:bg-primary data-hovered:text-foreground data-selected:text-primary-foreground data-focus-visible:ring-ring/50 relative flex items-center justify-center rounded-none p-0 text-sm font-normal whitespace-nowrap [transition-property:color,background-color,border-radius,box-shadow] duration-150 outline-none data-disabled:pointer-events-none data-disabled:opacity-30 data-focus-visible:z-10 data-focus-visible:ring-[3px] data-unavailable:pointer-events-none data-unavailable:line-through data-unavailable:opacity-30 cursor-pointer",
+              fullWidth ? "h-9 w-full" : "size-9",
               // Range-specific styles
               isRange &&
                 "data-selected:bg-accent data-selected:text-foreground data-invalid:data-selection-end:bg-destructive data-invalid:data-selection-start:bg-destructive data-selection-end:bg-primary data-selection-start:bg-primary data-selection-end:text-primary-foreground data-selection-start:text-primary-foreground data-invalid:bg-red-100 data-selected:rounded-none data-selection-end:rounded-e-none data-invalid:data-selection-end:text-white data-selection-start:rounded-s-none data-invalid:data-selection-start:text-white",
@@ -81,30 +99,34 @@ function CalendarGridComponent({ isRange = false }: { isRange?: boolean }) {
   );
 }
 
-function Calendar({ className, ...props }: CalendarProps) {
+function Calendar({ className, fullWidth = false, ...props }: CalendarProps) {
   return (
     <CalendarRac
       {...props}
       className={composeRenderProps(className, (className) =>
-        cn("w-fit", className)
+        cn(fullWidth ? "w-full" : "w-fit", className)
       )}
     >
       <CalendarHeader />
-      <CalendarGridComponent />
+      <CalendarGridComponent fullWidth={fullWidth} />
     </CalendarRac>
   );
 }
 
-function RangeCalendar({ className, ...props }: RangeCalendarProps) {
+function RangeCalendar({
+  className,
+  fullWidth = false,
+  ...props
+}: RangeCalendarProps) {
   return (
     <RangeCalendarRac
       {...props}
       className={composeRenderProps(className, (className) =>
-        cn("w-fit", className)
+        cn(fullWidth ? "w-full" : "w-fit", className)
       )}
     >
       <CalendarHeader />
-      <CalendarGridComponent isRange />
+      <CalendarGridComponent isRange fullWidth={fullWidth} />
     </RangeCalendarRac>
   );
 }

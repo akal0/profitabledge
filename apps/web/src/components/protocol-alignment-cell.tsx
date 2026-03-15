@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, Minus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   TRADE_IDENTIFIER_PILL_CLASS,
   TRADE_IDENTIFIER_TONES,
@@ -14,6 +15,7 @@ import {
 interface ProtocolAlignmentCellProps {
   tradeId: string;
   protocolAlignment: "aligned" | "against" | "discretionary" | null | undefined;
+  isLive?: boolean;
 }
 
 const ALIGNMENT_STATES = {
@@ -46,13 +48,16 @@ const ALIGNMENT_STATES = {
 export function ProtocolAlignmentCell({
   tradeId,
   protocolAlignment,
+  isLive = false,
 }: ProtocolAlignmentCellProps) {
   const currentState = protocolAlignment ?? "null";
   const state = ALIGNMENT_STATES[currentState as keyof typeof ALIGNMENT_STATES];
   const Icon = state.icon;
 
   const updateMutation = useMutation({
-    mutationFn: async (alignment: "aligned" | "against" | "discretionary" | null) => {
+    mutationFn: async (
+      alignment: "aligned" | "against" | "discretionary" | null
+    ) => {
       const result = await trpcClient.trades.updateProtocolAlignment.mutate({
         tradeId,
         protocolAlignment: alignment,
@@ -69,6 +74,11 @@ export function ProtocolAlignmentCell({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    if (isLive) {
+      toast.error("You can't edit a live trade.");
+      return;
+    }
 
     // Cycle through states: not set → aligned → against → discretionary → not set
     const nextAlignment = state.next;

@@ -70,6 +70,17 @@ type PendingCsvImportResolution = {
   warnings: string[];
 };
 
+type DemoWorkspaceResult = {
+  tradeCount: number;
+  openTradeCount: number;
+  resetCount?: number;
+  account?: {
+    id: string;
+    name: string;
+    broker?: string | null;
+  };
+};
+
 export function AddAccountSheet({
   onAccountCreated,
   trigger,
@@ -237,17 +248,14 @@ export function AddAccountSheet({
   async function handleDemoWorkspace() {
     try {
       setSubmitting(true);
-      const result =
-        demoAccounts.length > 0
-          ? await trpcClient.accounts.resetDemoWorkspace.mutate()
-          : await trpcClient.accounts.createSampleAccount.mutate();
+      const result = (await (demoAccounts.length > 0
+        ? trpcClient.accounts.resetDemoWorkspace.mutate()
+        : trpcClient.accounts.createSampleAccount.mutate())) as DemoWorkspaceResult;
 
       await refreshAccounts();
 
       const resetCount =
-        typeof (result as any).resetCount === "number"
-          ? (result as any).resetCount
-          : 0;
+        typeof result.resetCount === "number" ? result.resetCount : 0;
 
       toast.success(
         demoAccounts.length > 0
@@ -267,11 +275,11 @@ export function AddAccountSheet({
         return;
       }
 
-      const createdAccount = result.account as {
-        id: string;
-        name: string;
-        broker?: string | null;
-      };
+      const createdAccount = result.account;
+      if (!createdAccount) {
+        toast.error("Demo account was created without account metadata");
+        return;
+      }
 
       onAccountCreated({
         id: createdAccount.id,

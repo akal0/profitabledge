@@ -504,6 +504,7 @@ export function DataTable<TData>({
       </tr>
     ),
     [
+      hasRowInteraction,
       isInteractiveTarget,
       onRowClick,
       onRowDoubleClick,

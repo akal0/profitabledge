@@ -8,3 +8,7 @@ __pycache__/
 *.pyc
 *.d.ts
 !next-env.d.ts
+mprocs.log
+services.zip
+apps/server/tsconfig.generate.*.json
+packages/contracts/src/*.js

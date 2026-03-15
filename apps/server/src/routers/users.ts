@@ -777,7 +777,9 @@ export const usersRouter = router({
         ? [input.accountId]
         : accounts.map((a) => a.id);
 
-      if (accountIds.length === 0) return { achievements: [], score: 0 };
+      if (accountIds.length === 0) {
+        return { achievements: [], earned: 0, total: 0, score: 0 };
+      }
 
       // Get all trades across accounts
       const trades = await db
@@ -785,7 +787,7 @@ export const usersRouter = router({
         .from(trade)
         .where(inArray(trade.accountId, accountIds));
 
-      const pnls = trades.map((t) => parseFloat(t.netPnl?.toString() || "0"));
+      const pnls = trades.map((t) => parseFloat(t.profit?.toString() || "0"));
       const totalTrades = trades.length;
       const totalPnl = pnls.reduce((s, p) => s + p, 0);
       const wins = pnls.filter((p) => p > 0).length;
@@ -804,7 +806,7 @@ export const usersRouter = router({
           (a, b) =>
             new Date(a.openTime!).getTime() - new Date(b.openTime!).getTime()
         )
-        .map((t) => parseFloat(t.netPnl?.toString() || "0"));
+        .map((t) => parseFloat(t.profit?.toString() || "0"));
       for (const p of sortedPnls) {
         if (p > 0) {
           currentWinStreak++;
@@ -818,7 +820,7 @@ export const usersRouter = router({
         if (!t.openTime) continue;
         const d = new Date(t.openTime).toISOString().split("T")[0];
         dailyPnls[d] =
-          (dailyPnls[d] || 0) + parseFloat(t.netPnl?.toString() || "0");
+          (dailyPnls[d] || 0) + parseFloat(t.profit?.toString() || "0");
       }
       let maxGreenStreak = 0;
       let currentGreenStreak = 0;

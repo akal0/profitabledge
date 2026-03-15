@@ -3,6 +3,40 @@ import { NextRequest, NextResponse } from "next/server";
 const TE_BASE = "https://api.tradingeconomics.com/calendar/country/all";
 const FF_BASE = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
 
+type TradingEconomicsItem = Record<string, unknown> & {
+  Date?: string;
+  ReferenceDate?: string;
+  Importance?: number | string;
+  Event?: string;
+  Category?: string;
+  Currency?: string;
+  Country?: string;
+  Actual?: string | number | null;
+  Forecast?: string | number | null;
+  TEForecast?: string | number | null;
+  Previous?: string | number | null;
+};
+
+type ForexFactoryItem = Record<string, unknown> & {
+  date?: string;
+  impact?: string;
+  title?: string;
+  country?: string;
+  actual?: string | number | null;
+  forecast?: string | number | null;
+  previous?: string | number | null;
+};
+
+type CalendarEvent = {
+  title: string;
+  country: string;
+  date: string;
+  impact: string;
+  actual: string | number | null;
+  forecast: string | number | null;
+  previous: string | number | null;
+};
+
 function parseDate(value: string | null, fallback: Date) {
   const parsed = value ? new Date(value) : fallback;
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
@@ -13,24 +47,29 @@ function formatDate(date: Date) {
 }
 
 function mapTradingEconomics(
-  data: unknown[],
+  data: TradingEconomicsItem[],
   startTime: number,
   endTime: number
-) {
+): CalendarEvent[] {
   return data
     .map((item) => {
-      const rawDate = item?.Date || item?.ReferenceDate || null;
+      const rawDate =
+        typeof item.Date === "string"
+          ? item.Date
+          : typeof item.ReferenceDate === "string"
+          ? item.ReferenceDate
+          : null;
       const parsedDate = rawDate ? new Date(rawDate) : null;
       if (!parsedDate || Number.isNaN(parsedDate.getTime())) return null;
       if (parsedDate.getTime() < startTime || parsedDate.getTime() > endTime) {
         return null;
       }
       const importance =
-        typeof item?.Importance === "number"
+        typeof item.Importance === "number"
           ? item.Importance
-          : Number(item?.Importance || 0);
+          : Number(item.Importance || 0);
       let impact = "Low";
-      const eventLabel = String(item?.Event || item?.Category || "");
+      const eventLabel = String(item.Event || item.Category || "");
       if (eventLabel.toLowerCase().includes("holiday")) {
         impact = "Holiday";
       } else if (importance >= 3) {
@@ -38,45 +77,45 @@ function mapTradingEconomics(
       } else if (importance === 2) {
         impact = "Medium";
       }
-      const currency = item?.Currency ? String(item.Currency) : "";
+      const currency = item.Currency ? String(item.Currency) : "";
       return {
-        title: item?.Event || item?.Category || "Untitled event",
-        country: currency || item?.Country || "Global",
+        title: String(item.Event || item.Category || "Untitled event"),
+        country: String(currency || item.Country || "Global"),
         date: parsedDate.toISOString(),
         impact,
-        actual: item?.Actual || null,
-        forecast: item?.Forecast || item?.TEForecast || null,
-        previous: item?.Previous || null,
+        actual: item.Actual ?? null,
+        forecast: item.Forecast ?? item.TEForecast ?? null,
+        previous: item.Previous ?? null,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is CalendarEvent => item !== null);
 }
 
 function mapForexFactory(
-  data: unknown[],
+  data: ForexFactoryItem[],
   startTime: number,
   endTime: number
-) {
+): CalendarEvent[] {
   return data
     .map((item) => {
-      const rawDate = item?.date || null;
+      const rawDate = typeof item.date === "string" ? item.date : null;
       const parsedDate = rawDate ? new Date(rawDate) : null;
       if (!parsedDate || Number.isNaN(parsedDate.getTime())) return null;
       if (parsedDate.getTime() < startTime || parsedDate.getTime() > endTime) {
         return null;
       }
-      const impact = String(item?.impact || "Low");
+      const impact = String(item.impact || "Low");
       return {
-        title: item?.title || "Untitled event",
-        country: item?.country || "Global",
+        title: String(item.title || "Untitled event"),
+        country: String(item.country || "Global"),
         date: parsedDate.toISOString(),
         impact,
-        actual: item?.actual || null,
-        forecast: item?.forecast || null,
-        previous: item?.previous || null,
+        actual: item.actual ?? null,
+        forecast: item.forecast ?? null,
+        previous: item.previous ?? null,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is CalendarEvent => item !== null);
 }
 
 export async function GET(request: NextRequest) {
@@ -140,8 +179,8 @@ export async function GET(request: NextRequest) {
       ffData = [];
     }
 
-    const teArray = Array.isArray(teData) ? teData : [];
-    const ffArray = Array.isArray(ffData) ? ffData : [];
+    const teArray = Array.isArray(teData) ? (teData as TradingEconomicsItem[]) : [];
+    const ffArray = Array.isArray(ffData) ? (ffData as ForexFactoryItem[]) : [];
 
     const teMapped = mapTradingEconomics(teArray, startTime, endTime);
     const ffMapped = mapForexFactory(ffArray, startTime, endTime);

@@ -9,7 +9,10 @@ import { createNotification } from "../lib/notifications";
 import { buildAutoPropAccountFields } from "../lib/prop-firm-detection";
 import { ensurePropChallengeLineageForAccount } from "../lib/prop-challenge-lineage";
 import { syncPropAccountState } from "../lib/prop-rule-monitor";
-import { parseBrokerCsvImportBundle } from "../lib/trade-import/csv/bundle";
+import {
+  parseBrokerCsvImportBundle,
+  type ParsedImportTrade,
+} from "../lib/trade-import/csv/bundle";
 import { loadDeletedImportedTradeMatchers } from "../lib/trade-import/deleted-imported-trades";
 import {
   buildImportedTradeCoreIdentityFingerprint,
@@ -146,7 +149,7 @@ async function applyParsedImportToExistingAccount(input: {
   }> = [];
   let suppressedDeletedTrades = 0;
 
-  parsedImport.trades.forEach((parsedTrade, index) => {
+  parsedImport.trades.forEach((parsedTrade: ParsedImportTrade, index: number) => {
     const tradeFingerprint = buildImportedTradeIdentityFingerprint(parsedTrade);
     const tradeCoreFingerprint =
       buildImportedTradeCoreIdentityFingerprint(parsedTrade);
@@ -498,7 +501,7 @@ export const uploadRouter = router({
         await ensurePropChallengeLineageForAccount(accountId);
       }
 
-      const inserts = parsedImport.trades.map((parsedTrade, index) =>
+      const inserts = parsedImport.trades.map((parsedTrade: ParsedImportTrade, index: number) =>
         buildImportedTradeInsertRecord({
           accountId,
           trade: parsedTrade,

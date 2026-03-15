@@ -93,7 +93,10 @@ export function EmotionTagger({
     { accountId: accountId || "", tradeId },
     { enabled: !!tradeId && !!accountId }
   );
-  const emotions = (emotionsRaw as TradeEmotionRecord[] | undefined) ?? [];
+  const emotions = useMemo(
+    () => (emotionsRaw as TradeEmotionRecord[] | undefined) ?? [],
+    [emotionsRaw]
+  );
 
   const tagMutation = aiApi.tagEmotion.useMutation({
     onSuccess: () => refetch(),

@@ -3,13 +3,16 @@ import BaseMediaUpload, { type BaseMediaUploadProps } from "./BaseMediaUpload";
 
 export type CsvUploadProps = Omit<
   BaseMediaUploadProps,
-  "accept" | "multiple"
+  "accept"
 > & {
   onFileChange?: (file: File | null) => void;
+  onFilesChange?: (files: File[]) => void;
 };
 
 const CsvUpload: React.FC<CsvUploadProps> = ({
   onFileChange,
+  onFilesChange,
+  multiple = false,
   maxSize,
   disabled,
   className,
@@ -17,13 +20,16 @@ const CsvUpload: React.FC<CsvUploadProps> = ({
   return (
     <BaseMediaUpload
       accept=".csv,text/csv"
-      multiple={false}
+      multiple={multiple}
       maxSize={maxSize}
       disabled={disabled}
       className={className}
       title="Upload CSV"
       description={undefined}
-      onFilesChange={(files) => onFileChange?.(files[0] ?? null)}
+      onFilesChange={(files) => {
+        onFileChange?.(files[0] ?? null);
+        onFilesChange?.(files);
+      }}
     />
   );
 };

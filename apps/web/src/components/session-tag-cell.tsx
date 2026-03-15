@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import {
   ColorPicker,
   ColorPickerSelection,
@@ -27,14 +28,19 @@ import { useAccountStore } from "@/stores/account";
 import { toast } from "sonner";
 import {
   getTradeIdentifierColorStyle,
-  TRADE_IDENTIFIER_BUTTON_CLASS,
   TRADE_IDENTIFIER_PILL_CLASS,
 } from "@/components/trades/trade-identifier-pill";
+import {
+  getTradeTagColorButtonStyle,
+  getTradeTagColorSwatchStyle,
+  tradeTagEditorStyles,
+} from "@/components/trades/trade-tag-editor-styles";
 
 interface SessionTagCellProps {
   tradeId: string;
   sessionTag: string | null | undefined;
   sessionTagColor: string | null | undefined;
+  isLive?: boolean;
 }
 
 type SessionTagOption = {
@@ -57,6 +63,7 @@ export function SessionTagCell({
   tradeId,
   sessionTag,
   sessionTagColor,
+  isLive = false,
 }: SessionTagCellProps) {
   const [open, setOpen] = React.useState(false);
   const [tagName, setTagName] = React.useState(sessionTag ?? "");
@@ -153,7 +160,16 @@ export function SessionTagCell({
   }, [matchedExistingTag, isColorDirty, selectedColor]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen && isLive) {
+          toast.error("You can't edit a live trade.");
+          return;
+        }
+        setOpen(nextOpen);
+      }}
+    >
       <PopoverTrigger asChild>
         <div
           className="cursor-pointer"
@@ -167,10 +183,7 @@ export function SessionTagCell({
           {sessionTag && sessionTagColor ? (
             <Badge
               style={getTradeIdentifierColorStyle(sessionTagColor)}
-              className={cn(
-                TRADE_IDENTIFIER_PILL_CLASS,
-                "hover:opacity-90"
-              )}
+              className={cn(TRADE_IDENTIFIER_PILL_CLASS, "hover:opacity-90")}
             >
               <TagIcon size={12} />
               <span className="max-w-[12rem] truncate">{sessionTag}</span>
@@ -179,9 +192,9 @@ export function SessionTagCell({
             <Button
               variant="ghost"
               size="sm"
-              className={cn(TRADE_IDENTIFIER_BUTTON_CLASS, "gap-1.5")}
+              className={tradeTagEditorStyles.addButtonClass}
             >
-              <Plus className="mb-0.5 size-3.5" />
+              <Plus className="mb-0.5 size-3" />
               Add session
             </Button>
           )}
@@ -189,21 +202,24 @@ export function SessionTagCell({
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-80 bg-sidebar border border-white/5 rounded-none text-white/80"
+        className={tradeTagEditorStyles.popoverContentClass}
         align="start"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div className="space-y-4">
+        <div className={tradeTagEditorStyles.sectionClass}>
           <div className="space-y-3">
-            <Label htmlFor="session-tag-name" className="text-xs text-white/70">
+            <Label
+              htmlFor="session-tag-name"
+              className={tradeTagEditorStyles.labelClass}
+            >
               Session name
             </Label>
             <Input
               id="session-tag-name"
               placeholder="e.g., London, New York, Asia..."
               value={tagName}
-              className="bg-sidebar border-white/5 rounded-none text-white/80 placeholder:text-white/30"
+              className={tradeTagEditorStyles.inputClass}
               onChange={(e) => {
                 const nextValue = e.target.value;
                 setTagName(nextValue);
@@ -223,10 +239,15 @@ export function SessionTagCell({
               }}
             />
           </div>
+        </div>
 
-          {sessionTags && sessionTags.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-xs text-white/70">Existing sessions</Label>
+        {sessionTags && sessionTags.length > 0 && (
+          <>
+            <Separator className={tradeTagEditorStyles.separatorClass} />
+            <div className={tradeTagEditorStyles.sectionClass}>
+              <Label className={tradeTagEditorStyles.labelClass}>
+                Existing sessions
+              </Label>
               <div className="flex flex-wrap gap-2">
                 {sessionTags.map((tag) => {
                   const isActive =
@@ -236,8 +257,8 @@ export function SessionTagCell({
                       key={tag.name}
                       type="button"
                       className={cn(
-                        "flex items-center gap-2 border border-white/5 bg-sidebar px-2 py-1 text-xs text-white/70 transition-colors hover:bg-sidebar-accent",
-                        isActive && "bg-sidebar-accent text-white"
+                        tradeTagEditorStyles.optionChipClass,
+                        isActive && tradeTagEditorStyles.optionChipActiveClass
                       )}
                       onClick={() => {
                         setTagName(tag.name);
@@ -247,8 +268,8 @@ export function SessionTagCell({
                       }}
                     >
                       <span
-                        className="h-2.5 w-2.5 border border-white/20"
-                        style={{ backgroundColor: tag.color }}
+                        className={tradeTagEditorStyles.colorSwatchClass}
+                        style={getTradeTagColorSwatchStyle(tag.color)}
                       />
                       {tag.name}
                     </button>
@@ -256,22 +277,28 @@ export function SessionTagCell({
                 })}
               </div>
             </div>
-          )}
+          </>
+        )}
 
+        <Separator className={tradeTagEditorStyles.separatorClass} />
+
+        <div className={tradeTagEditorStyles.sectionClass}>
           <div className="space-y-3">
-            <Label className="text-xs text-white/70">Color</Label>
+            <Label className={tradeTagEditorStyles.labelClass}>Color</Label>
             <div className="flex flex-wrap gap-2">
               {DEFAULT_SESSION_COLORS.map((color, index) => (
                 <button
                   key={`${color}-${index}`}
                   type="button"
                   className={cn(
-                    "w-8 h-8 rounded-none border-2 transition-all cursor-pointer",
+                    tradeTagEditorStyles.colorButtonClass,
                     selectedColor === color
-                      ? "border-white/100 scale-110"
-                      : "border-white/5 hover:border-foreground/50"
+                      ? tradeTagEditorStyles.colorButtonActiveClass
+                      : tradeTagEditorStyles.colorButtonInactiveClass
                   )}
-                  style={{ backgroundColor: color }}
+                  style={getTradeTagColorButtonStyle(color, {
+                    active: selectedColor === color,
+                  })}
                   onClick={() => {
                     setSelectedColor(color);
                     setShowColorPicker(false);
@@ -282,10 +309,10 @@ export function SessionTagCell({
               <button
                 type="button"
                 className={cn(
-                  "w-8 h-8 rounded-none border border-white/5 flex items-center justify-center transition-all text-white/70",
+                  tradeTagEditorStyles.colorCustomButtonClass,
                   showColorPicker
-                    ? "border-white/20 bg-sidebar-accent text-white"
-                    : "bg-sidebar hover:bg-sidebar-accent"
+                    ? "border-white/15 bg-sidebar-accent/80 text-white"
+                    : ""
                 )}
                 onClick={() => setShowColorPicker(!showColorPicker)}
               >
@@ -294,7 +321,12 @@ export function SessionTagCell({
             </div>
 
             {showColorPicker && (
-              <div className="mt-4 space-y-3">
+              <div
+                className={cn(
+                  "mt-4 space-y-3",
+                  tradeTagEditorStyles.colorPickerPanelClass
+                )}
+              >
                 <ColorPicker
                   value={selectedColor}
                   onChange={(rgba) => {
@@ -316,38 +348,49 @@ export function SessionTagCell({
               </div>
             )}
           </div>
+        </div>
 
-          <div className="flex gap-2 pt-2">
-            {sessionTag && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleRemove}
-                disabled={updateMutation.isPending}
-                className="border border-white/5 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 rounded-none text-xs"
-              >
-                Remove
-              </Button>
+        <Separator className={tradeTagEditorStyles.separatorClass} />
+
+        <div className={tradeTagEditorStyles.footerClass}>
+          {sessionTag ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleRemove}
+              disabled={updateMutation.isPending}
+              className={cn(
+                tradeTagEditorStyles.footerButtonClass,
+                tradeTagEditorStyles.destructiveButtonClass
+              )}
+            >
+              Remove
+            </Button>
+          ) : null}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleSave}
+            disabled={updateMutation.isPending}
+            className={cn(
+              tradeTagEditorStyles.footerButtonClass,
+              tradeTagEditorStyles.primaryButtonClass
             )}
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleSave}
-              disabled={updateMutation.isPending}
-              className="ml-auto border border-white/5 bg-sidebar-accent text-white hover:bg-sidebar-accent/80 rounded-none text-xs"
-            >
-              {updateMutation.isPending ? "Saving..." : "Save"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setOpen(false)}
-              disabled={updateMutation.isPending}
-              className="border border-white/5 bg-transparent text-white/70 hover:bg-sidebar-accent rounded-none text-xs"
-            >
-              Cancel
-            </Button>
-          </div>
+          >
+            {updateMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpen(false)}
+            disabled={updateMutation.isPending}
+            className={cn(
+              tradeTagEditorStyles.footerButtonClass,
+              tradeTagEditorStyles.secondaryButtonClass
+            )}
+          >
+            Cancel
+          </Button>
         </div>
       </PopoverContent>
     </Popover>

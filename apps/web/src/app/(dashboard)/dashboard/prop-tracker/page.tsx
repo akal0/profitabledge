@@ -42,11 +42,7 @@ const HEADER_BADGE_CLASS = "h-7 rounded-sm px-1.5 text-[10px] font-medium";
 const FTMO_PROP_FIRM_ID = "ftmo";
 const FTMO_IMAGE_SRC = "/brokers/FTMO.png";
 const GOALS_SURFACE_OUTER_CLASS =
-<<<<<<< Updated upstream
-  "group flex flex-col rounded-lg border border-white/5 bg-sidebar p-1";
-=======
   "group flex flex-col rounded-sm ring ring-white/5 bg-sidebar p-1.5";
->>>>>>> Stashed changes
 const GOALS_SURFACE_INNER_CLASS =
   "flex flex-1 flex-col rounded-sm bg-white ring ring-white/5 transition-all duration-250 dark:bg-sidebar-accent dark:group-hover:brightness-120";
 const GOALS_PANEL_HEADER_CLASS =
@@ -179,15 +175,6 @@ function OverviewPanel({
   return (
     <div className={GOALS_SURFACE_OUTER_CLASS}>
       <div className={cn(GOALS_SURFACE_INNER_CLASS, "h-full")}>
-<<<<<<< Updated upstream
-        <div className={cn(GOALS_PANEL_HEADER_CLASS, "justify-between")}>
-          <div className="flex min-w-0 flex-1 items-start gap-1.5">
-            <Icon className="mt-0.5 h-4 w-4 shrink-0 text-white/50 transition-all duration-250 group-hover:text-white" />
-            <div className="min-w-0">
-              <h2 className="text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
-                {title}
-              </h2>
-=======
         <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-5">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-sm ring ring-white/5 bg-sidebar p-2">
@@ -195,7 +182,6 @@ function OverviewPanel({
             </div>
             <div>
               <h2 className="text-sm font-semibold text-white">{title}</h2>
->>>>>>> Stashed changes
               <p className="mt-0.5 text-xs text-white/40">{description}</p>
             </div>
           </div>
@@ -704,11 +690,7 @@ export default function PropTrackerIndexPage() {
           {[1, 2, 3, 4].map((key) => (
             <div
               key={key}
-<<<<<<< Updated upstream
-              className="rounded-lg border border-white/5 bg-sidebar p-1"
-=======
               className="rounded-sm ring ring-white/5 bg-sidebar p-1.5"
->>>>>>> Stashed changes
             >
               <div className="h-28 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
             </div>
@@ -719,11 +701,7 @@ export default function PropTrackerIndexPage() {
           {[1, 2].map((key) => (
             <div
               key={key}
-<<<<<<< Updated upstream
-              className="rounded-lg border border-white/5 bg-sidebar p-1"
-=======
               className="rounded-sm ring ring-white/5 bg-sidebar p-1.5"
->>>>>>> Stashed changes
             >
               <div className="h-56 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
             </div>

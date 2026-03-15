@@ -28,8 +28,8 @@ export default function AchievementsPage() {
   }
 
   const achievements = data?.achievements || [];
-  const earned = data?.earned || 0;
-  const total = data?.total || 0;
+  const earned = data && "earned" in data ? data.earned : 0;
+  const total = data && "total" in data ? data.total : achievements.length;
   const progressPct = total > 0 ? (earned / total) * 100 : 0;
 
   return (

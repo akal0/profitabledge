@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   propChallengeInstance,
@@ -359,6 +359,7 @@ export async function listContinuablePropChallenges(userId: string) {
           name: true,
           broker: true,
           propCurrentPhase: true,
+          propPhaseStatus: true,
         },
       },
       stageAccounts: {
@@ -674,6 +675,55 @@ export async function pausePropChallengeForAccount(accountId: string) {
   }
 
   return account.propChallengeInstanceId;
+}
+
+export async function deleteOrphanedPropChallengeInstances(
+  challengeInstanceIds: string[]
+) {
+  const uniqueIds = Array.from(
+    new Set(challengeInstanceIds.filter((id): id is string => Boolean(id)))
+  );
+
+  if (!uniqueIds.length) {
+    return 0;
+  }
+
+  let deletedCount = 0;
+
+  for (const challengeInstanceId of uniqueIds) {
+    const [stageCountRow] = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+      })
+      .from(propChallengeStageAccount)
+      .where(
+        eq(propChallengeStageAccount.challengeInstanceId, challengeInstanceId)
+      );
+
+    const remainingStageCount = Number(stageCountRow?.count ?? 0);
+    if (remainingStageCount > 0) {
+      continue;
+    }
+
+    const [accountCountRow] = await db
+      .select({
+        count: sql<number>`count(*)::int`,
+      })
+      .from(tradingAccount)
+      .where(eq(tradingAccount.propChallengeInstanceId, challengeInstanceId));
+
+    const remainingAccountCount = Number(accountCountRow?.count ?? 0);
+    if (remainingAccountCount > 0) {
+      continue;
+    }
+
+    await db
+      .delete(propChallengeInstance)
+      .where(eq(propChallengeInstance.id, challengeInstanceId));
+    deletedCount += 1;
+  }
+
+  return deletedCount;
 }
 
 export async function getPropChallengeLineageForAccount(accountId: string) {

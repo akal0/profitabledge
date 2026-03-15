@@ -3,13 +3,13 @@
 import React, { useState, useRef } from "react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { trpc } from "@/utils/trpc";
 import {
@@ -19,7 +19,7 @@ import {
 } from "./pnl-card-renderer";
 import { toPng, toJpeg } from "html-to-image";
 import { toast } from "sonner";
-import { Copy, Download, Share2, Upload, Sparkles } from "lucide-react";
+import { Copy, Download, Share2, Upload, X } from "lucide-react";
 
 interface ShareCardDialogProps {
   open: boolean;
@@ -191,227 +191,246 @@ export function ShareCardDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-7xl max-h-[95vh] overflow-hidden flex flex-col"
+        showCloseButton={false}
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-7xl"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Share2 className="w-5 h-5" />
-            Share PnL Card
-          </DialogTitle>
-        </DialogHeader>
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80 max-h-[95vh]">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <Share2 className="h-3.5 w-3.5 text-white/60" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-white">Share PnL Card</div>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">Customize and share your trade result</p>
+            </div>
+            <DialogClose asChild>
+              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            </DialogClose>
+          </div>
+          <Separator />
 
-        <div
-          className="flex flex-col gap-6 flex-1 overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          {/* Top: Preview - Full height with 3:4 aspect ratio */}
-          <div className="flex-1 flex items-center justify-center bg-black/20 rounded-lg overflow-hidden">
-            <div className="h-full flex items-center justify-center p-4">
-              <div
-                className="h-full flex items-center justify-center"
-                style={{ aspectRatio: "3/4" }}
-              >
-                <div className="scale-[0.55] origin-center">
-                  <PnlCardRenderer
-                    ref={cardRef}
-                    data={tradeData}
-                    config={{ ...config, customText }}
-                  />
+          {/* Body */}
+          <div
+            className="flex flex-col gap-6 flex-1 overflow-y-auto px-5 py-4"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {/* Top: Preview - Full height with 3:4 aspect ratio */}
+            <div className="flex-1 flex items-center justify-center bg-black/20 rounded-lg overflow-hidden">
+              <div className="h-full flex items-center justify-center p-4">
+                <div
+                  className="h-full flex items-center justify-center"
+                  style={{ aspectRatio: "3/4" }}
+                >
+                  <div className="scale-[0.55] origin-center">
+                    <PnlCardRenderer
+                      ref={cardRef}
+                      data={tradeData}
+                      config={{ ...config, customText }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Bottom: Customization */}
-          <div className="space-y-4 overflow-y-auto">
-            <Tabs defaultValue="templates" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="templates">Templates</TabsTrigger>
-                <TabsTrigger value="gradients">Gradients</TabsTrigger>
-                <TabsTrigger value="custom">Custom</TabsTrigger>
-              </TabsList>
+            {/* Bottom: Customization */}
+            <div className="space-y-4 overflow-y-auto">
+              <Tabs defaultValue="templates" className="w-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="templates">Templates</TabsTrigger>
+                  <TabsTrigger value="gradients">Gradients</TabsTrigger>
+                  <TabsTrigger value="custom">Custom</TabsTrigger>
+                </TabsList>
 
-              <TabsContent value="templates" className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {templates?.map((template) => (
-                    <button
-                      key={template.id}
-                      onClick={() => handleTemplateSelect(template)}
-                      className="p-4 border rounded-lg hover:border-primary transition-colors text-left"
-                    >
-                      <div
-                        className="w-full h-24 rounded mb-2"
-                        style={{
-                          background:
-                            template.backgroundType === "gradient"
-                              ? template.backgroundValue
-                              : template.backgroundImageUrl
-                              ? `url(${template.backgroundImageUrl})`
-                              : template.backgroundValue,
-                          backgroundSize: "cover",
-                        }}
-                      />
-                      <p className="font-medium text-sm">{template.name}</p>
-                      {template.description && (
-                        <p className="text-xs text-muted-foreground">
-                          {template.description}
-                        </p>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="gradients" className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  {GRADIENT_PRESETS.map((gradient) => (
-                    <button
-                      key={gradient.name}
-                      onClick={() => handleGradientSelect(gradient)}
-                      className="group"
-                    >
-                      <div
-                        className="w-full h-24 rounded-lg mb-2 group-hover:scale-105 transition-transform"
-                        style={{ background: gradient.value }}
-                      />
-                      <p className="text-sm font-medium">{gradient.name}</p>
-                    </button>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="custom" className="space-y-4">
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="custom-image">
-                      Upload Background Image
-                    </Label>
-                    <div className="mt-2">
-                      <label
-                        htmlFor="custom-image"
-                        className="flex items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors"
+                <TabsContent value="templates" className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {templates?.map((template) => (
+                      <button
+                        key={template.id}
+                        onClick={() => handleTemplateSelect(template)}
+                        className="p-4 border rounded-lg hover:border-primary transition-colors text-left"
                       >
-                        <Upload className="w-5 h-5" />
-                        <span>Click to upload image</span>
-                      </label>
-                      <input
-                        id="custom-image"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        className="hidden"
+                        <div
+                          className="w-full h-24 rounded mb-2"
+                          style={{
+                            background:
+                              template.backgroundType === "gradient"
+                                ? template.backgroundValue
+                                : template.backgroundImageUrl
+                                ? `url(${template.backgroundImageUrl})`
+                                : template.backgroundValue,
+                            backgroundSize: "cover",
+                          }}
+                        />
+                        <p className="font-medium text-sm">{template.name}</p>
+                        {template.description && (
+                          <p className="text-xs text-muted-foreground">
+                            {template.description}
+                          </p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="gradients" className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    {GRADIENT_PRESETS.map((gradient) => (
+                      <button
+                        key={gradient.name}
+                        onClick={() => handleGradientSelect(gradient)}
+                        className="group"
+                      >
+                        <div
+                          className="w-full h-24 rounded-lg mb-2 group-hover:scale-105 transition-transform"
+                          style={{ background: gradient.value }}
+                        />
+                        <p className="text-sm font-medium">{gradient.name}</p>
+                      </button>
+                    ))}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="custom" className="space-y-4">
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="custom-image">
+                        Upload Background Image
+                      </Label>
+                      <div className="mt-2">
+                        <label
+                          htmlFor="custom-image"
+                          className="flex items-center justify-center gap-2 p-6 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary transition-colors"
+                        >
+                          <Upload className="w-5 h-5" />
+                          <span>Click to upload image</span>
+                        </label>
+                        <input
+                          id="custom-image"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </div>
+                    </div>
+
+                    {uploadedImage && (
+                      <>
+                        <div>
+                          <Label htmlFor="image-opacity">
+                            Background Opacity: {imageOpacity}%
+                          </Label>
+                          <input
+                            id="image-opacity"
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={imageOpacity}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              setImageOpacity(value);
+                              setConfig({
+                                ...config,
+                                imageOpacity: value,
+                              });
+                            }}
+                            className="mt-2 w-full"
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="image-blur">
+                            Background Blur: {imageBlur}px
+                          </Label>
+                          <input
+                            id="image-blur"
+                            type="range"
+                            min="0"
+                            max="20"
+                            value={imageBlur}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value);
+                              setImageBlur(value);
+                              setConfig({
+                                ...config,
+                                imageBlur: value,
+                              });
+                            }}
+                            className="mt-2 w-full"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <Label htmlFor="custom-text">Custom Text (Optional)</Label>
+                      <Input
+                        id="custom-text"
+                        placeholder="Add a personal message..."
+                        value={customText}
+                        onChange={(e) => setCustomText(e.target.value)}
+                        className="mt-2"
+                      />
+                    </div>
+
+                    <div>
+                      <Label>Primary Color</Label>
+                      <Input
+                        type="color"
+                        value={config.layout.colors.primary}
+                        onChange={(e) =>
+                          setConfig({
+                            ...config,
+                            layout: {
+                              ...config.layout,
+                              colors: {
+                                ...config.layout.colors,
+                                primary: e.target.value,
+                              },
+                            },
+                          })
+                        }
+                        className="mt-2 h-12"
                       />
                     </div>
                   </div>
+                </TabsContent>
+              </Tabs>
 
-                  {uploadedImage && (
-                    <>
-                      <div>
-                        <Label htmlFor="image-opacity">
-                          Background Opacity: {imageOpacity}%
-                        </Label>
-                        <input
-                          id="image-opacity"
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={imageOpacity}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value);
-                            setImageOpacity(value);
-                            setConfig({
-                              ...config,
-                              imageOpacity: value,
-                            });
-                          }}
-                          className="mt-2 w-full"
-                        />
-                      </div>
-
-                      <div>
-                        <Label htmlFor="image-blur">
-                          Background Blur: {imageBlur}px
-                        </Label>
-                        <input
-                          id="image-blur"
-                          type="range"
-                          min="0"
-                          max="20"
-                          value={imageBlur}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value);
-                            setImageBlur(value);
-                            setConfig({
-                              ...config,
-                              imageBlur: value,
-                            });
-                          }}
-                          className="mt-2 w-full"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div>
-                    <Label htmlFor="custom-text">Custom Text (Optional)</Label>
-                    <Input
-                      id="custom-text"
-                      placeholder="Add a personal message..."
-                      value={customText}
-                      onChange={(e) => setCustomText(e.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Primary Color</Label>
-                    <Input
-                      type="color"
-                      value={config.layout.colors.primary}
-                      onChange={(e) =>
-                        setConfig({
-                          ...config,
-                          layout: {
-                            ...config.layout,
-                            colors: {
-                              ...config.layout.colors,
-                              primary: e.target.value,
-                            },
-                          },
-                        })
-                      }
-                      className="mt-2 h-12"
-                    />
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-
-            {/* Action Buttons */}
-            <div className="grid grid-cols-3 gap-2 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={() => handleDownload("png")}
-                disabled={isGenerating}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                PNG
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => handleDownload("jpg")}
-                disabled={isGenerating}
-              >
-                <Download className="w-4 h-4 mr-2" />
-                JPG
-              </Button>
-              <Button onClick={handleShare} disabled={isGenerating}>
-                <Copy className="w-4 h-4 mr-2" />
-                Share Link
-              </Button>
+              {/* Action Buttons */}
+              <div className="grid grid-cols-3 gap-2 pt-4 border-t border-white/5">
+                <Button
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                  onClick={() => handleDownload("png")}
+                  disabled={isGenerating}
+                >
+                  <Download className="w-4 h-4" />
+                  PNG
+                </Button>
+                <Button
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                  onClick={() => handleDownload("jpg")}
+                  disabled={isGenerating}
+                >
+                  <Download className="w-4 h-4" />
+                  JPG
+                </Button>
+                <Button
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                  onClick={handleShare}
+                  disabled={isGenerating}
+                >
+                  <Copy className="w-4 h-4" />
+                  Share Link
+                </Button>
+              </div>
             </div>
           </div>
         </div>

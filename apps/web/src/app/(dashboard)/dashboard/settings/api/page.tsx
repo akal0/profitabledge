@@ -4,18 +4,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { trpcOptions } from "@/utils/trpc";
 import { useState } from "react";
-import { Copy, Check, Trash2, Key, Download, ExternalLink } from "lucide-react";
+import { Copy, Check, Trash2, Key, Download, ExternalLink, X, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -184,111 +181,146 @@ export default function APISettingsPage() {
 
       {/* Generate API Key Dialog */}
       <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
-        <DialogContent className="bg-sidebar border-white/10">
-          <DialogHeader>
-            <DialogTitle className="text-white">Generate API Key</DialogTitle>
-            <DialogDescription className="text-white/60">
-              Create a new API key for your MetaTrader Expert Advisor
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Key className="h-3.5 w-3.5 text-white/60" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Generate API Key</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">Create a new API key for your MetaTrader Expert Advisor</p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
 
-          <div className="flex flex-col gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <Label className="text-white/80">Key Name</Label>
-              <Input
-                placeholder="e.g., My FTMO Account EA"
-                value={newApiKeyName}
-                onChange={(e) => setNewApiKeyName(e.target.value)}
-                className="bg-sidebar-accent border-white/5 text-white"
-              />
-              <p className="text-xs text-white/40">
-                Choose a descriptive name to identify this key
-              </p>
+            {/* Body */}
+            <div className="px-5 py-4 space-y-4">
+              <div className="flex flex-col gap-2">
+                <Label className="text-white/80">Key Name</Label>
+                <Input
+                  placeholder="e.g., My FTMO Account EA"
+                  value={newApiKeyName}
+                  onChange={(e) => setNewApiKeyName(e.target.value)}
+                  className="bg-sidebar-accent border-white/5 text-white"
+                />
+                <p className="text-xs text-white/40">
+                  Choose a descriptive name to identify this key
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                onClick={() => setShowGenerateDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGenerateKey}
+                disabled={generateKey.isPending || !newApiKeyName.trim()}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              >
+                {generateKey.isPending ? "Generating..." : "Generate"}
+              </Button>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setShowGenerateDialog(false)}
-              className="text-white/60"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleGenerateKey}
-              disabled={generateKey.isPending || !newApiKeyName.trim()}
-              className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
-            >
-              {generateKey.isPending ? "Generating..." : "Generate"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Show Generated Key Dialog */}
       <Dialog open={showKeyDialog} onOpenChange={setShowKeyDialog}>
-        <DialogContent className="bg-sidebar border-white/10 max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-white">
-              Your API Key Has Been Generated
-            </DialogTitle>
-            <DialogDescription className="text-rose-400">
-              Copy this key now - you won't be able to see it again!
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-2xl"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <AlertTriangle className="h-3.5 w-3.5 text-yellow-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Your API Key Has Been Generated</div>
+                <p className="mt-1 text-xs leading-relaxed text-rose-400">Copy this key now - you won't be able to see it again!</p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
 
-          <div className="flex flex-col gap-4 py-4">
-            <div className="flex items-center gap-2 p-4 bg-sidebar-accent border border-white/10 rounded-md">
-              <code className="flex-1 text-white font-mono text-sm break-all">
-                {generatedKey}
-              </code>
-              <Button
-                size="sm"
-                onClick={handleCopyKey}
-                className="border border-white/5 bg-teal-600/25 hover:bg-teal-600/35 text-teal-300"
+            {/* Body */}
+            <div className="px-5 py-4 space-y-4">
+              <div className="flex items-center gap-2 p-4 bg-sidebar-accent border border-white/10 rounded-md">
+                <code className="flex-1 text-white font-mono text-sm break-all">
+                  {generatedKey}
+                </code>
+                <Button
+                  size="sm"
+                  onClick={handleCopyKey}
+                  className="border border-white/5 bg-teal-600/25 hover:bg-teal-600/35 text-teal-300"
+                >
+                  {copiedKey ? (
+                    <Check className="size-4" />
+                  ) : (
+                    <Copy className="size-4" />
+                  )}
+                </Button>
+              </div>
+
+              <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-md">
+                <p className="text-yellow-300 text-sm font-medium mb-2">
+                  Important:
+                </p>
+                <ul className="text-yellow-200 text-xs space-y-1 list-disc list-inside">
+                  <li>Save this key in a secure location</li>
+                  <li>You'll need it to configure your MetaTrader EA</li>
+                  <li>This key won't be shown again</li>
+                  <li>If lost, generate a new key and update your EA</li>
+                </ul>
+              </div>
+
+              <Link
+                href="/dashboard/settings/ea-setup"
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-900/20 border border-blue-500/30 rounded-md text-blue-300 text-sm hover:bg-blue-900/30 transition"
               >
-                {copiedKey ? (
-                  <Check className="size-4" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
+                <Download className="size-4" />
+                <span>Next: Download &amp; Setup Expert Advisor</span>
+                <ExternalLink className="size-3" />
+              </Link>
+            </div>
+
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                onClick={() => {
+                  setShowKeyDialog(false);
+                  setGeneratedKey("");
+                }}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none w-full"
+              >
+                I've Saved My Key
               </Button>
             </div>
-
-            <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-md">
-              <p className="text-yellow-300 text-sm font-medium mb-2">
-                Important:
-              </p>
-              <ul className="text-yellow-200 text-xs space-y-1 list-disc list-inside">
-                <li>Save this key in a secure location</li>
-                <li>You'll need it to configure your MetaTrader EA</li>
-                <li>This key won't be shown again</li>
-                <li>If lost, generate a new key and update your EA</li>
-              </ul>
-            </div>
-
-            <Link
-              href="/dashboard/settings/ea-setup"
-              className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-900/20 border border-blue-500/30 rounded-md text-blue-300 text-sm hover:bg-blue-900/30 transition"
-            >
-              <Download className="size-4" />
-              <span>Next: Download & Setup Expert Advisor</span>
-              <ExternalLink className="size-3" />
-            </Link>
           </div>
-
-          <DialogFooter>
-            <Button
-              onClick={() => {
-                setShowKeyDialog(false);
-                setGeneratedKey("");
-              }}
-              className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5 w-full"
-            >
-              I've Saved My Key
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

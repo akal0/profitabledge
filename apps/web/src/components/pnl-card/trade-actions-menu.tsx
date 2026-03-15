@@ -12,6 +12,7 @@ import {
 import { MoreHorizontal, Share2, Download, Copy, Play } from "lucide-react";
 import { ShareCardDialog } from "./share-card-dialog";
 import { TradeReplay } from "@/components/trades/trade-replay";
+import { exportTradeDetails } from "@/components/trades/export-trade-details";
 import type { PnlCardData } from "./pnl-card-renderer";
 import { toast } from "sonner";
 
@@ -103,7 +104,11 @@ export function TradeActionsMenu({ trade }: TradeActionsMenuProps) {
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              exportTradeDetails(trade);
+              toast.success("Trade details exported");
+            }}
           >
             <Download className="mr-2 h-4 w-4" />
             Export Details

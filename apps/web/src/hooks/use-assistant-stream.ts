@@ -6,6 +6,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import type {
   StreamEvent,
   AssistantStreamState,
@@ -13,6 +14,7 @@ import type {
   StreamStage,
   VizSpec,
 } from "@/types/assistant-stream";
+import { showAIErrorToast } from "@/lib/ai-error-toast";
 
 const INITIAL_STATE: AssistantStreamState = {
   stage: null,
@@ -80,7 +82,18 @@ export function useAssistantStream() {
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          let message = `HTTP ${response.status}: ${response.statusText}`;
+
+          try {
+            const errorPayload = await response.json();
+            if (errorPayload?.error && typeof errorPayload.error === "string") {
+              message = errorPayload.error;
+            }
+          } catch {
+            // Fall back to the status text when the response body is not JSON.
+          }
+
+          throw new Error(message);
         }
 
         const reader = response.body?.getReader();
@@ -214,6 +227,16 @@ export function useAssistantStream() {
       return () => clearTimeout(timer);
     }
   }, [state.justCompleted]);
+
+  useEffect(() => {
+    if (!state.error) {
+      return;
+    }
+
+    if (!showAIErrorToast(state.error)) {
+      toast.error(state.error);
+    }
+  }, [state.error]);
 
   return {
     state,

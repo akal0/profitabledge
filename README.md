@@ -1,67 +1,67 @@
 # profitabledge
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Next, TRPC, and more.
+Profitabledge is a trading analytics platform with account sync, trade journaling, replay/backtesting, AI-assisted analysis, and MT5 worker infrastructure.
 
-## Features
+## Workspace
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **shadcn/ui** - Reusable UI components
-- **Next.js** - Full-stack React framework
-- **tRPC** - End-to-end type-safe APIs
-- **Bun** - Runtime environment
-- **Drizzle** - TypeScript-first ORM
-- **PostgreSQL** - Database engine
-- **Authentication** - Email & password authentication with Better Auth
-- **Turborepo** - Optimized monorepo build system
+```text
+profitabledge/
+├── apps/
+│   ├── web/                  # Next.js frontend
+│   └── server/               # Next.js + tRPC backend
+├── packages/
+│   ├── contracts/            # shared contract surface
+│   └── platform/             # shared runtime helpers
+├── services/
+│   └── mt5-worker/           # MT5 worker service
+├── EA/                       # MetaTrader expert advisor assets
+└── docs/                     # canonical documentation tree
+```
 
 ## Getting Started
 
-First, install the dependencies:
+1. Install dependencies:
 
 ```bash
 bun install
 ```
-## Database Setup
 
-This project uses PostgreSQL with Drizzle ORM.
+2. Configure environment variables for the server app in `apps/server/.env`.
 
-1. Make sure you have a PostgreSQL database set up.
-2. Update your `apps/server/.env` file with your PostgreSQL connection details.
+3. Push the database schema:
 
-3. Apply the schema to your database:
 ```bash
 bun db:push
 ```
 
-
-Then, run the development server:
+4. Start the apps:
 
 ```bash
 bun dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
-The API is running at [http://localhost:3000](http://localhost:3000).
+Default local URLs:
 
+- web: `http://localhost:3001`
+- server: `http://localhost:3000`
 
+## Key Scripts
 
-## Project Structure
+- `bun dev`
+- `bun build`
+- `bun check-types`
+- `bun dev:web`
+- `bun dev:server`
+- `bun db:push`
+- `bun db:generate`
+- `bun db:migrate`
+- `bun db:studio`
 
-```
-profitabledge/
-├── apps/
-│   ├── web/         # Frontend application (Next.js)
-│   └── server/      # Backend API (Next, TRPC)
-```
+## Documentation
 
-## Available Scripts
-
-- `bun dev`: Start all applications in development mode
-- `bun build`: Build all applications
-- `bun dev:web`: Start only the web application
-- `bun dev:server`: Start only the server
-- `bun check-types`: Check TypeScript types across all apps
-- `bun db:push`: Push schema changes to database
-- `bun db:studio`: Open database studio UI
+- `docs/README.md`
+- `docs/reference/architecture/overview.md`
+- `docs/reference/frontend/overview.md`
+- `docs/reference/backend/overview.md`
+- `docs/reference/operations/developer-playbook.md`
+- `docs/reference/roadmap/alpha-launch-hardening-plan.md`

@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   type ColumnDef,
   type ColumnSizingState,
+  type ColumnOrderState,
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
@@ -28,6 +29,38 @@ export interface UseDataTableOptions<TData> {
   getRowId?: (row: TData, index: number) => string;
 }
 
+function getColumnIdFromDef<TData>(
+  column: ColumnDef<TData, any>,
+  index: number
+) {
+  return (
+    ("id" in column && typeof column.id === "string" && column.id) ||
+    ("accessorKey" in column &&
+      typeof column.accessorKey === "string" &&
+      column.accessorKey) ||
+    `col_${index}`
+  );
+}
+
+function buildDefaultColumnOrder<TData>(columns: ColumnDef<TData, any>[]) {
+  return columns.map((column, index) => getColumnIdFromDef(column, index));
+}
+
+function mergeColumnOrder(
+  savedOrder: string[] | undefined,
+  defaultOrder: string[]
+): ColumnOrderState {
+  if (!savedOrder?.length) {
+    return defaultOrder;
+  }
+
+  const allowed = new Set(defaultOrder);
+  const filteredSavedOrder = savedOrder.filter((id) => allowed.has(id));
+  const missing = defaultOrder.filter((id) => !filteredSavedOrder.includes(id));
+
+  return [...filteredSavedOrder, ...missing];
+}
+
 export function useDataTable<TData>({
   data,
   columns,
@@ -38,6 +71,10 @@ export function useDataTable<TData>({
   disablePreferences,
   getRowId,
 }: UseDataTableOptions<TData>) {
+  const defaultColumnOrder = React.useMemo(
+    () => buildDefaultColumnOrder(columns),
+    [columns]
+  );
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
@@ -47,14 +84,29 @@ export function useDataTable<TData>({
   const [columnSizing, setColumnSizing] = React.useState<ColumnSizingState>(
     () => initialSizing ?? {}
   );
+  const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>(
+    () => defaultColumnOrder
+  );
   const [globalFilter, setGlobalFilter] = React.useState<string>("");
   const [rowSelection, setRowSelection] = React.useState({});
 
   const [didLoadPrefs, setDidLoadPrefs] = React.useState(false);
+  const lastPersistedVisibilityRef = React.useRef(
+    JSON.stringify(initialVisibility ?? {})
+  );
   const lastPersistedSizingRef = React.useRef(
     JSON.stringify(initialSizing ?? {})
   );
+  const lastPersistedOrderRef = React.useRef(
+    JSON.stringify(defaultColumnOrder)
+  );
   const persistSizingTimeoutRef = React.useRef<number | null>(null);
+  const persistVisibilityTimeoutRef = React.useRef<number | null>(null);
+  const persistOrderTimeoutRef = React.useRef<number | null>(null);
+
+  React.useEffect(() => {
+    setColumnOrder((current) => mergeColumnOrder(current, defaultColumnOrder));
+  }, [defaultColumnOrder]);
 
   // After mount: load from DB
   React.useEffect(() => {
@@ -95,6 +147,7 @@ export function useDataTable<TData>({
             }
             if (nextVis) {
               setColumnVisibility(nextVis);
+              lastPersistedVisibilityRef.current = JSON.stringify(nextVis);
             }
           }
 
@@ -110,8 +163,21 @@ export function useDataTable<TData>({
             setColumnSizing(nextSizing);
             lastPersistedSizingRef.current = JSON.stringify(nextSizing);
           }
+
+          if (Array.isArray(anyPref.columnOrder)) {
+            const nextOrder = mergeColumnOrder(
+              anyPref.columnOrder as string[],
+              defaultColumnOrder
+            );
+            setColumnOrder(nextOrder);
+            lastPersistedOrderRef.current = JSON.stringify(nextOrder);
+          }
         } else {
+          lastPersistedVisibilityRef.current = JSON.stringify(
+            initialVisibility ?? {}
+          );
           lastPersistedSizingRef.current = JSON.stringify(initialSizing ?? {});
+          lastPersistedOrderRef.current = JSON.stringify(defaultColumnOrder);
         }
       } catch {}
       if (!cancelled) setDidLoadPrefs(true);
@@ -119,7 +185,45 @@ export function useDataTable<TData>({
     return () => {
       cancelled = true;
     };
-  }, [tableId, disablePreferences, columns, initialSizing]);
+  }, [
+    tableId,
+    disablePreferences,
+    columns,
+    defaultColumnOrder,
+    initialSizing,
+    initialVisibility,
+  ]);
+
+  React.useEffect(() => {
+    if (!didLoadPrefs || !tableId || disablePreferences) {
+      return;
+    }
+
+    const serializedVisibility = JSON.stringify(columnVisibility || {});
+    if (serializedVisibility === lastPersistedVisibilityRef.current) {
+      return;
+    }
+
+    if (persistVisibilityTimeoutRef.current) {
+      window.clearTimeout(persistVisibilityTimeoutRef.current);
+    }
+
+    persistVisibilityTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        await trpcClient.users.updateTablePreferences.mutate({
+          tableId,
+          preferences: { columnVisibility },
+        });
+        lastPersistedVisibilityRef.current = serializedVisibility;
+      } catch {}
+    }, 400);
+
+    return () => {
+      if (persistVisibilityTimeoutRef.current) {
+        window.clearTimeout(persistVisibilityTimeoutRef.current);
+      }
+    };
+  }, [columnVisibility, didLoadPrefs, disablePreferences, tableId]);
 
   React.useEffect(() => {
     if (!didLoadPrefs || !tableId) {
@@ -157,6 +261,38 @@ export function useDataTable<TData>({
     };
   }, [columnSizing, didLoadPrefs, tableId]);
 
+  React.useEffect(() => {
+    if (!didLoadPrefs || !tableId) {
+      return;
+    }
+
+    const serializedOrder = JSON.stringify(columnOrder || []);
+    if (serializedOrder === lastPersistedOrderRef.current) {
+      return;
+    }
+
+    if (persistOrderTimeoutRef.current) {
+      window.clearTimeout(persistOrderTimeoutRef.current);
+    }
+
+    persistOrderTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        const nextOrder = mergeColumnOrder(columnOrder, defaultColumnOrder);
+        await trpcClient.users.updateTablePreferences.mutate({
+          tableId,
+          preferences: { columnOrder: nextOrder },
+        });
+        lastPersistedOrderRef.current = JSON.stringify(nextOrder);
+      } catch {}
+    }, 400);
+
+    return () => {
+      if (persistOrderTimeoutRef.current) {
+        window.clearTimeout(persistOrderTimeoutRef.current);
+      }
+    };
+  }, [columnOrder, defaultColumnOrder, didLoadPrefs, tableId]);
+
   const table = useReactTable({
     data,
     columns,
@@ -177,6 +313,7 @@ export function useDataTable<TData>({
       columnFilters,
       columnVisibility,
       columnSizing,
+      columnOrder,
       globalFilter,
       rowSelection,
     },
@@ -184,6 +321,7 @@ export function useDataTable<TData>({
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
     onGlobalFilterChange: setGlobalFilter,
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
@@ -202,6 +340,8 @@ export function useDataTable<TData>({
     setColumnVisibility,
     columnSizing,
     setColumnSizing,
+    columnOrder,
+    setColumnOrder,
     globalFilter,
     setGlobalFilter,
     rowSelection,

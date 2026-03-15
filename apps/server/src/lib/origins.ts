@@ -12,10 +12,7 @@ export function getAllowedWebOrigins() {
     origins.add(origin);
   }
 
-  const envCandidates = [
-    process.env.WEB_URL,
-    process.env.NEXT_PUBLIC_WEB_URL,
-  ]
+  const envCandidates = [process.env.WEB_URL, process.env.NEXT_PUBLIC_WEB_URL]
     .map((value) => value?.trim())
     .filter((value): value is string => Boolean(value));
 

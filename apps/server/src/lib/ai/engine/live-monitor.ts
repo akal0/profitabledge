@@ -41,6 +41,28 @@ function formatPct(val: number): string {
   return `${val.toFixed(1)}%`;
 }
 
+function getTradeSession(trade: OpenTrade): string | null {
+  return trade.sessionTag ?? null;
+}
+
+function getTradeBrokerMetaString(
+  trade: OpenTrade,
+  key: string
+): string | null {
+  const value = trade.brokerMeta?.[key];
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function getTradeProtocolAlignment(trade: OpenTrade): string | null {
+  return getTradeBrokerMetaString(trade, "protocolAlignment");
+}
+
+function getTradeModelTag(trade: OpenTrade): string | null {
+  return getTradeBrokerMetaString(trade, "modelTag");
+}
+
 // ─── Monitor All Open Trades ────────────────────────────────────
 
 export async function monitorOpenTrades(
@@ -129,6 +151,8 @@ export function checkForAnomalies(
   profile: TraderProfileData
 ): LiveTradeAlert[] {
   const alerts: LiveTradeAlert[] = [];
+  const session = getTradeSession(trade);
+  const protocolAlignment = getTradeProtocolAlignment(trade);
 
   // 1. Unusual hold time
   if (trade.openTime) {
@@ -158,18 +182,18 @@ export function checkForAnomalies(
   }
 
   // 2. Weak session
-  if (trade.session) {
+  if (session) {
     const sessionProfile = profile.sessions.find(
-      (s) => s.session === trade.session
+      (s) => s.session === session
     );
     if (sessionProfile && sessionProfile.winRate < 40 && sessionProfile.trades >= 5) {
       alerts.push({
         alertType: "unusual_session",
         severity: "warning",
-        title: `Weak session: ${trade.session}`,
-        message: `Your win rate in ${trade.session} is only ${formatPct(sessionProfile.winRate)} (${sessionProfile.trades} trades). This is one of your weaker sessions.`,
+        title: `Weak session: ${session}`,
+        message: `Your win rate in ${session} is only ${formatPct(sessionProfile.winRate)} (${sessionProfile.trades} trades). This is one of your weaker sessions.`,
         data: {
-          session: trade.session,
+          session,
           winRate: sessionProfile.winRate,
           trades: sessionProfile.trades,
           openTradeId: trade.id,
@@ -221,7 +245,7 @@ export function checkForAnomalies(
 
   // 5. Protocol deviation
   if (
-    trade.protocolAlignment === "against" &&
+    protocolAlignment === "against" &&
     profile.protocolStats.againstWinRate < 40 &&
     profile.protocolStats.againstCount >= 5
   ) {
@@ -231,7 +255,7 @@ export function checkForAnomalies(
       title: "Trading against your protocol",
       message: `This trade is marked "against protocol". Your against-protocol win rate is only ${formatPct(profile.protocolStats.againstWinRate)} (${profile.protocolStats.againstCount} trades). Protocol-aligned trades win at ${formatPct(profile.protocolStats.alignedWinRate)}.`,
       data: {
-        protocolAlignment: trade.protocolAlignment,
+        protocolAlignment,
         againstWR: profile.protocolStats.againstWinRate,
         alignedWR: profile.protocolStats.alignedWinRate,
         openTradeId: trade.id,
@@ -281,13 +305,17 @@ function checkConditionMatches(
 function findConditionMatch<
   T extends { filters: Record<string, string | number> }
 >(trade: OpenTrade, conditions: T[]): T | null {
+  const session = getTradeSession(trade);
+  const modelTag = getTradeModelTag(trade);
+  const protocolAlignment = getTradeProtocolAlignment(trade);
+
   for (const cond of conditions) {
     const matches = Object.entries(cond.filters).every(([dim, val]) => {
       const strVal = String(val);
       if (dim === "symbol") return trade.symbol === strVal;
-      if (dim === "session") return trade.session === strVal;
-      if (dim === "model") return trade.modelTag === strVal;
-      if (dim === "protocol") return trade.protocolAlignment === strVal;
+      if (dim === "session") return session === strVal;
+      if (dim === "model") return modelTag === strVal;
+      if (dim === "protocol") return protocolAlignment === strVal;
       if (dim === "direction") return trade.tradeType === strVal;
       // Skip bucket dimensions for open trades (we don't know final values)
       return true;
@@ -310,7 +338,9 @@ function scoreSetupAlignment(
   trade: OpenTrade,
   profile: TraderProfileData
 ): { score: number; reason: string } {
-  if (trade.protocolAlignment === "aligned") {
+  const protocolAlignment = getTradeProtocolAlignment(trade);
+
+  if (protocolAlignment === "aligned") {
     if (profile.protocolStats.alignedWinRate > 55) {
       return {
         score: 9,
@@ -320,7 +350,7 @@ function scoreSetupAlignment(
     return { score: 7, reason: "Aligned with your trading protocol" };
   }
 
-  if (trade.protocolAlignment === "against") {
+  if (protocolAlignment === "against") {
     return {
       score: Math.max(2, Math.min(5, profile.protocolStats.againstWinRate / 10)),
       reason: `Against-protocol trades win at ${formatPct(profile.protocolStats.againstWinRate)}`,
@@ -442,12 +472,14 @@ function scoreSessionAlignment(
   trade: OpenTrade,
   profile: TraderProfileData
 ): { score: number; reason: string } {
-  if (!trade.session) {
+  const session = getTradeSession(trade);
+
+  if (!session) {
     return { score: 5, reason: "No session data" };
   }
 
   const sessionProfile = profile.sessions.find(
-    (s) => s.session === trade.session
+    (s) => s.session === session
   );
 
   if (!sessionProfile || sessionProfile.trades < 5) {
@@ -457,20 +489,20 @@ function scoreSessionAlignment(
   if (sessionProfile.winRate > 60) {
     return {
       score: 9,
-      reason: `${trade.session}: ${formatPct(sessionProfile.winRate)} win rate`,
+      reason: `${session}: ${formatPct(sessionProfile.winRate)} win rate`,
     };
   }
 
   if (sessionProfile.winRate < 40) {
     return {
       score: 3,
-      reason: `${trade.session}: only ${formatPct(sessionProfile.winRate)} win rate`,
+      reason: `${session}: only ${formatPct(sessionProfile.winRate)} win rate`,
     };
   }
 
   return {
     score: 6,
-    reason: `${trade.session}: ${formatPct(sessionProfile.winRate)} win rate`,
+    reason: `${session}: ${formatPct(sessionProfile.winRate)} win rate`,
   };
 }
 

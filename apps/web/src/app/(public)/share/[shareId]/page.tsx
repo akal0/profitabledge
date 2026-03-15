@@ -1,6 +1,7 @@
 "use client";
 
 import { use } from "react";
+import Link from "next/link";
 import { trpc } from "@/utils/trpc";
 import { PnlCardRenderer } from "@/components/pnl-card/pnl-card-renderer";
 import { Button } from "@/components/ui/button";
@@ -99,9 +100,9 @@ export default function SharePage({ params }: SharePageProps) {
             Download Card
           </Button>
           <Button variant="outline" size="lg" asChild>
-            <a href="/" target="_blank">
+            <Link href="/">
               Create Your Own
-            </a>
+            </Link>
           </Button>
         </div>
 
@@ -109,9 +110,9 @@ export default function SharePage({ params }: SharePageProps) {
         <div className="text-center text-sm text-muted-foreground">
           <p>
             Powered by{" "}
-            <a href="/" className="font-semibold hover:underline">
+            <Link href="/" className="font-semibold hover:underline">
               profitabledge
-            </a>
+            </Link>
           </p>
         </div>
       </div>

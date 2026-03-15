@@ -10,9 +10,9 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
         type={type}
         data-slot="input"
         className={cn(
-          " file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-sidebar hover:brightness-120 dark:border-white/5 flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-xs placeholder:text-xs shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-xs file:font-medium file:mr-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-xs",
-          "focus-visible:scale-[98%] transition duration-250",
-          "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive",
+          "file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-transparent hover:brightness-120 dark:ring-white/5 flex h-9 w-full min-w-0 rounded-md ring bg-transparent px-3 py-1 text-xs placeholder:text-xs shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:ring-0 file:bg-transparent file:text-xs file:font-medium file:mr-4 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-xs",
+          "focus-visible:scale-100!",
+          "aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
           className
         )}
         {...props}

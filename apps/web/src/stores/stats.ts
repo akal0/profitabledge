@@ -23,6 +23,7 @@ export type AccountStats = {
   liveEquity?: number | null;
   lastSyncedAt?: string | null;
   isLiveDataFresh?: boolean;
+  brokerType?: string | null;
 };
 
 type StatsState = {

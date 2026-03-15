@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/profitabledge
+      BETTER_AUTH_SECRET: ci-secret-value
+      BETTER_AUTH_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SERVER_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_WEB_URL: http://127.0.0.1:3001
+      WEB_URL: http://127.0.0.1:3001
+      CORS_ORIGIN: http://127.0.0.1:3001
+      CREDENTIAL_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      BROKER_WORKER_SECRET: ci-worker-secret
+      UPLOADTHING_TOKEN: ci-uploadthing-token
+      GEMINI_API_KEY: ci-gemini-key
+      GOOGLE_GENERATIVE_AI_API_KEY: ci-google-generative-ai-key
+      GOOGLE_CLIENT_ID: ci-google-client-id
+      GOOGLE_CLIENT_SECRET: ci-google-client-secret
+      TWITTER_CLIENT_ID: ci-twitter-client-id
+      TWITTER_CLIENT_SECRET: ci-twitter-client-secret
+      CTRADER_CLIENT_ID: ci-ctrader-client-id
+      CTRADER_CLIENT_SECRET: ci-ctrader-client-secret
+      CTRADER_REDIRECT_URI: http://127.0.0.1:3000/api/oauth/ctrader/callback
+      TWELVE_DATA_API_KEY: ci-twelve-data-key
+      ALPHA_ENABLE_AI_ASSISTANT: "true"
+      ALPHA_ENABLE_COMMUNITY: "false"
+      ALPHA_ENABLE_CONNECTIONS: "true"
+      ALPHA_ENABLE_BACKTEST: "true"
+      ALPHA_ENABLE_FEEDBACK: "true"
+      ALPHA_ENABLE_SUPPORT_DIAGNOSTICS: "true"
+      ALPHA_ENABLE_SCHEDULED_SYNC: "true"
+      ALPHA_ENABLE_MT5_INGESTION: "true"
+      ALPHA_SUPPORT_EMAIL: support@example.com
+      NEXT_PUBLIC_ALPHA_ENABLE_AI_ASSISTANT: "true"
+      NEXT_PUBLIC_ALPHA_ENABLE_COMMUNITY: "false"
+      NEXT_PUBLIC_ALPHA_ENABLE_CONNECTIONS: "true"
+      NEXT_PUBLIC_ALPHA_ENABLE_BACKTEST: "true"
+      NEXT_PUBLIC_ALPHA_ENABLE_FEEDBACK: "true"
+      NEXT_PUBLIC_ALPHA_ENABLE_SUPPORT_DIAGNOSTICS: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.12
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun check-types
+
+      - name: Lint web
+        run: bun run --cwd apps/web lint
+
+      - name: Smoke tests
+        run: bun test
+
+      - name: Build server
+        run: bun run --cwd apps/server build
+
+      - name: Build web
+        run: bun run --cwd apps/web build

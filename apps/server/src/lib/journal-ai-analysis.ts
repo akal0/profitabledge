@@ -13,6 +13,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "../db";
 import { journalEntry, type JournalBlock, type JournalAIInsight } from "../db/schema/journal";
 import { and, eq, inArray } from "drizzle-orm";
+import {
+  generateMeteredGeminiContent,
+  hasPlatformGeminiKey,
+} from "./ai/gemini";
+import { hasUserAIProviderKey } from "./ai/provider-keys";
+import { logAIProviderError } from "./ai/provider-errors";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 const JOURNAL_MODEL = "gemini-2.5-flash";
@@ -567,23 +573,32 @@ Respond in JSON format:
   "topics": ["string - topic 1", "string - topic 2", ...]
 }`;
 
-  if (!process.env.GEMINI_API_KEY) {
+  const hasUserKey = await hasUserAIProviderKey(entry.userId, "gemini");
+
+  if (!hasPlatformGeminiKey() && !hasUserKey) {
     await persistJournalAnalysis(entryId, fallbackResult, plainText);
     return fallbackResult;
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: JOURNAL_MODEL });
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
+    const result = await generateMeteredGeminiContent({
+      userId: entry.userId,
+      featureKey: "journal.analysis.summary",
+      model: JOURNAL_MODEL,
+      request: {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 2048,
         },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 2048,
+      },
+      metadata: {
+        entryId,
       },
     });
     const response = result.response.text();
@@ -600,7 +615,7 @@ Respond in JSON format:
     await persistJournalAnalysis(entryId, mergedResult, plainText);
     return mergedResult;
   } catch (error) {
-    console.error("Error generating journal summary:", error);
+    logAIProviderError("Journal AI summary", error);
     await persistJournalAnalysis(entryId, fallbackResult, plainText);
     return fallbackResult;
   }
@@ -619,8 +634,6 @@ export async function extractPatternsFromEntries(
   if (entries.length < 3) {
     return [];
   }
-
-  const model = genAI.getGenerativeModel({ model: JOURNAL_MODEL });
 
   const entriesText = entries
     .filter(e => e.content)
@@ -655,7 +668,15 @@ Respond in JSON format:
 }`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateMeteredGeminiContent({
+      userId,
+      featureKey: "journal.analysis.patterns",
+      model: JOURNAL_MODEL,
+      request: prompt,
+      metadata: {
+        entryCount: entries.length,
+      },
+    });
     const response = result.response.text();
     
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -669,20 +690,30 @@ Respond in JSON format:
       createdAt: new Date().toISOString()
     }));
   } catch (error) {
-    console.error("Error extracting patterns:", error);
+    logAIProviderError("Journal AI pattern extraction", error);
     return [];
   }
 }
 
-export async function analyzeSentiment(text: string): Promise<'positive' | 'negative' | 'neutral' | 'mixed'> {
-  const model = genAI.getGenerativeModel({ model: JOURNAL_MODEL });
-  
+export async function analyzeSentiment(
+  text: string,
+  userId?: string
+): Promise<'positive' | 'negative' | 'neutral' | 'mixed'> {
   const prompt = `Analyze the sentiment of this trading journal text. Respond with exactly one word: positive, negative, neutral, or mixed.
 
 Text: ${text.slice(0, 1000)}`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = userId
+      ? await generateMeteredGeminiContent({
+          userId,
+          featureKey: "journal.analysis.sentiment",
+          model: JOURNAL_MODEL,
+          request: prompt,
+        })
+      : await genAI
+          .getGenerativeModel({ model: JOURNAL_MODEL })
+          .generateContent(prompt);
     const response = result.response.text().toLowerCase().trim();
     
     if (['positive', 'negative', 'neutral', 'mixed'].includes(response)) {
@@ -694,15 +725,22 @@ Text: ${text.slice(0, 1000)}`;
   }
 }
 
-export async function extractTopics(text: string): Promise<string[]> {
-  const model = genAI.getGenerativeModel({ model: JOURNAL_MODEL });
-  
+export async function extractTopics(text: string, userId?: string): Promise<string[]> {
   const prompt = `Extract the main topics from this trading journal text. Respond with a JSON array of 3-5 topic strings.
 
 Text: ${text.slice(0, 1000)}`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = userId
+      ? await generateMeteredGeminiContent({
+          userId,
+          featureKey: "journal.analysis.topics",
+          model: JOURNAL_MODEL,
+          request: prompt,
+        })
+      : await genAI
+          .getGenerativeModel({ model: JOURNAL_MODEL })
+          .generateContent(prompt);
     const response = result.response.text();
     
     const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -720,8 +758,6 @@ export async function generateJournalContextQuery(
   userQuery: string,
   userId: string
 ): Promise<{ answer: string; relevantEntries: string[] }> {
-  const model = genAI.getGenerativeModel({ model: JOURNAL_MODEL });
-  
   const entries = await db
     .select({
       id: journalEntry.id,
@@ -754,14 +790,22 @@ Provide:
 1. A direct answer to the question based on journal content
 2. IDs of entries that are most relevant
 
-Respond in JSON format:
+  Respond in JSON format:
 {
   "answer": "string - your answer to the question",
   "relevantEntryIds": ["id1", "id2", ...]
-}`;
+  }`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await generateMeteredGeminiContent({
+      userId,
+      featureKey: "journal.analysis.context_query",
+      model: JOURNAL_MODEL,
+      request: prompt,
+      metadata: {
+        entryCount: entriesContext.length,
+      },
+    });
     const response = result.response.text();
     
     const jsonMatch = response.match(/\{[\s\S]*\}/);
@@ -775,7 +819,7 @@ Respond in JSON format:
       relevantEntries: parsed.relevantEntryIds || []
     };
   } catch (error) {
-    console.error("Error generating journal context:", error);
+    logAIProviderError("Journal AI context query", error);
     return { answer: "Error analyzing journal entries.", relevantEntries: [] };
   }
 }

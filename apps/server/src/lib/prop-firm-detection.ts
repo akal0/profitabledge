@@ -1,7 +1,8 @@
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../db";
 import {
   openTrade,
+  propChallengeInstance,
   propChallengeRule,
   propFirm,
   trade,
@@ -199,6 +200,174 @@ function buildChallengeRuleAccessCondition(userId?: string | null) {
         eq(propChallengeRule.createdByUserId, userId)
       )
     : isNull(propChallengeRule.createdByUserId);
+}
+
+function normalizeCustomPropFirmName(value: string | null | undefined) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+async function consolidateDuplicateCustomPropFirmsForUser(userId: string) {
+  const userOwnedFirms = await db.query.propFirm.findMany({
+    where: and(eq(propFirm.active, true), eq(propFirm.createdByUserId, userId)),
+    orderBy: (propFirm, { asc }) => [asc(propFirm.createdAt), asc(propFirm.id)],
+  });
+
+  const firmsByNormalizedName = new Map<string, PropFirmRecord[]>();
+
+  for (const firm of userOwnedFirms) {
+    const key = normalizeCustomPropFirmName(firm.displayName || firm.name);
+    if (!key) continue;
+    const existing = firmsByNormalizedName.get(key) || [];
+    existing.push(firm);
+    firmsByNormalizedName.set(key, existing);
+  }
+
+  for (const duplicateGroup of firmsByNormalizedName.values()) {
+    if (duplicateGroup.length < 2) continue;
+
+    const canonicalFirm = duplicateGroup[0]!;
+    const duplicateFirmIds = duplicateGroup.slice(1).map((firm) => firm.id);
+
+    if (duplicateFirmIds.length === 0) continue;
+
+    const now = new Date();
+
+    await db
+      .update(propChallengeRule)
+      .set({
+        propFirmId: canonicalFirm.id,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(propChallengeRule.createdByUserId, userId),
+          inArray(propChallengeRule.propFirmId, duplicateFirmIds)
+        )
+      );
+
+    await db
+      .update(tradingAccount)
+      .set({
+        propFirmId: canonicalFirm.id,
+      })
+      .where(
+        and(
+          eq(tradingAccount.userId, userId),
+          inArray(tradingAccount.propFirmId, duplicateFirmIds)
+        )
+      );
+
+    await db
+      .update(tradingAccount)
+      .set({
+        propDetectedFirmId: canonicalFirm.id,
+      })
+      .where(
+        and(
+          eq(tradingAccount.userId, userId),
+          inArray(tradingAccount.propDetectedFirmId, duplicateFirmIds)
+        )
+      );
+
+    await db
+      .update(propChallengeInstance)
+      .set({
+        propFirmId: canonicalFirm.id,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(propChallengeInstance.userId, userId),
+          inArray(propChallengeInstance.propFirmId, duplicateFirmIds)
+        )
+      );
+
+    await db
+      .delete(propFirm)
+      .where(
+        and(
+          eq(propFirm.createdByUserId, userId),
+          inArray(propFirm.id, duplicateFirmIds)
+        )
+      );
+  }
+}
+
+export async function ensureCustomPropFirmForUser(input: {
+  userId: string;
+  propFirmName: string;
+  description?: string | null;
+}) {
+  await consolidateDuplicateCustomPropFirmsForUser(input.userId);
+
+  const normalizedName = normalizeCustomPropFirmName(input.propFirmName);
+  const userOwnedFirms = await db.query.propFirm.findMany({
+    where: and(
+      eq(propFirm.active, true),
+      eq(propFirm.createdByUserId, input.userId)
+    ),
+    orderBy: (propFirm, { asc }) => [asc(propFirm.createdAt)],
+  });
+
+  const matchingFirm =
+    userOwnedFirms.find(
+      (firm) =>
+        normalizeCustomPropFirmName(firm.displayName || firm.name) ===
+        normalizedName
+    ) ?? null;
+
+  if (matchingFirm) {
+    const desiredName = input.propFirmName.trim();
+    const currentDisplayName = matchingFirm.displayName?.trim() || "";
+    const currentName = matchingFirm.name?.trim() || "";
+
+    if (
+      desiredName &&
+      (currentDisplayName !== desiredName || currentName !== desiredName)
+    ) {
+      const [updatedFirm] = await db
+        .update(propFirm)
+        .set({
+          name: desiredName,
+          displayName: desiredName,
+          updatedAt: new Date(),
+        })
+        .where(eq(propFirm.id, matchingFirm.id))
+        .returning();
+
+      return updatedFirm || matchingFirm;
+    }
+
+    return matchingFirm;
+  }
+
+  const now = new Date();
+  const [createdFirm] = await db
+    .insert(propFirm)
+    .values({
+      id: crypto.randomUUID(),
+      createdByUserId: input.userId,
+      name: input.propFirmName.trim(),
+      displayName: input.propFirmName.trim(),
+      description: input.description?.trim() || null,
+      logo: null,
+      website: null,
+      supportedPlatforms: ["mt4", "mt5", "ctrader"],
+      brokerDetectionPatterns: [],
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  if (!createdFirm) {
+    throw new Error("Failed to create prop firm");
+  }
+
+  return createdFirm;
 }
 
 function toFiniteNumber(
@@ -534,6 +703,8 @@ export async function getAllPropFirms() {
 }
 
 export async function getAccessiblePropFirms(userId: string) {
+  await consolidateDuplicateCustomPropFirmsForUser(userId);
+
   const rows = await db.query.propFirm.findMany({
     where: and(eq(propFirm.active, true), buildPropFirmAccessCondition(userId)),
     orderBy: (propFirm, { asc }) => [asc(propFirm.displayName)],

@@ -1,9 +1,6 @@
 import { db } from "../db";
-import {
-  trade as tradeTable,
-  account as accountTable,
-} from "../db/schema/trading";
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { trade as tradeTable } from "../db/schema/trading";
+import { eq, and, gte, desc, sql } from "drizzle-orm";
 
 export type InsightType =
   | "overtrade_warning"
@@ -41,10 +38,11 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
       .where(
         and(
           eq(tradeTable.accountId, accountId),
-          gte(tradeTable.close, thirtyDaysAgo.toISOString())
+          gte(tradeTable.closeTime, thirtyDaysAgo),
+          sql`${tradeTable.closeTime} IS NOT NULL`
         )
       )
-      .orderBy(desc(tradeTable.close))
+      .orderBy(desc(tradeTable.closeTime))
       .limit(1000);
 
     if (trades.length < 10) {
@@ -55,8 +53,8 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
     // 1. Check for overtrading patterns
     const tradesByDay = new Map<string, number>();
     trades.forEach((trade) => {
-      if (!trade.close) return;
-      const day = trade.close.slice(0, 10);
+      if (!trade.closeTime) return;
+      const day = trade.closeTime.toISOString().slice(0, 10);
       tradesByDay.set(day, (tradesByDay.get(day) || 0) + 1);
     });
 
@@ -88,8 +86,8 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
       { wins: number; total: number; profit: number }
     >();
     trades.forEach((trade) => {
-      if (!trade.session) return;
-      const session = trade.session;
+      if (!trade.sessionTag) return;
+      const session = trade.sessionTag;
       const stats = sessionStats.get(session) || {
         wins: 0,
         total: 0,
@@ -130,8 +128,8 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
       (t) =>
         t.mfePips != null &&
         t.profit != null &&
-        t.stoploss != null &&
-        t.entry != null
+        t.sl != null &&
+        t.openPrice != null
     );
 
     if (exitEfficiencyTrades.length >= 20) {
@@ -139,9 +137,10 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
         exitEfficiencyTrades.reduce((sum, t) => {
           const mfe = Math.abs(Number(t.mfePips || 0));
           const profit = Math.abs(Number(t.profit || 0));
-          const entry = Number(t.entry);
-          const sl = Number(t.stoploss);
+          const entry = Number(t.openPrice);
+          const sl = Number(t.sl);
           const risk = Math.abs(entry - sl);
+          if (!Number.isFinite(risk) || risk <= 0) return sum;
           const actualR = profit / risk;
           const potentialR = mfe / risk;
           return sum + (potentialR > 0 ? actualR / potentialR : 0);
@@ -163,8 +162,8 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
     // 4. R:R optimization
     const rrBuckets = new Map<string, { wins: number; total: number }>();
     trades.forEach((trade) => {
-      if (trade.plannedRr == null) return;
-      const rr = Number(trade.plannedRr);
+      if (trade.plannedRR == null) return;
+      const rr = Number(trade.plannedRR);
       const bucket = rr < 2 ? "low" : rr < 3 ? "medium" : "high";
       const stats = rrBuckets.get(bucket) || { wins: 0, total: 0 };
       stats.total++;
@@ -197,8 +196,8 @@ export async function generateInsights(accountId: string): Promise<Insight[]> {
     // 5. Time of day performance
     const hourStats = new Map<number, { profit: number; count: number }>();
     trades.forEach((trade) => {
-      if (!trade.close || trade.profit == null) return;
-      const hour = new Date(trade.close).getHours();
+      if (!trade.closeTime || trade.profit == null) return;
+      const hour = trade.closeTime.getHours();
       const stats = hourStats.get(hour) || { profit: 0, count: 0 };
       stats.profit += Number(trade.profit);
       stats.count++;

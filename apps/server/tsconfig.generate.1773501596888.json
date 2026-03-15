@@ -1,0 +1,54 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "tsBuildInfoFile": ".next/cache/check-types.tsbuildinfo",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@profitabledge/contracts": [
+        "../../packages/contracts/src/index.ts"
+      ],
+      "@profitabledge/contracts/*": [
+        "../../packages/contracts/src/*"
+      ],
+      "@profitabledge/platform": [
+        "../../packages/platform/src/index.ts"
+      ],
+      "@profitabledge/platform/*": [
+        "../../packages/platform/src/*"
+      ]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "../../packages/contracts/src/**/*.ts",
+    "../../packages/contracts/src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

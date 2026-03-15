@@ -49,7 +49,7 @@ export default function AvatarUploader({
     setFile(null);
     await trpcClient.users.clearImage.mutate();
     onUploaded?.("");
-  }, [previewUrl, setPreviewUrl, setFile]);
+  }, [onUploaded, previewUrl, setPreviewUrl, setFile]);
   const getFile = useCallback(() => file, [file]);
 
   const upload = useCallback(async () => {

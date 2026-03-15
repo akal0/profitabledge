@@ -6,6 +6,8 @@ import {
   jsonb,
   pgEnum,
   index,
+  boolean,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 import { tradingAccount } from "./trading";
@@ -101,9 +103,47 @@ export const aiActionLog = pgTable(
   }
 );
 
+export const aiProviderKey = pgTable(
+  "ai_provider_key",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 32 }).notNull(),
+    displayName: text("display_name").notNull(),
+    encryptedApiKey: text("encrypted_api_key").notNull(),
+    credentialIv: text("credential_iv").notNull(),
+    keyPrefix: varchar("key_prefix", { length: 32 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    lastValidatedAt: timestamp("last_validated_at"),
+    lastUsedAt: timestamp("last_used_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userProviderUnique: uniqueIndex("ai_provider_key_user_provider_idx").on(
+      table.userId,
+      table.provider
+    ),
+    userCreatedIdx: index("ai_provider_key_user_created_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+    providerActiveIdx: index("ai_provider_key_provider_active_idx").on(
+      table.provider,
+      table.isActive
+    ),
+  })
+);
+
 export type AiReport = typeof aiReport.$inferSelect;
 export type AiReportInsert = typeof aiReport.$inferInsert;
 export type AiChatMessage = typeof aiChatMessage.$inferSelect;
 export type AiChatMessageInsert = typeof aiChatMessage.$inferInsert;
 export type AiActionLog = typeof aiActionLog.$inferSelect;
 export type AiActionLogInsert = typeof aiActionLog.$inferInsert;
+export type AiProviderKey = typeof aiProviderKey.$inferSelect;
+export type AiProviderKeyInsert = typeof aiProviderKey.$inferInsert;

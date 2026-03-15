@@ -8,3 +8,13 @@ __pycache__/
 *.pyc
 *.d.ts
 !next-env.d.ts
+*.tsbuildinfo
+apps/server/src/**/*.js
+apps/server/src/**/*.js.map
+apps/server/src/**/*.d.ts
+apps/server/src/**/*.d.ts.map
+apps/server/*.js
+apps/server/*.js.map
+apps/server/*.d.ts
+apps/server/*.d.ts.map
+!apps/server/next-env.d.ts

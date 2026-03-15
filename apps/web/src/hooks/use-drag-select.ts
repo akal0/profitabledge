@@ -29,6 +29,7 @@ export function useDragSelect(options: UseDragSelectOptions = {}) {
       const target = e.target as HTMLElement;
       // Don't start drag if clicking on buttons, inputs, or other interactive elements
       if (
+        target.closest('[data-cell-interactive="true"]') ||
         target.closest("button") ||
         target.closest("input") ||
         target.closest("select") ||

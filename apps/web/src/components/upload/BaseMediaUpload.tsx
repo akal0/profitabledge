@@ -62,6 +62,17 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
 
   const file = files[0];
   const inputProps = getInputProps({ accept, multiple });
+  const hasFiles = files.length > 0;
+  const isInputDisabled = Boolean(disabled) || (!multiple && Boolean(file));
+  const resolvedDescription =
+    description ??
+    (multiple
+      ? hasFiles
+        ? `Drag & drop or click to add more files (max. ${formatBytes(
+            maxSize
+          )})`
+        : `Drag & drop or click to browse files (max. ${formatBytes(maxSize)})`
+      : `Drag & drop or click to browse (max. ${formatBytes(maxSize)})`);
 
   return (
     <div className={className}>
@@ -78,8 +89,8 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
         <input
           {...inputProps}
           className="sr-only"
-          aria-label="Upload file"
-          disabled={Boolean(file) || disabled}
+          aria-label={multiple ? "Upload files" : "Upload file"}
+          disabled={isInputDisabled}
         />
 
         <div className="flex flex-col items-center justify-center text-center gap-3 ">
@@ -94,8 +105,7 @@ const BaseMediaUpload: React.FC<BaseMediaUploadProps> = ({
             <p className=" text-sm font-semibold">{title}</p>
 
             <p className="text-secondary text-[11px]">
-              {description ??
-                `Drag & drop or click to browse (max. ${formatBytes(maxSize)})`}
+              {resolvedDescription}
             </p>
           </div>
         </div>

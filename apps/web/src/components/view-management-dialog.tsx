@@ -5,10 +5,8 @@ import { trpcClient, queryClient } from "@/utils/trpc";
 import { useMutation } from "@tanstack/react-query";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -30,14 +28,13 @@ import {
   DropdownMenuSub,
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Trash2, Star, Settings2, Plus, MoreVertical, Edit } from "lucide-react";
+import { Trash2, Star, Settings2, MoreVertical, Edit, LayoutDashboard, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ViewManagementDialogProps {
@@ -276,246 +273,256 @@ export function ViewManagementDialog({ open, onOpenChange }: ViewManagementDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col bg-sidebar border border-white/5 rounded-md p-0 gap-0">
-        <div className="px-6 py-5">
-          <DialogHeader className="p-0">
-            <DialogTitle className="text-base font-semibold text-white">Manage views</DialogTitle>
-            <DialogDescription className="text-xs text-white/40">
-              Create custom views with specific columns and filters
-            </DialogDescription>
-          </DialogHeader>
-        </div>
-
-        <Separator />
-
-        <Tabs value={activeTab} onValueChange={(value) => {
-          setActiveTab(value);
-          if (value === "my-views") {
-            resetForm();
-          }
-        }} className="flex-1 flex flex-col overflow-hidden">
-          <div className="px-6 pt-4">
-            <TabsList className="grid w-full grid-cols-2 bg-muted/25 rounded-sm p-[3px]">
-              <TabsTrigger value="my-views" className="text-xs rounded-sm data-[state=active]:bg-[#222225] data-[state=active]:text-white text-white/40">
-                My views
-              </TabsTrigger>
-              <TabsTrigger value="create" className="text-xs rounded-sm data-[state=active]:bg-[#222225] data-[state=active]:text-white text-white/40">
-                {editingViewId ? "Edit view" : "Create view"}
-              </TabsTrigger>
-            </TabsList>
+      <DialogContent
+        showCloseButton={false}
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-3xl"
+      >
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80 max-h-[80vh]">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <LayoutDashboard className="h-3.5 w-3.5 text-white/60" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-white">Manage views</div>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">Create custom views with specific columns and filters</p>
+            </div>
+            <DialogClose asChild>
+              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            </DialogClose>
           </div>
 
-          {/* My Views Tab */}
-          <TabsContent value="my-views" className="flex-1 overflow-auto px-6 py-5">
-            {isLoadingViews ? (
-              <div className="text-center py-8 text-white/40 text-xs">
-                Loading views...
-              </div>
-            ) : views.length === 0 ? (
-              <div className="text-center py-8 text-white/40 text-xs">
-                <p>No custom views yet.</p>
-                <p className="text-xs mt-2">Create your first view to get started.</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {views.map((view) => (
-                  <div
-                    key={view.id}
-                    className="flex items-center justify-between p-3 border border-white/5 rounded-sm hover:bg-sidebar-accent transition-colors"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <span className="text-2xl">{view.icon}</span>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium text-white text-sm">{view.name}</h4>
-                          {view.isDefault && (
-                            <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                          )}
-                        </div>
-                        {view.description && (
-                          <p className="text-xs text-white/40">{view.description}</p>
-                        )}
-                        <p className="text-xs text-white/40 mt-1">
-                          {view.config?.visibleColumns?.length || 0} columns
-                        </p>
-                      </div>
-                    </div>
+          <Separator />
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button className="cursor-pointer flex items-center justify-center px-2 py-2 h-[32px] text-xs rounded-sm transition-all active:scale-95 duration-250 border border-white/5 bg-sidebar hover:bg-sidebar-accent">
-                          <MoreVertical className="h-4 w-4 text-white/60" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-sm bg-sidebar border border-white/5 p-1">
-                        <DropdownMenuItem
-                          onClick={() => setEditingViewId(view.id)}
-                          className="px-4 py-2.5 text-white/70 hover:bg-sidebar-accent"
-                        >
-                          <Edit className="mr-2 h-4 w-4 text-white/60" />
-                          Edit
-                        </DropdownMenuItem>
-                        {!view.isDefault && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => setDefaultMutation.mutate(view.id)}
-                              className="px-4 py-2.5 text-white/70 hover:bg-sidebar-accent"
-                            >
-                              <Star className="mr-2 h-4 w-4 text-white/60" />
-                              Set as default
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={() => deleteMutation.mutate(view.id)}
-                          className="px-4 py-2.5 text-rose-400 hover:bg-sidebar-accent"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Create View Tab */}
-          <TabsContent value="create" className="flex-1 overflow-auto">
-            <div className="px-6 py-3">
-              <h3 className="text-xs font-semibold text-white/70 tracking-wide">View details</h3>
+          <Tabs value={activeTab} onValueChange={(value) => {
+            setActiveTab(value);
+            if (value === "my-views") {
+              resetForm();
+            }
+          }} className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-5 pt-4 shrink-0">
+              <TabsList className="grid w-full grid-cols-2 bg-muted/25 rounded-sm p-[3px]">
+                <TabsTrigger value="my-views" className="text-xs rounded-sm data-[state=active]:bg-[#222225] data-[state=active]:text-white text-white/40">
+                  My views
+                </TabsTrigger>
+                <TabsTrigger value="create" className="text-xs rounded-sm data-[state=active]:bg-[#222225] data-[state=active]:text-white text-white/40">
+                  {editingViewId ? "Edit view" : "Create view"}
+                </TabsTrigger>
+              </TabsList>
             </div>
-            <Separator />
-            <div className="px-6 py-5 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">View name</Label>
-                <Input
-                  placeholder="e.g., London Wins"
-                  value={newViewName}
-                  onChange={(e) => setNewViewName(e.target.value)}
-                  className="bg-sidebar border border-white/5 rounded-sm text-white/80 placeholder:text-white/30"
-                />
-              </div>
 
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">Description (optional)</Label>
-                <Input
-                  placeholder="e.g., Winning trades during London session"
-                  value={newViewDescription}
-                  onChange={(e) => setNewViewDescription(e.target.value)}
-                  className="bg-sidebar border border-white/5 rounded-sm text-white/80 placeholder:text-white/30"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">Icon</Label>
-                <div className="flex gap-2 mt-1 flex-wrap">
-                  {DEFAULT_ICONS.map((icon) => (
-                    <button
-                      key={icon}
-                      onClick={() => setNewViewIcon(icon)}
-                      className={cn(
-                        "text-2xl p-2 rounded-sm border border-white/5 hover:bg-sidebar-accent transition-colors",
-                        newViewIcon === icon && "bg-sidebar-accent border-white/20"
-                      )}
-                    >
-                      {icon}
-                    </button>
-                  ))}
+            {/* My Views Tab */}
+            <TabsContent value="my-views" className="flex-1 overflow-auto px-5 py-4">
+              {isLoadingViews ? (
+                <div className="text-center py-8 text-white/40 text-xs">
+                  Loading views...
                 </div>
-              </div>
-            </div>
+              ) : views.length === 0 ? (
+                <div className="text-center py-8 text-white/40 text-xs">
+                  <p>No custom views yet.</p>
+                  <p className="text-xs mt-2">Create your first view to get started.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {views.map((view) => (
+                    <div
+                      key={view.id}
+                      className="flex items-center justify-between p-3 border border-white/5 rounded-sm hover:bg-sidebar-accent transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <span className="text-2xl">{view.icon}</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium text-white text-sm">{view.name}</h4>
+                            {view.isDefault && (
+                              <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                            )}
+                          </div>
+                          {view.description && (
+                            <p className="text-xs text-white/40">{view.description}</p>
+                          )}
+                          <p className="text-xs text-white/40 mt-1">
+                            {view.config?.visibleColumns?.length || 0} columns
+                          </p>
+                        </div>
+                      </div>
 
-            <Separator />
-
-            <div className="px-6 py-3">
-              <h3 className="text-xs font-semibold text-white/70 tracking-wide">Visible columns</h3>
-            </div>
-            <Separator />
-            <div className="px-6 py-5 space-y-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="w-full justify-between cursor-pointer px-3 py-2 h-[38px] text-xs transition-all active:scale-95 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent text-white/70">
-                    <span>{selectedColumns.length} columns selected</span>
-                    <Settings2 className="h-4 w-4 text-white/50" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="rounded-sm bg-sidebar border border-white/5 w-[400px] max-h-[400px] overflow-auto p-1">
-                  {Object.entries(columnsByCategory).map(([category, columns]) => (
-                    <DropdownMenuSub key={category}>
-                      <DropdownMenuSubTrigger>{category}</DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent className="rounded-sm bg-sidebar border border-white/5 max-h-[300px] overflow-auto p-1">
-                        {columns.map((col) => (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button className="cursor-pointer flex items-center justify-center px-2 py-2 h-[32px] text-xs rounded-sm transition-all active:scale-95 duration-250 border border-white/5 bg-sidebar hover:bg-sidebar-accent">
+                            <MoreVertical className="h-4 w-4 text-white/60" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="rounded-sm bg-sidebar border border-white/5 p-1">
                           <DropdownMenuItem
-                            key={col.id}
-                            onSelect={(e) => {
-                              e.preventDefault();
-                              toggleColumn(col.id);
-                            }}
-                            className="cursor-pointer px-4 py-2.5 text-white/70 hover:bg-sidebar-accent"
+                            onClick={() => setEditingViewId(view.id)}
+                            className="px-4 py-2.5 text-white/70 hover:bg-sidebar-accent"
                           >
-                            <Checkbox
-                              checked={selectedColumns.includes(col.id)}
-                              onCheckedChange={() => toggleColumn(col.id)}
-                              className="mr-2 rounded-sm"
-                              onClick={(e) => e.stopPropagation()}
-                            />
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="cursor-help">{col.label}</span>
-                              </TooltipTrigger>
-                              <TooltipContent className="text-xs">
-                                {COLUMN_TOOLTIPS[col.id] || "Column details"}
-                              </TooltipContent>
-                            </Tooltip>
+                            <Edit className="mr-2 h-4 w-4 text-white/60" />
+                            Edit
                           </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
+                          {!view.isDefault && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => setDefaultMutation.mutate(view.id)}
+                                className="px-4 py-2.5 text-white/70 hover:bg-sidebar-accent"
+                              >
+                                <Star className="mr-2 h-4 w-4 text-white/60" />
+                                Set as default
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => deleteMutation.mutate(view.id)}
+                            className="px-4 py-2.5 text-rose-400 hover:bg-sidebar-accent"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Selected columns preview */}
-              {selectedColumns.length > 0 && (
-                <div className="p-3 bg-sidebar-accent rounded-sm border border-white/5">
-                  <p className="text-xs text-white/40 mb-2">Selected columns:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {selectedColumns.map((colId) => {
-                      const col = AVAILABLE_COLUMNS.find((c) => c.id === colId);
-                      return (
-                        <span
-                          key={colId}
-                          className="text-xs px-2 py-1 bg-sidebar rounded-sm border border-white/5 text-white/70"
-                        >
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="cursor-help">
-                                {col?.label || colId}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent className="text-xs">
-                              {COLUMN_TOOLTIPS[colId] || "Column details"}
-                            </TooltipContent>
-                          </Tooltip>
-                        </span>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
-            </div>
+            </TabsContent>
 
-            <Separator />
+            {/* Create View Tab */}
+            <TabsContent value="create" className="flex-1 overflow-auto">
+              <div className="px-5 py-3">
+                <h3 className="text-xs font-semibold text-white/70 tracking-wide">View details</h3>
+              </div>
+              <Separator />
+              <div className="px-5 py-4 space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-xs text-white/50">View name</Label>
+                  <Input
+                    placeholder="e.g., London Wins"
+                    value={newViewName}
+                    onChange={(e) => setNewViewName(e.target.value)}
+                    className="bg-sidebar border border-white/5 rounded-sm text-white/80 placeholder:text-white/30"
+                  />
+                </div>
 
-            <div className="px-6 py-5">
-              <div className="flex justify-end gap-2">
+                <div className="space-y-2">
+                  <Label className="text-xs text-white/50">Description (optional)</Label>
+                  <Input
+                    placeholder="e.g., Winning trades during London session"
+                    value={newViewDescription}
+                    onChange={(e) => setNewViewDescription(e.target.value)}
+                    className="bg-sidebar border border-white/5 rounded-sm text-white/80 placeholder:text-white/30"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-white/50">Icon</Label>
+                  <div className="flex gap-2 mt-1 flex-wrap">
+                    {DEFAULT_ICONS.map((icon) => (
+                      <button
+                        key={icon}
+                        onClick={() => setNewViewIcon(icon)}
+                        className={cn(
+                          "text-2xl p-2 rounded-sm border border-white/5 hover:bg-sidebar-accent transition-colors",
+                          newViewIcon === icon && "bg-sidebar-accent border-white/20"
+                        )}
+                      >
+                        {icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="px-5 py-3">
+                <h3 className="text-xs font-semibold text-white/70 tracking-wide">Visible columns</h3>
+              </div>
+              <Separator />
+              <div className="px-5 py-4 space-y-3">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="w-full justify-between cursor-pointer px-3 py-2 h-[38px] text-xs transition-all active:scale-95 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent text-white/70">
+                      <span>{selectedColumns.length} columns selected</span>
+                      <Settings2 className="h-4 w-4 text-white/50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="rounded-sm bg-sidebar border border-white/5 w-[400px] max-h-[400px] overflow-auto p-1">
+                    {Object.entries(columnsByCategory).map(([category, columns]) => (
+                      <DropdownMenuSub key={category}>
+                        <DropdownMenuSubTrigger>{category}</DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="rounded-sm bg-sidebar border border-white/5 max-h-[300px] overflow-auto p-1">
+                          {columns.map((col) => (
+                            <DropdownMenuItem
+                              key={col.id}
+                              onSelect={(e) => {
+                                e.preventDefault();
+                                toggleColumn(col.id);
+                              }}
+                              className="cursor-pointer px-4 py-2.5 text-white/70 hover:bg-sidebar-accent"
+                            >
+                              <Checkbox
+                                checked={selectedColumns.includes(col.id)}
+                                onCheckedChange={() => toggleColumn(col.id)}
+                                className="mr-2 rounded-sm"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="cursor-help">{col.label}</span>
+                                </TooltipTrigger>
+                                <TooltipContent className="text-xs">
+                                  {COLUMN_TOOLTIPS[col.id] || "Column details"}
+                                </TooltipContent>
+                              </Tooltip>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Selected columns preview */}
+                {selectedColumns.length > 0 && (
+                  <div className="p-3 bg-sidebar-accent rounded-sm border border-white/5">
+                    <p className="text-xs text-white/40 mb-2">Selected columns:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedColumns.map((colId) => {
+                        const col = AVAILABLE_COLUMNS.find((c) => c.id === colId);
+                        return (
+                          <span
+                            key={colId}
+                            className="text-xs px-2 py-1 bg-sidebar rounded-sm border border-white/5 text-white/70"
+                          >
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help">
+                                  {col?.label || colId}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="text-xs">
+                                {COLUMN_TOOLTIPS[colId] || "Column details"}
+                              </TooltipContent>
+                            </Tooltip>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              <div className="flex items-center justify-end gap-2 px-5 py-3">
                 <Button
-                  variant="outline"
-                  className="rounded-sm"
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                   onClick={() => {
                     resetForm();
                     setActiveTab("my-views");
@@ -524,7 +531,7 @@ export function ViewManagementDialog({ open, onOpenChange }: ViewManagementDialo
                   Cancel
                 </Button>
                 <Button
-                  className="gap-2 rounded-sm"
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                   onClick={handleSaveView}
                   disabled={!newViewName.trim() || saveMutation.isPending}
                 >
@@ -534,9 +541,9 @@ export function ViewManagementDialog({ open, onOpenChange }: ViewManagementDialo
                   }
                 </Button>
               </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </TabsContent>
+          </Tabs>
+        </div>
       </DialogContent>
     </Dialog>
   );

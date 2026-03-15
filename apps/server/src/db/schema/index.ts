@@ -1,4 +1,5 @@
 export * from './auth';
+export * from './billing';
 export * from './trading';
 export * from './ai';
 export * from './copier';
@@ -10,3 +11,4 @@ export * from './connections';
 export * from './mt5-sync';
 export * from './trader-brain';
 export * from './coaching';
+export * from './operations';

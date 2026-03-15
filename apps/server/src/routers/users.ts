@@ -1,10 +1,10 @@
 import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
 import { user as userTable } from "../db/schema/auth";
-import { tradingAccount, trade } from "../db/schema/trading";
-import { and, eq, ne, inArray } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { getUserAchievementSummary } from "../lib/achievements";
 import { createNotification } from "../lib/notifications";
 
 const DASHBOARD_WIDGET_IDS = [
@@ -58,6 +58,7 @@ const CHART_WIDGET_IDS = [
   "r-multiple-distribution",
   "mae-mfe-scatter",
   "entry-exit-time",
+  "hold-time-scatter",
   "monte-carlo",
   "rolling-performance",
   "correlation-matrix",
@@ -765,197 +766,10 @@ export const usersRouter = router({
   getAchievements: protectedProcedure
     .input(z.object({ accountId: z.string() }).optional())
     .query(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-
-      // Get all user accounts if no specific one
-      const accounts = await db
-        .select({ id: tradingAccount.id })
-        .from(tradingAccount)
-        .where(eq(tradingAccount.userId, userId));
-
-      const accountIds = input?.accountId
-        ? [input.accountId]
-        : accounts.map((a) => a.id);
-
-      if (accountIds.length === 0) return { achievements: [], score: 0 };
-
-      // Get all trades across accounts
-      const trades = await db
-        .select()
-        .from(trade)
-        .where(inArray(trade.accountId, accountIds));
-
-      const pnls = trades.map((t) => parseFloat(t.netPnl?.toString() || "0"));
-      const totalTrades = trades.length;
-      const totalPnl = pnls.reduce((s, p) => s + p, 0);
-      const wins = pnls.filter((p) => p > 0).length;
-      const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
-      const grossWin = pnls.filter((p) => p > 0).reduce((s, p) => s + p, 0);
-      const grossLoss = Math.abs(
-        pnls.filter((p) => p < 0).reduce((s, p) => s + p, 0)
+      return getUserAchievementSummary(
+        ctx.session.user.id,
+        input?.accountId
       );
-      const pf = grossLoss > 0 ? grossWin / grossLoss : 0;
-
-      // Streak calculations
-      let maxWinStreak = 0;
-      let currentWinStreak = 0;
-      const sortedPnls = [...trades]
-        .sort(
-          (a, b) =>
-            new Date(a.openTime!).getTime() - new Date(b.openTime!).getTime()
-        )
-        .map((t) => parseFloat(t.netPnl?.toString() || "0"));
-      for (const p of sortedPnls) {
-        if (p > 0) {
-          currentWinStreak++;
-          maxWinStreak = Math.max(maxWinStreak, currentWinStreak);
-        } else currentWinStreak = 0;
-      }
-
-      // Daily profits
-      const dailyPnls: Record<string, number> = {};
-      for (const t of trades) {
-        if (!t.openTime) continue;
-        const d = new Date(t.openTime).toISOString().split("T")[0];
-        dailyPnls[d] =
-          (dailyPnls[d] || 0) + parseFloat(t.netPnl?.toString() || "0");
-      }
-      let maxGreenStreak = 0;
-      let currentGreenStreak = 0;
-      const sortedDays = Object.entries(dailyPnls).sort((a, b) =>
-        a[0].localeCompare(b[0])
-      );
-      for (const [, pnl] of sortedDays) {
-        if (pnl > 0) {
-          currentGreenStreak++;
-          maxGreenStreak = Math.max(maxGreenStreak, currentGreenStreak);
-        } else currentGreenStreak = 0;
-      }
-
-      // Define achievements
-      const allAchievements = [
-        {
-          id: "first_trade",
-          name: "First Trade",
-          description: "Complete your first trade",
-          icon: "🏁",
-          check: () => totalTrades >= 1,
-        },
-        {
-          id: "ten_trades",
-          name: "Getting Started",
-          description: "Complete 10 trades",
-          icon: "📊",
-          check: () => totalTrades >= 10,
-        },
-        {
-          id: "fifty_trades",
-          name: "Committed Trader",
-          description: "Complete 50 trades",
-          icon: "💪",
-          check: () => totalTrades >= 50,
-        },
-        {
-          id: "hundred_trades",
-          name: "Centurion",
-          description: "Complete 100 trades",
-          icon: "🎯",
-          check: () => totalTrades >= 100,
-        },
-        {
-          id: "five_hundred_trades",
-          name: "Veteran",
-          description: "Complete 500 trades",
-          icon: "⭐",
-          check: () => totalTrades >= 500,
-        },
-        {
-          id: "first_profit",
-          name: "In the Green",
-          description: "Achieve overall positive P&L",
-          icon: "💚",
-          check: () => totalPnl > 0,
-        },
-        {
-          id: "fifty_win_rate",
-          name: "Edge Found",
-          description: "Maintain 50%+ win rate (50+ trades)",
-          icon: "📈",
-          check: () => winRate >= 50 && totalTrades >= 50,
-        },
-        {
-          id: "sixty_win_rate",
-          name: "Sharp Shooter",
-          description: "Maintain 60%+ win rate (100+ trades)",
-          icon: "🎯",
-          check: () => winRate >= 60 && totalTrades >= 100,
-        },
-        {
-          id: "profit_factor_2",
-          name: "Double Edge",
-          description: "Achieve profit factor above 2.0",
-          icon: "💎",
-          check: () => pf >= 2 && totalTrades >= 30,
-        },
-        {
-          id: "win_streak_5",
-          name: "Hot Streak",
-          description: "Win 5 trades in a row",
-          icon: "🔥",
-          check: () => maxWinStreak >= 5,
-        },
-        {
-          id: "win_streak_10",
-          name: "Unstoppable",
-          description: "Win 10 trades in a row",
-          icon: "🏆",
-          check: () => maxWinStreak >= 10,
-        },
-        {
-          id: "green_week",
-          name: "Green Week",
-          description: "5 consecutive profitable days",
-          icon: "📅",
-          check: () => maxGreenStreak >= 5,
-        },
-        {
-          id: "green_month",
-          name: "Green Month",
-          description: "20 consecutive profitable days",
-          icon: "🗓️",
-          check: () => maxGreenStreak >= 20,
-        },
-        {
-          id: "thousand_pnl",
-          name: "First Grand",
-          description: "Earn $1,000 in total profit",
-          icon: "💰",
-          check: () => totalPnl >= 1000,
-        },
-        {
-          id: "ten_k_pnl",
-          name: "Five Figures",
-          description: "Earn $10,000 in total profit",
-          icon: "🤑",
-          check: () => totalPnl >= 10000,
-        },
-      ];
-
-      const earned = allAchievements.filter((a) => a.check());
-      const score = earned.length;
-
-      return {
-        achievements: allAchievements.map((a) => ({
-          id: a.id,
-          name: a.name,
-          description: a.description,
-          icon: a.icon,
-          earned: a.check(),
-        })),
-        earned: earned.length,
-        total: allAchievements.length,
-        score,
-      };
     }),
 
   // ============== TIMEZONE MANAGEMENT ==============

@@ -108,7 +108,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
         discord: data?.discord ?? "",
       });
     })();
-  }, []);
+  }, [form]);
 
   return (
     <div className="w-full max-w-lg bg-sidebar rounded-xl shadow-sidebar-button">

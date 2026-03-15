@@ -6,6 +6,8 @@ import { Suspense, useEffect, useState } from "react";
 import { trpcClient } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import type { Me } from "@/types/user";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
+import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 
 function AssistantPageContent() {
   const searchParams = useSearchParams();
@@ -35,6 +37,15 @@ function AssistantPageContent() {
 }
 
 export default function AssistantPage() {
+  if (!isPublicAlphaFeatureEnabled("aiAssistant")) {
+    return (
+      <AlphaFeatureLocked
+        feature="aiAssistant"
+        title="Assistant is held back in this alpha"
+      />
+    );
+  }
+
   return (
     <Suspense
       fallback={

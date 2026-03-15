@@ -1,12 +1,15 @@
 import { createRouteHandler } from "uploadthing/next";
 
-import { ourFileRouter } from "./core";
+import { ourFileRouter } from "@profitabledge/contracts/uploadthing";
+import { getServerEnv } from "@/lib/env";
+
+const serverEnv = getServerEnv();
 
 // Export routes for Next App Router
 export const { GET, POST } = createRouteHandler({
   router: ourFileRouter,
   config: {
-    token: process.env.UPLOADTHING_TOKEN,
+    token: serverEnv.UPLOADTHING_TOKEN,
   },
 });
 

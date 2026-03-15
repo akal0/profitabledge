@@ -2,14 +2,6 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "@/routers";
 import { createContext } from "@/lib/context";
 import { NextRequest } from "next/server";
-import { startSyncScheduler } from "@/lib/providers/sync-scheduler";
-
-// Start sync scheduler once (module-level singleton)
-let _schedulerStarted = false;
-if (!_schedulerStarted && process.env.NODE_ENV !== "test") {
-  _schedulerStarted = true;
-  startSyncScheduler();
-}
 
 function handler(req: NextRequest) {
   return fetchRequestHandler({

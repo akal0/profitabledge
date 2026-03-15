@@ -20,7 +20,16 @@ import {
   XIcon,
 } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import {
+  Children,
+  createContext,
+  isValidElement,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Streamdown } from "streamdown";
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
@@ -188,7 +197,13 @@ export const MessageBranchContent = ({
   ...props
 }: MessageBranchContentProps) => {
   const { currentBranch, setBranches, branches } = useMessageBranch();
-  const childrenArray = Array.isArray(children) ? children : [children];
+  const childrenArray = useMemo(
+    () =>
+      Children.toArray(children).filter((child): child is ReactElement =>
+        isValidElement(child)
+      ),
+    [children]
+  );
 
   // Use useEffect to update branches when they change
   useEffect(() => {

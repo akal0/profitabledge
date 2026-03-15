@@ -16,7 +16,12 @@ import {
   resolveScopedAccountIds,
   isAllAccountsScope,
 } from "../../account-scope";
-import { getOrComputeProfile, getFullProfile } from "./trader-profile";
+import { getFullProfile } from "./trader-profile";
+import {
+  describeConditionPredicate,
+  describeConditionTrades,
+  matchesConditionFilters,
+} from "./condition-language";
 import type {
   TraderProfileData,
   EdgeCondition,
@@ -65,6 +70,14 @@ function formatDollar(val: number): string {
   return `${sign}${Math.abs(val).toFixed(2)}`;
 }
 
+function formatCountNoun(
+  count: number,
+  singular: string,
+  plural = `${singular}s`
+): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 // ─── Get Recent Trades ──────────────────────────────────────────
 
 async function getRecentTrades(
@@ -93,6 +106,30 @@ async function getRecentTrades(
     .orderBy(desc(tradeTable.closeTime));
 }
 
+async function getLatestClosedTrades(
+  accountId: string,
+  userId: string,
+  limit: number
+): Promise<ClosedTrade[]> {
+  const accountIds = await resolveScopedAccountIds(userId, accountId);
+
+  if (accountIds.length === 0) {
+    return [];
+  }
+
+  return db
+    .select()
+    .from(tradeTable)
+    .where(
+      and(
+        buildAccountScopeCondition(tradeTable.accountId, accountIds),
+        sql`${tradeTable.closeTime} IS NOT NULL`
+      )
+    )
+    .orderBy(desc(tradeTable.closeTime))
+    .limit(limit);
+}
+
 // ─── Main Insight Generator ─────────────────────────────────────
 
 export async function generateInsights(
@@ -104,10 +141,19 @@ export async function generateInsights(
   if (!fullProfile) return [];
 
   const { profile, edges, leaks } = fullProfile;
-  if (profile.totalTrades < 15) return [];
 
-  const recentTrades = await getRecentTrades(accountId, userId, 7);
-  if (recentTrades.length < 3) return [];
+  // Manual trigger is more lenient — useful when user explicitly requests insights
+  const minTotalTrades = trigger === "manual" ? 5 : 15;
+  const lookbackDays = trigger === "manual" ? 30 : 7;
+  const minRecentTrades = trigger === "manual" ? 1 : 3;
+
+  if (profile.totalTrades < minTotalTrades) return [];
+
+  let recentTrades = await getRecentTrades(accountId, userId, lookbackDays);
+  if (trigger === "manual" && recentTrades.length < minRecentTrades) {
+    recentTrades = await getLatestClosedTrades(accountId, userId, 30);
+  }
+  if (recentTrades.length < minRecentTrades) return [];
 
   const insights: InsightResult[] = [];
 
@@ -445,24 +491,19 @@ function generatePatternInsights(
   // Highlight top edge condition
   if (edges.length > 0) {
     const topEdge = edges[0];
-    const matchingRecent = recent.filter((t) => {
-      return Object.entries(topEdge.filters).every(([dim, val]) => {
-        if (dim === "symbol") return t.symbol === val;
-        if (dim === "session") return t.sessionTag === val;
-        if (dim === "model") return t.modelTag === val;
-        if (dim === "protocol") return t.protocolAlignment === val;
-        if (dim === "direction") return t.tradeType === val;
-        return true; // Skip bucket-based for matching
-      });
-    });
+    const matchingRecent = recent.filter((t) =>
+      matchesConditionFilters(t, topEdge.filters)
+    );
 
     if (matchingRecent.length > 0) {
+      const edgePredicate = describeConditionPredicate(topEdge.filters);
       insights.push({
         category: "pattern",
         severity: "positive",
         title: "Trading in your edge",
-        message: `Your best pattern "${topEdge.label}" has a ${formatPct(topEdge.winRate)} win rate (${topEdge.trades} trades). You took ${matchingRecent.length} matching trade(s) this week.`,
-        recommendation: "Keep focusing on this setup when conditions align.",
+        message: `Your best trades ${edgePredicate}, with a win rate of ${formatPct(topEdge.winRate)} (${topEdge.trades} trades). You took ${formatCountNoun(matchingRecent.length, "matching trade")} this week.`,
+        recommendation:
+          "Keep prioritizing this type of setup when it appears and note what made it work.",
         data: { edge: topEdge, recentMatches: matchingRecent.length },
       });
     }
@@ -471,24 +512,19 @@ function generatePatternInsights(
   // Warn about leak conditions
   if (leaks.length > 0) {
     for (const leak of leaks.slice(0, 2)) {
-      const matchingRecent = recent.filter((t) => {
-        return Object.entries(leak.filters).every(([dim, val]) => {
-          if (dim === "symbol") return t.symbol === val;
-          if (dim === "session") return t.sessionTag === val;
-          if (dim === "model") return t.modelTag === val;
-          if (dim === "protocol") return t.protocolAlignment === val;
-          if (dim === "direction") return t.tradeType === val;
-          return true;
-        });
-      });
+      const matchingRecent = recent.filter((t) =>
+        matchesConditionFilters(t, leak.filters)
+      );
 
       if (matchingRecent.length >= 2) {
+        const leakPredicate = describeConditionPredicate(leak.filters);
         insights.push({
           category: "pattern",
           severity: "warning",
           title: "Repeating a losing pattern",
-          message: `You took ${matchingRecent.length} trades matching "${leak.label}" this week. This pattern has only a ${formatPct(leak.winRate)} win rate historically (${leak.trades} trades).`,
-          recommendation: `Consider filtering out "${leak.label}" trades or reducing position size.`,
+          message: `You took ${matchingRecent.length} trades that ${leakPredicate} this week. This pattern only has a ${formatPct(leak.winRate)} win rate historically (${leak.trades} trades). Be careful, you're repeating a losing pattern.`,
+          recommendation:
+            "Review this setup in the trades table and tighten the filters you allow yourself to take.",
           data: { leak, recentMatches: matchingRecent.length },
         });
         break; // Only show one leak warning per cycle
@@ -517,7 +553,7 @@ function generateAnomalyInsights(
       category: "anomaly",
       severity: "info",
       title: "Exploring new symbols",
-      message: `You traded ${newSymbols.length} symbol(s) this week that you haven't traded before: ${newSymbols.join(", ")}. New symbols lack historical data for reliable analysis.`,
+      message: `You traded ${formatCountNoun(newSymbols.length, "new symbol")} this week: ${newSymbols.join(", ")}. New symbols do not have enough personal history yet for reliable pattern analysis.`,
       recommendation:
         "Reduce position size on unfamiliar instruments until you build a track record.",
       data: { newSymbols },
@@ -585,23 +621,17 @@ function generateTradeSpecificInsights(
 
   // Check if trade matched an edge condition
   for (const edge of edges.slice(0, 3)) {
-    const matches = Object.entries(edge.filters).every(([dim, val]) => {
-      if (dim === "symbol") return trade.symbol === val;
-      if (dim === "session") return trade.sessionTag === val;
-      if (dim === "model") return trade.modelTag === val;
-      if (dim === "protocol") return trade.protocolAlignment === val;
-      if (dim === "direction") return trade.tradeType === val;
-      return true;
-    });
+    const matches = matchesConditionFilters(trade, edge.filters);
 
     if (matches) {
+      const edgeDescription = describeConditionTrades(edge.filters);
       insights.push({
         category: "pattern",
         severity: wasWin ? "positive" : "info",
         title: wasWin
           ? "Edge condition — another win"
           : "Edge condition — rare miss",
-        message: `This trade matched your edge pattern "${edge.label}" (${formatPct(edge.winRate)} WR). ${wasWin ? "The pattern continues to hold." : "Not every trade in your edge will win, but the odds are in your favor."}`,
+        message: `This trade matched one of your strongest patterns. Historically, ${edgeDescription} win ${formatPct(edge.winRate)} of the time (${edge.trades} trades). ${wasWin ? "The pattern continues to hold." : "Not every strong pattern wins every time, but the odds are still in your favor."}`,
         recommendation: wasWin
           ? "Keep trading this pattern."
           : "One loss doesn't invalidate the edge. Stick to the process.",
@@ -613,22 +643,17 @@ function generateTradeSpecificInsights(
 
   // Check if trade matched a leak condition
   for (const leak of leaks.slice(0, 3)) {
-    const matches = Object.entries(leak.filters).every(([dim, val]) => {
-      if (dim === "symbol") return trade.symbol === val;
-      if (dim === "session") return trade.sessionTag === val;
-      if (dim === "model") return trade.modelTag === val;
-      if (dim === "protocol") return trade.protocolAlignment === val;
-      if (dim === "direction") return trade.tradeType === val;
-      return true;
-    });
+    const matches = matchesConditionFilters(trade, leak.filters);
 
     if (matches && !wasWin) {
+      const leakDescription = describeConditionTrades(leak.filters);
       insights.push({
         category: "pattern",
         severity: "warning",
         title: "Leak pattern — expected loss",
-        message: `This trade matched your leak pattern "${leak.label}" (${formatPct(leak.winRate)} WR). This pattern consistently underperforms.`,
-        recommendation: `Consider filtering out "${leak.label}" from your playbook.`,
+        message: `This trade matched one of your weakest patterns. Historically, ${leakDescription} win only ${formatPct(leak.winRate)} of the time (${leak.trades} trades).`,
+        recommendation:
+          "Review whether this setup belongs in your playbook at all, or if it needs tighter filters.",
         data: { leak, profit },
       });
       break;

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../lib/trpc";
 import { db } from "../db";
 import {
@@ -7,12 +8,12 @@ import {
   propDailySnapshot,
   propChallengeInstance,
   propChallengeRule,
-  propFirm,
   trade,
 } from "../db/schema/trading";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import {
   detectPropFirm,
+  ensureCustomPropFirmForUser,
   getAccessiblePropFirms,
   getChallengeRuleById,
   getPropFirmById,
@@ -59,6 +60,35 @@ function gaussianishSample() {
       3) /
     Math.sqrt(3)
   );
+}
+
+function getSortedChallengePhases(phases: any[]) {
+  return [...phases]
+    .filter((phase) => Number.isFinite(Number(phase?.order)))
+    .sort((left, right) => {
+      const leftOrder = Number(left?.order);
+      const rightOrder = Number(right?.order);
+      if (leftOrder === 0) return 1;
+      if (rightOrder === 0) return -1;
+      return leftOrder - rightOrder;
+    });
+}
+
+function getNextChallengePhaseOrder(phases: any[], currentPhase: number) {
+  if (currentPhase === 0) return null;
+
+  const orderedChallengePhases = getSortedChallengePhases(phases).map((phase) =>
+    Number(phase.order)
+  );
+  const currentIndex = orderedChallengePhases.findIndex(
+    (phaseOrder) => phaseOrder === currentPhase
+  );
+
+  if (currentIndex === -1) {
+    return orderedChallengePhases[0] ?? null;
+  }
+
+  return orderedChallengePhases[currentIndex + 1] ?? 0;
 }
 
 function sampleOne<T>(values: T[]) {
@@ -222,23 +252,11 @@ export const propFirmsRouter = router({
         },
       ];
 
-      const [createdFirm] = await db
-        .insert(propFirm)
-        .values({
-          id: crypto.randomUUID(),
-          createdByUserId: ctx.session.user.id,
-          name: propFirmName,
-          displayName: propFirmName,
-          description: firmDescription,
-          logo: null,
-          website: null,
-          supportedPlatforms: ["mt4", "mt5", "ctrader"],
-          brokerDetectionPatterns: [],
-          active: true,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
+      const createdFirm = await ensureCustomPropFirmForUser({
+        userId: ctx.session.user.id,
+        propFirmName,
+        description: firmDescription,
+      });
 
       if (!createdFirm) {
         throw new Error("Failed to create prop firm");
@@ -359,6 +377,9 @@ export const propFirmsRouter = router({
       let resolvedChallengeRuleId =
         input.challengeRuleId ?? account.propChallengeRuleId;
       let resolvedCurrentPhase = input.currentPhase ?? 1;
+      let selectedChallengeInstance:
+        | typeof propChallengeInstance.$inferSelect
+        | null = null;
 
       if (input.challengeInstanceId) {
         const challengeInstance =
@@ -373,13 +394,83 @@ export const propFirmsRouter = router({
           throw new Error("Challenge not found or access denied");
         }
 
+        selectedChallengeInstance = challengeInstance;
         resolvedPropFirmId = challengeInstance.propFirmId;
         resolvedChallengeRuleId = challengeInstance.propChallengeRuleId;
-        resolvedCurrentPhase = challengeInstance.currentPhase;
       }
 
       if (!resolvedPropFirmId || !resolvedChallengeRuleId) {
         throw new Error("Challenge configuration is incomplete");
+      }
+
+      const challengeRule = await getChallengeRuleById(
+        resolvedChallengeRuleId,
+        ctx.session.user.id
+      );
+      const resolvedPropFirm = await getPropFirmById(
+        resolvedPropFirmId,
+        ctx.session.user.id
+      );
+
+      if (!resolvedPropFirm || !challengeRule) {
+        throw new Error("Challenge configuration not found");
+      }
+
+      if (selectedChallengeInstance) {
+        const currentChallengeAccount =
+          selectedChallengeInstance.currentAccountId
+            ? await db.query.tradingAccount.findFirst({
+                where: and(
+                  eq(
+                    tradingAccount.id,
+                    selectedChallengeInstance.currentAccountId
+                  ),
+                  eq(tradingAccount.userId, ctx.session.user.id)
+                ),
+                columns: {
+                  id: true,
+                  name: true,
+                  propPhaseStatus: true,
+                },
+              })
+            : null;
+        const currentPhaseLabel =
+          ((challengeRule.phases as any[]) || []).find(
+            (phase: any) =>
+              phase.order === selectedChallengeInstance.currentPhase
+          )?.name ||
+          (selectedChallengeInstance.currentPhase === 0
+            ? "Funded"
+            : `Phase ${selectedChallengeInstance.currentPhase}`);
+
+        if (selectedChallengeInstance.currentPhase === 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "This challenge has already reached funded.",
+          });
+        }
+
+        if (currentChallengeAccount?.propPhaseStatus !== "passed") {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `You can't continue to the next phase until ${currentPhaseLabel} is passed on the current account.`,
+          });
+        }
+
+        const nextPhase = getNextChallengePhaseOrder(
+          (challengeRule.phases as any[]) || [],
+          selectedChallengeInstance.currentPhase
+        );
+
+        if (nextPhase == null) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "This challenge does not have another phase to continue into.",
+          });
+        }
+
+        resolvedCurrentPhase = nextPhase;
       }
 
       const { phaseStartDate, startBalance, startEquity } =
@@ -397,18 +488,6 @@ export const propFirmsRouter = router({
           }
         );
 
-      const challengeRule = await getChallengeRuleById(
-        resolvedChallengeRuleId,
-        ctx.session.user.id
-      );
-      const resolvedPropFirm = await getPropFirmById(
-        resolvedPropFirmId,
-        ctx.session.user.id
-      );
-
-      if (!resolvedPropFirm || !challengeRule) {
-        throw new Error("Challenge configuration not found");
-      }
       const phaseLabel =
         ((challengeRule?.phases as any[]) || []).find(
           (phase: any) => phase.order === resolvedCurrentPhase

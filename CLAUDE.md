@@ -2,9 +2,43 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Canonical project reference docs now live under `docs/reference/...`.
+Use `docs/README.md` as the entrypoint for current implementation guides.
+Follow `AGENTS.md` as the authoritative documentation-first operating procedure.
+
+## Documentation Workflow
+
+Before implementing, updating, or removing features:
+
+1. read the relevant docs in `docs/reference/...`
+2. verify against the code if the docs appear stale
+
+After changing behavior, structure, schema, integrations, or workflows:
+
+1. update the relevant `docs/reference/...` files in the same task
+2. fix any stale pointer or index docs caused by the change
+
+Do not treat feature work as complete until the touched docs are updated or confirmed accurate.
+
+In implementation responses, include:
+
+- which docs were consulted
+- which docs were updated
+
+## IMPORTANT: Development Server Rules
+
+**DO NOT start, stop, restart, or interact with development servers unless explicitly requested by the user.**
+
+- The user always has `bun dev` running in their own terminal
+- Frontend runs on port 3001, backend on port 3000
+- Never use `bun dev`, `bun dev:web`, `bun dev:server`, `pkill`, `lsof`, or any server management commands
+- Assume servers are always running and will hot-reload automatically
+- Focus on code changes only - the servers will pick them up automatically
+
 ## Project Overview
 
 This is a full-stack TypeScript monorepo built with Better-T-Stack, featuring:
+
 - **Frontend**: Next.js app (port 3001) with React 19, TailwindCSS v4, shadcn/ui components
 - **Backend**: Next.js API (port 3000) with tRPC for type-safe APIs
 - **Database**: PostgreSQL with Drizzle ORM
@@ -42,11 +76,13 @@ cd apps/server && bun lint # Lint backend (if available)
 ## Architecture
 
 ### Monorepo Structure
+
 - `apps/web/` - Next.js frontend with TypeScript project references to server
 - `apps/server/` - Next.js API backend with tRPC routes
 - Shared TypeScript configuration and build pipeline via Turborepo
 
 ### Key Files
+
 - `apps/server/src/routers/index.ts` - Main tRPC router
 - `apps/server/src/lib/trpc.ts` - tRPC setup with protected procedures
 - `apps/server/src/lib/auth.ts` - Better Auth configuration
@@ -55,23 +91,27 @@ cd apps/server && bun lint # Lint backend (if available)
 - `drizzle.config.ts` - Database configuration
 
 ### Authentication Flow
+
 - Better Auth handles email/password authentication
 - Protected tRPC procedures check for valid session in context
 - Frontend uses credentials: "include" for cookie-based auth
 - Database schema includes user, session, account, and verification tables
 
 ### Database Setup Required
+
 1. Set up PostgreSQL database
 2. Configure `apps/server/.env` with DATABASE_URL
 3. Run `bun db:push` to apply schema
 
-
 ## Environment Variables
+
 Backend (`apps/server/.env`):
+
 - `DATABASE_URL` - PostgreSQL connection string
 - `BETTER_AUTH_SECRET` - Auth secret key
 - `BETTER_AUTH_URL` - Auth base URL
 - `CORS_ORIGIN` - Allowed CORS origin
 
 Frontend (`apps/web/.env.local`):
+
 - `NEXT_PUBLIC_SERVER_URL` - Backend API URL (typically http://localhost:3000)

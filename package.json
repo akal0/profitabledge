@@ -8,17 +8,24 @@
   "scripts": {
     "dev": "turbo dev",
     "dev:all": "mprocs",
+<<<<<<< Updated upstream
     "build": "turbo build",
     "check-types": "turbo check-types",
     "lint": "turbo lint",
     "test": "bun test apps/server/src apps/web/src",
+=======
+    "build": "bun run contracts:generate-trpc && turbo build",
+    "check-types": "bun run contracts:generate-trpc && turbo check-types",
+    "lint": "turbo -F web lint",
+    "test": "bun test",
+    "contracts:generate-trpc": "node scripts/generate-trpc-contract.mjs",
+>>>>>>> Stashed changes
     "ai:validate:deterministic": "turbo -F server ai:validate:deterministic",
     "mt5:backfill": "bun run --cwd apps/server mt5:backfill",
     "mt5:mock-sync": "bun run --cwd apps/server mt5:mock-sync",
     "price:dedupe": "bun run --cwd apps/server price:dedupe",
     "price:prune": "bun run --cwd apps/server price:prune",
     "setup:hooks": "bash scripts/setup-git-hooks.sh",
-    "dev:native": "turbo -F native dev",
     "dev:web": "turbo -F web dev",
     "dev:server": "turbo -F server dev",
     "db:push": "turbo -F server db:push",

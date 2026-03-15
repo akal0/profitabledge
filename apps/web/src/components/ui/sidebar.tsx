@@ -162,7 +162,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
 }) {
-  const { isMobile, state, openMobile, setOpenMobile, setOpen } = useSidebar();
+  const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
   if (collapsible === "none") {
     return (
@@ -204,17 +204,6 @@ function Sidebar({
     );
   }
 
-  const wasCollapsedRef = React.useRef(false);
-  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
-
-  React.useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    };
-  }, []);
-
   return (
     <div
       className="group peer text-sidebar-foreground hidden md:block"
@@ -223,25 +212,6 @@ function Sidebar({
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
-      // onMouseEnter={() => {
-      //   if (closeTimerRef.current) {
-      //     clearTimeout(closeTimerRef.current);
-      //     closeTimerRef.current = null;
-      //   }
-      //   if (collapsible === "icon" && state === "collapsed") {
-      //     wasCollapsedRef.current = true;
-      //     setOpen(true);
-      //   }
-      // }}
-      // onMouseLeave={() => {
-      //   if (collapsible === "icon" && wasCollapsedRef.current) {
-      //     closeTimerRef.current = setTimeout(() => {
-      //       setOpen(false);
-      //       wasCollapsedRef.current = false;
-      //       closeTimerRef.current = null;
-      //     }, 180);
-      //   }
-      // }}
     >
       {/* This is what handles the sidebar gap on desktop */}
       <div
@@ -541,23 +511,24 @@ function SidebarMenuButton({
     return button;
   }
 
-  if (typeof tooltip === "string") {
-    tooltip = {
-      children: tooltip,
-    };
-  }
+  const { children: tooltipChildren, ...tooltipRest } =
+    typeof tooltip === "string" ? { children: tooltip } : tooltip;
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent
-        className="bg-sidebar-accent text-white py-3 px-5 text-xs rounded-xs tracking-wide border-white/5"
+        className="px-0 py-2 border-white/5"
         side="right"
         align="center"
         hidden={state !== "collapsed" || isMobile}
-        {...tooltip}
         sideOffset={12}
-      />
+        {...tooltipRest}
+      >
+        <div className="px-3 text-xs font-medium text-white">
+          {tooltipChildren}
+        </div>
+      </TooltipContent>
     </Tooltip>
   );
 }

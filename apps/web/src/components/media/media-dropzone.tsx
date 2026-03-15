@@ -1,7 +1,15 @@
 "use client";
 
 import React, { useCallback, useState } from "react";
-import { Upload, Image, Video, X, Play, FileVideo, Loader2 } from "lucide-react";
+import {
+  Upload,
+  Image as ImageIcon,
+  Video,
+  X,
+  Play,
+  FileVideo,
+  Loader2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -262,7 +270,7 @@ export function MediaDropzone({
         <div className="flex flex-col items-center gap-3 p-4">
           <div className="flex gap-2">
             <div className="rounded-lg bg-muted p-3">
-              <Image className="h-5 w-5 text-muted-foreground" />
+              <ImageIcon className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="rounded-lg bg-muted p-3">
               <Video className="h-5 w-5 text-muted-foreground" />
@@ -306,7 +314,7 @@ export function MediaDropzone({
               ) : (
                 <div className="flex h-full w-full items-center justify-center">
                   {mediaFile.type === "image" ? (
-                    <Image className="h-8 w-8 text-muted-foreground" />
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
                   ) : (
                     <FileVideo className="h-8 w-8 text-muted-foreground" />
                   )}

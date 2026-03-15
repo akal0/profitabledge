@@ -17,9 +17,7 @@ type PropDashboardLike = {
     propCurrentPhase?: number | null;
   } | null;
   challengeRule?: {
-    phases?: Array<{
-      order?: number | null;
-    }> | null;
+    phases?: unknown;
   } | null;
 };
 
@@ -30,9 +28,9 @@ type PropStatusAppearance = {
 
 const DEFAULT_HEADER_BADGE_CLASS =
   "h-7 rounded-sm px-1.5 text-[10px] font-medium";
-const FUNDED_APPEARANCE: PropStatusAppearance = {
+export const FUNDED_PROP_STATUS_APPEARANCE: PropStatusAppearance = {
   label: "Funded",
-  className: "border-amber-400/25 bg-amber-400/10 text-amber-200",
+  className: "ring-amber-400/25 bg-amber-400/10 text-amber-200 px-2.5",
 };
 
 export function getPropStatusAppearance(
@@ -42,27 +40,28 @@ export function getPropStatusAppearance(
     case "active":
       return {
         label: "Active",
-        className: "border-blue-500/30 bg-blue-500/15 text-blue-400",
+        className: "ring-blue-500/30 bg-blue-500/15 text-blue-400 px-2.5",
       };
     case "passed":
       return {
         label: "Passed",
-        className: "border-teal-500/30 bg-teal-500/15 text-teal-400",
+        className: "ring-teal-500/30 bg-teal-500/15 text-teal-400 px-2.5",
       };
     case "failed":
       return {
         label: "Failed",
-        className: "border-red-500/30 bg-red-500/15 text-red-400",
+        className: "ring-red-500/30 bg-red-500/15 text-red-400 px-2.5",
       };
     case "paused":
       return {
         label: "Paused",
-        className: "border-white/10 bg-sidebar text-white/50",
+        className: "ring-white/10 bg-sidebar text-white/50 px-2.5",
       };
     default:
       return {
         label: "Unknown",
-        className: "border-white/10 bg-black/10 text-white/50 dark:bg-sidebar",
+        className:
+          "ring-white/10 bg-black/10 text-white/50 dark:bg-sidebar px-2.5",
       };
   }
 }
@@ -105,10 +104,12 @@ export function isAboutToPassPropTrackerAccount(
   }
 
   const evaluationPhases = Array.isArray(dashboard?.challengeRule?.phases)
-    ? dashboard.challengeRule.phases.filter((phase) => (phase?.order ?? 0) > 0)
+    ? dashboard.challengeRule.phases.filter(
+        (phase: any) => (phase?.order ?? 0) > 0
+      )
     : [];
   const finalChallengePhaseOrder = evaluationPhases.reduce(
-    (max, phase) => Math.max(max, Number(phase?.order) || 0),
+    (max, phase: any) => Math.max(max, Number(phase?.order) || 0),
     0
   );
 
@@ -131,7 +132,7 @@ export function PropAccountStatusBadges({
 }) {
   const isFunded = isFundedPropTrackerAccount(account, dashboard);
   const statusAppearance = isFunded
-    ? FUNDED_APPEARANCE
+    ? FUNDED_PROP_STATUS_APPEARANCE
     : getPropStatusAppearance(
         getEffectivePropTrackerStatus(account, dashboard)
       );
@@ -150,7 +151,7 @@ export function PropAccountStatusBadges({
           variant="outline"
           className={cn(
             badgeClassName,
-            "border-amber-500/30 bg-amber-500/15 text-amber-300"
+            "ring-amber-500/30 bg-amber-500/15 text-amber-300 px-2.5"
           )}
         >
           About to pass

@@ -39,7 +39,7 @@ const parseNumber = (value: string) => {
 const cleanRules = (rules: ComplianceRules) =>
   Object.fromEntries(
     Object.entries(rules).filter(
-      ([, value]) => value !== undefined && value !== null && value !== ""
+      ([, value]) => value !== undefined && value !== null
     )
   );
 

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
-/** @type {import('next').NextConfig} */
+
 const nextConfig: NextConfig = {
+  transpilePackages: ["@profitabledge/contracts", "@profitabledge/platform"],
   async redirects() {
     return [
       {
@@ -14,6 +15,24 @@ const nextConfig: NextConfig = {
         permanent: false,
       },
     ];
+  },
+  webpack(config) {
+    const fileLoaderRule = config.module.rules.find(
+      (rule: { test?: RegExp | { test: (path: string) => boolean } }) =>
+        rule?.test instanceof RegExp && rule.test.test(".svg")
+    ) as { exclude?: RegExp; test?: RegExp } | undefined;
+
+    if (fileLoaderRule) {
+      fileLoaderRule.exclude = /\.svg$/i;
+    }
+
+    config.module.rules.push({
+      test: /\.svg$/i,
+      issuer: /\.[jt]sx?$/,
+      use: ["@svgr/webpack"],
+    });
+
+    return config;
   },
   images: {
     remotePatterns: [
@@ -31,12 +50,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+<<<<<<< Updated upstream
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: true,
   },
+=======
+>>>>>>> Stashed changes
   turbopack: {
     rules: {
       "*.svg": {
@@ -47,4 +69,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

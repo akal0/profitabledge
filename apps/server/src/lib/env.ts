@@ -1,0 +1,101 @@
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
+import { z } from "zod";
+
+const serverEnvSchema = z.object({
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  BETTER_AUTH_SECRET: z.string().min(1).optional(),
+  BETTER_AUTH_URL: z.string().min(1).optional(),
+  CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
+  BROKER_WORKER_SECRET: z.string().min(1).optional(),
+  CORS_ORIGIN: z.string().min(1).optional(),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
+  GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+  TWITTER_CLIENT_ID: z.string().min(1).optional(),
+  TWITTER_CLIENT_SECRET: z.string().min(1).optional(),
+  UPLOADTHING_TOKEN: z.string().min(1).optional(),
+  WEB_URL: z.string().url().optional(),
+  POLAR_ACCESS_TOKEN: z.string().min(1).optional(),
+  POLAR_WEBHOOK_SECRET: z.string().min(1).optional(),
+  POLAR_SERVER: z.enum(["production", "sandbox"]).optional(),
+  POLAR_PRODUCT_PRO_ID: z.string().min(1).optional(),
+  POLAR_PRODUCT_ELITE_ID: z.string().min(1).optional(),
+  GITHUB_FEATURE_REQUEST_TOKEN: z.string().min(1).optional(),
+  GITHUB_FEATURE_REQUEST_OWNER: z.string().min(1).optional(),
+  GITHUB_FEATURE_REQUEST_REPO: z.string().min(1).optional(),
+  PRIVATE_BETA_REQUIRED: z.string().min(1).optional(),
+  PRIVATE_BETA_ADMIN_EMAILS: z.string().min(1).optional(),
+  AFFILIATE_COMMISSION_BPS: z.coerce.number().int().min(0).max(10000).optional(),
+  ALPHA_ENABLE_AI_ASSISTANT: z.string().min(1).optional(),
+  ALPHA_ENABLE_COMMUNITY: z.string().min(1).optional(),
+  ALPHA_ENABLE_CONNECTIONS: z.string().min(1).optional(),
+  ALPHA_ENABLE_BACKTEST: z.string().min(1).optional(),
+  ALPHA_ENABLE_FEEDBACK: z.string().min(1).optional(),
+  ALPHA_ENABLE_SUPPORT_DIAGNOSTICS: z.string().min(1).optional(),
+  ALPHA_ENABLE_SCHEDULED_SYNC: z.string().min(1).optional(),
+  ALPHA_ENABLE_MT5_INGESTION: z.string().min(1).optional(),
+  ALPHA_SUPPORT_EMAIL: z.string().email().optional(),
+});
+
+let envLoaded = false;
+let cachedEnv: z.infer<typeof serverEnvSchema> | null = null;
+
+function resolveEnvDirectories() {
+  const cwd = path.resolve(process.cwd());
+  const marker = `${path.sep}apps${path.sep}server`;
+  const markerIndex = cwd.indexOf(marker);
+
+  if (markerIndex >= 0) {
+    const repoRoot = cwd.slice(0, markerIndex) || path.sep;
+    const serverRoot = cwd.slice(0, markerIndex + marker.length);
+
+    return {
+      repoRoot,
+      serverRoot,
+    };
+  }
+
+  return {
+    repoRoot: cwd,
+    serverRoot: path.resolve(cwd, "apps/server"),
+  };
+}
+
+function candidateEnvPaths(): string[] {
+  const { repoRoot, serverRoot } = resolveEnvDirectories();
+
+  return [
+    path.resolve(serverRoot, ".env.local"),
+    path.resolve(repoRoot, ".env.local"),
+    path.resolve(serverRoot, ".env"),
+    path.resolve(repoRoot, ".env"),
+  ];
+}
+
+function ensureServerEnvLoaded() {
+  if (envLoaded) return;
+
+  for (const candidate of candidateEnvPaths()) {
+    if (fs.existsSync(candidate)) {
+      dotenv.config({ path: candidate, override: false });
+    }
+  }
+
+  envLoaded = true;
+}
+
+export function getServerEnv() {
+  if (cachedEnv) return cachedEnv;
+
+  ensureServerEnvLoaded();
+  cachedEnv = serverEnvSchema.parse(process.env);
+  return cachedEnv;
+}
+
+export function resetServerEnvForTests() {
+  envLoaded = false;
+  cachedEnv = null;
+}

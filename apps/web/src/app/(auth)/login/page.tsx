@@ -264,8 +264,8 @@ const LoginPage = () => {
               onClick={handleGoogleLogin}
               className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group"
             >
-              <Google className="stroke-secondary fill-secondary group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
-              <p className="text-xs text-secondary group-hover:text-white duration-250">
+              <Google className="stroke-none fill-muted-foreground group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
+              <p className="text-xs text-muted-foreground group-hover:text-white duration-250">
                 Login with Google
               </p>
             </Button>
@@ -274,7 +274,7 @@ const LoginPage = () => {
               onClick={handleTwitterLogin}
               className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group"
             >
-              <X className="stroke-secondary fill-secondary group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
+              <X className="stroke-none fill-muted-foreground group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
               <p className="text-xs text-secondary group-hover:text-white duration-250">
                 Login with X
               </p>
@@ -283,13 +283,10 @@ const LoginPage = () => {
 
           <Separator />
 
-          <p className="text-xs text-center text-secondary py-6">
+          <p className="text-xs text-center text-secondary py-6 font-medium">
             Don't have an account?{" "}
-            <Link
-              href="/sign-up"
-              className="text-white underline underline-offset-2"
-            >
-              Sign up.{" "}
+            <Link href="/sign-up" className="text-white font-medium">
+              Sign up
             </Link>
           </p>
         </div>

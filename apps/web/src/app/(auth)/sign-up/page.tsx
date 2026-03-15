@@ -13,7 +13,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import AvatarUpload from "@/components/upload/AvatarUpload";
@@ -61,10 +61,15 @@ const FormSchema = z.object({
 const SignupPage = () => {
   const router = useRouter();
   const [privateBetaRequired, setPrivateBetaRequired] = useState(false);
+  const [publicConfigResolved, setPublicConfigResolved] = useState(false);
   const [betaCode, setBetaCode] = useState("");
   const [betaMessage, setBetaMessage] = useState<string | null>(null);
   const [betaValid, setBetaValid] = useState<boolean | null>(null);
   const [betaChecking, setBetaChecking] = useState(false);
+  const [socialProviderLoading, setSocialProviderLoading] = useState<
+    "google" | "twitter" | null
+  >(null);
+  const betaCodeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,6 +79,7 @@ const SignupPage = () => {
       if (cancelled) return;
 
       setPrivateBetaRequired(config.privateBetaRequired);
+      setPublicConfigResolved(true);
       const storedIntent = getStoredGrowthIntent();
       if (storedIntent.betaCode) {
         setBetaCode(storedIntent.betaCode);
@@ -92,6 +98,7 @@ const SignupPage = () => {
     })().catch(() => {
       if (!cancelled) {
         setPrivateBetaRequired(false);
+        setPublicConfigResolved(true);
       }
     });
 
@@ -141,6 +148,13 @@ const SignupPage = () => {
   }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
+    if (!publicConfigResolved) {
+      setBetaMessage("Checking invite access requirements...");
+      betaCodeInputRef.current?.focus();
+      toast.message("Checking invite access requirements...");
+      return;
+    }
+
     const normalizedBetaCode = betaCode.trim().toUpperCase();
 
     if (privateBetaRequired) {
@@ -257,6 +271,75 @@ const SignupPage = () => {
     );
   }
 
+  async function ensureProviderBetaAccess(providerLabel: string) {
+    if (!publicConfigResolved) {
+      setBetaValid(null);
+      setBetaMessage("Checking invite access requirements...");
+      betaCodeInputRef.current?.focus();
+      toast.message("Checking invite access requirements...");
+      return null;
+    }
+
+    const normalizedBetaCode = betaCode.trim().toUpperCase();
+
+    if (privateBetaRequired) {
+      if (!normalizedBetaCode) {
+        setBetaValid(false);
+        setBetaMessage(
+          `Enter your private beta code to continue with ${providerLabel}`
+        );
+        betaCodeInputRef.current?.focus();
+        toast.error("A private beta code is required");
+        return null;
+      }
+
+      const result = await validateBetaCode(normalizedBetaCode);
+      if (!result?.valid) {
+        setBetaValid(false);
+        setBetaMessage(
+          (result && "message" in result ? result.message : null) ||
+            `Enter a valid private beta code to continue with ${providerLabel}`
+        );
+        betaCodeInputRef.current?.focus();
+        toast.error(
+          (result && "message" in result ? result.message : null) ||
+            "Invalid private beta code"
+        );
+        return null;
+      }
+    } else if (normalizedBetaCode) {
+      await validateBetaCode(normalizedBetaCode);
+    }
+
+    storeBetaCode(normalizedBetaCode);
+    return normalizedBetaCode;
+  }
+
+  async function handleSocialSignUp(provider: "google" | "twitter") {
+    const providerLabel =
+      provider === "google" ? "Google sign up" : "X sign up";
+    const normalizedBetaCode = await ensureProviderBetaAccess(providerLabel);
+    if (normalizedBetaCode === null) {
+      return;
+    }
+
+    setSocialProviderLoading(provider);
+
+    try {
+      await authClient.signIn.social({
+        provider,
+        callbackURL: `${window.location.origin}/onboarding`,
+      });
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : `Unable to continue with ${providerLabel}`
+      );
+      setSocialProviderLoading(null);
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-screen w-screen relative bg-sidebar">
       <div
@@ -355,7 +438,9 @@ const SignupPage = () => {
                     <label className="text-xs text-white/80">
                       Private beta code
                     </label>
+
                     <Input
+                      ref={betaCodeInputRef}
                       value={betaCode}
                       onChange={(event) => {
                         setBetaCode(event.target.value.toUpperCase());
@@ -369,7 +454,15 @@ const SignupPage = () => {
                           void validateBetaCode(betaCode);
                         }
                       }}
-                      placeholder={privateBetaRequired ? "BETA1234" : "Optional"}
+                      placeholder={
+                        privateBetaRequired ? "BETA1234" : "Optional"
+                      }
+                      aria-invalid={betaValid === false}
+                      className={cn(
+                        "mt-1",
+                        betaValid === false &&
+                          "border-red-500/60 focus-visible:ring-red-500"
+                      )}
                     />
                     <p
                       className={cn(
@@ -392,7 +485,7 @@ const SignupPage = () => {
                 </div>
               </div>
 
-              <div className="px-10 my-6 space-y-4">
+              <div className="px-10 my-6 space-y-2">
                 <Button
                   className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full"
                   type="submit"
@@ -411,30 +504,41 @@ const SignupPage = () => {
               <OverlapSeparator> Or sign up with </OverlapSeparator>
 
               <div className="flex items-center justify-center gap-2 px-10 py-2 pb-0">
-                <Button className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group">
-                  <Google className="stroke-secondary fill-secondary group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
-                  <p className="text-xs text-secondary group-hover:text-white duration-250">
-                    Sign up with Google
+                <Button
+                  type="button"
+                  disabled={socialProviderLoading !== null}
+                  onClick={() => void handleSocialSignUp("google")}
+                  className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group"
+                >
+                  <Google className="stroke-none fill-muted-foreground group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
+                  <p className="text-xs text-muted-foreground group-hover:text-white duration-250">
+                    {socialProviderLoading === "google"
+                      ? "Redirecting..."
+                      : "Sign up with Google"}
                   </p>
                 </Button>
 
-                <Button className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group">
-                  <X className="stroke-secondary fill-secondary group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
-                  <p className="text-xs text-secondary group-hover:text-white duration-250">
-                    Sign up with X
+                <Button
+                  type="button"
+                  disabled={socialProviderLoading !== null}
+                  onClick={() => void handleSocialSignUp("twitter")}
+                  className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group"
+                >
+                  <X className="stroke-none fill-muted-foreground group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
+                  <p className="text-xs text-muted-foreground group-hover:text-white duration-250">
+                    {socialProviderLoading === "twitter"
+                      ? "Redirecting..."
+                      : "Sign up with X"}
                   </p>
                 </Button>
               </div>
 
               <Separator />
 
-              <p className="text-xs text-center text-secondary">
+              <p className="text-xs text-center text-muted-foreground font-medium">
                 Already have an account?{" "}
-                <Link
-                  href="/login"
-                  className="text-white underline underline-offset-2"
-                >
-                  Login.{" "}
+                <Link href="/login" className="text-white font-medium">
+                  Login
                 </Link>
               </p>
             </form>

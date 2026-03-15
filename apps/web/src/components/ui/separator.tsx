@@ -30,10 +30,10 @@ export const OverlapSeparator = ({
   children?: React.ReactNode;
 }) => {
   return (
-    <div className="flex items-center justify-center gap-2 w-full mt-8 mb-4">
+    <div className="flex items-center justify-center gap-2 w-full mt-6 mb-4 px-10">
       <div
         className={cn(
-          "h-[2px] bg-[#000000]/50 border-b border-[#222225] w-full",
+          "h-[2px] bg-[#000000]/50 border-b border-[#222225] w-full ",
           className
         )}
       />

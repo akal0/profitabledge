@@ -162,12 +162,12 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
                   <FormLabel className="text-xs">Username</FormLabel>
                   <FormControl>
                     <div className="*:not-first:mt-2 rounded-md border-[0.5px] border-white/0">
-                      <div className="flex rounded-md ">
-                        <span className="bg-sidebar text-secondary z-10 inline-flex items-center px-3 text-xs border border-white/5 border-r-0">
+                      <div className="flex rounded-md overflow-hidden">
+                        <span className="bg-sidebar text-secondary z-10 inline-flex items-center px-3 text-xs border border-white/5 border-r-0 rounded-l-md pointer-events-none select-none">
                           profitabledge.com/
                         </span>
                         <Input
-                          className=" bg-sidebar relative z-0 focus-visible:scale-[100%]"
+                          className=" bg-sidebar relative z-0 focus-visible:scale-[100%] rounded-l-none"
                           placeholder="profitabletrader"
                           type="text"
                           {...field}
@@ -273,10 +273,10 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
 
           <div className="flex gap-4 px-6">
             <Button
-              className="shadow-sidebar-button rounded-[6px] h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center w-full"
+              className="rounded-md h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2.5 items-center justify-center w-full"
               type="submit"
             >
-              Update
+              Update profile
             </Button>
           </div>
         </form>

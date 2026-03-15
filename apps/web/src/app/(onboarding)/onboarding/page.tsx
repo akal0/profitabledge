@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import ChevronRight from "@/public/icons/chevron-right.svg";
@@ -12,51 +12,104 @@ import Personal from "./components/personal";
 import { authClient } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  Shield,
-  Target,
-  CheckCircle2,
-  TrendingUp,
-  Clock,
   AlertTriangle,
+  ExternalLink,
+  Plug,
+  Cpu,
+  Sparkles,
 } from "lucide-react";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   clearStoredGrowthIntent,
   getStoredGrowthIntent,
 } from "@/features/growth/lib/access-intent";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import CsvUpload from "@/components/upload/CsvUpload";
+import {
+  TRADE_ACTION_BUTTON_CLASS,
+  TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+  TRADE_IDENTIFIER_PILL_CLASS,
+  TRADE_IDENTIFIER_TONES,
+  TRADE_SURFACE_CARD_CLASS,
+} from "@/components/trades/trade-identifier-pill";
+import {
+  BROKER_OPTIONS,
+  brokerSupportsMultiCsvImport,
+  getBrokerSupplementalCsvReports,
+  getBrokerImage,
+  isDemoWorkspaceAccount,
+} from "@/features/accounts/lib/account-metadata";
+import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 
-type OnboardingStep = 1 | 2 | 3 | 4;
+type OnboardingStep = 1 | 2 | 3;
 type BillingPlanKey = "student" | "professional" | "institutional";
-const ONBOARDING_STEP_STORAGE_KEY = "profitabledge-onboarding-step";
+const LEGACY_ONBOARDING_STEP_STORAGE_KEY = "profitabledge-onboarding-step";
 const CHECKOUT_SYNC_RETRY_DELAYS_MS = [0, 1500, 3000, 5000] as const;
 
-function getStoredOnboardingStep(): OnboardingStep | null {
+function getOnboardingStepStorageKey(userId: string) {
+  return `${LEGACY_ONBOARDING_STEP_STORAGE_KEY}:${userId}`;
+}
+
+function getStoredOnboardingStep(
+  userId: string | null | undefined
+): OnboardingStep | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const raw = window.sessionStorage.getItem(ONBOARDING_STEP_STORAGE_KEY);
-  return raw === "1" || raw === "2" || raw === "3" || raw === "4"
+  if (!userId) {
+    return null;
+  }
+
+  const raw = window.sessionStorage.getItem(
+    getOnboardingStepStorageKey(userId)
+  );
+  return raw === "1" || raw === "2" || raw === "3"
     ? (Number(raw) as OnboardingStep)
     : null;
 }
 
-function storeOnboardingStep(step: OnboardingStep) {
+function storeOnboardingStep(
+  userId: string | null | undefined,
+  step: OnboardingStep
+) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.sessionStorage.setItem(ONBOARDING_STEP_STORAGE_KEY, String(step));
+  if (!userId) {
+    return;
+  }
+
+  window.sessionStorage.setItem(
+    getOnboardingStepStorageKey(userId),
+    String(step)
+  );
 }
 
-function clearStoredOnboardingStep() {
+function clearStoredOnboardingStep(userId?: string | null) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.sessionStorage.removeItem(ONBOARDING_STEP_STORAGE_KEY);
+  window.sessionStorage.removeItem(LEGACY_ONBOARDING_STEP_STORAGE_KEY);
+
+  if (!userId) {
+    return;
+  }
+
+  window.sessionStorage.removeItem(getOnboardingStepStorageKey(userId));
 }
 
 function sleep(ms: number) {
@@ -87,6 +140,8 @@ function OnboardingPageContent() {
   );
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const bootstrappedGrowthState = useRef(false);
   const bootstrappedStepState = useRef(false);
   const handledCheckoutState = useRef<string | null>(null);
@@ -107,8 +162,10 @@ function OnboardingPageContent() {
   );
 
   const activePlanKey =
-    (billingStateQuery.data?.billing.activePlanKey as BillingPlanKey | undefined) ??
-    "student";
+    (billingStateQuery.data?.billing.activePlanKey as
+      | BillingPlanKey
+      | undefined) ?? "student";
+  const onboardingStorageUserId = session?.user.id ?? null;
   const accessLocked = Boolean(
     billingStateQuery.data?.access.privateBetaRequired &&
       !billingStateQuery.data.access.hasPrivateBetaAccess
@@ -126,11 +183,15 @@ function OnboardingPageContent() {
       return;
     }
 
-    storeOnboardingStep(currentStep);
-  }, [currentStep]);
+    storeOnboardingStep(onboardingStorageUserId, currentStep);
+  }, [currentStep, onboardingStorageUserId]);
 
   useEffect(() => {
-    if (!billingStateQuery.data || bootstrappedStepState.current) {
+    if (
+      !billingStateQuery.data ||
+      bootstrappedStepState.current ||
+      isSessionPending
+    ) {
       return;
     }
 
@@ -138,7 +199,7 @@ function OnboardingPageContent() {
 
     const checkoutStatus = searchParams?.get("checkout");
     const planParam = searchParams?.get("plan");
-    const storedStep = getStoredOnboardingStep();
+    const storedStep = getStoredOnboardingStep(onboardingStorageUserId);
 
     if (
       checkoutStatus === "success" &&
@@ -154,14 +215,21 @@ function OnboardingPageContent() {
     }
 
     if (activePlanKey !== "student") {
-      setCurrentStep(storedStep && storedStep > 3 ? storedStep : 3);
+      setCurrentStep(3);
       return;
     }
 
     if (storedStep) {
       setCurrentStep(storedStep);
     }
-  }, [accessLocked, activePlanKey, billingStateQuery.data, searchParams]);
+  }, [
+    accessLocked,
+    activePlanKey,
+    billingStateQuery.data,
+    isSessionPending,
+    onboardingStorageUserId,
+    searchParams,
+  ]);
 
   useEffect(() => {
     if (billingStateQuery.data?.onboarding.isComplete && accessLocked) {
@@ -274,8 +342,9 @@ function OnboardingPageContent() {
           const synced = await syncFromPolar.mutateAsync();
           const refetched = await billingStateQuery.refetch();
           const nextPlanKey =
-            (refetched.data?.billing.activePlanKey as BillingPlanKey | undefined) ??
-            (synced.activePlanKey as BillingPlanKey);
+            (refetched.data?.billing.activePlanKey as
+              | BillingPlanKey
+              | undefined) ?? (synced.activePlanKey as BillingPlanKey);
 
           if (nextPlanKey === planParam) {
             toast.success(`${getPlanTitle(planParam)} plan activated`);
@@ -311,10 +380,10 @@ function OnboardingPageContent() {
 
   useEffect(() => {
     if (shouldSkipOnboarding) {
-      clearStoredOnboardingStep();
+      clearStoredOnboardingStep(onboardingStorageUserId);
       router.replace("/dashboard");
     }
-  }, [router, shouldSkipOnboarding]);
+  }, [onboardingStorageUserId, router, shouldSkipOnboarding]);
 
   const steps = [
     {
@@ -347,20 +416,10 @@ function OnboardingPageContent() {
           ? "completed"
           : "upcoming",
     },
-    {
-      id: 4,
-      name: "Trading rules",
-      status:
-        currentStep === 4
-          ? "current"
-          : currentStep > 4
-          ? "completed"
-          : "upcoming",
-    },
   ];
 
   const handleLogout = async () => {
-    clearStoredOnboardingStep();
+    clearStoredOnboardingStep(onboardingStorageUserId);
     await authClient.signOut();
     router.push("/login");
   };
@@ -470,7 +529,7 @@ function OnboardingPageContent() {
 
           <Button
             onClick={handleLogout}
-            className="shadow-sidebar-button border-[0.5px] border-white/5 rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar dark:hover:bg-sidebar text-white w-max text-xs hover:!brightness-110 duration-250 flex py-2 items-center justify-center cursor-pointer"
+            className="ring ring-white/10 rounded-md gap-2.5 h-max transition-all active:scale-95 bg-sidebar dark:hover:bg-sidebar text-white w-max text-xs hover:!brightness-110 duration-250 flex py-2 items-center justify-center cursor-pointer"
           >
             Log out
           </Button>
@@ -479,7 +538,12 @@ function OnboardingPageContent() {
         <Separator />
       </div>
 
-      <div className="px-25 h-full max-w-7xl mx-auto flex flex-col items-center justify-center gap-8">
+      <div
+        className={cn(
+          "px-25 h-full mx-auto flex flex-col items-center justify-center gap-8 w-full",
+          currentStep === 2 ? "max-w-[92rem]" : "max-w-7xl"
+        )}
+      >
         <div className="flex flex-col items-center justify-center w-full max-w-2xl min-w-2xl gap-12">
           {/* <h1 className="font-bold tracking-wide uppercase"> Profitabledge </h1> */}
 
@@ -529,54 +593,7 @@ function OnboardingPageContent() {
         </div>
 
         {/* Step Content */}
-        {currentStep === 1 && (
-          // <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
-          //   <h2 className="text-2xl font-bold text-white">
-          //     Tell us about yourself
-          //   </h2>
-          //   <div className="w-full space-y-4">
-          //     <div>
-          //       <label className="block text-sm font-medium text-white mb-2">
-          //         Full Name
-          //       </label>
-          //       <input
-          //         type="text"
-          //         className="w-full px-4 py-3 bg-sidebar border border-white/10 rounded-lg text-white placeholder:text-white/40"
-          //         placeholder="Enter your full name"
-          //       />
-          //     </div>
-          //     <div>
-          //       <label className="block text-sm font-medium text-white mb-2">
-          //         Email
-          //       </label>
-          //       <input
-          //         type="email"
-          //         className="w-full px-4 py-3 bg-sidebar border border-white/10 rounded-lg text-white placeholder:text-white/40"
-          //         placeholder="Enter your email"
-          //       />
-          //     </div>
-          //     <div>
-          //       <label className="block text-sm font-medium text-white mb-2">
-          //         Trading Experience
-          //       </label>
-          //       <select className="w-full px-4 py-3 bg-sidebar border border-white/10 rounded-lg text-white">
-          //         <option value="">Select your experience level</option>
-          //         <option value="beginner">Beginner (0-1 years)</option>
-          //         <option value="intermediate">Intermediate (1-3 years)</option>
-          //         <option value="advanced">Advanced (3+ years)</option>
-          //       </select>
-          //     </div>
-          //   </div>
-          //   <Button
-          //     onClick={() => setCurrentStep(2)}
-          //     className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
-          //   >
-          //     Continue to Plan Selection
-          //   </Button>
-          // </div>
-
-          <Personal onNext={() => setCurrentStep(2)} />
-        )}
+        {currentStep === 1 && <Personal onNext={() => setCurrentStep(2)} />}
 
         {currentStep === 2 && (
           <div className="flex flex-col items-center gap-8 w-full">
@@ -589,26 +606,6 @@ function OnboardingPageContent() {
                   pendingPlanKey={pendingPlanKey}
                   onSelectPlan={handlePlanSelection}
                 />
-
-                <div className="w-full max-w-7xl px-2">
-                  <div className="bg-sidebar border border-white/10 rounded-lg p-4 shadow-sidebar-button">
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs uppercase tracking-[0.18em] text-white/35">
-                        Current selection
-                      </p>
-                      <h2 className="text-sm font-semibold text-white">
-                        {getPlanTitle(selectedPlanKey)}
-                      </h2>
-                      <p className="text-xs text-white/45">
-                        {selectedPlanKey === activePlanKey
-                          ? "Your account is already on this plan."
-                          : selectedPlanKey === "student"
-                          ? "Continue with the free plan and upgrade whenever you need more sync capacity or premium tooling."
-                          : "Complete checkout to unlock this plan, then continue onboarding while Polar confirms the subscription."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </>
             ) : accessLocked ? (
               <div className="w-full max-w-2xl">
@@ -669,177 +666,222 @@ function OnboardingPageContent() {
                 Loading plan details...
               </div>
             )}
-
-            <div className="flex gap-4 max-w-7xl w-full">
-              <Button
-                onClick={() => setCurrentStep(1)}
-                className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
-              >
-                Back
-              </Button>
-
-              <Button
-                onClick={() => setCurrentStep(3)}
-                disabled={
-                  accessLocked ||
-                  billingConfigQuery.isLoading ||
-                  billingStateQuery.isLoading
-                }
-                className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-600 cursor-pointer text-white flex-1 text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center"
-              >
-                {accessLocked
-                  ? "Redeem access to continue"
-                  : "Continue to Account Setup"}
-              </Button>
-            </div>
           </div>
         )}
 
         {currentStep === 3 && (
-          <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
-            <h2 className="text-2xl font-bold text-white">
-              Add your trading account
-            </h2>
-            <div className="w-full space-y-6">
-              <div className="bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button">
-                <h3 className="text-lg font-semibold text-white mb-4">
-                  Import via CSV
-                </h3>
-                <p className="text-white/60 text-sm mb-4">
-                  Upload your trading history from your broker to get started
-                  quickly.
-                </p>
-                <div className="border-2 border-dashed border-white/20 rounded-lg p-8 text-center bg-sidebar/40">
-                  <p className="text-white/40">
-                    Drag and drop your CSV file here, or click to browse
-                  </p>
-                </div>
-              </div>
-              <div className="bg-sidebar border border-white/10 rounded-lg p-6 shadow-sidebar-button flex flex-col gap-5">
-                <div>
-                  <h3 className="text-lg font-semibold text-white mb-2">
-                    MT5 EA Sync (Recommended)
-                  </h3>
-                  <p className="text-white/60 text-sm">
-                    Real-time broker sync using the ProfitabEdge EA. Your
-                    account will auto-register the first time the EA connects.
-                  </p>
-                </div>
-                <Button
-                  asChild
-                  className="shadow-sidebar-button rounded-[6px] w-full h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
-                >
-                  <Link href="/dashboard/settings/ea-setup">Go to EA setup</Link>
-                </Button>
-              </div>
-            </div>
-            <div className="flex gap-4 w-full">
-              <Button
-                onClick={() => setCurrentStep(2)}
-                className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={() => setCurrentStep(4)}
-                className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-600 cursor-pointer text-white flex-1 text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center"
-              >
-                Continue to Trading Rules
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {currentStep === 4 && (
-          <TradingRulesStep onBack={() => setCurrentStep(3)} />
+          <AddAccountStep />
         )}
       </div>
     </div>
   );
 }
 
-function TradingRulesStep({ onBack }: { onBack: () => void }) {
-  const router = useRouter();
-  const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+type AddAccountForm = {
+  method: "csv" | "broker" | "ea" | null;
+  name: string;
+  broker: string;
+  initialCurrency: "$" | "£" | "€" | "";
+  initialBalance: string;
+  files: File[];
+};
 
-  const presets = [
-    {
-      id: "conservative",
-      name: "Conservative",
-      icon: Shield,
-      description: "Strict risk management, max 2% per trade, SL required",
-      rules: {
-        requireSL: true,
-        requireTP: true,
-        maxDailyTrades: 3,
-        maxDailyLossPercent: 3,
-        maxPositionSizePercent: 2,
-        minPlannedRR: 1.5,
-      },
-    },
-    {
-      id: "balanced",
-      name: "Balanced",
-      icon: Target,
-      description: "Moderate rules, max 5 daily trades, 5% daily loss limit",
-      rules: {
-        requireSL: true,
-        maxDailyTrades: 5,
-        maxDailyLossPercent: 5,
-        maxPositionSizePercent: 3,
-        minPlannedRR: 1,
-      },
-    },
-    {
-      id: "prop-firm",
-      name: "Prop Firm Ready",
-      icon: TrendingUp,
-      description: "Rules aligned with typical prop firm challenges",
-      rules: {
-        requireSL: true,
-        requireTP: true,
-        maxDailyTrades: 5,
-        maxDailyLossPercent: 4,
-        maxPositionSizePercent: 1,
-        minPlannedRR: 1.5,
-        maxConcurrentTrades: 3,
-      },
-    },
-    {
-      id: "scalper",
-      name: "Scalper",
-      icon: Clock,
-      description: "Higher trade count, tight risk per trade, fast execution",
-      rules: {
-        requireSL: true,
-        maxDailyTrades: 15,
-        maxDailyLossPercent: 3,
-        maxPositionSizePercent: 1,
-        maxEntrySpreadPips: 2,
-        maxHoldSeconds: 1800,
-      },
-    },
-  ];
+type PendingCsvImportResolution = {
+  matchedAccount: {
+    id: string;
+    name: string;
+    broker: string;
+    accountNumber: string | null;
+  };
+  warnings: string[];
+};
+
+function AddAccountStep() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { data: session } = authClient.useSession();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [accountStep, setAccountStep] = useState<1 | 2>(1);
+  const [form, setForm] = useState<AddAccountForm>({
+    method: null,
+    name: "",
+    broker: "",
+    initialCurrency: "$",
+    initialBalance: "",
+    files: [],
+  });
+  const [pendingCsvImportResolution, setPendingCsvImportResolution] =
+    useState<PendingCsvImportResolution | null>(null);
+  const onboardingStorageUserId = session?.user.id ?? null;
+  const { accounts } = useAccountCatalog();
+  const hasAccount = accounts.length > 0;
+
+  const demoAccounts = useMemo(
+    () => accounts.filter((account) => isDemoWorkspaceAccount(account)),
+    [accounts]
+  );
+
+  const canSubmitCsv = useMemo(() => {
+    if (form.method === "csv") {
+      return Boolean(form.files.length > 0 && form.name && form.broker);
+    }
+    return false;
+  }, [form]);
+
+  const selectedBrokerSupportsMultiCsv = useMemo(
+    () => brokerSupportsMultiCsvImport(form.broker),
+    [form.broker]
+  );
+  const canQueueMultipleCsvFiles = useMemo(
+    () => !form.broker || selectedBrokerSupportsMultiCsv,
+    [form.broker, selectedBrokerSupportsMultiCsv]
+  );
+  const selectedBrokerSupplementalReports = useMemo(
+    () => getBrokerSupplementalCsvReports(form.broker),
+    [form.broker]
+  );
+
+  useEffect(() => {
+    if (pendingCsvImportResolution && form.broker !== "tradovate") {
+      setPendingCsvImportResolution(null);
+    }
+  }, [form.broker, pendingCsvImportResolution]);
+
+  function resetAccountForm() {
+    setAccountStep(1);
+    setForm({
+      method: null,
+      name: "",
+      broker: "",
+      initialCurrency: "$",
+      initialBalance: "",
+      files: [],
+    });
+    setPendingCsvImportResolution(null);
+  }
+
+  async function fileToBase64(file: File): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(",")[1] || "";
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleSubmitCSV(input?: {
+    existingAccountAction?: "enrich" | "create_duplicate";
+    existingAccountId?: string;
+  }) {
+    if (!canSubmitCsv || form.files.length === 0) return;
+    setIsSubmitting(true);
+
+    try {
+      const normalizeBalance = (input: string): number | undefined => {
+        const cleaned = String(input || "").replace(/[^0-9.\-]/g, "");
+        if (!cleaned) return undefined;
+        const n = Number(cleaned);
+        return Number.isFinite(n) && n >= 0 ? n : undefined;
+      };
+
+      const encodedFiles = await Promise.all(
+        form.files.map(async (file) => ({
+          fileName: file.name,
+          csvBase64: await fileToBase64(file),
+        }))
+      );
+
+      const res = await trpcClient.upload.importCsv.mutate({
+        name: form.name,
+        broker: form.broker,
+        initialBalance: normalizeBalance(form.initialBalance),
+        initialCurrency: (form.initialCurrency || "$") as "$" | "£" | "€",
+        csvBase64: encodedFiles[0]?.csvBase64 ?? "",
+        fileName: encodedFiles[0]?.fileName,
+        files: encodedFiles,
+        existingAccountAction: input?.existingAccountAction,
+        existingAccountId: input?.existingAccountId,
+      });
+
+      if (res.status === "requires_account_resolution") {
+        setPendingCsvImportResolution({
+          matchedAccount: res.matchedExistingAccount,
+          warnings: res.warnings,
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      setPendingCsvImportResolution(null);
+
+      if (res.status === "enriched_existing") {
+        toast.success(
+          getCsvImportFeedbackMessage(res, {
+            accountName: res.matchedExistingAccount.name,
+          })
+        );
+      } else {
+        toast.success("Account created from CSV import");
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      resetAccountForm();
+    } catch (e) {
+      console.error(e);
+      toast.error("Failed to import CSV");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleDemoWorkspace() {
+    try {
+      setIsSubmitting(true);
+      const result = (await (demoAccounts.length > 0
+        ? trpcClient.accounts.resetDemoWorkspace.mutate()
+        : trpcClient.accounts.createSampleAccount.mutate())) as {
+        tradeCount: number;
+        openTradeCount: number;
+        resetCount?: number;
+        account?: { id: string; name: string; broker?: string | null };
+      };
+
+      toast.success(
+        demoAccounts.length > 0
+          ? `Demo workspace regenerated with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
+          : `Demo account created with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
+      );
+
+      // Auto-complete onboarding and redirect
+      try {
+        await trpcClient.billing.syncFromPolar.mutate().catch(() => {});
+        await trpcClient.billing.markOnboardingComplete.mutate();
+      } catch {
+        // Non-blocking — account was created, let user proceed manually
+        await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+        setIsSubmitting(false);
+        return;
+      }
+
+      clearStoredOnboardingStep(onboardingStorageUserId);
+      router.push("/dashboard");
+    } catch (e: any) {
+      toast.error(
+        e.message ||
+          (demoAccounts.length > 0
+            ? "Failed to regenerate demo workspace"
+            : "Failed to create demo account")
+      );
+      setIsSubmitting(false);
+    }
+  }
 
   const handleComplete = async () => {
     setIsSubmitting(true);
-
-    if (selectedPreset) {
-      try {
-        const preset = presets.find((p) => p.id === selectedPreset);
-        if (preset) {
-          await trpcClient.rules.createRuleSet.mutate({
-            name: `${preset.name} Rules`,
-            description: `Auto-created during onboarding: ${preset.description}`,
-            rules: preset.rules,
-          });
-          toast.success("Trading rules created!");
-        }
-      } catch {
-        // Non-blocking - user can still proceed
-      }
-    }
 
     try {
       try {
@@ -855,95 +897,617 @@ function TradingRulesStep({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    clearStoredOnboardingStep();
+    clearStoredOnboardingStep(onboardingStorageUserId);
     setIsSubmitting(false);
     router.push("/dashboard");
   };
 
+  const sectionTitleClass =
+    "text-xs font-semibold text-white/70 tracking-wide";
+  const fieldLabelClass = "text-xs text-white/50";
+  const fieldInputClass =
+    "rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-white/25 hover:brightness-100";
+  const fieldSelectTriggerClass = "h-9 w-full px-4";
+  const fieldSelectContentClass = "";
+  const fieldSelectItemClass = "whitespace-normal";
+
   return (
-    <div className="flex flex-col items-center gap-8 w-full max-w-2xl">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-white">Set your trading rules</h2>
-        <p className="text-white/50 text-sm mt-2">
-          Choose a rule preset to get started. You can customize these later.
-        </p>
-      </div>
+    <div className="flex flex-col w-full max-w-2xl">
+      <div className="rounded-sm overflow-hidden ring-1 ring-white/8 bg-sidebar">
+        {/* Header */}
+        <div className="px-6 py-5">
+          <div className="flex w-full items-end justify-between gap-4">
+            <div className="flex flex-col items-start gap-1">
+              <h2 className="text-base font-semibold text-white">
+                {accountStep === 1
+                  ? "Connect your account"
+                  : form.method === "csv"
+                  ? "Import account with CSV upload"
+                  : form.method === "broker"
+                  ? "Broker sync"
+                  : "EA sync"}
+              </h2>
+              <p className="max-w-md text-xs leading-relaxed text-white/40">
+                {accountStep === 1
+                  ? "Choose how you want to add your trading account."
+                  : form.method === "csv"
+                  ? "Upload your CSV file or broker report bundle and enter the details for this trading account."
+                  : form.method === "broker"
+                  ? "Use Connections to sync supported broker and platform accounts directly."
+                  : "Use the MT5 EA bridge for terminal-based sync and richer trade analytics."}
+              </p>
+            </div>
+            {hasAccount && (
+              <span
+                className={cn(
+                  TRADE_IDENTIFIER_PILL_CLASS,
+                  TRADE_IDENTIFIER_TONES.positive,
+                  "min-h-6 px-2 py-0.5 text-[10px]"
+                )}
+              >
+                Account added
+              </span>
+            )}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-2 gap-4 w-full">
-        {presets.map((preset) => {
-          const Icon = preset.icon;
-          const isSelected = selectedPreset === preset.id;
-
-          return (
-            <button
-              key={preset.id}
-              type="button"
-              onClick={() => setSelectedPreset(isSelected ? null : preset.id)}
-              className={`bg-sidebar border rounded-lg p-5 text-left transition-all hover:brightness-110 cursor-pointer ${
-                isSelected
-                  ? "border-emerald-500/50 ring-1 ring-emerald-500/20"
-                  : "border-white/10 hover:border-white/20"
-              }`}
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div
-                  className={`flex items-center justify-center size-9 rounded-lg ${
-                    isSelected
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-white/5 text-white/50"
-                  }`}
+        {accountStep === 1 && (
+          <>
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Connection method</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className="grid gap-3">
+                <Button
+                  className={cn(
+                    TRADE_SURFACE_CARD_CLASS,
+                    "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                  )}
+                  onClick={() => {
+                    setForm({ ...form, method: "csv" });
+                    setAccountStep(2);
+                  }}
                 >
-                  <Icon className="size-5" />
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium text-white">
+                      Import account via CSV
+                    </span>
+                    <span className="text-xs text-white/45">
+                      Upload a statement export and create a new account from
+                      it.
+                    </span>
+                  </div>
+                  <span className="text-white/35">&rarr;</span>
+                </Button>
+
+                <Button
+                  className={cn(
+                    TRADE_SURFACE_CARD_CLASS,
+                    "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                  )}
+                  onClick={() => {
+                    setForm({ ...form, method: "broker" });
+                    setAccountStep(2);
+                  }}
+                >
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium text-white">
+                      Broker sync
+                    </span>
+                    <span className="text-xs text-white/45">
+                      Connect through the Connections page for direct broker and
+                      platform sync.
+                    </span>
+                  </div>
+                  <span
+                    className={cn(
+                      TRADE_IDENTIFIER_PILL_CLASS,
+                      TRADE_IDENTIFIER_TONES.info,
+                      "min-h-6 px-2 py-0.5 text-[10px]"
+                    )}
+                  >
+                    Recommended
+                  </span>
+                </Button>
+
+                <Button
+                  className={cn(
+                    TRADE_SURFACE_CARD_CLASS,
+                    "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                  )}
+                  onClick={() => {
+                    setForm({ ...form, method: "ea" });
+                    setAccountStep(2);
+                  }}
+                >
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium text-white">
+                      EA sync
+                    </span>
+                    <span className="text-xs text-white/45">
+                      Use the MT5 EA bridge for terminal-side sync and advanced
+                      intratrade metrics.
+                    </span>
+                  </div>
+                  <span
+                    className={cn(
+                      TRADE_IDENTIFIER_PILL_CLASS,
+                      TRADE_IDENTIFIER_TONES.live,
+                      "min-h-6 px-2 py-0.5 text-[10px]"
+                    )}
+                  >
+                    MT5 only
+                  </span>
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Demo workspace</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 p-4")}>
+                <div className="flex items-start gap-3">
+                  <Sparkles className="mt-0.5 size-4 text-amber-300" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-white">
+                      Explore with demo data
+                    </p>
+                    <p className="text-xs leading-relaxed text-white/45">
+                      {demoAccounts.length > 0
+                        ? `Replace ${demoAccounts.length} seeded demo workspace${
+                            demoAccounts.length === 1 ? "" : "s"
+                          } with a fresh fully-populated trading environment.`
+                        : "Create a fully-seeded demo account with historical trades and live positions."}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-sm text-white">
-                    {preset.name}
-                  </h3>
+                <Button
+                  className={cn(
+                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                    "h-9 w-full ring-1 ring-amber-400/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
+                  )}
+                  onClick={handleDemoWorkspace}
+                  disabled={isSubmitting}
+                >
+                  <Sparkles className="size-3.5" />
+                  {isSubmitting
+                    ? demoAccounts.length > 0
+                      ? "Regenerating..."
+                      : "Creating..."
+                    : demoAccounts.length > 0
+                    ? "Regenerate demo workspace"
+                    : "Try with demo data"}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {accountStep === 2 && form.method === "csv" && (
+          <>
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Account details</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>Account name</Label>
+                  <Input
+                    placeholder="e.g. FTMO 100k Live"
+                    className={fieldInputClass}
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>Broker</Label>
+                  <Select
+                    value={form.broker}
+                    onValueChange={(v) => {
+                      setPendingCsvImportResolution(null);
+                      setForm((f) => ({
+                        ...f,
+                        broker: v,
+                        files: brokerSupportsMultiCsvImport(v)
+                          ? f.files
+                          : f.files.slice(0, 1),
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className={fieldSelectTriggerClass}>
+                      <SelectValue placeholder="Select a broker" />
+                    </SelectTrigger>
+                    <SelectContent className={fieldSelectContentClass}>
+                      {BROKER_OPTIONS.map((b) => (
+                        <SelectItem
+                          key={b.value}
+                          value={b.value}
+                          className={fieldSelectItemClass}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={b.image}
+                              alt={b.label}
+                              className="h-4 w-4 object-contain"
+                            />
+                            {b.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {form.broker === "tradovate" ? (
+                    <p className="text-xs leading-relaxed text-white/40">
+                      Tradovate CSV import currently supports bundle uploads.
+                      Start with{" "}
+                      <span className="text-white/65">Performance</span> or{" "}
+                      <span className="text-white/65">Position History</span>{" "}
+                      as the base report, then add{" "}
+                      <span className="text-white/65">
+                        {selectedBrokerSupplementalReports
+                          .filter(
+                            (report) =>
+                              report !== "Performance" &&
+                              report !== "Position History"
+                          )
+                          .join(", ")}
+                      </span>{" "}
+                      in the same import for richer metadata.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>
+                    Initial account balance
+                  </Label>
+                  <div className="flex items-center gap-0">
+                    <Select
+                      value={form.initialCurrency}
+                      onValueChange={(v: "$" | "£" | "€") =>
+                        setForm((f) => ({ ...f, initialCurrency: v }))
+                      }
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          fieldSelectTriggerClass,
+                          "w-20 rounded-r-none"
+                        )}
+                        style={{ borderRightWidth: 0 }}
+                      >
+                        <SelectValue placeholder="$" />
+                      </SelectTrigger>
+                      <SelectContent className={fieldSelectContentClass}>
+                        {(["$", "£", "€"] as const).map((c) => (
+                          <SelectItem
+                            key={c}
+                            value={c}
+                            className={fieldSelectItemClass}
+                          >
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="$100,000"
+                      className={cn(fieldInputClass, "flex-1 rounded-l-none")}
+                      style={{ borderLeftWidth: 0 }}
+                      value={form.initialBalance}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          initialBalance: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
                 </div>
               </div>
-              <p className="text-xs text-white/50 leading-relaxed">
-                {preset.description}
-              </p>
-              {isSelected && (
-                <div className="mt-3 pt-3 border-t border-white/5 space-y-1">
-                  {Object.entries(preset.rules).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center gap-1.5 text-[10px] text-white/40"
+            </div>
+
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Upload CSV</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <CsvUpload
+                multiple={canQueueMultipleCsvFiles}
+                onFilesChange={(files) => {
+                  setPendingCsvImportResolution(null);
+                  setForm((prev) => ({ ...prev, files }));
+                }}
+              />
+              {!form.broker ? (
+                <p className="mt-3 text-xs leading-relaxed text-white/40">
+                  You can queue multiple CSVs before choosing a broker. If you
+                  later pick a broker that does not support bundle imports, only
+                  the first file will be kept.
+                </p>
+              ) : null}
+            </div>
+
+            <Separator />
+            <div className="px-6 py-5">
+              {pendingCsvImportResolution ? (
+                <div className="mb-4 rounded-sm ring-1 ring-amber-400/20 bg-amber-400/5 p-4">
+                  <p className="text-sm font-medium text-white">
+                    This Tradovate CSV bundle matches an existing imported
+                    account.
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/55">
+                    Matched account:{" "}
+                    <span className="text-white/80">
+                      {pendingCsvImportResolution.matchedAccount.name}
+                    </span>
+                    {pendingCsvImportResolution.matchedAccount.accountNumber
+                      ? ` (${pendingCsvImportResolution.matchedAccount.accountNumber})`
+                      : ""}
+                    . Choose whether to enrich that account or create a new
+                    duplicate account intentionally.
+                  </p>
+                  {pendingCsvImportResolution.warnings.length > 0 ? (
+                    <p className="mt-2 text-xs leading-relaxed text-white/40">
+                      {pendingCsvImportResolution.warnings[0]}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      className={cn(
+                        TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                        "h-8 px-3"
+                      )}
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        handleSubmitCSV({
+                          existingAccountAction: "enrich",
+                          existingAccountId:
+                            pendingCsvImportResolution.matchedAccount.id,
+                        })
+                      }
                     >
-                      <CheckCircle2 className="size-3 text-emerald-500/60" />
-                      <span>
-                        {key
-                          .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, (s) => s.toUpperCase())}
-                        : {String(value)}
-                      </span>
-                    </div>
-                  ))}
+                      Enrich existing account
+                    </Button>
+                    <Button
+                      type="button"
+                      className={cn(TRADE_ACTION_BUTTON_CLASS, "h-8 px-3")}
+                      disabled={isSubmitting}
+                      onClick={() =>
+                        handleSubmitCSV({
+                          existingAccountAction: "create_duplicate",
+                          existingAccountId:
+                            pendingCsvImportResolution.matchedAccount.id,
+                        })
+                      }
+                    >
+                      Create duplicate account
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </button>
-          );
-        })}
+              ) : null}
+              <div className="flex w-full gap-2">
+                <Button
+                  className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
+                  onClick={resetAccountForm}
+                >
+                  Back
+                </Button>
+
+                <Button
+                  className={cn(
+                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                    "h-9 flex-1",
+                    !canSubmitCsv && "opacity-60"
+                  )}
+                  disabled={!canSubmitCsv || isSubmitting}
+                  onClick={() => handleSubmitCSV()}
+                >
+                  {isSubmitting ? "Uploading..." : "Upload"}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {accountStep === 2 && form.method === "broker" && (
+          <>
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Connections</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 p-4")}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Plug className="size-4 text-blue-300" />
+                      <p className="text-sm font-medium text-white">
+                        Direct platform sync
+                      </p>
+                    </div>
+                    <p className="text-xs leading-relaxed text-white/45">
+                      Connect MetaTrader 5, cTrader, Match-Trader, or
+                      TradeLocker from the Connections page. ProfitEdge handles
+                      the sync workflow from there.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      TRADE_IDENTIFIER_PILL_CLASS,
+                      TRADE_IDENTIFIER_TONES.info,
+                      "min-h-6 px-2 py-0.5 text-[10px]"
+                    )}
+                  >
+                    Recommended
+                  </span>
+                </div>
+
+                <Button
+                  asChild
+                  className={cn(
+                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                    "h-9 w-full"
+                  )}
+                >
+                  <Link href="/dashboard/settings/connections">
+                    <ExternalLink className="size-3.5" />
+                    Go to Connections
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>What to expect</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
+                <ol className="space-y-2 text-sm text-white/70">
+                  <li>1. Open Connections.</li>
+                  <li>2. Choose the provider you want to link.</li>
+                  <li>
+                    3. Complete the connection and let sync create or link the
+                    account.
+                  </li>
+                </ol>
+                <p className="text-xs leading-relaxed text-white/40">
+                  Use this flow for supported direct platform and broker sync.
+                  It is the main path for non-EA account connections.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-5">
+              <Button
+                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                onClick={resetAccountForm}
+              >
+                Back
+              </Button>
+            </div>
+          </>
+        )}
+
+        {accountStep === 2 && form.method === "ea" && (
+          <>
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>MT5 EA bridge</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 p-4")}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Cpu className="size-4 text-teal-300" />
+                      <p className="text-sm font-medium text-white">
+                        Terminal-side MT5 sync
+                      </p>
+                    </div>
+                    <p className="text-xs leading-relaxed text-white/45">
+                      Use the EA bridge when you want MT5 terminal sync plus the
+                      advanced intratrade metrics the API path cannot capture.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      TRADE_IDENTIFIER_PILL_CLASS,
+                      TRADE_IDENTIFIER_TONES.live,
+                      "min-h-6 px-2 py-0.5 text-[10px]"
+                    )}
+                  >
+                    MT5 only
+                  </span>
+                </div>
+
+                <Button
+                  asChild
+                  className={cn(
+                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                    "h-9 w-full"
+                  )}
+                >
+                  <Link href="/dashboard/settings/ea-setup">
+                    <ExternalLink className="size-3.5" />
+                    Go to EA Setup
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>What to expect</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
+                <ol className="space-y-2 text-sm text-white/70">
+                  <li>1. Open EA Setup.</li>
+                  <li>2. Generate the key and install the EA in MT5.</li>
+                  <li>
+                    3. Attach the EA and let the first sync register the
+                    account.
+                  </li>
+                </ol>
+                <p className="text-xs leading-relaxed text-white/40">
+                  Use this flow when you specifically want MT5 terminal-side
+                  sync and the richer analytics captured by the EA bridge.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-5">
+              <Button
+                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                onClick={resetAccountForm}
+              >
+                Back
+              </Button>
+            </div>
+          </>
+        )}
       </div>
 
-      <div className="flex gap-4 w-full">
-        <Button
-          onClick={onBack}
-          className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 items-center justify-center"
-        >
-          Back
-        </Button>
+      {/* Navigation button */}
+      <div className="flex w-full mt-6">
         <Button
           onClick={handleComplete}
-          disabled={isSubmitting}
-          className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-emerald-600 hover:bg-emerald-600 cursor-pointer text-white flex-1 text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center"
+          disabled={!hasAccount || isSubmitting}
+          className={cn(
+            TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+            "h-9 w-full",
+            hasAccount
+              ? "!ring-emerald-600/90 !bg-emerald-600/72 !text-white hover:!bg-emerald-500/80"
+              : "opacity-50"
+          )}
         >
           {isSubmitting
             ? "Setting up..."
-            : selectedPreset
-            ? "Create Rules & Go to Dashboard"
-            : "Skip & Go to Dashboard"}
+            : hasAccount
+            ? "Go to Dashboard"
+            : "Add an account to continue"}
         </Button>
       </div>
     </div>

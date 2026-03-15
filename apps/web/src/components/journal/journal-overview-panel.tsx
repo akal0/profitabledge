@@ -19,12 +19,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { JournalPrompts } from "./journal-prompts";
-import { JournalWidgetFrame, JournalWidgetShell } from "./journal-widget-shell";
 import {
   journalActionButtonClassName,
   journalActionButtonMutedClassName,
   journalCompactActionButtonClassName,
 } from "./action-button-styles";
+import {
+  JournalInsightsPanelShell,
+  JournalInsightsStatCard,
+} from "./journal-insights-shell";
 
 interface JournalOverviewPanelProps {
   accountId?: string;
@@ -140,65 +143,53 @@ export function JournalOverviewPanel({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {statsLoading
           ? Array.from({ length: 4 }).map((_, index) => (
-              <JournalWidgetShell key={index}>
-                <div className="flex items-start justify-between p-4">
-                  <div className="space-y-2">
-                    <Skeleton className="h-3 w-20 bg-sidebar-accent" />
-                    <Skeleton className="h-6 w-24 bg-sidebar-accent" />
-                    <Skeleton className="h-3 w-16 bg-sidebar-accent" />
-                  </div>
-                  <Skeleton className="h-9 w-9 bg-sidebar-accent" />
-                </div>
-              </JournalWidgetShell>
+              <JournalInsightsStatCard
+                key={index}
+                icon={BookText}
+                label="Loading"
+                value={<Skeleton className="h-8 w-24 bg-sidebar" />}
+                hint="Pulling journal stats"
+                className="pointer-events-none"
+              />
             ))
           : statCards.map((stat) => {
               const Icon = stat.icon;
               return (
-                <JournalWidgetShell key={stat.label}>
-                  <div className="flex items-start justify-between p-4">
-                    <div className="space-y-1">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-white/35">
-                        {stat.label}
-                      </p>
-                      <p className="text-lg font-semibold text-white">{stat.value}</p>
-                      <p className="text-xs text-white/40">{stat.helper}</p>
-                    </div>
-                    <div className="flex h-9 w-9 items-center justify-center rounded-sm border border-white/10 bg-white/[0.03] text-teal-300">
-                      <Icon className="h-4 w-4" />
-                    </div>
-                  </div>
-                </JournalWidgetShell>
+                <JournalInsightsStatCard
+                  key={stat.label}
+                  icon={Icon}
+                  label={stat.label}
+                  value={stat.value}
+                  hint={stat.helper}
+                  iconClassName="text-teal-300"
+                  valueClassName="text-lg"
+                />
               );
             })}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <JournalWidgetFrame
-          header={
-            <div className="flex flex-row items-center justify-between gap-4 p-3.5">
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-white">Prompt Inbox</h3>
-                <p className="text-xs text-white/45">
-                  Surface the AI prompts that should turn into journal entries next.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className="border-teal-400/20 bg-teal-500/10 text-teal-300"
-                >
-                  {pendingPrompts.length} pending
-                </Badge>
-                <JournalPrompts
-                  triggerVariant="button"
-                  buttonLabel="Open inbox"
-                  onJournalFromPrompt={onCreateFromPrompt}
-                />
-              </div>
+        <JournalInsightsPanelShell
+          icon={Sparkles}
+          title="Prompt inbox"
+          description="Surface the AI prompts that should turn into journal entries next."
+          action={
+            <div className="flex items-center gap-2">
+              <Badge
+                variant="outline"
+                className="border-teal-400/20 bg-teal-500/10 text-teal-300"
+              >
+                {pendingPrompts.length} pending
+              </Badge>
+              <JournalPrompts
+                triggerVariant="button"
+                buttonLabel="Open inbox"
+                onJournalFromPrompt={onCreateFromPrompt}
+              />
             </div>
           }
         >
-          <div className="space-y-3 p-4">
+          <div className="space-y-3">
             {promptsLoading ? (
               Array.from({ length: 3 }).map((_, index) => (
                 <Skeleton key={index} className="h-20 rounded-sm bg-sidebar-accent" />
@@ -239,19 +230,14 @@ export function JournalOverviewPanel({
               </div>
             )}
           </div>
-        </JournalWidgetFrame>
+        </JournalInsightsPanelShell>
 
-        <JournalWidgetFrame
-          header={
-            <div className="p-3.5">
-              <h3 className="text-sm font-semibold text-white">Review Builder</h3>
-              <p className="text-xs text-white/45">
-                Create structured daily, weekly, and monthly reflections from recent trades.
-              </p>
-            </div>
-          }
+        <JournalInsightsPanelShell
+          icon={CalendarDays}
+          title="Review builder"
+          description="Create structured daily, weekly, and monthly reflections from recent trades."
         >
-          <div className="space-y-3 p-4">
+          <div className="space-y-3">
             <div className="grid gap-2 sm:grid-cols-2">
               <Button
                 size="sm"
@@ -317,7 +303,7 @@ export function JournalOverviewPanel({
               </div>
             )}
           </div>
-        </JournalWidgetFrame>
+        </JournalInsightsPanelShell>
       </div>
     </div>
   );

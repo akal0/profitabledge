@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { trpc } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
@@ -16,12 +16,9 @@ import { Separator } from "@/components/ui/separator";
 import {
   Shield,
   TrendingDown,
-  Percent,
   BarChart3,
-  RefreshCw,
   AlertTriangle,
   CheckCircle,
-  Target,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -35,49 +32,47 @@ import {
 } from "recharts";
 import { APP_RECHARTS_TOOLTIP_CONTENT_STYLE } from "@/components/ui/tooltip";
 import { WidgetWrapper } from "./widget-wrapper";
-import { formatSignedCurrency } from "./charts/dashboard-chart-ui";
+import {
+  formatCompactCurrencyValue,
+  formatCurrencyValue,
+  formatSignedCurrencyValue,
+} from "@/features/dashboard/widgets/lib/widget-shared";
 
 const WIDGET_CONTENT_SEPARATOR_CLASS =
   "-mx-3.5 shrink-0 self-stretch";
 
 export function RiskDashboardWidget({
+  accountId,
   isEditing = false,
   className,
+  currencyCode,
 }: {
+  accountId?: string;
   isEditing?: boolean;
   className?: string;
+  currencyCode?: string;
 }) {
-  const accountId = useAccountStore((s) => s.selectedAccountId);
+  const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
+  const effectiveAccountId = accountId || selectedAccountId;
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const { data: riskData, isLoading: loadingRisk } =
     trpc.ai.getRiskOfRuin.useQuery(
-      { accountId: accountId ?? "" },
-      { enabled: !!accountId }
+      { accountId: effectiveAccountId ?? "" },
+      { enabled: !!effectiveAccountId }
     );
 
   const { data: drawdownData } = trpc.ai.getDrawdownProfile.useQuery(
-    { accountId: accountId ?? "" },
-    { enabled: !!accountId }
+    { accountId: effectiveAccountId ?? "" },
+    { enabled: !!effectiveAccountId }
   );
 
   const { data: positionData } = trpc.ai.getPositionSizing.useQuery(
-    { accountId: accountId ?? "" },
-    { enabled: !!accountId }
+    { accountId: effectiveAccountId ?? "" },
+    { enabled: !!effectiveAccountId }
   );
 
-  const {
-    data: monteCarloData,
-    isLoading: loadingMC,
-    refetch: refetchMC,
-  } = trpc.ai.runSimulation.useQuery(
-    {
-      accountId: accountId ?? "",
-      simulations: 3000,
-      tradeCount: 100,
-    },
-    { enabled: !!accountId && sheetOpen }
-  );
+  const runSimulation = trpc.ai.runSimulation.useMutation();
 
   const ruin = riskData?.probabilityOfRuin ?? 0;
   const kellyCriterion = riskData?.kellyCriterion ?? 0;
@@ -85,6 +80,33 @@ export function RiskDashboardWidget({
   const maxDD = drawdownData?.maxDrawdown ?? 0;
   const isInDrawdown = drawdownData?.isInDrawdown ?? false;
   const currentDD = drawdownData?.currentDrawdownPct ?? 0;
+  const formatMoney = (value: number, digits = 0) =>
+    formatCurrencyValue(value, currencyCode, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  const formatSignedMoney = (value: number, digits = 0) =>
+    formatSignedCurrencyValue(value, currencyCode, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  const formatCompactMoney = (value: number) =>
+    formatCompactCurrencyValue(value, currencyCode, {
+      maximumFractionDigits: 0,
+    });
+
+  useEffect(() => {
+    if (!sheetOpen || !effectiveAccountId) return;
+
+    runSimulation.mutate({
+      accountId: effectiveAccountId,
+      simulations: 3000,
+      tradeCount: 100,
+    });
+  }, [effectiveAccountId, runSimulation, sheetOpen]);
+
+  const monteCarloData = runSimulation.data;
+  const loadingMC = runSimulation.isPending;
 
   // Risk level classification
   const riskLevel =
@@ -137,13 +159,13 @@ export function RiskDashboardWidget({
         }
       >
         {loadingRisk ? (
-          <div className="space-y-2 flex-1">
+          <div className="flex flex-1 flex-col justify-end space-y-2">
             <Skeleton className="h-12 w-full" />
             <Skeleton className="h-4 w-3/4" />
             <Skeleton className="h-4 w-1/2" />
           </div>
         ) : (
-          <div className="flex h-full flex-col justify-end">
+          <div className="flex flex-1 flex-col justify-end">
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 pb-2">
               <div>
                 <p className="text-[10px] uppercase text-white/40">
@@ -223,8 +245,8 @@ export function RiskDashboardWidget({
                 </p>
                 <p className="text-[10px] text-white/30">
                   {isInDrawdown
-                    ? `${formatSignedCurrency(
-                        -(drawdownData?.currentDrawdownDollars ?? 0)
+                    ? `${formatSignedMoney(
+                        -Math.abs(drawdownData?.currentDrawdownDollars ?? 0)
                       )} from peak`
                     : "No active drawdown"}
                 </p>
@@ -295,7 +317,9 @@ export function RiskDashboardWidget({
                     {maxDD.toFixed(1)}%
                   </p>
                   <p className="text-[10px] text-white/30 mt-0.5">
-                    ${(drawdownData?.maxDrawdownDollars ?? 0).toFixed(0)}
+                    {formatMoney(
+                      Math.abs(drawdownData?.maxDrawdownDollars ?? 0)
+                    )}
                   </p>
                 </div>
                 <div className="rounded-lg bg-white/3 p-3">
@@ -321,8 +345,10 @@ export function RiskDashboardWidget({
                         Currently in drawdown
                       </p>
                       <p className="text-xs text-white/50">
-                        {currentDD.toFixed(1)}% from peak ($
-                        {(drawdownData?.currentDrawdownDollars ?? 0).toFixed(0)}
+                        {currentDD.toFixed(1)}% from peak (
+                        {formatMoney(
+                          Math.abs(drawdownData?.currentDrawdownDollars ?? 0)
+                        )}
                         )
                       </p>
                     </div>
@@ -419,13 +445,11 @@ export function RiskDashboardWidget({
                           tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }}
                           tickLine={false}
                           axisLine={false}
-                          tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                          tickFormatter={(value) => formatCompactMoney(value)}
                         />
                         <RechartsTooltip
                           contentStyle={APP_RECHARTS_TOOLTIP_CONTENT_STYLE}
-                          formatter={(value: number) => [
-                            `$${value.toFixed(0)}`,
-                          ]}
+                          formatter={(value: number) => [formatMoney(value)]}
                         />
                         <Area
                           type="monotone"
@@ -513,11 +537,11 @@ export function RiskDashboardWidget({
                       trades)
                     </p>
                     <p className="text-lg font-bold text-teal-400">
-                      ${monteCarloData.finalEquity.p50.toFixed(0)}
+                      {formatMoney(monteCarloData.finalEquity.p50)}
                     </p>
                     <p className="text-[10px] text-white/30">
-                      Range: ${monteCarloData.finalEquity.p5.toFixed(0)} — $
-                      {monteCarloData.finalEquity.p95.toFixed(0)}
+                      Range: {formatMoney(monteCarloData.finalEquity.p5)} —{" "}
+                      {formatMoney(monteCarloData.finalEquity.p95)}
                     </p>
                   </div>
                 </>

@@ -14,8 +14,8 @@ import {
   ZAxis,
 } from "recharts";
 
-import { Skeleton } from "../../ui/skeleton";
 import { useChartTrades } from "./use-chart-trades";
+import { useChartRenderMode } from "./chart-render-mode";
 import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
@@ -31,11 +31,6 @@ function formatDuration(totalMinutes: number) {
   return `${hours}h ${minutes}m`;
 }
 
-function average(values: number[]) {
-  if (values.length === 0) return 0;
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
 function median(values: number[]) {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -49,10 +44,13 @@ function median(values: number[]) {
 export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
   const storeAccountId = useAccountStore((state) => state.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
+  const renderMode = useChartRenderMode();
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
 
   const scatterData = useMemo(() => {
-    return trades
+    const maxPoints =
+      renderMode === "embedded" ? 300 : Number.POSITIVE_INFINITY;
+    const eligibleTrades = trades
       .filter((trade) => {
         return (
           Number.isFinite(Number(trade.holdSeconds)) &&
@@ -60,20 +58,34 @@ export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
           Number.isFinite(Number(trade.profit))
         );
       })
+      .map((trade) => ({
+        trade,
+        profit: Number(trade.profit ?? 0),
+      }));
+    const sampleStep =
+      maxPoints !== Number.POSITIVE_INFINITY &&
+      eligibleTrades.length > maxPoints
+        ? Math.ceil(eligibleTrades.length / maxPoints)
+        : 1;
+    const sampledTrades =
+      sampleStep > 1
+        ? eligibleTrades.filter((_, index) => index % sampleStep === 0)
+        : eligibleTrades;
+
+    return sampledTrades
       .map((trade) => {
-        const profit = Number(trade.profit ?? 0);
-        const holdMinutes = Number(trade.holdSeconds ?? 0) / 60;
-        const rr = Number(trade.realisedRR ?? 0);
+        const profit = trade.profit;
+        const holdMinutes = Number(trade.trade.holdSeconds ?? 0) / 60;
+        const rr = Number(trade.trade.realisedRR ?? 0);
         return {
           holdMinutes,
           profit,
           rr,
-          symbol: trade.symbol || "Unknown",
-          outcome: profit >= 0 ? "Winning Trades" : "Losing Trades",
+          symbol: trade.trade.symbol || "Unknown",
           size: Math.max(24, Math.min(180, Math.abs(profit))),
         };
       });
-  }, [trades]);
+  }, [renderMode, trades]);
 
   const winners = scatterData.filter((trade) => trade.profit >= 0);
   const losers = scatterData.filter((trade) => trade.profit < 0);
@@ -82,140 +94,110 @@ export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
     const holdTimes = scatterData.map((trade) => trade.holdMinutes);
     return {
       medianHold: median(holdTimes),
-      avgWinnerHold: average(winners.map((trade) => trade.holdMinutes)),
-      avgLoserHold: average(losers.map((trade) => trade.holdMinutes)),
     };
-  }, [losers, scatterData, winners]);
+  }, [scatterData]);
 
   if (isLoading) {
-    return <Skeleton className="h-full w-full" />;
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <p className="text-xs text-white/30">Loading...</p>
+      </div>
+    );
   }
 
   if (scatterData.length < 5) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-white/30">
-        Need at least 5 closed trades with duration data
+      <div className="flex h-full w-full items-center justify-center">
+        <p className="text-xs text-white/30">
+          Need at least 5 closed trades with duration data
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-6 py-2">
-      <div className="flex flex-wrap items-center gap-4 text-[9px] text-white/30">
-        <span>
-          Median hold:{" "}
-          <span className="font-medium text-white/70">
-            {formatDuration(stats.medianHold)}
-          </span>
-        </span>
-        <span>
-          Avg winner hold:{" "}
-          <span className="font-medium text-emerald-400">
-            {formatDuration(stats.avgWinnerHold)}
-          </span>
-        </span>
-        <span>
-          Avg loser hold:{" "}
-          <span className="font-medium text-rose-400">
-            {formatDuration(stats.avgLoserHold)}
-          </span>
-        </span>
-      </div>
-
-      <div className="min-h-0 flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              stroke="rgba(255,255,255,0.05)"
-            />
-            <XAxis
-              type="number"
-              dataKey="holdMinutes"
-              name="Hold time"
-              tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 9 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={formatDuration}
-              label={{
-                value: "Hold time",
-                position: "insideBottom",
-                offset: -4,
-                fill: "rgba(255,255,255,0.35)",
-                fontSize: 10,
-              }}
-            />
-            <YAxis
-              type="number"
-              dataKey="profit"
-              name="P&L"
-              tick={{ fill: "rgba(255,255,255,0.25)", fontSize: 9 }}
-              tickLine={false}
-              axisLine={false}
-              width={64}
-              tickFormatter={(value) => formatSignedCurrency(value, 0)}
-            />
-            <ZAxis type="number" dataKey="size" range={[32, 160]} />
-            <Tooltip
-              cursor={{ strokeDasharray: "3 3" }}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
-                const point = payload[0].payload as {
-                  symbol: string;
-                  holdMinutes: number;
-                  profit: number;
-                  rr: number;
-                };
-                return (
-                  <DashboardChartTooltipFrame title={point.symbol}>
-                    <DashboardChartTooltipRow
-                      label="Hold time"
-                      value={formatDuration(point.holdMinutes)}
-                    />
-                    <DashboardChartTooltipRow
-                      label="P&L"
-                      value={formatSignedCurrency(point.profit, 2)}
-                      tone={point.profit >= 0 ? "positive" : "negative"}
-                    />
-                    <DashboardChartTooltipRow
-                      label="Realised RR"
-                      value={`${point.rr.toFixed(2)}R`}
-                      tone={point.rr >= 0 ? "positive" : "negative"}
-                    />
-                  </DashboardChartTooltipFrame>
-                );
-              }}
-            />
-            <ReferenceLine
-              y={0}
-              stroke="rgba(255,255,255,0.2)"
-              strokeDasharray="5 5"
-            />
-            <Scatter
-              name="Winning Trades"
-              data={winners.map((trade) => ({
-                ...trade,
-                "Hold time": trade.holdMinutes,
-                "P&L": trade.profit,
-                RR: trade.rr,
-              }))}
-              fill="#34d399"
-              fillOpacity={0.45}
-            />
-            <Scatter
-              name="Losing Trades"
-              data={losers.map((trade) => ({
-                ...trade,
-                "Hold time": trade.holdMinutes,
-                "P&L": trade.profit,
-                RR: trade.rr,
-              }))}
-              fill="#fb7185"
-              fillOpacity={0.45}
-            />
-          </ScatterChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
+    <ResponsiveContainer width="100%" height="100%">
+      <ScatterChart>
+        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+        <XAxis
+          type="number"
+          dataKey="holdMinutes"
+          name="Hold time"
+          stroke="#ffffff50"
+          tick={{ fill: "#ffffff70", fontSize: 11 }}
+          tickFormatter={formatDuration}
+          label={{
+            value: "Hold time",
+            position: "insideBottom",
+            offset: -5,
+            fill: "#ffffff50",
+          }}
+        />
+        <YAxis
+          type="number"
+          dataKey="profit"
+          name="P&L"
+          stroke="#ffffff50"
+          tick={{ fill: "#ffffff70", fontSize: 11 }}
+          width={72}
+          tickFormatter={(value) => formatSignedCurrency(value, 0)}
+          label={{
+            value: "P&L",
+            angle: -90,
+            position: "insideLeft",
+            fill: "#ffffff50",
+          }}
+        />
+        <ZAxis type="number" dataKey="size" range={[20, 200]} />
+        <Tooltip
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null;
+            const point = payload[0].payload as {
+              symbol: string;
+              holdMinutes: number;
+              profit: number;
+              rr: number;
+            };
+            return (
+              <DashboardChartTooltipFrame title={point.symbol}>
+                <DashboardChartTooltipRow
+                  label="Hold time"
+                  value={formatDuration(point.holdMinutes)}
+                />
+                <DashboardChartTooltipRow
+                  label="P&L"
+                  value={formatSignedCurrency(point.profit, 2)}
+                  tone={point.profit >= 0 ? "positive" : "negative"}
+                />
+                <DashboardChartTooltipRow
+                  label="Realised RR"
+                  value={`${point.rr.toFixed(2)}R`}
+                  tone={point.rr >= 0 ? "positive" : "negative"}
+                />
+                <DashboardChartTooltipRow
+                  label="Median hold"
+                  value={formatDuration(stats.medianHold)}
+                />
+              </DashboardChartTooltipFrame>
+            );
+          }}
+        />
+        <ReferenceLine y={0} stroke="#ffffff30" strokeWidth={1} />
+        <Scatter
+          name="Winning Trades"
+          data={winners}
+          fill="#10b981"
+          fillOpacity={0.6}
+          isAnimationActive={renderMode !== "embedded"}
+        />
+        <Scatter
+          name="Losing Trades"
+          data={losers}
+          fill="#ef4444"
+          fillOpacity={0.6}
+          isAnimationActive={renderMode !== "embedded"}
+        />
+      </ScatterChart>
+    </ResponsiveContainer>
   );
 }

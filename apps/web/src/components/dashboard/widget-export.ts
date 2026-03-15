@@ -21,7 +21,7 @@ const widgetLabels: Record<WidgetType, string> = {
   "profit-factor": "Profit Factor",
   "win-streak": "Win Streak",
   "hold-time": "Hold Time",
-  "average-rr": "Average R:R",
+  "average-rr": "Average RR",
   "asset-profitability": "Asset Profitability",
   "trade-counts": "Trade Counts",
   "profit-expectancy": "Profit Expectancy",
@@ -30,21 +30,18 @@ const widgetLabels: Record<WidgetType, string> = {
   "open-trades": "Open Trades",
   "execution-scorecard": "Execution Scorecard",
   "money-left-on-table": "Money Left on Table",
-  "watchlist": "Watchlist",
   "session-performance": "Session Performance",
-  "streak-calendar": "Trade Streak Calendar",
+  "streak-calendar": "Daily Streak Calendar",
   "tiltmeter": "Tiltmeter",
   "daily-briefing": "Daily Briefing",
-  "risk-intelligence": "Risk Intelligence",
   "rule-compliance": "Rule Compliance",
   "edge-coach": "Edge Coach",
-  "what-if": "What If Scenarios",
-  benchmark: "Platform Benchmark",
 };
 
 export function exportWidgetsAsJson(
   widgets: WidgetType[],
-  spans: Partial<Record<WidgetType, number>>
+  spans: Partial<Record<WidgetType, number>>,
+  fileName?: string
 ): void {
   const exportData: WidgetExportData = {
     exportedAt: new Date().toISOString(),
@@ -62,7 +59,7 @@ export function exportWidgetsAsJson(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `dashboard-widgets-${new Date().toISOString().split("T")[0]}.json`;
+  a.download = `${fileName ?? `dashboard-widgets-${new Date().toISOString().split("T")[0]}`}.json`;
   a.click();
   URL.revokeObjectURL(url);
   
@@ -71,7 +68,8 @@ export function exportWidgetsAsJson(
 
 export function exportWidgetsAsCsv(
   widgets: WidgetType[],
-  spans: Partial<Record<WidgetType, number>>
+  spans: Partial<Record<WidgetType, number>>,
+  fileName?: string
 ): void {
   const headers = ["Position", "Widget ID", "Widget Name", "Column Span"];
   const rows = widgets.map((w, index) => [
@@ -90,7 +88,7 @@ export function exportWidgetsAsCsv(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `dashboard-widgets-${new Date().toISOString().split("T")[0]}.csv`;
+  a.download = `${fileName ?? `dashboard-widgets-${new Date().toISOString().split("T")[0]}`}.csv`;
   a.click();
   URL.revokeObjectURL(url);
   

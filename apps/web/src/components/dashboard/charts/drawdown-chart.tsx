@@ -17,7 +17,16 @@ import {
   ChartTooltip,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useDateRangeStore } from "@/stores/date-range";
+import {
+  countRangeDays,
+  formatRangeLabel,
+  getComparisonRange,
+  normalizeDateRange,
+} from "@/components/dashboard/chart-comparison-utils";
+import {
+  useComparisonStore,
+  type WidgetComparisonMode,
+} from "@/stores/comparison";
 import { trpcOptions } from "@/utils/trpc";
 
 import {
@@ -26,24 +35,125 @@ import {
   formatSignedCurrency,
   formatSignedPercent,
 } from "./dashboard-chart-ui";
-import { useChartTrades } from "./use-chart-trades";
+import {
+  buildRelativeAxisTicks,
+  clampRelativeMs,
+  formatRelativeDate,
+  formatRelativeTooltipDate,
+  getRelativeAxisTickStepMs,
+  getMergedRelativePositions,
+  getRangeDurationMs,
+  getRelativeSamplingStepMs,
+  getSeriesValueAt,
+  usesBucketedRelativeSampling,
+} from "./range-alignment";
+import { useChartRenderMode } from "./chart-render-mode";
+import { type ChartTrade, useChartTrades } from "./use-chart-trades";
+import { useChartDateRange } from "./use-chart-date-range";
 
 const chartConfig = {
   drawdown: {
     label: "Drawdown",
     color: "#F76290",
   },
+  compare: {
+    label: "Comparison",
+    color: "#FCA070",
+  },
 } satisfies ChartConfig;
 
 type DataPoint = {
-  date: string;
   drawdown: number;
   drawdownPercent: number;
-  timestamp: number;
+  relativeMs: number;
 };
 
-export function DrawdownChart({ accountId }: { accountId?: string }) {
-  const { start, end, min, max } = useDateRangeStore();
+function buildDrawdownSeries(
+  trades: ChartTrade[],
+  range: { start: Date; end: Date } | null,
+  initialBalance: number
+) {
+  if (!range) {
+    return {
+      data: [] as DataPoint[],
+      maxDrawdown: 0,
+      maxDrawdownPercent: 0,
+    };
+  }
+
+  const durationMs = getRangeDurationMs(range);
+  let runningEquity = initialBalance;
+  let peakEquity = initialBalance;
+  let absoluteMaxDrawdown = 0;
+  let absoluteMaxDrawdownPercent = 0;
+  const points: DataPoint[] = [
+    {
+      drawdown: 0,
+      drawdownPercent: 0,
+      relativeMs: 0,
+    },
+  ];
+
+  const sortedTrades = [...trades]
+    .filter((trade) => trade.close && trade.profit != null)
+    .sort(
+      (a, b) =>
+        new Date(a.close || 0).getTime() - new Date(b.close || 0).getTime()
+    );
+
+  sortedTrades.forEach((trade) => {
+    runningEquity += Number(trade.profit ?? 0);
+    if (runningEquity > peakEquity) {
+      peakEquity = runningEquity;
+    }
+
+    const drawdown = peakEquity - runningEquity;
+    const drawdownPercent = peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
+
+    if (drawdown > absoluteMaxDrawdown) {
+      absoluteMaxDrawdown = drawdown;
+      absoluteMaxDrawdownPercent = drawdownPercent;
+    }
+
+    points.push({
+      drawdown: -drawdown,
+      drawdownPercent: -drawdownPercent,
+      relativeMs: clampRelativeMs(new Date(trade.close || 0).getTime(), range),
+    });
+  });
+
+  if (points[points.length - 1]?.relativeMs !== durationMs) {
+    const currentDrawdown = peakEquity - runningEquity;
+    const currentDrawdownPercent =
+      peakEquity > 0 ? (currentDrawdown / peakEquity) * 100 : 0;
+
+    points.push({
+      drawdown: -currentDrawdown,
+      drawdownPercent: -currentDrawdownPercent,
+      relativeMs: durationMs,
+    });
+  }
+
+  return {
+    data: points,
+    maxDrawdown: absoluteMaxDrawdown,
+    maxDrawdownPercent: absoluteMaxDrawdownPercent,
+  };
+}
+
+export function DrawdownChart({
+  accountId,
+  ownerId = "drawdown-chart",
+  comparisonMode,
+}: {
+  accountId?: string;
+  ownerId?: string;
+  comparisonMode?: WidgetComparisonMode;
+}) {
+  const { start, end, min, max } = useChartDateRange();
+  const renderMode = useChartRenderMode();
+  const comparisons = useComparisonStore((state) => state.comparisons);
+  const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
 
   const resolvedRange = React.useMemo(() => {
     const minDate = min ? new Date(min) : undefined;
@@ -75,17 +185,51 @@ export function DrawdownChart({ accountId }: { accountId?: string }) {
     () =>
       resolvedRange
         ? {
-            startISO: resolvedRange.start.toISOString(),
-            endISO: resolvedRange.end.toISOString(),
+            startISO: normalizeDateRange(resolvedRange).start.toISOString(),
+            endISO: normalizeDateRange(resolvedRange).end.toISOString(),
           }
         : undefined,
     [resolvedRange]
+  );
+
+  const comparisonRange = React.useMemo(() => {
+    if (!resolvedRange) return null;
+    return getComparisonRange(myMode, resolvedRange, {
+      minDate: min,
+      maxDate: max,
+    });
+  }, [max, min, myMode, resolvedRange]);
+
+  const comparisonRangeOverride = React.useMemo(
+    () =>
+      comparisonRange
+        ? {
+            startISO: normalizeDateRange(comparisonRange).start.toISOString(),
+            endISO: normalizeDateRange(comparisonRange).end.toISOString(),
+          }
+        : undefined,
+    [comparisonRange]
+  );
+
+  const timelineRange = React.useMemo(
+    () => (resolvedRange ? normalizeDateRange(resolvedRange) : null),
+    [resolvedRange]
+  );
+  const comparisonTimelineRange = React.useMemo(
+    () => (comparisonRange ? normalizeDateRange(comparisonRange) : null),
+    [comparisonRange]
   );
 
   const { trades, isLoading: tradesLoading } = useChartTrades(
     accountId,
     rangeOverride
   );
+  const {
+    trades: comparisonTrades,
+    isLoading: comparisonTradesLoading,
+  } = useChartTrades(accountId, comparisonRangeOverride, {
+    enabled: Boolean(comparisonRange),
+  });
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
     ...trpcOptions.accounts.stats.queryOptions({ accountId: accountId || "" }),
@@ -102,72 +246,23 @@ export function DrawdownChart({ accountId }: { accountId?: string }) {
     )?.initialBalance ?? 0
   );
 
-  const { data, maxDrawdown, maxDrawdownPercent } = React.useMemo(() => {
-    if (!resolvedRange) {
-      return {
-        data: [] as DataPoint[],
-        maxDrawdown: 0,
-        maxDrawdownPercent: 0,
-      };
-    }
+  const { data, maxDrawdown, maxDrawdownPercent } = React.useMemo(
+    () => buildDrawdownSeries(trades, timelineRange, initialBalance),
+    [initialBalance, timelineRange, trades]
+  );
+  const comparisonResult = React.useMemo(
+    () =>
+      comparisonTimelineRange
+        ? buildDrawdownSeries(
+            comparisonTrades,
+            comparisonTimelineRange,
+            initialBalance
+          )
+        : { data: [] as DataPoint[], maxDrawdown: 0, maxDrawdownPercent: 0 },
+    [comparisonTimelineRange, comparisonTrades, initialBalance]
+  );
 
-    let runningEquity = initialBalance;
-    let peakEquity = initialBalance;
-    let absoluteMaxDrawdown = 0;
-    let absoluteMaxDrawdownPercent = 0;
-    const points: DataPoint[] = [
-      {
-        date: resolvedRange.start.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        }),
-        drawdown: 0,
-        drawdownPercent: 0,
-        timestamp: resolvedRange.start.getTime(),
-      },
-    ];
-
-    const sortedTrades = [...trades]
-      .filter((trade) => trade.close && trade.profit != null)
-      .sort(
-        (a, b) =>
-          new Date(a.close || 0).getTime() - new Date(b.close || 0).getTime()
-      );
-
-    sortedTrades.forEach((trade) => {
-      runningEquity += Number(trade.profit ?? 0);
-      if (runningEquity > peakEquity) {
-        peakEquity = runningEquity;
-      }
-
-      const drawdown = peakEquity - runningEquity;
-      const drawdownPercent =
-        peakEquity > 0 ? (drawdown / peakEquity) * 100 : 0;
-
-      if (drawdown > absoluteMaxDrawdown) {
-        absoluteMaxDrawdown = drawdown;
-        absoluteMaxDrawdownPercent = drawdownPercent;
-      }
-
-      points.push({
-        date: new Date(trade.close || 0).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        }),
-        drawdown: -drawdown,
-        drawdownPercent: -drawdownPercent,
-        timestamp: new Date(trade.close || 0).getTime(),
-      });
-    });
-
-    return {
-      data: points,
-      maxDrawdown: absoluteMaxDrawdown,
-      maxDrawdownPercent: absoluteMaxDrawdownPercent,
-    };
-  }, [initialBalance, resolvedRange, trades]);
-
-  const loading = tradesLoading || statsLoading;
+  const loading = tradesLoading || statsLoading || comparisonTradesLoading;
 
   if (loading) {
     return (
@@ -186,10 +281,81 @@ export function DrawdownChart({ accountId }: { accountId?: string }) {
     );
   }
 
-  const yMin = Math.min(...data.map((point) => point.drawdownPercent), -1);
+  const daysSelected = timelineRange ? countRangeDays(timelineRange) : null;
+  const primaryLabel = (() => {
+    if (!daysSelected) return "Selected range";
+    if (daysSelected === 1) return "Selected day";
+    if (daysSelected === 7) return "Selected week";
+    return `Selected ${daysSelected} days`;
+  })();
+  const comparisonLabel = (() => {
+    if (!comparisonResult.data.length) return undefined;
+    if (myMode === "thisWeek") return "This week";
+    if (myMode === "lastWeek") return "Last week";
+    if (!daysSelected) return "Previous range";
+    if (daysSelected === 1) return "Previous day";
+    return `Previous ${daysSelected} days`;
+  })();
+  const primaryRangeLabel = timelineRange
+    ? formatRangeLabel(timelineRange)
+    : undefined;
+  const comparisonRangeLabel = comparisonTimelineRange
+    ? formatRangeLabel(comparisonTimelineRange)
+    : undefined;
+  const durationMs = timelineRange ? getRangeDurationMs(timelineRange) : 0;
+  const sampleStepMs = timelineRange
+    ? getRelativeSamplingStepMs(timelineRange)
+    : null;
+  const axisTickStepMs = timelineRange
+    ? getRelativeAxisTickStepMs(timelineRange)
+    : null;
+  const useBucketedSampling = timelineRange
+    ? usesBucketedRelativeSampling(timelineRange)
+    : false;
+  const primarySeries = data.map((point) => ({
+    relativeMs: point.relativeMs,
+    value: point.drawdownPercent,
+  }));
+  const comparisonSeries = comparisonResult.data.map((point) => ({
+    relativeMs: point.relativeMs,
+    value: point.drawdownPercent,
+  }));
+
+  const mergedData = getMergedRelativePositions(
+    primarySeries,
+    comparisonSeries,
+    durationMs,
+    sampleStepMs,
+    {
+      includeSeriesPoints: !useBucketedSampling,
+    }
+  ).map((relativeMs) => ({
+    x: relativeMs,
+    label: timelineRange ? formatRelativeDate(timelineRange, relativeMs) : "",
+    primaryDate: timelineRange
+      ? formatRelativeTooltipDate(timelineRange, relativeMs)
+      : "",
+    comparisonDate: comparisonTimelineRange
+      ? formatRelativeTooltipDate(comparisonTimelineRange, relativeMs)
+      : undefined,
+    drawdownPercent: getSeriesValueAt(primarySeries, relativeMs),
+    compare: comparisonResult.data.length
+      ? getSeriesValueAt(comparisonSeries, relativeMs)
+      : undefined,
+  }));
+
+  const yMin = Math.min(
+    ...mergedData.flatMap((point) =>
+      [point.drawdownPercent, point.compare].filter(
+        (value): value is number => typeof value === "number"
+      )
+    ),
+    -1
+  );
   const yTicks = [0, yMin * 0.25, yMin * 0.5, yMin * 0.75, yMin].map((value) =>
     Number(value.toFixed(2))
   );
+  const xTicks = buildRelativeAxisTicks(durationMs, 6, axisTickStepMs);
 
   return (
     <Card className="h-full w-full rounded-none border-none bg-transparent shadow-none">
@@ -204,9 +370,12 @@ export function DrawdownChart({ accountId }: { accountId?: string }) {
           </p>
         </CardTitle>
       </CardHeader>
-      <CardContent className="p-0 pt-3">
+      <CardContent className="p-0 overflow-visible">
         <ChartContainer config={chartConfig} className="h-52 w-full md:h-74">
-          <AreaChart data={data} margin={{ top: 12, right: 12, left: 32, bottom: 18 }}>
+          <AreaChart
+            data={mergedData}
+            margin={{ top: 12, right: 0, left: 36, bottom: -4 }}
+          >
             <defs>
               <linearGradient id="drawdownGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#F76290" stopOpacity={0.3} />
@@ -215,35 +384,64 @@ export function DrawdownChart({ accountId }: { accountId?: string }) {
             </defs>
             <CartesianGrid strokeDasharray="8 8" vertical={false} />
             <XAxis
-              dataKey="date"
+              type="number"
+              dataKey="x"
+              domain={[0, durationMs]}
+              ticks={xTicks}
               tickLine={false}
               axisLine={false}
-              tickMargin={12}
-              tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+              tickMargin={10}
+              tick={{ fill: "rgba(255,255,255,0.4)" }}
+              tickFormatter={(value) =>
+                timelineRange
+                  ? formatRelativeDate(timelineRange, Number(value))
+                  : ""
+              }
             />
             <YAxis
               domain={[yMin, 0]}
               ticks={yTicks}
               tickLine={false}
               axisLine={false}
-              tickMargin={8}
-              width={48}
-              tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 10 }}
+              tickMargin={6}
+              width={20}
+              tick={{ fill: "rgba(255,255,255,0.4)" }}
               tickFormatter={(value) => `${value.toFixed(0)}%`}
             />
             <ChartTooltip
               cursor={false}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
-                const point = payload[0].payload as DataPoint;
-                const percent = Number(payload[0].value ?? 0);
+                const point = payload[0].payload as {
+                  label: string;
+                  primaryDate?: string;
+                  comparisonDate?: string;
+                };
                 return (
-                  <DashboardChartTooltipFrame title={point.date}>
-                    <DashboardChartTooltipRow
-                      label="Drawdown"
-                      value={`${Math.abs(percent).toFixed(2)}% underwater`}
-                      tone="negative"
-                    />
+                  <DashboardChartTooltipFrame
+                    title={point.primaryDate ?? point.comparisonDate ?? point.label}
+                  >
+                    {payload.map((item) => {
+                      const key = item.dataKey as "drawdownPercent" | "compare";
+                      const percent = Number(item.value ?? 0);
+                      const label =
+                        key === "drawdownPercent"
+                          ? primaryRangeLabel
+                            ? `${primaryLabel} (${primaryRangeLabel})`
+                            : primaryLabel
+                          : comparisonRangeLabel
+                            ? `${comparisonLabel ?? "Comparison"} (${comparisonRangeLabel})`
+                            : (comparisonLabel ?? "Comparison");
+                      return (
+                        <DashboardChartTooltipRow
+                          key={key}
+                          label={label}
+                          value={`${Math.abs(percent).toFixed(2)}% underwater`}
+                          tone={key === "compare" ? "accent" : "negative"}
+                          indicatorColor={key === "compare" ? "#FCA070" : "#F76290"}
+                        />
+                      );
+                    })}
                   </DashboardChartTooltipFrame>
                 );
               }}
@@ -255,8 +453,23 @@ export function DrawdownChart({ accountId }: { accountId?: string }) {
               strokeWidth={2}
               fill="url(#drawdownGradient)"
               dot={false}
+              isAnimationActive={renderMode !== "embedded"}
               activeDot={{ r: 4, fill: "#F76290" }}
             />
+            {comparisonResult.data.length > 0 ? (
+              <Area
+                type="monotone"
+                dataKey="compare"
+                stroke="#FCA070"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                fill="transparent"
+                fillOpacity={0}
+                dot={false}
+                isAnimationActive={renderMode !== "embedded"}
+                activeDot={{ r: 4, fill: "#FCA070" }}
+              />
+            ) : null}
           </AreaChart>
         </ChartContainer>
       </CardContent>

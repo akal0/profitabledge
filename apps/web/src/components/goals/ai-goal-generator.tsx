@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Sparkles, Send, Lightbulb, Target, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { trpcClient } from "@/utils/trpc";
+import { showAIErrorToast } from "@/lib/ai-error-toast";
 import type { CustomGoalCriteria } from "./custom-goal-builder";
 
 interface AIGoalGeneratorProps {
@@ -83,6 +84,7 @@ export function AIGoalGenerator({
       ]);
     } catch (error) {
       console.error("Failed to generate goal:", error);
+      showAIErrorToast(error);
       setMessages((prev) => [
         ...prev,
         {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { trpc } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
@@ -10,7 +11,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Separator } from "@/components/ui/separator";
 import { WidgetWrapper } from "./widget-wrapper";
+import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 
 const TILT_LEVELS = {
   green: {
@@ -64,6 +67,7 @@ export function TiltmeterWidget({
   className?: string;
 }) {
   const accountId = useAccountStore((s) => s.selectedAccountId);
+  const widgetRef = useRef<HTMLDivElement | null>(null);
 
   const { data: tiltData, isLoading } = trpc.ai.getTiltStatus.useQuery(
     { accountId: accountId ?? "" },
@@ -78,11 +82,17 @@ export function TiltmeterWidget({
   if (isLoading) {
     return (
       <WidgetWrapper
+        rootRef={widgetRef}
         className={className}
         icon={Brain}
         title="Tiltmeter"
         showHeader
         contentClassName="flex-col p-3.5"
+        headerRight={
+          !isEditing ? (
+            <WidgetShareButton targetRef={widgetRef} title="Tiltmeter" />
+          ) : null
+        }
       >
         <Skeleton className="h-full w-full rounded-sm" />
       </WidgetWrapper>
@@ -111,6 +121,7 @@ export function TiltmeterWidget({
 
   return (
     <WidgetWrapper
+      rootRef={widgetRef}
       isEditing={isEditing}
       className={className}
       icon={Brain}
@@ -118,15 +129,20 @@ export function TiltmeterWidget({
       showHeader
       contentClassName="flex-col justify-end p-3.5"
       headerRight={
-        <span
-          className={cn(
-            "text-[10px] font-semibold px-2 py-1 rounded-sm",
-            config.bg,
-            config.color
-          )}
-        >
-          {config.label}
-        </span>
+        <>
+          <span
+            className={cn(
+              "text-[10px] font-semibold px-2 py-1 rounded-sm",
+              config.bg,
+              config.color
+            )}
+          >
+            {config.label}
+          </span>
+          {!isEditing ? (
+            <WidgetShareButton targetRef={widgetRef} title="Tiltmeter" />
+          ) : null}
+        </>
       }
     >
       <div className="flex flex-col justify-end h-full w-full">
@@ -158,8 +174,12 @@ export function TiltmeterWidget({
                   <line
                     x1="60"
                     y1="55"
-                    x2={60 + 40 * Math.cos(((180 - gaugeAngle) * Math.PI) / 180)}
-                    y2={55 - 40 * Math.sin(((180 - gaugeAngle) * Math.PI) / 180)}
+                    x2={
+                      60 + 40 * Math.cos(((180 - gaugeAngle) * Math.PI) / 180)
+                    }
+                    y2={
+                      55 - 40 * Math.sin(((180 - gaugeAngle) * Math.PI) / 180)
+                    }
                     stroke="white"
                     strokeWidth="2"
                     strokeLinecap="round"
@@ -172,7 +192,9 @@ export function TiltmeterWidget({
               <div className="flex min-w-[180px] flex-col">
                 <div className="flex items-center justify-between px-3 text-[11px] text-white/60">
                   <span>
-                    {activeStateLabels.length > 0 ? "Active state" : "Emotional state"}
+                    {activeStateLabels.length > 0
+                      ? "Active state"
+                      : "Emotional state"}
                   </span>
                   <span>
                     {activeStateLabels.length > 0
@@ -186,6 +208,7 @@ export function TiltmeterWidget({
                       : null}
                   </span>
                 </div>
+                <Separator className="mt-2 w-full" />
                 <div className="flex flex-col gap-1 px-3 pt-2 text-xs font-medium text-white">
                   {activeStateLabels.length > 0 ? (
                     activeStateLabels.map((label, index) => (

@@ -11,7 +11,20 @@ export interface PsychologySnapshot {
   focus: number;
   fear: number;
   greed: number;
-  emotionalState: 'calm' | 'anxious' | 'excited' | 'frustrated' | 'neutral' | 'stressed' | 'confident';
+  emotionalState:
+    | 'calm'
+    | 'confident'
+    | 'neutral'
+    | 'excited'
+    | 'anxious'
+    | 'stressed'
+    | 'frustrated'
+    | 'angry'
+    | 'confused'
+    | 'discouraged'
+    | 'overwhelmed'
+    | 'regretful'
+    | 'impatient';
   notes?: string;
   tradingEnvironment?: 'home' | 'office' | 'traveling' | 'mobile';
   sleepQuality?: number;

@@ -11,9 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Sheet,
@@ -33,6 +31,7 @@ import {
   Sparkles,
   Plus,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { TRADE_SURFACE_CARD_CLASS } from "@/components/trades/trade-identifier-pill";
 
@@ -44,6 +43,8 @@ const categoryConfig = {
   strategy: { label: "Strategy", icon: Sparkles, color: "text-yellow-400" },
   custom: { label: "Custom", icon: FileText, color: "text-white/60" },
 };
+
+type JournalTemplateCategory = keyof typeof categoryConfig;
 
 // Pre-built system templates
 const systemTemplates = [
@@ -180,11 +181,16 @@ export function TemplateBrowser({
   onStartBlank,
 }: TemplateBrowserProps) {
   const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState<JournalTemplateCategory | null>(null);
+
+  const templateFilters = selectedCategory
+    ? { category: selectedCategory }
+    : undefined;
 
   // Fetch user templates
   const { data: userTemplates, isLoading } = trpc.journal.listTemplates.useQuery(
-    { category: selectedCategory as any },
+    templateFilters,
     { enabled: isOpen }
   );
 
@@ -287,7 +293,9 @@ export function TemplateBrowser({
               >
                 All
               </Button>
-              {Object.entries(categoryConfig).map(([key, config]) => {
+              {(Object.entries(categoryConfig) as Array<
+                [JournalTemplateCategory, (typeof categoryConfig)[JournalTemplateCategory]]
+              >).map(([key, config]) => {
                 const Icon = config.icon;
                 return (
                   <Button
@@ -412,7 +420,7 @@ export function SaveTemplateDialog({
 }: SaveTemplateDialogProps) {
   const [name, setName] = useState(entryTitle || "My Template");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState<string>("custom");
+  const [category, setCategory] = useState<JournalTemplateCategory>("custom");
   const [emoji, setEmoji] = useState("📄");
 
   const createTemplate = trpc.journal.createTemplate.useMutation({
@@ -428,7 +436,7 @@ export function SaveTemplateDialog({
       description: description || undefined,
       emoji,
       content: entryContent,
-      category: category as any,
+      category,
     });
   };
 
@@ -436,94 +444,118 @@ export function SaveTemplateDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-sidebar border-white/10 max-w-md">
-        <DialogHeader>
-          <DialogTitle>Save as Template</DialogTitle>
-          <DialogDescription className="text-white/40">
-            Create a reusable template from this entry
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 pt-4">
-          {/* Emoji picker */}
-          <div>
-            <label className="text-sm text-white/60 mb-2 block">Icon</label>
-            <div className="flex gap-1 flex-wrap">
-              {commonEmojis.map((e) => (
-                <button
-                  key={e}
-                  onClick={() => setEmoji(e)}
-                  className={cn(
-                    "text-xl p-1.5 rounded transition-colors",
-                    emoji === e ? "bg-teal-500/20 ring-1 ring-teal-500" : "hover:bg-white/5"
-                  )}
-                >
-                  {e}
-                </button>
-              ))}
+      <DialogContent
+        showCloseButton={false}
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-md"
+      >
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <FileText className="h-3.5 w-3.5 text-white/60" />
             </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-white">Save as Template</div>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">
+                Create a reusable template from this entry
+              </p>
+            </div>
+            <DialogClose asChild>
+              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            </DialogClose>
           </div>
-
-          {/* Name */}
-          <div>
-            <label className="text-sm text-white/60 mb-2 block">Template Name</label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My Template"
-              className="bg-sidebar-accent border-white/10 text-white"
-            />
-          </div>
-
-          {/* Description */}
-          <div>
-            <label className="text-sm text-white/60 mb-2 block">Description</label>
-            <Input
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What is this template for?"
-              className="bg-sidebar-accent border-white/10 text-white"
-            />
-          </div>
-
-          {/* Category */}
-          <div>
-            <label className="text-sm text-white/60 mb-2 block">Category</label>
-            <div className="flex gap-2 flex-wrap">
-              {Object.entries(categoryConfig).map(([key, config]) => {
-                const Icon = config.icon;
-                return (
-                  <Button
-                    key={key}
-                    variant={category === key ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCategory(key)}
+          <Separator />
+          {/* Body */}
+          <div className="space-y-4 px-5 py-4">
+            {/* Emoji picker */}
+            <div>
+              <label className="text-sm text-white/60 mb-2 block">Icon</label>
+              <div className="flex gap-1 flex-wrap">
+                {commonEmojis.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setEmoji(e)}
                     className={cn(
-                      category === key
-                        ? "bg-teal-500 hover:bg-teal-600"
-                        : "border-white/10 text-white/60 hover:text-white"
+                      "text-xl p-1.5 rounded transition-colors",
+                      emoji === e ? "bg-teal-500/20 ring-1 ring-teal-500" : "hover:bg-white/5"
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5 mr-1.5" />
-                    {config.label}
-                  </Button>
-                );
-              })}
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Name */}
+            <div>
+              <label className="text-sm text-white/60 mb-2 block">Template Name</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My Template"
+                className="bg-sidebar-accent border-white/10 text-white"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="text-sm text-white/60 mb-2 block">Description</label>
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What is this template for?"
+                className="bg-sidebar-accent border-white/10 text-white"
+              />
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="text-sm text-white/60 mb-2 block">Category</label>
+              <div className="flex gap-2 flex-wrap">
+                {(Object.entries(categoryConfig) as Array<
+                  [JournalTemplateCategory, (typeof categoryConfig)[JournalTemplateCategory]]
+                >).map(([key, config]) => {
+                  const Icon = config.icon;
+                  return (
+                    <Button
+                      key={key}
+                      variant={category === key ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCategory(key)}
+                      className={cn(
+                        category === key
+                          ? "bg-teal-500 hover:bg-teal-600"
+                          : "border-white/10 text-white/60 hover:text-white"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5 mr-1.5" />
+                      {config.label}
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="flex justify-end gap-2 pt-4 border-t border-white/5 mt-4">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={!name.trim() || createTemplate.isPending}
-            className="bg-teal-500 hover:bg-teal-600"
-          >
-            {createTemplate.isPending ? "Saving..." : "Save Template"}
-          </Button>
+          <Separator />
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 px-5 py-3 shrink-0">
+            <Button
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!name.trim() || createTemplate.isPending}
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+            >
+              {createTemplate.isPending ? "Saving..." : "Save Template"}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

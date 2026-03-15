@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { trpc } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { WidgetWrapper } from "./widget-wrapper";
+import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 
 const RULE_TYPE_LABELS: Record<string, string> = {
   allowed_sessions: "Allowed Sessions",
@@ -33,7 +34,7 @@ const RULE_TYPE_LABELS: Record<string, string> = {
   allowed_symbols: "Allowed Symbols",
   max_trades_per_day: "Max Trades/Day",
   max_consecutive_losses: "Max Consecutive Losses",
-  min_rr_ratio: "Min R:R Ratio",
+  min_rr_ratio: "Min RR Ratio",
   protocol_required: "Protocol Required",
   max_daily_loss: "Max Daily Loss",
   no_trading_during_news: "No News Trading",
@@ -57,6 +58,7 @@ export function RuleComplianceWidget({
   className?: string;
 }) {
   const accountId = useAccountStore((s) => s.selectedAccountId);
+  const widgetRef = useRef<HTMLDivElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const {
@@ -94,14 +96,14 @@ export function RuleComplianceWidget({
 
   const activeRules = rules ?? [];
   const totalRules = activeRules.length;
-  const passCount = compliance?.passed ?? 0;
-  const failCount = compliance?.failed ?? 0;
-  const complianceRate =
-    totalRules > 0 ? Math.round((passCount / totalRules) * 100) : 100;
+  const complianceRate = Math.round(compliance?.complianceRate ?? 100);
+  const reviewedTrades = compliance?.trades ?? 0;
+  const failCount = compliance?.violations.length ?? 0;
 
   return (
     <>
       <WidgetWrapper
+        rootRef={widgetRef}
         isEditing={isEditing}
         className={className}
         icon={Scale}
@@ -109,6 +111,11 @@ export function RuleComplianceWidget({
         showHeader
         onClick={() => setSheetOpen(true)}
         contentClassName="flex-col justify-end p-3.5"
+        headerRight={
+          !isEditing ? (
+            <WidgetShareButton targetRef={widgetRef} title="Rule compliance" />
+          ) : null
+        }
       >
         {isLoading ? (
           <div className="flex-1 flex items-center justify-center">
@@ -126,10 +133,7 @@ export function RuleComplianceWidget({
           <>
             <div className="flex flex-col items-center justify-center flex-1">
               <div className="relative w-24 h-24">
-                <svg
-                  viewBox="0 0 100 100"
-                  className="w-full h-full -rotate-90"
-                >
+                <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                   <circle
                     cx="50"
                     cy="50"
@@ -173,25 +177,23 @@ export function RuleComplianceWidget({
                 </div>
               </div>
               <p className="text-[10px] text-white/40 mt-2">
-                {passCount} passed / {failCount} failed
+                {reviewedTrades} trades reviewed · {failCount} violations
               </p>
             </div>
 
             {failCount > 0 && compliance?.violations && (
               <div className="space-y-1 mt-auto">
-                {compliance.violations
-                  .slice(0, 2)
-                  .map((v: any, i: number) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-1.5 text-[10px]"
-                    >
-                      <XCircle className="h-2.5 w-2.5 text-rose-400 shrink-0" />
-                      <span className="text-white/50 truncate">
-                        {v.ruleName}: {v.message}
-                      </span>
-                    </div>
-                  ))}
+                {compliance.violations.slice(0, 2).map((v: any, i: number) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1.5 text-[10px]"
+                  >
+                    <XCircle className="h-2.5 w-2.5 text-rose-400 shrink-0" />
+                    <span className="text-white/50 truncate">
+                      {v.ruleName}: {v.message}
+                    </span>
+                  </div>
+                ))}
               </div>
             )}
           </>
@@ -258,7 +260,7 @@ export function RuleComplianceWidget({
                           </p>
                         </div>
                         <button
-                          onClick={() => deleteRule.mutate({ ruleId: rule.id })}
+                          onClick={() => deleteRule.mutate({ id: rule.id })}
                           className="p-1 rounded hover:bg-white/5 text-white/30 hover:text-rose-400"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -287,7 +289,7 @@ export function RuleComplianceWidget({
                       >
                         <div className="flex items-start justify-between mb-1">
                           <p className="text-sm font-medium">
-                            {suggestion.name}
+                            {suggestion.label}
                           </p>
                           <Button
                             size="sm"
@@ -297,10 +299,11 @@ export function RuleComplianceWidget({
                               if (!accountId) return;
                               createRule.mutate({
                                 accountId,
-                                name: suggestion.name,
+                                label: suggestion.label,
                                 ruleType: suggestion.ruleType,
                                 category: suggestion.category,
-                                config: suggestion.config,
+                                description: suggestion.description,
+                                parameters: suggestion.parameters,
                               });
                             }}
                             disabled={createRule.isPending}
@@ -310,7 +313,7 @@ export function RuleComplianceWidget({
                           </Button>
                         </div>
                         <p className="text-[10px] text-white/50">
-                          {suggestion.rationale}
+                          {suggestion.reason}
                         </p>
                       </div>
                     ))}
@@ -349,8 +352,8 @@ export function RuleComplianceWidget({
                         </span>
                       </div>
                       <div className="text-right text-[10px] text-white/40">
-                        <p>{passCount} passed</p>
-                        <p>{failCount} failed</p>
+                        <p>{reviewedTrades} trades</p>
+                        <p>{failCount} violations</p>
                       </div>
                     </div>
 
@@ -364,7 +367,7 @@ export function RuleComplianceWidget({
                             >
                               <XCircle className="h-3 w-3 text-rose-400 shrink-0" />
                               <span className="text-white/60">
-                                {v.ruleName}: {v.message}
+                                {v.ruleLabel}: {v.violation}
                               </span>
                             </div>
                           ))}

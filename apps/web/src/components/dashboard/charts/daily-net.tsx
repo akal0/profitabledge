@@ -18,9 +18,7 @@ import {
 } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { JetBrains_Mono } from "next/font/google";
 import { useMotionValueEvent, useSpring } from "framer-motion";
-import { useDateRangeStore } from "@/stores/date-range";
 import {
   useComparisonStore,
   type WidgetComparisonMode,
@@ -36,11 +34,7 @@ import {
   DashboardChartTooltipRow,
   formatSignedCurrency,
 } from "./dashboard-chart-ui";
-
-const jetBrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
+import { useChartDateRange } from "./use-chart-date-range";
 
 const CHART_MARGIN = 35;
 
@@ -63,7 +57,7 @@ export function DailyNetBarChart({
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }) {
-  const { start, end, min, max } = useDateRangeStore();
+  const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
   const [series, setSeries] = React.useState<Point[]>([]);
@@ -466,6 +460,15 @@ export function DailyNetBarChart({
                             value={formatSignedCurrency(v, 0)}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
+                            indicatorColor={
+                              typeof item.color === "string"
+                                ? item.color
+                                : key === "compare"
+                                  ? "#FCA070"
+                                  : v < 0
+                                    ? "#fb7185"
+                                    : "#2dd4bf"
+                            }
                           />
                         );
                       })}

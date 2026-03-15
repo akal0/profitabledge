@@ -5,11 +5,11 @@ import { db } from "../db";
 import { notification } from "../db/schema/notifications";
 import { user as userTable } from "../db/schema/auth";
 import {
-  NotificationType,
   mergeNotificationPreferences,
   defaultNotificationPreferences,
   createNotification,
 } from "../lib/notifications";
+import type { NotificationType } from "../lib/notifications";
 
 const preferenceSchema = z.object({
   inApp: z.boolean().optional(),

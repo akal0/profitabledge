@@ -1,13 +1,10 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -18,6 +15,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import {
+  toolbarFilterMenuContentClass,
+  toolbarFilterMenuItemClass,
+  toolbarFilterMenuSectionTitleClass,
+  toolbarFilterMenuMainSeparatorClass,
+} from "@/components/ui/filter-menu-styles";
 import {
   Bookmark,
   Save,
@@ -29,6 +33,7 @@ import {
   Check,
   RotateCcw,
   Pencil,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { WidgetType } from "@/components/dashboard/widgets";
@@ -48,7 +53,7 @@ interface WidgetPresetsProps {
     widgets: WidgetType[],
     spans: Partial<Record<WidgetType, number>>
   ) => void;
-  onExport: (format: "json" | "csv") => void;
+  onExport: (format: "json" | "csv", fileName?: string) => void;
 }
 
 const STORAGE_KEY = "profitable-edge-widget-presets";
@@ -68,16 +73,12 @@ const VALID_WIDGET_TYPES = new Set<WidgetType>([
   "open-trades",
   "execution-scorecard",
   "money-left-on-table",
-  "watchlist",
   "session-performance",
   "streak-calendar",
   "tiltmeter",
   "daily-briefing",
-  "risk-intelligence",
   "rule-compliance",
   "edge-coach",
-  "what-if",
-  "benchmark",
 ]);
 
 function sanitizeWidgetList(widgets: unknown): WidgetType[] {
@@ -97,20 +98,8 @@ const builtInPresets: WidgetPreset[] = [
     spans: {},
   },
   {
-    id: "builtin-risk",
-    name: "Risk focused",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "account-balance",
-      "total-losses",
-      "consistency-score",
-      "money-left-on-table",
-    ],
-    spans: {},
-  },
-  {
     id: "builtin-performance",
-    name: "Performance analysis",
+    name: "Performance",
     createdAt: new Date().toISOString(),
     widgets: [
       "win-rate",
@@ -120,7 +109,31 @@ const builtInPresets: WidgetPreset[] = [
       "execution-scorecard",
       "hold-time",
     ],
-    spans: { "asset-profitability": 2 },
+    spans: {},
+  },
+  {
+    id: "builtin-risk",
+    name: "Risk",
+    createdAt: new Date().toISOString(),
+    widgets: [
+      "account-balance",
+      "total-losses",
+      "rule-compliance",
+      "consistency-score",
+    ],
+    spans: {},
+  },
+  {
+    id: "builtin-psychology",
+    name: "Psychology",
+    createdAt: new Date().toISOString(),
+    widgets: [
+      "tiltmeter",
+      "daily-briefing",
+      "consistency-score",
+      "win-streak",
+    ],
+    spans: {},
   },
   {
     id: "builtin-minimal",
@@ -128,106 +141,6 @@ const builtInPresets: WidgetPreset[] = [
     createdAt: new Date().toISOString(),
     widgets: ["account-balance", "win-rate"],
     spans: {},
-  },
-  {
-    id: "builtin-active",
-    name: "Active trader",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "account-balance",
-      "account-equity",
-      "open-trades",
-      "watchlist",
-      "win-streak",
-      "profit-factor",
-    ],
-    spans: {},
-  },
-  {
-    id: "builtin-session",
-    name: "Session analyst",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "session-performance",
-      "streak-calendar",
-      "win-rate",
-      "profit-factor",
-      "hold-time",
-    ],
-    spans: {},
-  },
-  {
-    id: "builtin-streak",
-    name: "Streak tracker",
-    createdAt: new Date().toISOString(),
-    widgets: ["streak-calendar", "win-streak", "consistency-score", "win-rate"],
-    spans: {},
-  },
-  {
-    id: "builtin-ai-coach",
-    name: "AI Coach",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "tiltmeter",
-      "daily-briefing",
-      "rule-compliance",
-      "risk-intelligence",
-      "account-balance",
-      "win-rate",
-    ],
-    spans: {},
-  },
-  {
-    id: "builtin-psychology",
-    name: "Psychology focus",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "tiltmeter",
-      "daily-briefing",
-      "consistency-score",
-      "win-streak",
-    ],
-    spans: {},
-  },
-  {
-    id: "builtin-analysis",
-    name: "What-If Analysis",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "money-left-on-table",
-      "execution-scorecard",
-      "profit-expectancy",
-      "account-balance",
-    ],
-    spans: {},
-  },
-  {
-    id: "builtin-benchmark",
-    name: "Benchmark",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "win-rate",
-      "profit-factor",
-      "average-rr",
-      "consistency-score",
-    ],
-    spans: {},
-  },
-  {
-    id: "builtin-full-analytics",
-    name: "Full analytics",
-    createdAt: new Date().toISOString(),
-    widgets: [
-      "account-balance",
-      "win-rate",
-      "profit-factor",
-      "asset-profitability",
-      "execution-scorecard",
-      "tiltmeter",
-      "risk-intelligence",
-      "rule-compliance",
-    ],
-    spans: { "asset-profitability": 2 },
   },
 ];
 
@@ -272,11 +185,28 @@ export function WidgetPresets({
     useState<WidgetPreset[]>(loadCustomPresets);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [exportDialogType, setExportDialogType] = useState<"json" | "csv">("json");
+  const [exportFileName, setExportFileName] = useState("");
   const [presetName, setPresetName] = useState("");
   const [renamePresetId, setRenamePresetId] = useState<string | null>(null);
   const [renamePresetName, setRenamePresetName] = useState("");
-  const [activePresetId, setActivePresetId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const activePresetId = useMemo(() => {
+    const currentSet = new Set(currentWidgets);
+    const allPresets = [...builtInPresets, ...customPresets];
+    for (const preset of allPresets) {
+      const presetSet = new Set(preset.widgets);
+      if (
+        currentSet.size === presetSet.size &&
+        [...currentSet].every((w) => presetSet.has(w))
+      ) {
+        return preset.id;
+      }
+    }
+    return null;
+  }, [currentWidgets, customPresets]);
 
   const handleSavePreset = () => {
     if (!presetName.trim()) {
@@ -295,7 +225,6 @@ export function WidgetPresets({
     const updated = [...customPresets, newPreset];
     setCustomPresets(updated);
     saveCustomPresets(updated);
-    setActivePresetId(newPreset.id);
     setShowSaveDialog(false);
     setPresetName("");
     toast.success(`Preset "${presetName}" saved`);
@@ -308,7 +237,6 @@ export function WidgetPresets({
       return;
     }
     onApplyPreset(widgets, preset.spans);
-    setActivePresetId(preset.id);
     toast.success(`Applied "${preset.name}"`);
   };
 
@@ -316,9 +244,6 @@ export function WidgetPresets({
     const updated = customPresets.filter((p) => p.id !== presetId);
     setCustomPresets(updated);
     saveCustomPresets(updated);
-    if (activePresetId === presetId) {
-      setActivePresetId(null);
-    }
     toast.success("Preset deleted");
   };
 
@@ -345,19 +270,17 @@ export function WidgetPresets({
     toast.success("Preset renamed");
   };
 
-  const handleExportAllPresets = () => {
-    const allPresets = [...builtInPresets, ...customPresets];
-    const data = JSON.stringify(allPresets, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `widget-presets-${
-      new Date().toISOString().split("T")[0]
-    }.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Presets exported");
+  const openExportDialog = (type: "json" | "csv") => {
+    const date = new Date().toISOString().split("T")[0];
+    setExportDialogType(type);
+    setExportFileName(`dashboard-widgets-${date}`);
+    setShowExportDialog(true);
+  };
+
+  const handleConfirmExport = () => {
+    const name = exportFileName.trim() || "export";
+    onExport(exportDialogType, name);
+    setShowExportDialog(false);
   };
 
   const handleImportClick = () => {
@@ -414,9 +337,13 @@ export function WidgetPresets({
         const updated = [...customPresets, ...newCustomPresets];
         setCustomPresets(updated);
         saveCustomPresets(updated);
+        handleApplyPreset(newCustomPresets[0]);
         toast.success(`Imported ${newCustomPresets.length} preset(s)`);
       } else {
-        toast.info("File only contains built-in presets (already available)");
+        // File only had built-in presets — apply the first one
+        const first = validPresets[0];
+        handleApplyPreset({ ...first, widgets: sanitizeWidgetList(first.widgets) });
+        toast.info("Applied built-in preset");
       }
     } catch (err) {
       toast.error("Failed to import. Invalid JSON format.");
@@ -452,16 +379,17 @@ export function WidgetPresets({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="w-76 bg-sidebar border-white/10 rounded-none p-1"
+          className={`w-76 ${toolbarFilterMenuContentClass}`}
         >
-          <div className="px-2 py-1.5 text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+          <div className={toolbarFilterMenuSectionTitleClass}>
             Built-in
           </div>
+          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
           {builtInPresets.map((preset) => (
             <DropdownMenuItem
               key={preset.id}
               onClick={() => handleApplyPreset(preset)}
-              className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer flex items-center justify-between"
+              className={`${toolbarFilterMenuItemClass} cursor-pointer flex items-center justify-between rounded-sm`}
             >
               <span>{preset.name}</span>
               {activePresetId === preset.id && (
@@ -472,15 +400,16 @@ export function WidgetPresets({
 
           {customPresets.length > 0 && (
             <>
-              <DropdownMenuSeparator className="bg-white/5 my-1" />
-              <div className="px-2 py-1.5 text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+              <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+              <div className={toolbarFilterMenuSectionTitleClass}>
                 Custom
               </div>
+              <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
               {customPresets.map((preset) => (
                 <DropdownMenuItem
                   key={preset.id}
                   onClick={() => handleApplyPreset(preset)}
-                  className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer flex items-center justify-between group"
+                  className={`${toolbarFilterMenuItemClass} cursor-pointer flex items-center justify-between group rounded-sm`}
                 >
                   <span className="truncate flex-1 mr-2">{preset.name}</span>
                   <div className="flex items-center gap-0.5 shrink-0">
@@ -513,59 +442,52 @@ export function WidgetPresets({
             </>
           )}
 
-          <DropdownMenuSeparator className="bg-white/5 my-1" />
+          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
 
           <DropdownMenuItem
             onClick={() => setShowSaveDialog(true)}
-            className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer"
+            className={`${toolbarFilterMenuItemClass} cursor-pointer rounded-sm`}
           >
             <Save className="size-3 mr-2" />
             Save current as preset
           </DropdownMenuItem>
 
-          <DropdownMenuSeparator className="bg-white/5 my-1" />
+          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
 
-          <div className="px-2 py-1.5 text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+          <div className={toolbarFilterMenuSectionTitleClass}>
             Export / Import
           </div>
+          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
 
           <DropdownMenuItem
-            onClick={() => onExport("json")}
-            className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer"
+            onClick={() => openExportDialog("json")}
+            className={`${toolbarFilterMenuItemClass} cursor-pointer rounded-sm`}
           >
             <FileJson className="size-3 mr-2" />
             Export widgets (JSON)
           </DropdownMenuItem>
 
           <DropdownMenuItem
-            onClick={() => onExport("csv")}
-            className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer"
+            onClick={() => openExportDialog("csv")}
+            className={`${toolbarFilterMenuItemClass} cursor-pointer rounded-sm`}
           >
             <FileSpreadsheet className="size-3 mr-2" />
             Export widgets (CSV)
           </DropdownMenuItem>
 
           <DropdownMenuItem
-            onClick={handleExportAllPresets}
-            className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer"
-          >
-            <Download className="size-3 mr-2" />
-            Export all presets
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
             onClick={handleImportClick}
-            className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer"
+            className={`${toolbarFilterMenuItemClass} cursor-pointer rounded-sm`}
           >
             <Upload className="size-3 mr-2" />
             Import presets
           </DropdownMenuItem>
 
-          <DropdownMenuSeparator className="bg-white/5 my-1" />
+          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
 
           <DropdownMenuItem
             onClick={handleResetToDefault}
-            className="px-2 py-1.5 text-xs text-white/70 hover:text-white hover:bg-sidebar-accent rounded-none cursor-pointer"
+            className={`${toolbarFilterMenuItemClass} cursor-pointer rounded-sm`}
           >
             <RotateCcw className="size-3 mr-2" />
             Reset to default
@@ -573,89 +495,178 @@ export function WidgetPresets({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {/* Save Preset Dialog */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-        <DialogContent className="bg-sidebar border-white/10 rounded-none max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-white text-sm">
-              Save widget preset
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Save your current widget layout as a reusable preset
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Bookmark className="h-3.5 w-3.5 text-white/60" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Save widget preset</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">Save your current widget layout as a reusable preset</p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
 
-          <div className="py-4">
-            <Input
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-              placeholder="Enter preset name..."
-              className="bg-sidebar-accent border-white/10 rounded-none text-white text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSavePreset();
-              }}
-            />
-            <p className="text-[10px] text-white/40 mt-2">
-              {currentWidgets.length} widgets will be saved
-            </p>
+            {/* Body */}
+            <div className="px-5 py-4">
+              <Input
+                value={presetName}
+                onChange={(e) => setPresetName(e.target.value)}
+                placeholder="Enter preset name..."
+                className="bg-sidebar-accent border-white/10 rounded-sm text-white text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSavePreset();
+                }}
+              />
+              <p className="text-[10px] text-white/40 mt-2">
+                {currentWidgets.length} widgets will be saved
+              </p>
+            </div>
+
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                onClick={() => setShowSaveDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSavePreset}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              >
+                Save preset
+              </Button>
+            </div>
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowSaveDialog(false)}
-              className="h-7 px-3 text-xs rounded-none border-white/10 text-white/70 hover:text-white"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSavePreset}
-              className="h-7 px-3 text-xs rounded-none bg-teal-600 hover:bg-teal-500 text-white"
-            >
-              Save preset
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Rename Preset Dialog */}
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
-        <DialogContent className="bg-sidebar border-white/10 rounded-none max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-white text-sm">
-              Rename preset
-            </DialogTitle>
-            <DialogDescription className="text-white/50 text-xs">
-              Enter a new name for this preset
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Pencil className="h-3.5 w-3.5 text-white/60" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Rename preset</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">Enter a new name for this preset</p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
 
-          <div className="py-4">
-            <Input
-              value={renamePresetName}
-              onChange={(e) => setRenamePresetName(e.target.value)}
-              placeholder="Enter new name..."
-              className="bg-sidebar-accent border-white/10 rounded-none text-white text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleRenamePreset();
-              }}
-              autoFocus
-            />
+            {/* Body */}
+            <div className="px-5 py-4">
+              <Input
+                value={renamePresetName}
+                onChange={(e) => setRenamePresetName(e.target.value)}
+                placeholder="Enter new name..."
+                className="bg-sidebar-accent border-white/10 rounded-sm text-white text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleRenamePreset();
+                }}
+                autoFocus
+              />
+            </div>
+
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                onClick={() => setShowRenameDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRenamePreset}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              >
+                Rename
+              </Button>
+            </div>
           </div>
+        </DialogContent>
+      </Dialog>
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setShowRenameDialog(false)}
-              className="h-7 px-3 text-xs rounded-none border-white/10 text-white/70 hover:text-white"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleRenamePreset}
-              className="h-7 px-3 text-xs rounded-none bg-teal-600 hover:bg-teal-500 text-white"
-            >
-              Rename
-            </Button>
-          </DialogFooter>
+      {/* Export Dialog */}
+      <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Download className="h-3.5 w-3.5 text-white/60" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Export</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">Choose a filename for your export</p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
+            <div className="px-5 py-4">
+              <Input
+                value={exportFileName}
+                onChange={(e) => setExportFileName(e.target.value)}
+                placeholder="Enter filename..."
+                className="bg-sidebar-accent border-white/10 rounded-sm text-white text-sm"
+                onKeyDown={(e) => { if (e.key === "Enter") handleConfirmExport(); }}
+                autoFocus
+              />
+              <p className="text-[10px] text-white/40 mt-2">
+                .{exportDialogType === "csv" ? "csv" : "json"} will be appended automatically
+              </p>
+            </div>
+            <Separator />
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                onClick={() => setShowExportDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmExport}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              >
+                Export
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>

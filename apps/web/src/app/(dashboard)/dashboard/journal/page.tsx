@@ -102,7 +102,7 @@ function buildPromptBlocks(prompt: {
   return blocks;
 }
 
-export default function JournalPage() {
+function JournalPageContent() {
   const { selectedAccountId: accountId } = useAccountStore();
   const router = useRouter();
   const pathname = usePathname();
@@ -143,8 +143,10 @@ export default function JournalPage() {
     }),
     staleTime: 30000,
   });
-  const reviewItems =
-    (reviewQueue as { items?: ReviewQueueItem[] } | undefined)?.items ?? [];
+  const reviewItems = React.useMemo(
+    () => (reviewQueue as { items?: ReviewQueueItem[] } | undefined)?.items ?? [],
+    [reviewQueue]
+  );
   const completePromptMutation = trpc.journal.completePrompt.useMutation();
   const notifyPendingReviews =
     trpc.notifications.notifyPendingReviews.useMutation();
@@ -181,7 +183,7 @@ export default function JournalPage() {
 
     // Persistent notification (deduped per day)
     notifyPendingReviews.mutate({ count });
-  }, [reviewItems]);
+  }, [activeTab, markTypeRead, notifyPendingReviews, reviewItems]);
 
   React.useEffect(() => {
     if (!entryIdFromQuery) return;
@@ -278,6 +280,7 @@ export default function JournalPage() {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <JournalEntryPage
+          key={selectedEntryId || "new-entry"}
           entryId={selectedEntryId || undefined}
           accountId={accountId || undefined}
           initialContent={initialContent || undefined}
@@ -481,5 +484,21 @@ export default function JournalPage() {
         onStartBlank={handleStartBlank}
       />
     </Tabs>
+  );
+}
+
+export default function JournalPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
+          <div className="text-sm text-muted-foreground">
+            Loading journal workspace...
+          </div>
+        </main>
+      }
+    >
+      <JournalPageContent />
+    </React.Suspense>
   );
 }

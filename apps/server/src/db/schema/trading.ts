@@ -205,6 +205,33 @@ export const trade = pgTable(
   })
 );
 
+export const deletedImportedTrade = pgTable(
+  "deleted_imported_trade",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => tradingAccount.id, { onDelete: "cascade" }),
+    originalTradeId: text("original_trade_id"),
+    ticket: varchar("ticket", { length: 100 }),
+    importFingerprint: text("import_fingerprint").notNull(),
+    importSource: varchar("import_source", { length: 32 }),
+    importParserId: varchar("import_parser_id", { length: 128 }),
+    importReportType: varchar("import_report_type", { length: 128 }),
+    tradeSnapshot: jsonb("trade_snapshot").$type<Record<string, unknown> | null>(),
+    deletedAt: timestamp("deleted_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    accountFingerprintIdx: uniqueIndex(
+      "deleted_imported_trade_account_fingerprint_idx"
+    ).on(table.accountId, table.importFingerprint),
+    accountTicketIdx: index("deleted_imported_trade_account_ticket_idx").on(
+      table.accountId,
+      table.ticket
+    ),
+  })
+);
+
 // Open (active) trades - synced from EA in real-time
 export const openTrade = pgTable(
   "open_trade",

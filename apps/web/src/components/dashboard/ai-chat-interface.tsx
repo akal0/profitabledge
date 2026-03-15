@@ -2,7 +2,7 @@
 
 /**
  * AI Trading Insights Chat Interface
- * 
+ *
  * Beautiful two-column chat layout with streaming responses
  */
 
@@ -10,7 +10,13 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
-import { Send, Sparkles, TrendingUp, BarChart3, AlertCircle } from "lucide-react";
+import {
+  Send,
+  Sparkles,
+  TrendingUp,
+  BarChart3,
+  AlertCircle,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAssistantPageContext } from "@/hooks/use-assistant-page-context";
 
@@ -24,7 +30,10 @@ interface AIChatInterfaceProps {
   className?: string;
 }
 
-export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) {
+export function AIChatInterface({
+  accountId,
+  className,
+}: AIChatInterfaceProps) {
   const pageContext = useAssistantPageContext("dashboard-chat");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -32,9 +41,21 @@ export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) 
   const [isFocused, setIsFocused] = useState(false);
 
   const suggestedQueries = [
-    { icon: TrendingUp, text: "How well did I do this week?", color: "text-emerald-500" },
-    { icon: BarChart3, text: "What's my best performing asset?", color: "text-blue-500" },
-    { icon: AlertCircle, text: "How deep do my trades drawdown?", color: "text-amber-500" },
+    {
+      icon: TrendingUp,
+      text: "How well did I do this week?",
+      color: "text-emerald-500",
+    },
+    {
+      icon: BarChart3,
+      text: "What's my best performing asset?",
+      color: "text-blue-500",
+    },
+    {
+      icon: AlertCircle,
+      text: "How deep do my trades drawdown?",
+      color: "text-amber-500",
+    },
   ];
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -129,14 +150,18 @@ export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) 
             <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-full p-6 mb-6">
               <Sparkles className="w-12 h-12 text-blue-500" />
             </div>
-            <h2 className="text-2xl font-semibold mb-3">Trading Insights Assistant</h2>
+            <h2 className="text-2xl font-semibold mb-3">
+              Trading insights assistant
+            </h2>
             <p className="text-muted-foreground max-w-md mb-8">
-              Ask me anything about your trading performance. I can analyze your metrics,
-              identify patterns, and help you improve.
+              Ask me anything about your trading performance. I can analyze your
+              metrics, identify patterns, and help you improve.
             </p>
 
             <div className="grid gap-3 w-full max-w-2xl">
-              <p className="text-sm font-medium text-muted-foreground mb-2">Try asking:</p>
+              <p className="text-sm font-medium text-muted-foreground mb-2">
+                Try asking:
+              </p>
               {suggestedQueries.map((query, idx) => (
                 <button
                   key={idx}
@@ -144,7 +169,9 @@ export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) 
                   className="flex items-center gap-3 p-4 rounded-lg border border-border bg-card hover:bg-accent hover:border-accent-foreground/20 transition-all text-left group"
                 >
                   <query.icon className={cn("w-5 h-5", query.color)} />
-                  <span className="text-sm group-hover:text-foreground">{query.text}</span>
+                  <span className="text-sm group-hover:text-foreground">
+                    {query.text}
+                  </span>
                 </button>
               ))}
             </div>
@@ -158,7 +185,9 @@ export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) 
               key={idx}
               className={cn(
                 "grid gap-4",
-                message.role === "user" ? "grid-cols-[1fr,auto]" : "grid-cols-[auto,1fr]"
+                message.role === "user"
+                  ? "grid-cols-[1fr,auto]"
+                  : "grid-cols-[auto,1fr]"
               )}
             >
               {/* User Message - Right Side */}
@@ -193,16 +222,24 @@ export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) 
                         <ReactMarkdown
                           components={{
                             p: ({ children }) => (
-                              <p className="text-sm leading-relaxed mb-3 last:mb-0">{children}</p>
+                              <p className="text-sm leading-relaxed mb-3 last:mb-0">
+                                {children}
+                              </p>
                             ),
                             strong: ({ children }) => (
-                              <strong className="font-semibold text-foreground">{children}</strong>
+                              <strong className="font-semibold text-foreground">
+                                {children}
+                              </strong>
                             ),
                             ul: ({ children }) => (
-                              <ul className="list-disc list-inside space-y-1 my-3">{children}</ul>
+                              <ul className="list-disc list-inside space-y-1 my-3">
+                                {children}
+                              </ul>
                             ),
                             li: ({ children }) => (
-                              <li className="text-sm text-muted-foreground">{children}</li>
+                              <li className="text-sm text-muted-foreground">
+                                {children}
+                              </li>
                             ),
                           }}
                         >
@@ -265,7 +302,15 @@ export function AIChatInterface({ accountId, className }: AIChatInterfaceProps) 
             />
             <div className="flex items-center justify-between px-4 pb-3">
               <p className="text-xs text-muted-foreground">
-                Press <kbd className="px-1.5 py-0.5 text-xs font-mono rounded bg-muted">Enter</kbd> to send, <kbd className="px-1.5 py-0.5 text-xs font-mono rounded bg-muted">Shift + Enter</kbd> for new line
+                Press{" "}
+                <kbd className="px-1.5 py-0.5 text-xs font-mono rounded bg-muted">
+                  Enter
+                </kbd>{" "}
+                to send,{" "}
+                <kbd className="px-1.5 py-0.5 text-xs font-mono rounded bg-muted">
+                  Shift + Enter
+                </kbd>{" "}
+                for new line
               </p>
               <Button
                 type="submit"

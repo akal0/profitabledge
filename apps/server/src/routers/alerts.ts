@@ -392,7 +392,7 @@ export const alertsRouter = router({
             await createNotification({
               userId,
               accountId,
-              type: "settings_updated", // Using system type for alerts
+              type: "alert_triggered",
               title,
               body: message,
               metadata: {

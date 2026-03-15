@@ -3,6 +3,10 @@
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { TrendingUp, Flame } from "lucide-react";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "./goal-surface";
 
 interface StreakTrackerProps {
   currentStreak: number;
@@ -11,26 +15,67 @@ interface StreakTrackerProps {
   className?: string;
 }
 
+type StreakTone = {
+  color: string;
+  backgroundColor: string;
+  recordBadgeClassName: string;
+  recordTextClassName: string;
+};
+
+const GREEN_STREAK_TONE: StreakTone = {
+  color: "#10b981",
+  backgroundColor: "#10b98115",
+  recordBadgeClassName: "border-emerald-500/20 bg-emerald-500/10",
+  recordTextClassName: "text-emerald-400",
+};
+
 const streakConfig = {
   wins: {
-    label: "Win Streak",
+    label: "Win streak",
     icon: TrendingUp,
-    color: "#10b981",
     unit: "wins",
   },
   greenDays: {
-    label: "Green Days",
+    label: "Green days",
     icon: Flame,
-    color: "#f59e0b",
     unit: "days",
   },
   trades: {
-    label: "Trade Streak",
+    label: "Trade streak",
     icon: TrendingUp,
     color: "#3b82f6",
     unit: "trades",
   },
 };
+
+function getWinStreakTone(currentStreak: number, longestStreak: number): StreakTone {
+  const progressRatio =
+    longestStreak > 0
+      ? currentStreak / longestStreak
+      : currentStreak > 0
+        ? 1
+        : 0;
+
+  if (progressRatio >= 0.75) {
+    return GREEN_STREAK_TONE;
+  }
+
+  if (progressRatio >= 0.35) {
+    return {
+      color: "#f59e0b",
+      backgroundColor: "#f59e0b15",
+      recordBadgeClassName: "border-amber-500/20 bg-amber-500/10",
+      recordTextClassName: "text-amber-400",
+    };
+  }
+
+  return {
+    color: "#9ca3af",
+    backgroundColor: "#9ca3af15",
+    recordBadgeClassName: "border-slate-500/20 bg-slate-500/10",
+    recordTextClassName: "text-slate-300",
+  };
+}
 
 export function StreakTracker({
   currentStreak,
@@ -40,77 +85,87 @@ export function StreakTracker({
 }: StreakTrackerProps) {
   const config = streakConfig[streakType];
   const Icon = config.icon;
+  const progressToRecord =
+    longestStreak > 0
+      ? Math.min((currentStreak / longestStreak) * 100, 100)
+      : currentStreak > 0
+        ? 100
+        : 0;
+  const tone =
+    streakType === "wins"
+      ? getWinStreakTone(currentStreak, longestStreak)
+      : streakType === "greenDays"
+        ? GREEN_STREAK_TONE
+        : {
+            color: "#3b82f6",
+            backgroundColor: "#3b82f615",
+            recordBadgeClassName: "border-blue-500/20 bg-blue-500/10",
+            recordTextClassName: "text-blue-300",
+          };
 
   return (
     <motion.div
-      className={cn(
-        "group rounded-sm border border-white/5 bg-sidebar p-1.5",
-        className
-      )}
+      className={cn("h-full", className)}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
-      <div className="relative overflow-hidden rounded-sm bg-sidebar-accent p-4 transition-all duration-250 group-hover:brightness-120">
-        {/* Header */}
-        <div className="mb-4 flex items-center gap-2">
-          <div
-            className="rounded p-1.5"
-            style={{ backgroundColor: `${config.color}15` }}
-          >
-            <Icon className="h-3.5 w-3.5" style={{ color: config.color }} />
+      <GoalSurface className="h-full">
+        <div className="relative flex h-full flex-col overflow-hidden p-3.5">
+          <div className="flex items-center gap-2">
+            <Icon className="h-4 w-4" style={{ color: tone.color }} />
+            <span className="text-xs text-white/50">{config.label}</span>
           </div>
-          <span className="text-xs text-white/50">{config.label}</span>
-        </div>
 
-        {/* Current streak */}
-        <div className="mb-5">
-          <motion.div
-            className="mb-0.5 text-4xl font-semibold text-white"
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-          >
-            {currentStreak}
-          </motion.div>
-          <div className="text-xs text-white/40">current {config.unit}</div>
-        </div>
+          <GoalContentSeparator className="mb-4 mt-3.5" />
 
-        {/* Progress bar to longest streak */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] text-white/45">
-            <span>Progress to record</span>
-            <span>
-              {currentStreak} / {longestStreak}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+          <div className="mb-5">
             <motion.div
-              className="h-full rounded-full"
-              style={{ backgroundColor: config.color }}
-              initial={{ width: 0 }}
-              animate={{
-                width: `${Math.min((currentStreak / longestStreak) * 100, 100)}%`,
-              }}
-              transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
-            />
+              className="mb-0.5 text-4xl font-semibold text-white"
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            >
+              {currentStreak}
+            </motion.div>
+            <div className="text-xs text-white/40">current {config.unit}</div>
           </div>
-        </div>
 
-        {/* Record badge */}
-        {currentStreak >= longestStreak && currentStreak > 0 && (
-          <motion.div
-            className="mt-3 inline-flex items-center gap-2 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2.5 py-1"
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.6, type: "spring" }}
-          >
-            <span className="text-[10px] font-medium text-yellow-400">
-              New Record!
-            </span>
-          </motion.div>
-        )}
-      </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[10px] text-white/45">
+              <span>Progress to record</span>
+              <span>
+                {currentStreak} / {longestStreak}
+              </span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+              <motion.div
+                className="h-full rounded-full"
+                style={{ backgroundColor: tone.color }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progressToRecord}%` }}
+                transition={{ duration: 1, delay: 0.4, ease: "easeOut" }}
+              />
+            </div>
+          </div>
+
+          {currentStreak >= longestStreak && currentStreak > 0 && (
+            <motion.div
+              className={cn(
+                "mt-3 inline-flex items-center gap-2 self-start rounded-full px-2.5 py-1",
+                tone.recordBadgeClassName
+              )}
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.6, type: "spring" }}
+            >
+              <span className={cn("text-[10px] font-medium", tone.recordTextClassName)}>
+                New record!
+              </span>
+            </motion.div>
+          )}
+        </div>
+      </GoalSurface>
     </motion.div>
   );
 }

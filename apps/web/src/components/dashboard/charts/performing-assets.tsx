@@ -18,10 +18,11 @@ import {
 } from "@/components/ui/chart";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { JetBrains_Mono } from "next/font/google";
 import { useMotionValueEvent, useSpring } from "framer-motion";
-import { useDateRangeStore } from "@/stores/date-range";
-import { useComparisonStore } from "@/stores/comparison";
+import {
+  useComparisonStore,
+  type WidgetComparisonMode,
+} from "@/stores/comparison";
 import { trpcClient } from "@/utils/trpc";
 import {
   formatRangeLabel,
@@ -32,6 +33,7 @@ import {
   DashboardChartTooltipRow,
   formatSignedCurrency,
 } from "./dashboard-chart-ui";
+import { useChartDateRange } from "./use-chart-date-range";
 
 const CHART_MARGIN = 35;
 
@@ -47,13 +49,15 @@ const chartConfig = {
 export function PerformingAssetsBarChart({
   accountId,
   ownerId = "performing-assets",
+  comparisonMode,
 }: {
   accountId?: string;
   ownerId?: string;
+  comparisonMode?: WidgetComparisonMode;
 }) {
-  const { start, end, min, max } = useDateRangeStore();
+  const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
-  const myMode = comparisons[ownerId] ?? "none";
+  const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
   const [series, setSeries] = React.useState<Point[]>([]);
   const [comparisonSeries, setComparisonSeries] = React.useState<
     Point[] | null
@@ -300,7 +304,7 @@ export function PerformingAssetsBarChart({
       if (worst === null || v < worst.v) worst = { symbol, v };
     }
     return { best, worst };
-  }, [series, comparisonSeries, myMode]);
+  }, [series, comparisonSeries]);
 
   const primaryLabel = React.useMemo(() => "Selected range", []);
   const comparisonLabel = React.useMemo(() => {
@@ -460,6 +464,15 @@ export function PerformingAssetsBarChart({
                             value={formatSignedCurrency(v, 0)}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
+                            indicatorColor={
+                              typeof item.color === "string"
+                                ? item.color
+                                : key === "compare"
+                                  ? "#FCA070"
+                                  : v < 0
+                                    ? "#fb7185"
+                                    : "#2dd4bf"
+                            }
                           />
                         );
                       })}

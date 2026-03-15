@@ -49,7 +49,20 @@ type PsychologyData = {
   focus: number;
   fear: number;
   greed: number;
-  emotionalState: string;
+  emotionalState:
+    | "calm"
+    | "confident"
+    | "neutral"
+    | "excited"
+    | "anxious"
+    | "stressed"
+    | "frustrated"
+    | "angry"
+    | "confused"
+    | "discouraged"
+    | "overwhelmed"
+    | "regretful"
+    | "impatient";
   notes?: string;
 };
 
@@ -467,7 +480,12 @@ export default function BacktestJournalPage() {
                     <Label className="text-xs text-white/50 mb-1.5 block">Emotional State</Label>
                     <Select
                       value={psychology.emotionalState}
-                      onValueChange={(v) => setPsychology({ ...psychology, emotionalState: v })}
+                      onValueChange={(v) =>
+                        setPsychology({
+                          ...psychology,
+                          emotionalState: v as PsychologyData["emotionalState"],
+                        })
+                      }
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -480,6 +498,12 @@ export default function BacktestJournalPage() {
                         <SelectItem value="anxious">Anxious</SelectItem>
                         <SelectItem value="frustrated">Frustrated</SelectItem>
                         <SelectItem value="stressed">Stressed</SelectItem>
+                        <SelectItem value="angry">Angry</SelectItem>
+                        <SelectItem value="confused">Confused</SelectItem>
+                        <SelectItem value="discouraged">Discouraged</SelectItem>
+                        <SelectItem value="overwhelmed">Overwhelmed</SelectItem>
+                        <SelectItem value="regretful">Regretful</SelectItem>
+                        <SelectItem value="impatient">Impatient</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

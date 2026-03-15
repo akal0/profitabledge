@@ -173,6 +173,14 @@ function OnboardingPageContent() {
   const shouldSkipOnboarding = Boolean(
     billingStateQuery.data?.onboarding.isComplete && !accessLocked
   );
+  const pendingStoredGrowthIntent = useMemo(() => {
+    const storedIntent = getStoredGrowthIntent();
+    return Boolean(
+      storedIntent.betaCode ||
+        storedIntent.referralCode ||
+        storedIntent.affiliateCode
+    );
+  }, []);
 
   useEffect(() => {
     setSelectedPlanKey(activePlanKey);
@@ -209,7 +217,7 @@ function OnboardingPageContent() {
       return;
     }
 
-    if (accessLocked) {
+    if (accessLocked && !pendingStoredGrowthIntent) {
       setCurrentStep(2);
       return;
     }
@@ -228,6 +236,7 @@ function OnboardingPageContent() {
     billingStateQuery.data,
     isSessionPending,
     onboardingStorageUserId,
+    pendingStoredGrowthIntent,
     searchParams,
   ]);
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { normalizeOriginUrl } from "@profitabledge/platform";
 import { toast } from "sonner";
 import { ActiveConnectionsSection } from "@/features/settings/connections/components/active-connections-section";
 import { AvailablePlatformsSection } from "@/features/settings/connections/components/available-platforms-section";
@@ -171,8 +172,14 @@ export default function ConnectionsSettingsPage() {
 
   const handleOAuthConnect = async (provider: string) => {
     try {
+      const serverOrigin = normalizeOriginUrl(process.env.NEXT_PUBLIC_SERVER_URL);
+      if (!serverOrigin) {
+        toast.error("Server URL is not configured");
+        return;
+      }
+
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_URL}/trpc/connections.getOAuthUrl?input=${encodeURIComponent(
+        `${serverOrigin}/trpc/connections.getOAuthUrl?input=${encodeURIComponent(
           JSON.stringify({ provider })
         )}`,
         { credentials: "include" }

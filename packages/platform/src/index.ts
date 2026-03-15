@@ -1,4 +1,8 @@
-export { getOriginCandidates, rewriteRequestToBase } from "./origin-utils";
+export {
+  getOriginCandidates,
+  normalizeOriginUrl,
+  rewriteRequestToBase,
+} from "./origin-utils";
 export { fetchFirstAvailable } from "./failover-fetch";
 export {
   ALPHA_FLAG_DEFINITIONS,

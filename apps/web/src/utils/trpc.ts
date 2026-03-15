@@ -3,16 +3,28 @@ import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import type { AppRouter } from "@profitabledge/contracts/trpc";
-import { fetchFirstAvailable, getOriginCandidates } from "@profitabledge/platform";
+import {
+  fetchFirstAvailable,
+  getOriginCandidates,
+  rewriteRequestToBase,
+} from "@profitabledge/platform";
 import { toast } from "sonner";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
 
 function getCandidateBases(): string[] {
-  return getOriginCandidates({
+  const candidates = getOriginCandidates({
     envUrl: process.env.NEXT_PUBLIC_SERVER_URL,
     fallbackPort: 3000,
     location: typeof window !== "undefined" ? window.location : undefined,
   });
+
+  if (candidates.length === 0) {
+    throw new Error(
+      "NEXT_PUBLIC_SERVER_URL must be set to your server origin for non-local web sessions"
+    );
+  }
+
+  return candidates;
 }
 
 export const queryClient = new QueryClient({
@@ -50,9 +62,8 @@ function toUrlString(url: RequestInfo | URL): string {
 }
 
 function getTrpcTargets(url: RequestInfo | URL): string[] {
-  const urlString = toUrlString(url);
   return candidates.map((base) =>
-    urlString.replace(primaryBase, `${base}/trpc`)
+    toUrlString(rewriteRequestToBase(url, `${base}/trpc`, primaryBase))
   );
 }
 

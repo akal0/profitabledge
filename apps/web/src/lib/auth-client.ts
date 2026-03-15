@@ -1,41 +1,29 @@
 import { createAuthClient } from "better-auth/react";
+import { getOriginCandidates, rewriteRequestToBase } from "@profitabledge/platform";
 
 function inferAuthBases(): string[] {
-  if (typeof window !== "undefined") {
-    const { protocol, hostname } = window.location;
-    const env = process.env.NEXT_PUBLIC_SERVER_URL || "";
-    const localhost = `${protocol}//localhost:3000`;
-    const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
-    const lan = isLanIp ? `${protocol}//${hostname}:3000` : "";
-    const ordered = isLanIp ? [env, lan, localhost] : [env, localhost, lan];
-    return Array.from(new Set(ordered.filter(Boolean)));
+  const bases = getOriginCandidates({
+    envUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+    fallbackPort: 3000,
+    location: typeof window !== "undefined" ? window.location : undefined,
+  });
+
+  if (bases.length === 0) {
+    throw new Error(
+      "NEXT_PUBLIC_SERVER_URL must be set to your server origin for non-local auth flows"
+    );
   }
-  return [process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"];
+
+  return bases;
 }
 
 const bases = inferAuthBases();
-
-function buildTarget(
-  input: RequestInfo | URL,
-  base: string,
-  primary: string
-): RequestInfo | URL {
-  if (typeof input === "string") {
-    if (/^https?:\/\//i.test(input)) {
-      if (primary && input.startsWith(primary))
-        return input.replace(primary, base);
-      return input;
-    }
-    return `${base}${input.startsWith("/") ? "" : "/"}${input}`;
-  }
-  return input;
-}
 
 export const authClient = createAuthClient({
   baseURL: bases[0],
   async fetch(input: RequestInfo | URL, init?: RequestInit) {
     for (let i = 0; i < bases.length; i++) {
-      const target = buildTarget(input, bases[i], bases[0]);
+      const target = rewriteRequestToBase(input, bases[i], bases[0]);
       try {
         const res = await fetch(target as any, {
           ...(init || {}),

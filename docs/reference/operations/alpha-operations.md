@@ -52,6 +52,7 @@ Production note:
 
 - the server Vercel project owns Better Auth CORS and trusted-origin checks, so `WEB_URL`, `NEXT_PUBLIC_WEB_URL`, and `CORS_ORIGIN` must be set on the `apps/server` deployment as well as any web-side `NEXT_PUBLIC_*` settings
 - use bare origins such as `https://profitabledge-web.vercel.app` without a trailing slash; the server now normalizes trailing slashes, but origin-only values are still the intended format
+- set `NEXT_PUBLIC_SERVER_URL` on the web deployment to the bare server origin such as `https://profitabledge-server.vercel.app`; the web client now normalizes trailing slashes, and production browser sessions no longer fall back to `localhost` when that value is present or expected
 
 ## Runtime shape
 

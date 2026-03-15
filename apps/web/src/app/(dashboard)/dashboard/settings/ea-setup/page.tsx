@@ -17,6 +17,7 @@ import {
 import { trpcOptions } from "@/utils/trpc";
 import React, { useState } from "react";
 import Link from "next/link";
+import { normalizeOriginUrl } from "@profitabledge/platform";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,7 +35,7 @@ export default function EASetupPage() {
 
   const apiUrl =
     customNgrokUrl ||
-    process.env.NEXT_PUBLIC_SERVER_URL ||
+    normalizeOriginUrl(process.env.NEXT_PUBLIC_SERVER_URL) ||
     "http://localhost:3000";
   const webhookUrl = `${apiUrl}/trpc/webhook.priceUpdate`;
   const isLocalhost =

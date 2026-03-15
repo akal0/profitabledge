@@ -5,9 +5,11 @@
  */
 
 import { NextRequest } from "next/server";
+import { normalizeOriginUrl } from "@profitabledge/platform";
 
 const SERVER_URL =
-  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000";
+  normalizeOriginUrl(process.env.NEXT_PUBLIC_SERVER_URL) ||
+  "http://localhost:3000";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

@@ -194,6 +194,12 @@ bun build
 
 `apps/web` package-local `build` and `check-types` now regenerate the shared tRPC declarations before they run, so isolated builds like Vercel's `apps/web` root-directory project do not depend on ignored generated files already existing in a developer workspace.
 
+At runtime, browser-side server origin resolution is intentionally stricter than local development:
+
+- set `NEXT_PUBLIC_SERVER_URL` to the bare server origin, for example `https://profitabledge-server.vercel.app`
+- trailing slashes are normalized away before tRPC/auth/proxy requests are built
+- localhost/LAN failover is only kept for local browser sessions; production browser sessions stay pinned to the configured server origin instead of retrying `localhost`
+
 ## When working on a new section
 
 Start from:

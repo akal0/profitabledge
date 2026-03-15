@@ -48,6 +48,11 @@ For local and CI build sanity, the most important variables are:
 - `NEXT_PUBLIC_ALPHA_ENABLE_FEEDBACK`
 - `NEXT_PUBLIC_ALPHA_ENABLE_SUPPORT_DIAGNOSTICS`
 
+Production note:
+
+- the server Vercel project owns Better Auth CORS and trusted-origin checks, so `WEB_URL`, `NEXT_PUBLIC_WEB_URL`, and `CORS_ORIGIN` must be set on the `apps/server` deployment as well as any web-side `NEXT_PUBLIC_*` settings
+- use bare origins such as `https://profitabledge-web.vercel.app` without a trailing slash; the server now normalizes trailing slashes, but origin-only values are still the intended format
+
 ## Runtime shape
 
 The request-serving apps and worker-like processes are now separate concerns:

@@ -1,8 +1,13 @@
+function normalizeOrigin(value: string | undefined | null) {
+  const normalized = value?.trim().replace(/\/+$/, "");
+  return normalized || null;
+}
+
 function parseOriginList(value: string | undefined | null) {
   return (value ?? "")
     .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+    .map((entry) => normalizeOrigin(entry))
+    .filter((entry): entry is string => Boolean(entry));
 }
 
 export function getAllowedWebOrigins() {
@@ -16,11 +21,11 @@ export function getAllowedWebOrigins() {
     process.env.WEB_URL,
     process.env.NEXT_PUBLIC_WEB_URL,
   ]
-    .map((value) => value?.trim())
+    .map((value) => normalizeOrigin(value))
     .filter((value): value is string => Boolean(value));
 
   for (const origin of envCandidates) {
-    origins.add(origin.replace(/\/$/, ""));
+    origins.add(origin);
   }
 
   return [...origins];

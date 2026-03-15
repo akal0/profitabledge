@@ -18,12 +18,10 @@ import {
   GrowthPageBody,
   GrowthPageShell,
 } from "@/features/growth/components/growth-page-primitives";
-import { trpcOptions } from "@/utils/trpc";
+import { trpc } from "@/utils/trpc";
 
 export function GrowthOverview() {
-  const billingStateQuery = useQuery({
-    ...trpcOptions.billing.getState.queryOptions(),
-  });
+  const billingStateQuery = trpc.billing.getState.useQuery();
 
   const affiliate = billingStateQuery.data?.affiliate;
   const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;

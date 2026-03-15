@@ -1,11 +1,10 @@
 "use client";
 
 import { useSelectedLayoutSegment } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 
 import { Separator } from "@/components/ui/separator";
 import { GrowthRouteTabs } from "@/features/growth/components/growth-route-tabs";
-import { trpcOptions } from "@/utils/trpc";
+import { trpc } from "@/utils/trpc";
 
 export default function GrowthLayout({
   children,
@@ -13,9 +12,7 @@ export default function GrowthLayout({
   children: React.ReactNode;
 }) {
   const segment = useSelectedLayoutSegment();
-  const billingStateQuery = useQuery({
-    ...trpcOptions.billing.getState.queryOptions(),
-  });
+  const billingStateQuery = trpc.billing.getState.useQuery();
   const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;
 
   return (

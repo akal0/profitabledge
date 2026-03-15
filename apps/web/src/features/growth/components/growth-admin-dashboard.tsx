@@ -14,7 +14,7 @@ import {
   GrowthPageBody,
   GrowthPageShell,
 } from "@/features/growth/components/growth-page-primitives";
-import { trpcOptions } from "@/utils/trpc";
+import { trpc, trpcOptions } from "@/utils/trpc";
 
 function formatDate(value?: string | Date | null) {
   if (!value) return "N/A";
@@ -56,9 +56,7 @@ export function GrowthAdminDashboard() {
     maxRedemptions: "",
   });
 
-  const billingStateQuery = useQuery({
-    ...trpcOptions.billing.getState.queryOptions(),
-  });
+  const billingStateQuery = trpc.billing.getState.useQuery();
   const betaCodesQuery = useQuery({
     ...trpcOptions.billing.listPrivateBetaCodes.queryOptions(),
     enabled: billingStateQuery.data?.admin?.isAdmin === true,

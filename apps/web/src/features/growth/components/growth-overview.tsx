@@ -21,9 +21,9 @@ import {
 import { trpcOptions } from "@/utils/trpc";
 
 export function GrowthOverview() {
-  const billingStateQuery = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+  });
 
   const affiliate = billingStateQuery.data?.affiliate;
   const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;

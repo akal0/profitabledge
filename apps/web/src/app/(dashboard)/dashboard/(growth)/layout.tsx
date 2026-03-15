@@ -13,9 +13,9 @@ export default function GrowthLayout({
   children: React.ReactNode;
 }) {
   const segment = useSelectedLayoutSegment();
-  const billingStateQuery = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+  });
   const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;
 
   return (

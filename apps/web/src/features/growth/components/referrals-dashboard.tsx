@@ -78,9 +78,9 @@ function formatStatusLabel(status?: string | null) {
 export function ReferralsDashboard() {
   const [affiliateApplicationMessage, setAffiliateApplicationMessage] =
     useState("");
-  const billingStateQuery = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+  });
   const applyForAffiliate = useMutation({
     ...trpcOptions.billing.applyForAffiliate.mutationOptions(),
     onSuccess: () => {

@@ -56,9 +56,9 @@ export function GrowthAdminDashboard() {
     maxRedemptions: "",
   });
 
-  const billingStateQuery = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+  });
   const betaCodesQuery = useQuery({
     ...trpcOptions.billing.listPrivateBetaCodes.queryOptions(),
     enabled: billingStateQuery.data?.admin?.isAdmin === true,

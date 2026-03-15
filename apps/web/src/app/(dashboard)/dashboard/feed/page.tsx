@@ -15,6 +15,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
+import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 
 type EventType =
   | "trade_closed"
@@ -222,6 +224,8 @@ function FeedEventCard({ event, account }: FeedEventCardProps) {
 }
 
 export default function FeedPage() {
+  const communityEnabled = isPublicAlphaFeatureEnabled("community");
+
   const [selectedEventType, setSelectedEventType] = React.useState<EventType>("all");
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -230,6 +234,8 @@ export default function FeedPage() {
     limit: 50,
     offset: 0,
     verificationLevel: "ea_synced", // Minimum verification level
+  }, {
+    enabled: communityEnabled,
   });
 
   const handleRefresh = async () => {
@@ -243,6 +249,15 @@ export default function FeedPage() {
     if (selectedEventType === "all") return feedData;
     return feedData.filter((item) => item.event.eventType === selectedEventType);
   }, [feedData, selectedEventType]);
+
+  if (!communityEnabled) {
+    return (
+      <AlphaFeatureLocked
+        feature="community"
+        title="Community feed is held back in this alpha"
+      />
+    );
+  }
 
   return (
     <main className="p-6 space-y-4 py-4 max-w-4xl">

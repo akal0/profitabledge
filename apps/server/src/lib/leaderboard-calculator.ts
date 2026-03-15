@@ -54,7 +54,8 @@ export async function calculateLeaderboards(
   console.log(`[Leaderboard] Calculating ${category} for ${period}`);
 
   // Get period dates
-  const { periodStart, periodEnd } = getPeriodDates(period);
+  const { tradeWindowStart, tradeWindowEnd, periodStart, periodEnd } =
+    getPeriodDates(period);
 
   // Get all verified, opted-in accounts
   const accounts = await db
@@ -91,8 +92,8 @@ export async function calculateLeaderboards(
         .where(
           and(
             eq(trade.accountId, account.id),
-            gte(trade.closeTime, periodStart),
-            lte(trade.closeTime, periodEnd),
+            gte(trade.closeTime, tradeWindowStart),
+            lte(trade.closeTime, tradeWindowEnd),
             sql`${trade.closeTime} IS NOT NULL`
           )
         );
@@ -407,25 +408,39 @@ function getPercentileBand(percentile: number): string {
 /**
  * Get period dates
  */
-function getPeriodDates(period: LeaderboardPeriod): { periodStart: Date; periodEnd: Date } {
+function toDateOnlyString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function getPeriodDates(period: LeaderboardPeriod): {
+  tradeWindowStart: Date;
+  tradeWindowEnd: Date;
+  periodStart: string;
+  periodEnd: string;
+} {
   const now = new Date();
-  let periodStart: Date;
+  let tradeWindowStart: Date;
 
   switch (period) {
     case "30d":
-      periodStart = new Date(now);
-      periodStart.setDate(now.getDate() - 30);
+      tradeWindowStart = new Date(now);
+      tradeWindowStart.setDate(now.getDate() - 30);
       break;
     case "90d":
-      periodStart = new Date(now);
-      periodStart.setDate(now.getDate() - 90);
+      tradeWindowStart = new Date(now);
+      tradeWindowStart.setDate(now.getDate() - 90);
       break;
     case "all_time":
-      periodStart = new Date(2000, 0, 1);
+      tradeWindowStart = new Date(2000, 0, 1);
       break;
   }
 
-  return { periodStart, periodEnd: now };
+  return {
+    tradeWindowStart,
+    tradeWindowEnd: now,
+    periodStart: toDateOnlyString(tradeWindowStart),
+    periodEnd: toDateOnlyString(now),
+  };
 }
 
 /**

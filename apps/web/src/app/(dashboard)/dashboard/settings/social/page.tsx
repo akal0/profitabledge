@@ -15,13 +15,18 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
+import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 
 export default function SocialSettingsPage() {
+  const communityEnabled = isPublicAlphaFeatureEnabled("community");
+
   const { selectedAccountId } = useAccountStore();
 
-  const { data: accounts, refetch: refetchAccounts } = useQuery(
-    trpcOptions.accounts.list.queryOptions()
-  );
+  const { data: accounts, refetch: refetchAccounts } = useQuery({
+    ...trpcOptions.accounts.list.queryOptions(),
+    enabled: communityEnabled,
+  });
   const currentAccount = accounts?.find(
     (acc) => acc.id === selectedAccountId
   );
@@ -29,6 +34,15 @@ export default function SocialSettingsPage() {
   const toggleSocial = useMutation(
     trpcOptions.social.toggleAccountSocial.mutationOptions()
   );
+
+  if (!communityEnabled) {
+    return (
+      <AlphaFeatureLocked
+        feature="community"
+        title="Social settings are held back in this alpha"
+      />
+    );
+  }
 
   const handleToggleSocial = async (optIn: boolean) => {
     if (!selectedAccountId) {

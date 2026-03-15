@@ -18,7 +18,8 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 export default function VerifiedTrackRecordPage() {
-  const { shareId } = useParams<{ shareId: string }>();
+  const params = useParams<{ shareId: string }>();
+  const shareId = typeof params?.shareId === "string" ? params.shareId : "";
   const [copied, setCopied] = useState(false);
 
   const { data, isLoading, error } = trpc.accounts.getTrackRecord.useQuery(

@@ -106,6 +106,7 @@ function JournalPageContent() {
   const { selectedAccountId: accountId } = useAccountStore();
   const router = useRouter();
   const pathname = usePathname();
+  const safePathname = pathname ?? "/dashboard/journal";
   const searchParams = useSearchParams();
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -115,10 +116,11 @@ function JournalPageContent() {
   );
   const [initialTitle, setInitialTitle] = useState<string | null>(null);
   const [activePromptId, setActivePromptId] = useState<string | null>(null);
-  const entryIdFromQuery = searchParams.get("entryId");
-  const entryTypeFromQuery = searchParams.get("entryType");
-  const activeTab: JournalTab = isJournalTab(searchParams.get("tab"))
-    ? (searchParams.get("tab") as JournalTab)
+  const entryIdFromQuery = searchParams?.get("entryId") ?? null;
+  const entryTypeFromQuery = searchParams?.get("entryType") ?? null;
+  const activeTabValue = searchParams?.get("tab") ?? null;
+  const activeTab: JournalTab = isJournalTab(activeTabValue)
+    ? activeTabValue
     : "entries";
   const forcedEntryType =
     entryTypeFromQuery &&
@@ -194,17 +196,17 @@ function JournalPageContent() {
   }, [entryIdFromQuery]);
 
   const clearEntryIdFromUrl = React.useCallback(() => {
-    if (!searchParams.get("entryId")) {
+    if (!searchParams?.get("entryId")) {
       return;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
     params.delete("entryId");
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, {
+    router.replace(query ? `${safePathname}?${query}` : safePathname, {
       scroll: false,
     });
-  }, [pathname, router, searchParams]);
+  }, [router, safePathname, searchParams]);
 
   const handleTabChange = React.useCallback(
     (value: string) => {
@@ -218,7 +220,7 @@ function JournalPageContent() {
         markTypeRead.mutate({ type: "post_exit_ready" });
       }
 
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
 
       if (value === "entries") {
         params.delete("tab");
@@ -227,11 +229,11 @@ function JournalPageContent() {
       }
 
       const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, {
+      router.replace(query ? `${safePathname}?${query}` : safePathname, {
         scroll: false,
       });
     },
-    [pathname, router, searchParams, markTypeRead]
+    [router, safePathname, searchParams, markTypeRead]
   );
 
   // Handle template selection

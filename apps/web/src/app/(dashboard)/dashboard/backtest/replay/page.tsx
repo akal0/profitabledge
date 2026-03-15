@@ -77,8 +77,8 @@ import { toast } from "sonner";
 function BacktestReplayPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const paramSessionId = searchParams.get("sessionId");
-  const snapshotIdParam = searchParams.get("snapshot");
+  const paramSessionId = searchParams?.get("sessionId") ?? null;
+  const snapshotIdParam = searchParams?.get("snapshot") ?? null;
 
   const [sessionId, setSessionId] = useState<string | null>(paramSessionId);
   const [sessionName, setSessionName] = useState("Untitled Session");

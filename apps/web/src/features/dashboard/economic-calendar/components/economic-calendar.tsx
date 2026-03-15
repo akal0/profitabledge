@@ -34,19 +34,19 @@ export default function EconomicCalendar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currencyFilter, setCurrencyFilter] = useState<string[]>(() => {
-    const param = searchParams.get("currency");
+    const param = searchParams?.get("currency");
     return param ? [param] : [];
   });
   const [impactFilter, setImpactFilter] = useState<ImpactLevel[]>(() => {
-    const param = searchParams.get("impact");
+    const param = searchParams?.get("impact");
     if (param && (IMPACT_ORDER as readonly string[]).includes(param)) {
       return [param as ImpactLevel];
     }
     return [];
   });
   const [range, setRange] = useState<{ start: Date; end: Date } | null>(() => {
-    const startParam = searchParams.get("start");
-    const endParam = searchParams.get("end");
+    const startParam = searchParams?.get("start");
+    const endParam = searchParams?.get("end");
     if (startParam && endParam) {
       const start = new Date(`${startParam}T00:00:00`);
       const end = new Date(`${endParam}T23:59:59.999`);
@@ -63,8 +63,8 @@ export default function EconomicCalendar() {
     return { min, max };
   });
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const startParam = searchParams.get("start");
-    const endParam = searchParams.get("end");
+    const startParam = searchParams?.get("start");
+    const endParam = searchParams?.get("end");
     if (startParam && endParam && startParam === endParam) return "day";
     return "month";
   });

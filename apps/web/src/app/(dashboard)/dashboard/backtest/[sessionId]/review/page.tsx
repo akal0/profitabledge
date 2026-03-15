@@ -60,7 +60,8 @@ const rrConfig = {
 export default function BacktestReviewPage() {
   const params = useParams();
   const router = useRouter();
-  const sessionId = params.sessionId as string;
+  const sessionId =
+    typeof params?.sessionId === "string" ? params.sessionId : undefined;
 
   const [data, setData] = useState<SessionAnalytics | null>(null);
   const [loading, setLoading] = useState(true);

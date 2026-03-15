@@ -51,6 +51,7 @@ const backtestNavSections: NavSection[] = [
 
 export function BacktestSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const safePathname = pathname ?? "/backtest";
 
   return (
     <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
@@ -75,8 +76,8 @@ export function BacktestSidebar({ ...props }: React.ComponentProps<typeof Sideba
             <SidebarGroupContent>
               <SidebarMenu className="gap-0.5">
                 {section.items.map((item) => {
-                  const isActive = pathname === item.href ||
-                    (item.href !== "/backtest" && pathname.startsWith(item.href));
+                  const isActive = safePathname === item.href ||
+                    (item.href !== "/backtest" && safePathname.startsWith(item.href));
 
                   return (
                     <SidebarMenuItem key={item.href} className="px-0">

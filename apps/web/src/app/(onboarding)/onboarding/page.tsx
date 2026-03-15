@@ -136,8 +136,8 @@ function OnboardingPageContent() {
 
     bootstrappedStepState.current = true;
 
-    const checkoutStatus = searchParams.get("checkout");
-    const planParam = searchParams.get("plan");
+    const checkoutStatus = searchParams?.get("checkout");
+    const planParam = searchParams?.get("plan");
     const storedStep = getStoredOnboardingStep();
 
     if (
@@ -233,9 +233,9 @@ function OnboardingPageContent() {
   }, [billingStateQuery.data, completeGrowthAccess, billingStateQuery]);
 
   useEffect(() => {
-    const checkoutStatus = searchParams.get("checkout");
-    const planParam = searchParams.get("plan");
-    const checkoutId = searchParams.get("checkout_id");
+    const checkoutStatus = searchParams?.get("checkout");
+    const planParam = searchParams?.get("plan");
+    const checkoutId = searchParams?.get("checkout_id");
 
     if (
       checkoutStatus !== "success" ||

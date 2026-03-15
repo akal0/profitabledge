@@ -33,7 +33,11 @@ export function useAssistantPageContext(
 
   return useMemo(() => {
     const effectivePath = overridePath || pathname || undefined;
-    const context = buildContextFromPath(effectivePath, searchParams, source);
+    const context = buildContextFromPath(
+      effectivePath,
+      searchParams ?? new URLSearchParams(),
+      source
+    );
     const includeDashboardContext = context.surface === "dashboard";
 
     return {

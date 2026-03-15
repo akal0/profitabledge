@@ -4,7 +4,8 @@ import { useParams } from "next/navigation";
 
 export default function PublicProfilePage() {
   const params = useParams();
-  const username = typeof params.username === "string" ? params.username : "user";
+  const username =
+    typeof params?.username === "string" ? params.username : "user";
 
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-24 text-gray-900 dark:bg-gray-900 dark:text-white">

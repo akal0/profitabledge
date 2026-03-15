@@ -11,8 +11,8 @@ import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-f
 
 function AssistantPageContent() {
   const searchParams = useSearchParams();
-  const accountId = searchParams.get("accountId") || undefined;
-  const sourcePath = searchParams.get("sourcePath") || undefined;
+  const accountId = searchParams?.get("accountId") || undefined;
+  const sourcePath = searchParams?.get("sourcePath") || undefined;
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
   const [me, setMe] = useState<Me | null>(null);
 

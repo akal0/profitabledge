@@ -132,6 +132,7 @@ export function SettingsSidebar({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const safePathname = pathname ?? "/dashboard/settings";
 
   return (
     <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
@@ -160,8 +161,8 @@ export function SettingsSidebar({
               <SidebarMenu className="gap-0.5">
                 {section.items.map((item) => {
                   const isActive =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
+                    safePathname === item.href ||
+                    safePathname.startsWith(`${item.href}/`);
 
                   return (
                     <SidebarMenuItem key={item.href} className="px-0">

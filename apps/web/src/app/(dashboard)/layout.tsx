@@ -49,6 +49,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }>) {
   const pathname = usePathname();
+  const safePathname = pathname ?? "/dashboard";
   const router = useRouter();
   const accountId = useAccountStore((state) => state.selectedAccountId);
   const setSelectedAccountId = useAccountStore(
@@ -79,7 +80,7 @@ export default function DashboardLayout({
       : null;
 
   const connectionBadge = getConnectionBadge(currentAccountConnection);
-  const breadcrumbs = getDashboardBreadcrumbs(pathname);
+  const breadcrumbs = getDashboardBreadcrumbs(safePathname);
   const requiresOnboarding = Boolean(
     billingState && !billingState.onboarding.isComplete
   );
@@ -103,10 +104,10 @@ export default function DashboardLayout({
   const activePlanKey = (billingState?.billing?.activePlanKey ?? null) as PlanKey | null;
   const hasBlockedPlanAccess = Boolean(
     activePlanKey &&
-      pathname &&
+      safePathname &&
       PLAN_REQUIRED_ROUTES.some(
         (r) =>
-          pathname.startsWith(r.prefix) &&
+          safePathname.startsWith(r.prefix) &&
           !meetsRequirement(activePlanKey, r.plan)
       )
   );
@@ -114,7 +115,7 @@ export default function DashboardLayout({
 
   useAlphaPageTracking("dashboard");
   useSettingsAccountScopeGuard({
-    pathname,
+    pathname: safePathname,
     accountId,
     firstAccountId: accounts[0]?.id,
     setSelectedAccountId,
@@ -152,7 +153,7 @@ export default function DashboardLayout({
     <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
       <DashboardShellBootstrap />
       <AIInsightToast />
-      <DashboardShellSidebar pathname={pathname} />
+      <DashboardShellSidebar pathname={safePathname} />
       <VerticalSeparator />
 
       <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden">

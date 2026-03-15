@@ -189,7 +189,10 @@ From `apps/web`:
 bun dev
 bun check-types
 bun lint
+bun build
 ```
+
+`apps/web` package-local `build` and `check-types` now regenerate the shared tRPC declarations before they run, so isolated builds like Vercel's `apps/web` root-directory project do not depend on ignored generated files already existing in a developer workspace.
 
 ## When working on a new section
 

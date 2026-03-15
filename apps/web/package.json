@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port=3001",
-    "build": "next build",
+    "build": "bun run contracts:generate-trpc && next build",
     "start": "next start",
     "lint": "../../node_modules/.bin/eslint .",
-    "check-types": "node ../../scripts/run-tsc-check.mjs tsconfig.json"
+    "check-types": "bun run contracts:generate-trpc && node ../../scripts/run-tsc-check.mjs tsconfig.json",
+    "contracts:generate-trpc": "node ../../scripts/generate-trpc-contract.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.3",

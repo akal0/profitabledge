@@ -6,6 +6,7 @@ import React, {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -58,13 +59,6 @@ const typeLabels: Record<string, string> = {
   Persona: "Persona",
   metric: "Metrics",
   filter: "Filters",
-  Core: "Core",
-  Tags: "Tags",
-  Execution: "Execution",
-  Opportunity: "Opportunity",
-  Efficiency: "Efficiency",
-  Risk: "Risk",
-  Timing: "Timing",
 };
 
 const typeDescriptions: Record<string, string> = {
@@ -129,10 +123,22 @@ export const ChatSuggestionList = forwardRef<
   const shouldGroup = props.items.some(
     (item) => Boolean(item.category) || item.type === "session"
   );
-  const groupedItems = shouldGroup ? groupItemsByType(props.items) : null;
-  const sortedGroups = groupedItems
-    ? typeOrder.filter((type) => groupedItems[type]?.length > 0)
-    : [];
+  const groupedItems = useMemo(
+    () => (shouldGroup ? groupItemsByType(props.items) : null),
+    [props.items, shouldGroup]
+  );
+  const sortedGroups = useMemo(
+    () =>
+      groupedItems
+        ? typeOrder.filter((type) => groupedItems[type]?.length > 0)
+        : [],
+    [groupedItems]
+  );
+  const activeItems = useMemo(
+    () =>
+      expandedType && groupedItems ? groupedItems[expandedType] || [] : props.items,
+    [expandedType, groupedItems, props.items]
+  );
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -151,10 +157,7 @@ export const ChatSuggestionList = forwardRef<
 
   const selectItem = useCallback(
     (index: number) => {
-      const items = expandedType && groupedItems
-        ? groupedItems[expandedType] || []
-        : props.items;
-      const item = items[index];
+      const item = activeItems[index];
       if (!item) return;
 
       props.command({
@@ -163,22 +166,16 @@ export const ChatSuggestionList = forwardRef<
         type: item.type,
       });
     },
-    [props, expandedType, groupedItems]
+    [activeItems, props]
   );
 
   const upHandler = useCallback(() => {
-    const items = expandedType && groupedItems
-      ? groupedItems[expandedType] || []
-      : props.items;
-    setSelectedIndex((selectedIndex + items.length - 1) % items.length);
-  }, [selectedIndex, props.items.length, expandedType, groupedItems]);
+    setSelectedIndex((selectedIndex + activeItems.length - 1) % activeItems.length);
+  }, [activeItems.length, selectedIndex]);
 
   const downHandler = useCallback(() => {
-    const items = expandedType && groupedItems
-      ? groupedItems[expandedType] || []
-      : props.items;
-    setSelectedIndex((selectedIndex + 1) % items.length);
-  }, [selectedIndex, props.items.length, expandedType, groupedItems]);
+    setSelectedIndex((selectedIndex + 1) % activeItems.length);
+  }, [activeItems.length, selectedIndex]);
 
   const enterHandler = useCallback(() => {
     if (shouldGroup && !expandedType) {

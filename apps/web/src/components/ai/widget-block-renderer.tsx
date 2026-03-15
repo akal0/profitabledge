@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import {
   DailyNetCard,
   PerformanceWeekdayCard,
-} from "@/components/dashboard/chart-widgets";
+} from "@/features/dashboard/charts/components/comparison-chart-cards";
 import {
   BaseBarChart,
   BaseAreaChart,
@@ -164,7 +164,7 @@ function BarChartViz({
   return (
     <BaseBarChart
       data={chartData}
-      mode={mode}
+      mode={mode === "singular" ? "singular" : "plural"}
       summary={data.summary}
     />
   );
@@ -473,7 +473,10 @@ function TableViz({
   return (
     <BaseTable
       rows={data.rows || []}
-      columns={data.columns}
+      columns={data.columns?.map((column) => ({
+        ...column,
+        type: column.type === "ratio" ? "number" : column.type,
+      }))}
       tradeIds={data.tradeIds}
       onViewTrades={onViewTrades}
     />

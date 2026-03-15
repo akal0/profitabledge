@@ -12,7 +12,10 @@
  */
 
 import { db } from "../../../db";
-import { trade as tradeTable } from "../../../db/schema/trading";
+import {
+  trade as tradeTable,
+  tradingAccount,
+} from "../../../db/schema/trading";
 import { tradeEmotion } from "../../../db/schema/coaching";
 import { journalEntry } from "../../../db/schema/journal";
 import { eq, and, sql, gte, desc, inArray } from "drizzle-orm";
@@ -45,7 +48,10 @@ export interface TiltIndicator {
     | "loss_chasing"
     | "overtrading"
     | "emotional_volatility"
-    | "session_fatigue";
+    | "session_fatigue"
+    | "single_trade_damage"
+    | "daily_drawdown"
+    | "capital_damage";
   severity: "low" | "medium" | "high";
   label: string;
   message: string;
@@ -94,7 +100,69 @@ const TILT_INDICATOR_LABELS: Record<TiltIndicator["type"], string> = {
   overtrading: "Overtrading",
   emotional_volatility: "Emotional volatility",
   session_fatigue: "Session fatigue",
+  single_trade_damage: "Single-trade damage",
+  daily_drawdown: "Daily drawdown",
+  capital_damage: "Capital damage",
 };
+
+const BEHAVIOR_INDICATOR_TYPES = new Set<TiltIndicator["type"]>([
+  "revenge_trading",
+  "fomo_entries",
+  "loss_chasing",
+  "overtrading",
+  "emotional_volatility",
+  "session_fatigue",
+]);
+
+function severityPenalty(
+  severity: TiltIndicator["severity"],
+  weights: Record<TiltIndicator["severity"], number>
+): number {
+  return weights[severity];
+}
+
+function behaviorIndicatorPenalty(indicator: TiltIndicator): number {
+  return severityPenalty(indicator.severity, {
+    low: 8,
+    medium: 16,
+    high: 26,
+  });
+}
+
+function capitalIndicatorPenalty(indicator: TiltIndicator): number {
+  switch (indicator.type) {
+    case "single_trade_damage":
+      return severityPenalty(indicator.severity, {
+        low: 20,
+        medium: 36,
+        high: 56,
+      });
+    case "daily_drawdown":
+      return severityPenalty(indicator.severity, {
+        low: 18,
+        medium: 32,
+        high: 52,
+      });
+    case "capital_damage":
+      return severityPenalty(indicator.severity, {
+        low: 18,
+        medium: 30,
+        high: 48,
+      });
+    default:
+      return 0;
+  }
+}
+
+function classifySeverity(
+  value: number,
+  thresholds: { low: number; medium: number; high: number }
+): TiltIndicator["severity"] | null {
+  if (value >= thresholds.high) return "high";
+  if (value >= thresholds.medium) return "medium";
+  if (value >= thresholds.low) return "low";
+  return null;
+}
 
 // ─── Emotion-to-PnL Correlations ────────────────────────────────
 
@@ -208,6 +276,21 @@ export async function detectTiltStatus(
     )
     .orderBy(desc(tradeTable.closeTime));
 
+  const [account] = await db
+    .select({
+      initialBalance: tradingAccount.initialBalance,
+      liveBalance: tradingAccount.liveBalance,
+      liveEquity: tradingAccount.liveEquity,
+    })
+    .from(tradingAccount)
+    .where(
+      and(
+        eq(tradingAccount.id, accountId),
+        eq(tradingAccount.userId, userId)
+      )
+    )
+    .limit(1);
+
   // Get recent emotions
   const recentEmotions = await db
     .select()
@@ -236,6 +319,73 @@ export async function detectTiltStatus(
       data,
     });
   };
+
+  const recentTradeProfits = recentTrades.map((trade) => toNum(trade.profit));
+  const recentNetPnL = recentTradeProfits.reduce((sum, value) => sum + value, 0);
+  const recentGrossLoss = recentTradeProfits.reduce(
+    (sum, value) => sum + (value < 0 ? Math.abs(value) : 0),
+    0
+  );
+  const worstLossTrade = recentTrades.reduce<(typeof recentTrades)[number] | null>(
+    (worst, trade) => {
+      const profit = toNum(trade.profit);
+      if (profit >= 0) return worst;
+      if (!worst) return trade;
+      return Math.abs(profit) > Math.abs(toNum(worst.profit)) ? trade : worst;
+    },
+    null
+  );
+  const worstLossAbs = worstLossTrade ? Math.abs(toNum(worstLossTrade.profit)) : 0;
+
+  const currentBalanceEstimate =
+    (account?.liveBalance != null ? toNum(account.liveBalance) : null) ??
+    (account?.liveEquity != null ? toNum(account.liveEquity) : null) ??
+    (account?.initialBalance != null
+      ? toNum(account.initialBalance) + profile.netPnL
+      : null);
+  const startingBalanceEstimateRaw =
+    currentBalanceEstimate != null
+      ? currentBalanceEstimate - recentNetPnL
+      : account?.initialBalance != null
+        ? toNum(account.initialBalance)
+        : 0;
+  const startingBalanceEstimate = Math.max(startingBalanceEstimateRaw, 0);
+  const capitalBase = Math.max(
+    startingBalanceEstimate,
+    currentBalanceEstimate ?? 0,
+    account?.initialBalance != null ? toNum(account.initialBalance) : 0,
+    recentGrossLoss,
+    worstLossAbs,
+    1
+  );
+
+  const singleTradeLossPct =
+    capitalBase > 0 ? (worstLossAbs / capitalBase) * 100 : 0;
+  const dailyNetLossPct =
+    capitalBase > 0 && recentNetPnL < 0
+      ? (Math.abs(recentNetPnL) / capitalBase) * 100
+      : 0;
+
+  const recentTradesChronological = [...recentTrades].sort((a, b) => {
+    const aTime = a.closeTime ? new Date(a.closeTime).getTime() : 0;
+    const bTime = b.closeTime ? new Date(b.closeTime).getTime() : 0;
+    return aTime - bTime;
+  });
+  let runningBalance = startingBalanceEstimate;
+  let intradayPeak = startingBalanceEstimate;
+  let realizedDrawdownPct = 0;
+  for (const trade of recentTradesChronological) {
+    runningBalance += toNum(trade.profit);
+    if (runningBalance > intradayPeak) {
+      intradayPeak = runningBalance;
+    }
+    if (intradayPeak > 0) {
+      realizedDrawdownPct = Math.max(
+        realizedDrawdownPct,
+        ((intradayPeak - runningBalance) / intradayPeak) * 100
+      );
+    }
+  }
 
   // 1. Revenge trading detection: trades taken within 3 minutes of a loss
   if (recentTrades.length >= 2) {
@@ -336,13 +486,111 @@ export async function detectTiltStatus(
     );
   }
 
-  // `score` is a composure metric, while `tiltScore` is severity for the UI.
-  let score = 100;
-  for (const indicator of indicators) {
-    if (indicator.severity === "high") score -= 25;
-    else if (indicator.severity === "medium") score -= 15;
-    else score -= 8;
+  // 6. Single-trade damage: one loss consumed too much account capital
+  const singleTradeDamageSeverity = classifySeverity(singleTradeLossPct, {
+    low: 3,
+    medium: 8,
+    high: 15,
+  });
+  if (singleTradeDamageSeverity && worstLossTrade) {
+    pushIndicator(
+      "single_trade_damage",
+      singleTradeDamageSeverity,
+      `Your worst recent trade lost ${singleTradeLossPct.toFixed(1)}% of account capital (${worstLossAbs.toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      })}). A single trade should not damage the account this much.`,
+      {
+        singleTradeLossPct,
+        worstLossAbs,
+        worstLossTradeId: worstLossTrade.id,
+        capitalBase,
+      }
+    );
   }
+
+  // 7. Daily drawdown: 24h realized PnL hit was materially damaging
+  const dailyDrawdownSeverity = classifySeverity(dailyNetLossPct, {
+    low: 4,
+    medium: 10,
+    high: 20,
+  });
+  if (dailyDrawdownSeverity) {
+    pushIndicator(
+      "daily_drawdown",
+      dailyDrawdownSeverity,
+      `You are down ${dailyNetLossPct.toFixed(1)}% over the last 24 hours (${Math.abs(
+        recentNetPnL
+      ).toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      })}). Heavy one-day damage is a direct tilt risk.`,
+      {
+        dailyNetLossPct,
+        recentNetPnL,
+        capitalBase,
+      }
+    );
+  }
+
+  // 8. Capital damage: realized intraday drawdown from recent closed trades
+  const capitalDamageSeverity = classifySeverity(realizedDrawdownPct, {
+    low: 5,
+    medium: 12,
+    high: 20,
+  });
+  if (capitalDamageSeverity) {
+    pushIndicator(
+      "capital_damage",
+      capitalDamageSeverity,
+      `Your realized 24h drawdown reached ${realizedDrawdownPct.toFixed(
+        1
+      )}% from peak to trough. This kind of capital shock should meaningfully elevate the tilt meter.`,
+      {
+        realizedDrawdownPct,
+        capitalBase,
+        startingBalanceEstimate,
+      }
+    );
+  }
+
+  const behaviorIndicators = indicators.filter((indicator) =>
+    BEHAVIOR_INDICATOR_TYPES.has(indicator.type)
+  );
+  const capitalIndicators = indicators.filter(
+    (indicator) => !BEHAVIOR_INDICATOR_TYPES.has(indicator.type)
+  );
+
+  const behaviorPenalty = Math.min(
+    45,
+    behaviorIndicators.reduce(
+      (sum, indicator) => sum + behaviorIndicatorPenalty(indicator),
+      0
+    )
+  );
+
+  let capitalPenalty = 0;
+  if (capitalIndicators.length > 0) {
+    const weightedCapitalPenalties = capitalIndicators
+      .map((indicator) => capitalIndicatorPenalty(indicator))
+      .sort((a, b) => b - a);
+    const strongestCapitalPenalty = weightedCapitalPenalties[0] ?? 0;
+    const supportingCapitalPenalty = weightedCapitalPenalties
+      .slice(1)
+      .reduce((sum, penalty) => sum + penalty, 0);
+    const concentrationBonus =
+      singleTradeLossPct >= 5 &&
+      recentGrossLoss > 0 &&
+      worstLossAbs / recentGrossLoss >= 0.7
+        ? 8
+        : 0;
+
+    capitalPenalty = Math.min(
+      85,
+      strongestCapitalPenalty + supportingCapitalPenalty * 0.35 + concentrationBonus
+    );
+  }
+
+  // `score` is a composure metric, while `tiltScore` is severity for the UI.
+  let score = 100 - behaviorPenalty - capitalPenalty;
   score = Math.max(0, Math.min(100, score));
   const tiltScore = 100 - score;
 

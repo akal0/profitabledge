@@ -2,12 +2,17 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { getFieldCatalogItems } from "@/lib/ai/plan-generator";
+import { getServerAlphaFlags } from "@/lib/ops/alpha-runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    if (!getServerAlphaFlags().aiAssistant) {
+      return NextResponse.json({ fields: [] });
+    }
+
     const session = await auth.api.getSession({
       headers: await headers(),
     });

@@ -10,13 +10,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
+import { normalizeAIProviderError } from "@/lib/ai/provider-errors";
 import { streamToNDJSON } from "@/lib/ai/streaming-orchestrator";
+import {
+  buildAlphaFeatureDisabledResponse,
+  getServerAlphaFlags,
+} from "@/lib/ops/alpha-runtime";
+import {
+  ensureActivationMilestone,
+  recordAppEvent,
+  recordOperationalError,
+} from "@/lib/ops/event-log";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!getServerAlphaFlags().aiAssistant) {
+      return NextResponse.json(
+        buildAlphaFeatureDisabledResponse("aiAssistant"),
+        { status: 503 }
+      );
+    }
+
     // Authenticate
     const session = await auth.api.getSession({
       headers: await headers(),
@@ -53,6 +70,31 @@ export async function POST(request: NextRequest) {
       message: message.substring(0, 100),
     });
 
+    await Promise.all([
+      ensureActivationMilestone({
+        userId: session.user.id,
+        key: "assistant_prompt_started",
+        source: "server",
+        metadata: {
+          accountId,
+          page: pageContext?.pathname ?? null,
+        },
+      }),
+      recordAppEvent({
+        userId: session.user.id,
+        category: "ai",
+        name: "assistant.stream.started",
+        source: "server",
+        pagePath:
+          typeof pageContext?.pathname === "string" ? pageContext.pathname : null,
+        summary: message.substring(0, 120),
+        metadata: {
+          accountId,
+          evidenceMode: Boolean(evidenceMode),
+        },
+      }),
+    ]);
+
     // Create streaming response
     const stream = await streamToNDJSON(message, {
       userId: session.user.id,
@@ -71,10 +113,24 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[API] Stream error:", error);
+    const normalized = normalizeAIProviderError(
+      error,
+      "AI is temporarily unavailable. Please try again later."
+    );
+    console.error(`[API] Stream error: ${normalized.message}`);
+    await recordOperationalError({
+      category: "ai",
+      name: "assistant.stream.failed",
+      source: "server",
+      summary: normalized.message,
+      metadata: {
+        httpStatus: normalized.httpStatus,
+      },
+      isUserVisible: true,
+    });
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: normalized.message },
+      { status: normalized.httpStatus }
     );
   }
 }

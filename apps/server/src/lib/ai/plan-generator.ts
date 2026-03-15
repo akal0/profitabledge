@@ -7,7 +7,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createHash } from "crypto";
-import type { TradeQueryPlan } from "./query-plan";
+import type { Filter, Timeframe, TradeQueryPlan } from "./query-plan";
 import { validatePlan, validatePlanWithFields } from "./query-plan";
 import {
   TRADE_FIELDS,
@@ -21,8 +21,10 @@ import {
   inferTimeframeFromMessage,
   normalizeUserMessage,
 } from "./query-normalization";
+import { generateMeteredGeminiContent } from "./gemini";
 import { cache, cacheKeys } from "../cache";
 import type { CondensedProfile } from "./engine/types";
+import { logAIProviderError } from "./provider-errors";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -59,7 +61,8 @@ export async function generatePlan(
   userMessage: string,
   conversationContext?: string[],
   accountId?: string,
-  traderProfile?: CondensedProfile
+  traderProfile?: CondensedProfile,
+  billingUserId?: string
 ): Promise<PlanGenerationResult> {
   const normalizedMessage = normalizeUserMessage(userMessage);
   console.log("[Plan Generator] Generating plan for:", userMessage);
@@ -102,7 +105,9 @@ export async function generatePlan(
       normalizedMessage,
       conversationContext,
       false,
-      traderProfile
+      traderProfile,
+      billingUserId,
+      accountId
     );
     if (compactAttempt.success && compactAttempt.plan) {
       cache.set(cacheKey, compactAttempt.plan, PLAN_CACHE_TTL_MS);
@@ -114,7 +119,9 @@ export async function generatePlan(
         normalizedMessage,
         conversationContext,
         true,
-        traderProfile
+        traderProfile,
+        billingUserId,
+        accountId
       );
       if (fullAttempt.success && fullAttempt.plan) {
         cache.set(cacheKey, fullAttempt.plan, PLAN_CACHE_TTL_MS);
@@ -129,10 +136,10 @@ export async function generatePlan(
 
     return compactAttempt;
   } catch (error) {
-    console.error("[Plan Generator] Error:", error);
+    const normalized = logAIProviderError("Plan generation", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: normalized.message,
     };
   }
 }
@@ -534,9 +541,10 @@ async function generatePlanAttempt(
   userMessage: string,
   conversationContext: string[] | undefined,
   includeFullCatalog: boolean,
-  traderProfile?: CondensedProfile
+  traderProfile?: CondensedProfile,
+  billingUserId?: string,
+  accountId?: string
 ): Promise<PlanGenerationResult> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const contextStr =
     conversationContext && conversationContext.length > 0
       ? `\n\nConversation context:\n${conversationContext.join("\n")}\n`
@@ -552,7 +560,19 @@ async function generatePlanAttempt(
     includeFullCatalog ? buildFieldCatalog(true) : ""
   );
 
-  const result = await model.generateContent(prompt);
+  const result = billingUserId
+    ? await generateMeteredGeminiContent({
+        userId: billingUserId,
+        accountId,
+        featureKey: includeFullCatalog
+          ? "assistant.plan.generate.full_catalog"
+          : "assistant.plan.generate.compact",
+        model: "gemini-2.5-flash",
+        request: prompt,
+      })
+    : await genAI
+        .getGenerativeModel({ model: "gemini-2.5-flash" })
+        .generateContent(prompt);
   const responseText = result.response.text();
 
   console.log("[Plan Generator] AI response:", responseText);
@@ -588,7 +608,9 @@ async function generatePlanAttempt(
       const repaired = await repairPlan(
         userMessage,
         planData,
-        zodValidation.error
+        zodValidation.error,
+        billingUserId,
+        accountId
       );
       if (repaired.success && repaired.plan) {
         return repaired;
@@ -654,13 +676,14 @@ async function generatePlanAttempt(
 async function repairPlan(
   userMessage: string,
   invalidPlan: any,
-  error: string
+  error: string,
+  billingUserId?: string,
+  accountId?: string
 ): Promise<PlanGenerationResult> {
   console.log("[Plan Generator] Attempting to repair plan...");
 
   try {
     const normalizedMessage = normalizeUserMessage(userMessage);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `The following TradeQueryPlan is invalid. Fix it.
 
@@ -680,7 +703,17 @@ RULES:
 
 Return the CORRECTED plan as valid JSON only, no explanation.`;
 
-    const result = await model.generateContent(prompt);
+    const result = billingUserId
+      ? await generateMeteredGeminiContent({
+          userId: billingUserId,
+          accountId,
+          featureKey: "assistant.plan.repair",
+          model: "gemini-2.5-flash",
+          request: prompt,
+        })
+      : await genAI
+          .getGenerativeModel({ model: "gemini-2.5-flash" })
+          .generateContent(prompt);
     const responseText = result.response.text();
 
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
@@ -726,11 +759,10 @@ Return the CORRECTED plan as valid JSON only, no explanation.`;
     console.log("[Plan Generator] Plan repaired successfully");
     return { success: true, plan: validation.data };
   } catch (error) {
+    const normalized = logAIProviderError("Plan repair", error);
     return {
       success: false,
-      error: `Repair failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+      error: `Repair failed: ${normalized.message}`,
     };
   }
 }
@@ -1190,9 +1222,10 @@ function applyTimeframeOverrides(
 }
 
 function timeframeMatches(
-  actual: TradeQueryPlan["timeframe"],
-  expected: TradeQueryPlan["timeframe"]
+  actual: Timeframe | null | undefined,
+  expected: Timeframe | null | undefined
 ): boolean {
+  if (!actual || !expected) return false;
   if (actual.lastNDays || expected.lastNDays) {
     return actual.lastNDays === expected.lastNDays;
   }
@@ -1401,7 +1434,7 @@ function buildRRPerformanceFallback(
   if (!Number.isFinite(rValue)) return null;
 
   const sessionValue = detectSessionValue(lower);
-  const filters = [
+  const filters: Filter[] = [
     {
       field: "realisedRR",
       op: "gte",

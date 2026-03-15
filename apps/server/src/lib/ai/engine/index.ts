@@ -61,6 +61,13 @@ export {
   findLeaks,
 } from "./behavioral-analyzer";
 
+export {
+  describeConditionPredicate,
+  describeConditionTrades,
+  matchesConditionFilters,
+  summarizeConditionFilters,
+} from "./condition-language";
+
 // Insight Engine
 export {
   generateInsights,

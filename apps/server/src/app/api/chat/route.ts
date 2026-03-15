@@ -13,9 +13,27 @@ import {
   orchestrateConversation,
   validateContext,
 } from "../../../lib/ai/orchestrator";
+import {
+  buildAlphaFeatureDisabledResponse,
+  getServerAlphaFlags,
+} from "../../../lib/ops/alpha-runtime";
+import {
+  ensureActivationMilestone,
+  recordAppEvent,
+  recordOperationalError,
+} from "../../../lib/ops/event-log";
 
 export async function POST(request: NextRequest) {
   try {
+    if (!getServerAlphaFlags().aiAssistant) {
+      return new Response(JSON.stringify(buildAlphaFeatureDisabledResponse("aiAssistant")), {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+        },
+      });
+    }
+
     // 1. Authenticate user
     const session = await auth.api.getSession({
       headers: request.headers,
@@ -59,6 +77,30 @@ export async function POST(request: NextRequest) {
 
     // 6. Orchestrate query through unified pipeline
     console.log("[Chat API] Orchestrating query:", userMessage);
+    await Promise.all([
+      ensureActivationMilestone({
+        userId: session.user.id,
+        key: "assistant_prompt_started",
+        source: "server",
+        metadata: {
+          accountId: accountId ?? null,
+          page: pageContext?.pathname ?? null,
+        },
+      }),
+      recordAppEvent({
+        userId: session.user.id,
+        category: "ai",
+        name: "chat.request.started",
+        source: "server",
+        pagePath:
+          typeof pageContext?.pathname === "string" ? pageContext.pathname : null,
+        summary: userMessage.slice(0, 120),
+        metadata: {
+          accountId: accountId ?? null,
+        },
+      }),
+    ]);
+
     const result = await orchestrateConversation(
       userMessage,
       {
@@ -87,6 +129,13 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("Chat API error:", error);
+    await recordOperationalError({
+      category: "ai",
+      name: "chat.request.failed",
+      source: "server",
+      summary: error instanceof Error ? error.message : "Unknown error",
+      isUserVisible: true,
+    });
     return new Response(
       `I encountered an error processing your request: ${error instanceof Error ? error.message : "Unknown error"}`,
       { 

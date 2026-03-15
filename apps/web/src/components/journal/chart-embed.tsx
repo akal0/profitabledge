@@ -21,20 +21,53 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Trash2, Settings, Move, Maximize2 } from "lucide-react";
+import {
+  MoreHorizontal,
+  Trash2,
+  Settings,
+  Move,
+  Maximize2,
+} from "lucide-react";
 
 // Chart type metadata for display
-const chartTypeInfo: Record<ChartEmbedType, { label: string; description: string }> = {
-  "equity-curve": { label: "Equity Curve", description: "Account equity over time" },
-  "drawdown": { label: "Drawdown", description: "Drawdown from peak equity" },
+const chartTypeInfo: Record<
+  ChartEmbedType,
+  { label: string; description: string }
+> = {
+  "equity-curve": {
+    label: "Equity Curve",
+    description: "Account equity over time",
+  },
+  drawdown: { label: "Drawdown", description: "Drawdown from peak equity" },
   "daily-net": { label: "Daily P&L", description: "Net profit/loss by day" },
-  "performance-weekday": { label: "Performance by Day", description: "Breakdown by weekday" },
-  "performing-assets": { label: "Asset Performance", description: "P&L by trading asset" },
-  "performance-heatmap": { label: "Performance Heatmap", description: "Hour x Day grid" },
-  "streak-distribution": { label: "Win/Loss Streaks", description: "Streak distribution" },
-  "r-multiple-distribution": { label: "R-Multiple", description: "R-multiple distribution" },
-  "mae-mfe-scatter": { label: "MAE/MFE Scatter", description: "Excursion analysis" },
-  "entry-exit-time": { label: "Entry/Exit Time", description: "Timing analysis" },
+  "performance-weekday": {
+    label: "Performance by Day",
+    description: "Breakdown by weekday",
+  },
+  "performing-assets": {
+    label: "Asset Performance",
+    description: "P&L by trading asset",
+  },
+  "performance-heatmap": {
+    label: "Performance Heatmap",
+    description: "Hour x Day grid",
+  },
+  "streak-distribution": {
+    label: "Win/Loss Streaks",
+    description: "Streak distribution",
+  },
+  "r-multiple-distribution": {
+    label: "R-Multiple",
+    description: "R-multiple distribution",
+  },
+  "mae-mfe-scatter": {
+    label: "MAE / MFE scatter",
+    description: "Excursion analysis",
+  },
+  "entry-exit-time": {
+    label: "Entry / exit time",
+    description: "Timing analysis",
+  },
 };
 
 interface ChartEmbedProps {
@@ -125,7 +158,7 @@ export function ChartEmbed({
             {config?.title || label}
           </h3>
         )}
-        
+
         {/* Edit controls */}
         {isEditing && isHovered && (
           <div className="flex items-center gap-1">
@@ -147,7 +180,10 @@ export function ChartEmbed({
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-sidebar border-white/10">
+              <DropdownMenuContent
+                align="end"
+                className="bg-sidebar border-white/10"
+              >
                 <DropdownMenuItem className="text-white/80 focus:text-white focus:bg-white/10">
                   <Maximize2 className="h-4 w-4 mr-2" />
                   Expand
@@ -171,10 +207,7 @@ export function ChartEmbed({
       </div>
 
       {/* Chart container */}
-      <div
-        className="p-3"
-        style={{ height }}
-      >
+      <div className="p-3" style={{ height }}>
         {renderChart()}
       </div>
     </div>
@@ -191,7 +224,10 @@ interface ChartSelectorProps {
 }
 
 export function ChartSelector({ onSelect, className }: ChartSelectorProps) {
-  const chartTypes = Object.entries(chartTypeInfo) as [ChartEmbedType, typeof chartTypeInfo[ChartEmbedType]][];
+  const chartTypes = Object.entries(chartTypeInfo) as [
+    ChartEmbedType,
+    (typeof chartTypeInfo)[ChartEmbedType]
+  ][];
 
   return (
     <div className={cn("grid grid-cols-2 gap-2", className)}>
@@ -228,7 +264,10 @@ export function ChartPickerMenu({
 }: ChartPickerMenuProps) {
   if (!isOpen) return null;
 
-  const chartTypes = Object.entries(chartTypeInfo) as [ChartEmbedType, typeof chartTypeInfo[ChartEmbedType]][];
+  const chartTypes = Object.entries(chartTypeInfo) as [
+    ChartEmbedType,
+    (typeof chartTypeInfo)[ChartEmbedType]
+  ][];
 
   return (
     <div
@@ -236,7 +275,9 @@ export function ChartPickerMenu({
       style={{ top: position.top, left: position.left }}
     >
       <div className="p-2 border-b border-white/10">
-        <span className="text-xs font-medium text-white/40 uppercase">Select Chart</span>
+        <span className="text-xs font-medium text-white/40 uppercase">
+          Select Chart
+        </span>
       </div>
       <div className="p-1">
         {chartTypes.map(([type, info]) => (

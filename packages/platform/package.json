@@ -1,0 +1,13 @@
+{
+  "name": "@profitabledge/platform",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check-types": "../../node_modules/.bin/tsc -p tsconfig.json --noEmit --pretty false"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./failover-fetch": "./src/failover-fetch.ts",
+    "./origin-utils": "./src/origin-utils.ts"
+  }
+}

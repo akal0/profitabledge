@@ -31,13 +31,16 @@ import {
   Sparkles,
   MoreHorizontal,
   Brain,
+  LifeBuoy,
   Loader2,
   ArrowRight,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { publicAlphaFlags } from "@/lib/alpha-flags";
 import Cmd from "@/public/graphics/cmd.svg";
 import { trpc } from "@/utils/trpc";
+import { showAIErrorToast } from "@/lib/ai-error-toast";
 import { useAccountStore } from "@/stores/account";
 
 interface CommandPaletteProps {
@@ -122,16 +125,20 @@ const allResults: ResultItem[] = [
     iconColor: "text-amber-400",
     iconBg: "bg-amber-500/10",
   },
-  {
-    icon: BarChart3,
-    label: "Backtest",
-    subtitle: "Pages  ·  Strategy backtesting",
-    href: "/backtest",
-    key: "",
-    category: "pages",
-    iconColor: "text-cyan-400",
-    iconBg: "bg-cyan-500/10",
-  },
+  ...(publicAlphaFlags.backtest
+    ? [
+        {
+          icon: BarChart3,
+          label: "Backtest",
+          subtitle: "Pages  ·  Strategy backtesting",
+          href: "/backtest",
+          key: "",
+          category: "pages" as const,
+          iconColor: "text-cyan-400",
+          iconBg: "bg-cyan-500/10",
+        },
+      ]
+    : []),
   {
     icon: Trophy,
     label: "Prop Tracker",
@@ -144,39 +151,43 @@ const allResults: ResultItem[] = [
     iconBg: "bg-yellow-500/10",
   },
   // Community
-  {
-    icon: Rss,
-    label: "Feed",
-    subtitle: "Community  ·  Social trading feed",
-    shortcut: "⌘F",
-    href: "/dashboard/feed",
-    key: "f",
-    category: "community",
-    iconColor: "text-orange-400",
-    iconBg: "bg-orange-500/10",
-  },
-  {
-    icon: TrendingUp,
-    label: "Leaderboard",
-    subtitle: "Community  ·  Top traders ranking",
-    shortcut: "⌘L",
-    href: "/dashboard/leaderboard",
-    key: "l",
-    category: "community",
-    iconColor: "text-green-400",
-    iconBg: "bg-green-500/10",
-  },
-  {
-    icon: Newspaper,
-    label: "News",
-    subtitle: "Community  ·  Market news & updates",
-    shortcut: "⌘N",
-    href: "/dashboard/news",
-    key: "n",
-    category: "community",
-    iconColor: "text-slate-400",
-    iconBg: "bg-slate-500/10",
-  },
+  ...(publicAlphaFlags.community
+    ? [
+        {
+          icon: Rss,
+          label: "Feed",
+          subtitle: "Community  ·  Social trading feed",
+          shortcut: "⌘F",
+          href: "/dashboard/feed",
+          key: "f",
+          category: "community" as const,
+          iconColor: "text-orange-400",
+          iconBg: "bg-orange-500/10",
+        },
+        {
+          icon: TrendingUp,
+          label: "Leaderboard",
+          subtitle: "Community  ·  Top traders ranking",
+          shortcut: "⌘L",
+          href: "/dashboard/leaderboard",
+          key: "l",
+          category: "community" as const,
+          iconColor: "text-green-400",
+          iconBg: "bg-green-500/10",
+        },
+        {
+          icon: Newspaper,
+          label: "News",
+          subtitle: "Community  ·  Market news & updates",
+          shortcut: "⌘N",
+          href: "/dashboard/news",
+          key: "n",
+          category: "community" as const,
+          iconColor: "text-slate-400",
+          iconBg: "bg-slate-500/10",
+        },
+      ]
+    : []),
   // Tools
   {
     icon: Copy,
@@ -211,16 +222,20 @@ const allResults: ResultItem[] = [
     iconColor: "text-teal-400",
     iconBg: "bg-teal-500/10",
   },
-  {
-    icon: Sparkles,
-    label: "AI Assistant",
-    subtitle: "Tools  ·  AI-powered trade analysis",
-    href: "/assistant",
-    key: "",
-    category: "tools",
-    iconColor: "text-purple-400",
-    iconBg: "bg-purple-500/10",
-  },
+  ...(publicAlphaFlags.aiAssistant
+    ? [
+        {
+          icon: Sparkles,
+          label: "AI Assistant",
+          subtitle: "Tools  ·  AI-powered trade analysis",
+          href: "/assistant",
+          key: "",
+          category: "tools" as const,
+          iconColor: "text-purple-400",
+          iconBg: "bg-purple-500/10",
+        },
+      ]
+    : []),
   // Settings
   {
     icon: Settings,
@@ -244,6 +259,20 @@ const allResults: ResultItem[] = [
     iconColor: "text-red-400",
     iconBg: "bg-red-500/10",
   },
+  ...(publicAlphaFlags.supportDiagnostics
+    ? [
+        {
+          icon: LifeBuoy,
+          label: "Support",
+          subtitle: "Settings  ·  Alpha diagnostics & feedback",
+          href: "/dashboard/settings/support",
+          key: "",
+          category: "settings" as const,
+          iconColor: "text-sky-400",
+          iconBg: "bg-sky-500/10",
+        },
+      ]
+    : []),
   // Actions
   {
     icon: Zap,
@@ -322,6 +351,11 @@ export function CommandPalette({ className }: CommandPaletteProps) {
 
   const quickQuery = (trpc as any).ai.quickQuery.useMutation({
     onSuccess: (data: any) => {
+      if (!data?.success && showAIErrorToast(data?.answer || "")) {
+        setAiAnswer(null);
+        return;
+      }
+
       setAiAnswer({ answer: data.answer, data: data.data });
     },
   });
@@ -377,8 +411,9 @@ export function CommandPalette({ className }: CommandPaletteProps) {
       className={cn(
         "max-w-[928px]!",
         "[&_[data-slot=dialog-content]]:max-w-[928]! w-full",
-        "[&_[data-slot=dialog-content]]:p-0",
-        "[&_[data-slot=dialog-content]]:bg-[#161618]",
+        "[&_[data-slot=dialog-content]]:p-2",
+        "[&_[data-slot=dialog-content]]:bg-sidebar/5",
+        "[&_[data-slot=dialog-content]]:backdrop-blur-xl",
         "[&_[data-slot=dialog-content]]:border-white/[0.08]",
         "[&_[data-slot=dialog-content]]:rounded-2xl",
         "[&_[data-slot=dialog-content]]:shadow-2xl",
@@ -388,6 +423,7 @@ export function CommandPalette({ className }: CommandPaletteProps) {
       )}
       showCloseButton={false}
     >
+      <div className="overflow-hidden rounded-xl bg-[#161618]">
       <div className="flex flex-col">
         {/* Search Input */}
         <div className="flex items-center gap-3 py-1 border-b border-white/[0.06]">
@@ -604,6 +640,7 @@ export function CommandPalette({ className }: CommandPaletteProps) {
             <span className="ml-0.5">Close</span>
           </span>
         </div>
+      </div>
       </div>
     </CommandDialog>
   );

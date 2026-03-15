@@ -26,23 +26,32 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@profitabledge/contracts": [
+        "../../packages/contracts/src/index.ts"
+      ],
+      "@profitabledge/contracts/*": [
+        "../../packages/contracts/src/*"
+      ],
+      "@profitabledge/platform": [
+        "../../packages/platform/src/index.ts"
+      ],
+      "@profitabledge/platform/*": [
+        "../../packages/platform/src/*"
       ]
     }
   },
   "include": [
+    "../../packages/contracts/src/**/*.d.ts",
+    "../../packages/contracts/src/**/*.ts",
+    "../../packages/platform/src/**/*.ts",
     "./**/*.ts",
     "./**/*.tsx",
-    "./.next/types/**/*.ts",
     "./next-env.d.ts",
-    ".next/types/**/*.ts",
-    "./src/types/svg.d.ts"
+    "./src/types/svg.d.ts",
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "./node_modules"
-  ],
-  "references": [
-    {
-      "path": "../server"
-    }
   ]
 }

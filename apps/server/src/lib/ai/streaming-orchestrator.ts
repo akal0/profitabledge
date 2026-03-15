@@ -21,6 +21,7 @@ import {
   maybeHandleSpecialistQuery,
   type AssistantPageContext,
 } from "./assistant-specialists";
+import { logAIProviderError } from "./provider-errors";
 
 // ===== EVENT TYPES =====
 
@@ -250,7 +251,8 @@ export async function* streamQuery(
       userMessage,
       enrichedHistory,
       context.accountId,
-      condensed
+      condensed,
+      context.userId
     );
 
     if (!planResult.success || !planResult.plan) {
@@ -516,11 +518,14 @@ export async function* streamQuery(
     // ===== DONE =====
     yield { event: "done" };
   } catch (error) {
-    console.error("[StreamOrchestrator] Error:", error);
+    const normalized = logAIProviderError(
+      "Assistant stream orchestration",
+      error,
+      "AI is temporarily unavailable. Please try again later."
+    );
     yield {
       event: "error",
-      message:
-        error instanceof Error ? error.message : "An unexpected error occurred",
+      message: normalized.message,
     };
   }
 }

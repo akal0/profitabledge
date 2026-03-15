@@ -4,8 +4,19 @@ import { trpc } from "@/utils/trpc";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Trophy } from "lucide-react";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
+import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 
 export default function AchievementsPage() {
+  if (!isPublicAlphaFeatureEnabled("community")) {
+    return (
+      <AlphaFeatureLocked
+        feature="community"
+        title="Achievements are held back in this alpha"
+      />
+    );
+  }
+
   const { data, isLoading } = trpc.users.getAchievements.useQuery();
 
   if (isLoading) {
@@ -17,8 +28,8 @@ export default function AchievementsPage() {
   }
 
   const achievements = data?.achievements || [];
-  const earned = data?.earned || 0;
-  const total = data?.total || 0;
+  const earned = data && "earned" in data ? data.earned : 0;
+  const total = data && "total" in data ? data.total : achievements.length;
   const progressPct = total > 0 ? (earned / total) * 100 : 0;
 
   return (

@@ -23,6 +23,8 @@ import {
   getEffectivePropTrackerStatus,
   isFundedPropTrackerAccount,
 } from "@/components/prop-account-status-badges";
+import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator, VerticalSeparator } from "@/components/ui/separator";
@@ -40,11 +42,13 @@ const HEADER_BADGE_CLASS = "h-7 rounded-sm px-1.5 text-[10px] font-medium";
 const FTMO_PROP_FIRM_ID = "ftmo";
 const FTMO_IMAGE_SRC = "/brokers/FTMO.png";
 const GOALS_SURFACE_OUTER_CLASS =
-  "group flex flex-col rounded-sm border border-white/5 bg-sidebar p-1.5";
+  "group flex flex-col rounded-sm ring ring-white/5 bg-sidebar p-1.5";
 const GOALS_SURFACE_INNER_CLASS =
-  "flex flex-1 flex-col rounded-sm bg-sidebar-accent transition-all duration-250 group-hover:brightness-120";
-const GOALS_PANEL_BODY_CLASS = "px-4 py-4 sm:px-5 sm:py-5";
-const PANEL_ROW_PADDING_CLASS = "px-4 py-2.5 sm:px-5 sm:py-3";
+  "flex flex-1 flex-col rounded-sm bg-white ring ring-white/5 transition-all duration-250 dark:bg-sidebar-accent dark:group-hover:brightness-120";
+const GOALS_PANEL_HEADER_CLASS =
+  "widget-header flex w-full items-start gap-1.5 px-3.5 py-3.5";
+const GOALS_PANEL_BODY_CLASS = "px-3.5 py-3.5";
+const PANEL_ROW_PADDING_CLASS = "px-3.5 py-2.5 sm:px-3.5 sm:py-3";
 
 function formatUsd(value: number) {
   return value.toLocaleString("en-US", {
@@ -74,22 +78,22 @@ function getSurvivalTone(state?: string | null) {
     case "critical":
       return {
         label: "Critical",
-        badge: "border-rose-500/30 bg-rose-500/15 text-rose-300",
+        badge: "ring-rose-500/30 bg-rose-500/15 text-rose-300",
       };
     case "fragile":
       return {
         label: "Fragile",
-        badge: "border-amber-500/30 bg-amber-500/15 text-amber-300",
+        badge: "ring-amber-500/30 bg-amber-500/15 text-amber-300",
       };
     case "tight":
       return {
         label: "Tight",
-        badge: "border-yellow-500/30 bg-yellow-500/15 text-yellow-300",
+        badge: "ring-yellow-500/30 bg-yellow-500/15 text-yellow-300",
       };
     default:
       return {
         label: "Stable",
-        badge: "border-teal-500/30 bg-teal-500/15 text-teal-300",
+        badge: "ring-teal-500/30 bg-teal-500/15 text-teal-300",
       };
   }
 }
@@ -109,7 +113,7 @@ function SectionHeader({
       <h2 className="text-xs font-medium text-white/45">{label}</h2>
       <Badge
         variant="outline"
-        className="h-5 rounded-sm border-white/10 px-1.5 text-[10px] text-white/55"
+        className="h-5 rounded-sm ring-white/10 px-1.5 text-[10px] text-white/55"
       >
         {count}
       </Badge>
@@ -134,13 +138,13 @@ function OverviewStatCard({
 }) {
   return (
     <div className={GOALS_SURFACE_OUTER_CLASS}>
-      <div className={cn(GOALS_SURFACE_INNER_CLASS, "p-4")}>
-        <div className="mb-4 flex items-center gap-2">
+      <div className={cn(GOALS_SURFACE_INNER_CLASS, "p-3.5")}>
+        <div className="flex items-center gap-2">
           <Icon className={cn("h-4 w-4 text-white/60", iconClassName)} />
           <span className="text-xs text-white/50">{label}</span>
         </div>
         <Separator
-          className={cn(WIDGET_CONTENT_SEPARATOR_CLASS, "mb-4 -mx-4")}
+          className={cn(WIDGET_CONTENT_SEPARATOR_CLASS, "mb-3.5 mt-3.5")}
         />
         <div
           className={cn("text-2xl font-semibold text-white", valueClassName)}
@@ -173,7 +177,7 @@ function OverviewPanel({
       <div className={cn(GOALS_SURFACE_INNER_CLASS, "h-full")}>
         <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-5">
           <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-sm border border-white/5 bg-sidebar p-2">
+            <div className="mt-0.5 rounded-sm ring ring-white/5 bg-sidebar p-2">
               <Icon className="h-4 w-4 text-white/60" />
             </div>
             <div>
@@ -181,9 +185,9 @@ function OverviewPanel({
               <p className="mt-0.5 text-xs text-white/40">{description}</p>
             </div>
           </div>
-          {badge ? <div className="shrink-0">{badge}</div> : null}
+          {badge ? <div className="ml-auto shrink-0">{badge}</div> : null}
         </div>
-        <Separator />
+        <Separator className={WIDGET_CONTENT_SEPARATOR_CLASS} />
         <div
           className={cn(
             "flex-1 overflow-hidden",
@@ -272,7 +276,7 @@ function PropFirmAvatar({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-sm border border-white/10 bg-white/[0.04]",
+        "relative overflow-hidden rounded-sm ring ring-white/10 bg-white/[0.04]",
         className
       )}
     >
@@ -309,7 +313,7 @@ function EmptyState() {
           status, survival headroom, and next actions.
         </p>
         <Link href="/dashboard/accounts?tab=prop" className="mt-6">
-          <Button className="h-9 rounded-sm border border-white/5 bg-sidebar px-4 text-xs text-white hover:bg-sidebar-accent hover:brightness-110">
+          <Button className="h-9 rounded-sm ring ring-white/5 bg-sidebar px-4 text-xs text-white hover:bg-sidebar-accent hover:brightness-110">
             <Plus className="mr-1.5 h-3.5 w-3.5" />
             Add Prop Account
           </Button>
@@ -377,11 +381,17 @@ function PropAccountCard({
     <PropAccountFrame
       title={propFirm.displayName}
       headerRight={
-        <PropAccountStatusBadges
-          account={account}
-          dashboard={dashboard}
-          badgeClassName={HEADER_BADGE_CLASS}
-        />
+        <div className="flex items-center gap-1.5">
+          <PropAccountStatusBadges
+            account={account}
+            dashboard={dashboard}
+            badgeClassName={HEADER_BADGE_CLASS}
+          />
+          <RemovePropAccountButton
+            accountId={account.id}
+            accountName={account.name}
+          />
+        </div>
       }
     >
       <div className="flex items-end justify-between gap-3">
@@ -484,7 +494,13 @@ function PropAccountCard({
         href={`/dashboard/prop-tracker/${account.id}`}
         className="mt-5 block"
       >
-        <Button className="h-8 w-full gap-0.5 rounded-sm bg-teal-600 text-xs text-white hover:bg-teal-500">
+        <Button
+          className={getPropAssignActionButtonClassName({
+            tone: "teal",
+            size: "sm",
+            className: "w-full gap-0.5",
+          })}
+        >
           View tracker
           <ChevronRight className="size-3" />
         </Button>
@@ -528,10 +544,7 @@ export default function PropTrackerIndexPage() {
           dashboard: dashboardQueries[index]?.data,
         }))
         .filter((item) => Boolean(item.dashboard)),
-    [
-      propAccounts,
-      dashboardQueries.map((query) => query.dataUpdatedAt).join(","),
-    ]
+    [dashboardQueries, propAccounts]
   );
 
   const dashboardByAccountId = useMemo(
@@ -565,13 +578,43 @@ export default function PropTrackerIndexPage() {
       ({ dashboard }) =>
         (dashboard?.commandCenter?.targetRemainingPct ?? Infinity) <= 1
     );
-    const avgTargetRemaining =
+    const totalTargetRemaining =
       activeAccounts.length > 0
         ? activeAccounts.reduce(
             (sum, { dashboard }) =>
               sum + (dashboard?.commandCenter?.targetRemainingPct ?? 0),
             0
-          ) / activeAccounts.length
+          )
+        : null;
+    const closestTargetAccount =
+      activeAccounts.length > 0
+        ? activeAccounts.reduce<{
+            accountName: string;
+            targetRemainingPct: number;
+          } | null>((closest, { account, dashboard }) => {
+            const targetRemainingPct =
+              dashboard?.commandCenter?.targetRemainingPct;
+            if (
+              targetRemainingPct == null ||
+              Number.isNaN(targetRemainingPct)
+            ) {
+              return closest;
+            }
+
+            if (
+              !closest ||
+              targetRemainingPct < closest.targetRemainingPct ||
+              (targetRemainingPct === closest.targetRemainingPct &&
+                account.name.localeCompare(closest.accountName) < 0)
+            ) {
+              return {
+                accountName: account.name,
+                targetRemainingPct,
+              };
+            }
+
+            return closest;
+          }, null)
         : null;
     const avgDailyHeadroom =
       activeAccounts.length > 0
@@ -627,7 +670,8 @@ export default function PropTrackerIndexPage() {
       funded: fundedAccounts.length,
       urgent: urgentAccounts.length,
       nearTarget: nearTargetAccounts.length,
-      avgTargetRemaining,
+      totalTargetRemaining,
+      closestTargetAccount,
       avgDailyHeadroom,
       avgMaxHeadroom,
       nextActions,
@@ -639,16 +683,16 @@ export default function PropTrackerIndexPage() {
     return (
       <main className="space-y-6 p-6 py-4">
         <div className="flex justify-end">
-          <div className="h-9 w-36 animate-pulse rounded-sm border border-white/5 bg-sidebar" />
+          <div className="h-9 w-36 animate-pulse rounded-sm ring ring-white/5 bg-sidebar" />
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((key) => (
             <div
               key={key}
-              className="rounded-sm border border-white/5 bg-sidebar p-1.5"
+              className="rounded-sm ring ring-white/5 bg-sidebar p-1.5"
             >
-              <div className="h-28 animate-pulse rounded-sm bg-sidebar-accent" />
+              <div className="h-28 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
             </div>
           ))}
         </div>
@@ -657,9 +701,9 @@ export default function PropTrackerIndexPage() {
           {[1, 2].map((key) => (
             <div
               key={key}
-              className="rounded-sm border border-white/5 bg-sidebar p-1.5"
+              className="rounded-sm ring ring-white/5 bg-sidebar p-1.5"
             >
-              <div className="h-56 animate-pulse rounded-sm bg-sidebar-accent" />
+              <div className="h-56 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
             </div>
           ))}
         </div>
@@ -679,7 +723,7 @@ export default function PropTrackerIndexPage() {
         <EmptyState />
       ) : (
         <>
-          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <OverviewStatCard
               icon={Trophy}
               label="Active challenges"
@@ -705,10 +749,23 @@ export default function PropTrackerIndexPage() {
             />
             <OverviewStatCard
               icon={Target}
-              label="Average target left"
-              value={formatPct(portfolioCommandCenter.avgTargetRemaining)}
-              hint="Across active challenges"
+              label="Total target left"
+              value={formatPct(portfolioCommandCenter.totalTargetRemaining)}
+              hint="Combined across active challenges"
               iconClassName="text-amber-300"
+            />
+            <OverviewStatCard
+              icon={Trophy}
+              label="Closest account left"
+              value={formatPct(
+                portfolioCommandCenter.closestTargetAccount?.targetRemainingPct
+              )}
+              hint={
+                portfolioCommandCenter.closestTargetAccount
+                  ? `${portfolioCommandCenter.closestTargetAccount.accountName} is closest to target`
+                  : "No active challenges"
+              }
+              iconClassName="text-yellow-300"
             />
             <OverviewStatCard
               icon={Shield}

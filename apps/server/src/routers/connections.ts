@@ -41,12 +41,52 @@ import {
   isMtWorkerHostSnapshotFresh,
   listMtWorkerHostSnapshots,
 } from "../lib/mt5/host-status";
+import { createNotification } from "../lib/notifications";
+import { assertAlphaFeatureEnabled } from "../lib/ops/alpha-runtime";
+import {
+  ensureActivationMilestone,
+  recordAppEvent,
+  recordOperationalError,
+} from "../lib/ops/event-log";
 
 const credentialsSchema = z.record(z.string(), z.string());
 const connectionMetaSchema = z
   .record(z.string(), z.unknown())
   .optional()
   .default({});
+
+async function createConnectionSettingsNotification(input: {
+  userId: string;
+  title: string;
+  body: string;
+  connectionId: string;
+  provider: string;
+  displayName: string;
+  accountId?: string | null;
+  accountName?: string | null;
+  updatedFields?: string[];
+}) {
+  try {
+    await createNotification({
+      userId: input.userId,
+      accountId: input.accountId ?? null,
+      type: "settings_updated",
+      title: input.title,
+      body: input.body,
+      metadata: {
+        connectionId: input.connectionId,
+        provider: input.provider,
+        displayName: input.displayName,
+        accountId: input.accountId ?? null,
+        accountName: input.accountName ?? null,
+        updatedFields: input.updatedFields ?? [],
+        url: "/dashboard/settings/connections",
+      },
+    });
+  } catch (error) {
+    console.error("[Connections] Notification failed:", error);
+  }
+}
 
 export const connectionsRouter = router({
   /** List all connections for the current user. */
@@ -524,6 +564,7 @@ export const connectionsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
       const provider = await getProvider(input.provider);
 
       if (!provider.exchangeCode) {
@@ -569,6 +610,41 @@ export const connectionsRouter = router({
         })
         .returning();
 
+      await Promise.all([
+        ensureActivationMilestone({
+          userId: ctx.session.user.id,
+          key: "account_connected",
+          source: "server",
+          metadata: {
+            provider: conn.provider,
+            connectionId: conn.id,
+            mode: "oauth",
+          },
+        }),
+        recordAppEvent({
+          userId: ctx.session.user.id,
+          category: "connections",
+          name: "connection.oauth.completed",
+          source: "server",
+          summary: `${displayName} connected`,
+          metadata: {
+            provider: conn.provider,
+            connectionId: conn.id,
+          },
+          isUserVisible: true,
+        }),
+      ]);
+
+      await createConnectionSettingsNotification({
+        userId: ctx.session.user.id,
+        title: "Connection added",
+        body: `${displayName} is connected and ready to link to a trading account.`,
+        connectionId: conn.id,
+        provider: conn.provider,
+        displayName: conn.displayName,
+        updatedFields: ["provider", "displayName"],
+      });
+
       return { connectionId: conn.id };
     }),
 
@@ -583,6 +659,11 @@ export const connectionsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
+      if (isMtTerminalProvider(input.provider)) {
+        assertAlphaFeatureEnabled("mt5Ingestion");
+      }
+
       if (isMtTerminalProvider(input.provider)) {
         const conn = await createMtTerminalConnection({
           userId: ctx.session.user.id,
@@ -590,6 +671,42 @@ export const connectionsRouter = router({
           displayName: input.displayName,
           credentials: input.credentials,
           meta: input.meta,
+        });
+
+        await Promise.all([
+          ensureActivationMilestone({
+            userId: ctx.session.user.id,
+            key: "account_connected",
+            source: "server",
+            metadata: {
+              provider: conn.provider,
+              connectionId: conn.id,
+              mode: "terminal-farm",
+            },
+          }),
+          recordAppEvent({
+            userId: ctx.session.user.id,
+            category: "connections",
+            name: "connection.created",
+            source: "server",
+            summary: `${conn.displayName} queued`,
+            metadata: {
+              provider: conn.provider,
+              connectionId: conn.id,
+              mode: "terminal-farm",
+            },
+            isUserVisible: true,
+          }),
+        ]);
+
+        await createConnectionSettingsNotification({
+          userId: ctx.session.user.id,
+          title: "Connection queued",
+          body: `${conn.displayName} was queued for the MT terminal worker.`,
+          connectionId: conn.id,
+          provider: conn.provider,
+          displayName: conn.displayName,
+          updatedFields: ["provider", "displayName", "status"],
         });
 
         return {
@@ -610,6 +727,18 @@ export const connectionsRouter = router({
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
+        await recordOperationalError({
+          userId: ctx.session.user.id,
+          category: "connections",
+          name: "connection.validation_failed",
+          source: "server",
+          summary: `Could not connect to ${input.provider}`,
+          metadata: {
+            provider: input.provider,
+            message: msg,
+          },
+          isUserVisible: true,
+        });
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `Could not connect to ${input.provider}: ${msg}`,
@@ -645,6 +774,42 @@ export const connectionsRouter = router({
         })
         .returning();
 
+      await Promise.all([
+        ensureActivationMilestone({
+          userId: ctx.session.user.id,
+          key: "account_connected",
+          source: "server",
+          metadata: {
+            provider: conn.provider,
+            connectionId: conn.id,
+            mode: "credentials",
+          },
+        }),
+        recordAppEvent({
+          userId: ctx.session.user.id,
+          category: "connections",
+          name: "connection.created",
+          source: "server",
+          summary: `${displayName} connected`,
+          metadata: {
+            provider: conn.provider,
+            connectionId: conn.id,
+            mode: "credentials",
+          },
+          isUserVisible: true,
+        }),
+      ]);
+
+      await createConnectionSettingsNotification({
+        userId: ctx.session.user.id,
+        title: "Connection added",
+        body: `${displayName} is connected and ready to link to a trading account.`,
+        connectionId: conn.id,
+        provider: conn.provider,
+        displayName: conn.displayName,
+        updatedFields: ["provider", "displayName"],
+      });
+
       return { connectionId: conn.id, accountInfo };
     }),
 
@@ -657,6 +822,7 @@ export const connectionsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
       const [conn, acct] = await Promise.all([
         db.query.platformConnection.findFirst({
           where: and(
@@ -681,6 +847,32 @@ export const connectionsRouter = router({
         .set({ accountId: input.accountId, updatedAt: new Date() })
         .where(eq(platformConnection.id, input.connectionId));
 
+      await createConnectionSettingsNotification({
+        userId: ctx.session.user.id,
+        title: "Connection linked",
+        body: `Linked ${conn.displayName} to ${acct.name}.`,
+        connectionId: conn.id,
+        provider: conn.provider,
+        displayName: conn.displayName,
+        accountId: acct.id,
+        accountName: acct.name,
+        updatedFields: ["accountId"],
+      });
+
+      await recordAppEvent({
+        userId: ctx.session.user.id,
+        category: "connections",
+        name: "connection.linked",
+        source: "server",
+        summary: `${conn.displayName} linked to ${acct.name}`,
+        metadata: {
+          connectionId: conn.id,
+          accountId: acct.id,
+          provider: conn.provider,
+        },
+        isUserVisible: true,
+      });
+
       return { success: true };
     }),
 
@@ -688,6 +880,7 @@ export const connectionsRouter = router({
   syncNow: protectedProcedure
     .input(z.object({ connectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
       const conn = await db.query.platformConnection.findFirst({
         where: and(
           eq(platformConnection.id, input.connectionId),
@@ -698,6 +891,7 @@ export const connectionsRouter = router({
       if (!conn) throw new TRPCError({ code: "NOT_FOUND" });
 
       if (isMtTerminalProvider(conn.provider)) {
+        assertAlphaFeatureEnabled("mt5Ingestion");
         await db
           .update(platformConnection)
           .set({
@@ -718,7 +912,64 @@ export const connectionsRouter = router({
         };
       }
 
-      return syncConnection(input.connectionId);
+      try {
+        const result = await syncConnection(input.connectionId, {
+          notifySuccess: true,
+          source: "manual",
+        });
+
+        await recordAppEvent({
+          userId: ctx.session.user.id,
+          category: "connections",
+          name:
+            result.status === "success"
+              ? "connection.sync.completed"
+              : "connection.sync.non_success",
+          source: "server",
+          summary: `${conn.displayName} sync ${result.status}`,
+          metadata: {
+            connectionId: conn.id,
+            provider: conn.provider,
+            status: result.status,
+            tradesInserted: result.tradesInserted,
+            tradesFound: result.tradesFound,
+            errorMessage: result.errorMessage,
+          },
+          isUserVisible: result.status !== "success",
+        });
+
+        if (result.tradesInserted > 0) {
+          await ensureActivationMilestone({
+            userId: ctx.session.user.id,
+            key: "trades_synced",
+            source: "server",
+            metadata: {
+              connectionId: conn.id,
+              provider: conn.provider,
+              tradesInserted: result.tradesInserted,
+            },
+          });
+        }
+
+        return result;
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Connection sync failed";
+        await recordOperationalError({
+          userId: ctx.session.user.id,
+          category: "connections",
+          name: "connection.sync.failed",
+          source: "server",
+          summary: `${conn.displayName} sync failed`,
+          metadata: {
+            connectionId: conn.id,
+            provider: conn.provider,
+            message,
+          },
+          isUserVisible: true,
+        });
+        throw error;
+      }
     }),
 
   /** Update sync interval, pause state, or display name. */
@@ -732,6 +983,7 @@ export const connectionsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
       const conn = await db.query.platformConnection.findFirst({
         where: and(
           eq(platformConnection.id, input.connectionId),
@@ -759,6 +1011,21 @@ export const connectionsRouter = router({
         .set(updates)
         .where(eq(platformConnection.id, input.connectionId));
 
+      if (input.isPaused !== undefined) {
+        await createConnectionSettingsNotification({
+          userId: ctx.session.user.id,
+          title: input.isPaused ? "Sync paused" : "Sync resumed",
+          body: `${conn.displayName} sync has been ${
+            input.isPaused ? "paused" : "resumed"
+          }.`,
+          connectionId: conn.id,
+          provider: conn.provider,
+          displayName: conn.displayName,
+          accountId: conn.accountId,
+          updatedFields: ["isPaused"],
+        });
+      }
+
       return { success: true };
     }),
 
@@ -778,6 +1045,17 @@ export const connectionsRouter = router({
       await db
         .delete(platformConnection)
         .where(eq(platformConnection.id, input.connectionId));
+
+      await createConnectionSettingsNotification({
+        userId: ctx.session.user.id,
+        title: "Connection deleted",
+        body: `${conn.displayName} has been removed.`,
+        connectionId: conn.id,
+        provider: conn.provider,
+        displayName: conn.displayName,
+        accountId: conn.accountId,
+        updatedFields: ["deleted"],
+      });
 
       return { success: true };
     }),

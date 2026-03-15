@@ -12,6 +12,11 @@ import { db } from "../../../db";
 import { trade as tradeTable } from "../../../db/schema/trading";
 import { eq, and, sql } from "drizzle-orm";
 import type { EdgeCondition, LeakCondition } from "./types";
+import {
+  CONDITION_COMBINATIONS,
+  getConditionValue,
+  summarizeConditionFilters,
+} from "./condition-language";
 
 type ClosedTrade = typeof tradeTable.$inferSelect;
 
@@ -37,76 +42,6 @@ function holdSeconds(t: ClosedTrade): number {
   return 0;
 }
 
-// ─── Dimension Extractors ───────────────────────────────────────
-
-type DimensionExtractor = (t: ClosedTrade) => string | null;
-
-const DIMENSIONS: Record<string, DimensionExtractor> = {
-  symbol: (t) => t.symbol || null,
-  session: (t) => t.sessionTag || null,
-  model: (t) => t.modelTag || null,
-  protocol: (t) => t.protocolAlignment || null,
-  direction: (t) => t.tradeType || null,
-  rrBucket: (t) => {
-    const rr = toNum(t.plannedRR);
-    if (rr <= 0) return null;
-    if (rr < 1.5) return "RR<1.5";
-    if (rr < 2.5) return "RR 1.5-2.5";
-    if (rr < 3.5) return "RR 2.5-3.5";
-    return "RR>3.5";
-  },
-  holdBucket: (t) => {
-    const secs = holdSeconds(t);
-    if (secs <= 0) return null;
-    if (secs < 300) return "Hold<5m";
-    if (secs < 900) return "Hold 5-15m";
-    if (secs < 2700) return "Hold 15-45m";
-    if (secs < 7200) return "Hold 45m-2h";
-    return "Hold>2h";
-  },
-  hourBucket: (t) => {
-    const time = t.openTime || (t.open ? new Date(t.open) : null);
-    if (!time) return null;
-    const hour = new Date(time).getUTCHours();
-    const bucket = Math.floor(hour / 3) * 3;
-    return `${bucket}-${bucket + 3}h UTC`;
-  },
-  weekday: (t) => {
-    const time = t.openTime || (t.open ? new Date(t.open) : null);
-    if (!time) return null;
-    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
-      new Date(time).getDay()
-    ];
-  },
-};
-
-const DIMENSION_NAMES = Object.keys(DIMENSIONS);
-
-// ─── Combination Generator ──────────────────────────────────────
-
-function* combinations<T>(arr: T[], minLen: number, maxLen: number) {
-  for (let len = minLen; len <= maxLen; len++) {
-    yield* combinationsOfLength(arr, len);
-  }
-}
-
-function* combinationsOfLength<T>(
-  arr: T[],
-  len: number,
-  start = 0,
-  current: T[] = []
-): Generator<T[]> {
-  if (current.length === len) {
-    yield [...current];
-    return;
-  }
-  for (let i = start; i <= arr.length - (len - current.length); i++) {
-    current.push(arr[i]);
-    yield* combinationsOfLength(arr, len, i + 1, current);
-    current.pop();
-  }
-}
-
 // ─── Core Analysis ──────────────────────────────────────────────
 
 interface GroupStats {
@@ -121,7 +56,7 @@ interface GroupStats {
 
 function analyzeTradesForCombinations(
   trades: ClosedTrade[],
-  dimensionCombo: string[]
+  dimensionCombo: readonly string[]
 ): GroupStats[] {
   const groups = new Map<string, GroupStats>();
 
@@ -131,12 +66,7 @@ function analyzeTradesForCombinations(
     let skip = false;
 
     for (const dim of dimensionCombo) {
-      const extractor = DIMENSIONS[dim];
-      if (!extractor) {
-        skip = true;
-        break;
-      }
-      const val = extractor(t);
+      const val = getConditionValue(t, dim);
       if (val === null) {
         skip = true;
         break;
@@ -233,8 +163,7 @@ export function findEdges(trades: ClosedTrade[]): EdgeCondition[] {
 
   const candidates: EdgeCondition[] = [];
 
-  // Test 1-dimension, 2-dimension, and 3-dimension combinations
-  for (const combo of combinations(DIMENSION_NAMES, 1, 3)) {
+  for (const combo of CONDITION_COMBINATIONS) {
     const groups = analyzeTradesForCombinations(trades, combo);
 
     for (const group of groups) {
@@ -246,12 +175,8 @@ export function findEdges(trades: ClosedTrade[]): EdgeCondition[] {
 
       // Edge: significantly above baseline win rate AND profitable
       if (winRate > Math.max(55, baselineWinRate + 5) && avgProfit > 0) {
-        const label = Object.entries(group.filters)
-          .map(([, v]) => v)
-          .join(" + ");
-
         candidates.push({
-          label,
+          label: summarizeConditionFilters(group.filters),
           filters: group.filters,
           trades: group.total,
           winRate,
@@ -280,7 +205,7 @@ export function findLeaks(trades: ClosedTrade[]): LeakCondition[] {
 
   const candidates: LeakCondition[] = [];
 
-  for (const combo of combinations(DIMENSION_NAMES, 1, 3)) {
+  for (const combo of CONDITION_COMBINATIONS) {
     const groups = analyzeTradesForCombinations(trades, combo);
 
     for (const group of groups) {
@@ -292,12 +217,8 @@ export function findLeaks(trades: ClosedTrade[]): LeakCondition[] {
 
       // Leak: significantly below baseline win rate OR consistently losing money
       if (winRate < Math.min(45, baselineWinRate - 5) && group.totalLoss > group.totalProfit) {
-        const label = Object.entries(group.filters)
-          .map(([, v]) => v)
-          .join(" + ");
-
         candidates.push({
-          label,
+          label: summarizeConditionFilters(group.filters),
           filters: group.filters,
           trades: group.total,
           winRate,
@@ -322,7 +243,7 @@ export function findLeaks(trades: ClosedTrade[]): LeakCondition[] {
 // ─── Deduplication ──────────────────────────────────────────────
 
 function deduplicateConditions<
-  T extends { filters: Record<string, string>; winRate: number }
+  T extends { filters: Record<string, string | number>; winRate: number }
 >(conditions: T[]): T[] {
   const result: T[] = [];
 

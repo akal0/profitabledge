@@ -4,10 +4,9 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -22,6 +21,7 @@ import {
   Target,
   AlertTriangle,
   Info,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -237,9 +237,14 @@ export function TradeReplay({ tradeId, open, onOpenChange }: TradeReplayProps) {
   if (loadingTrade || !trade) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl">
-          <div className="flex items-center justify-center h-96">
-            <div className="text-muted-foreground">Loading trade data...</div>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-4xl"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            <div className="flex items-center justify-center h-96">
+              <div className="text-white/40">Loading trade data...</div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -253,31 +258,52 @@ export function TradeReplay({ tradeId, open, onOpenChange }: TradeReplayProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {isLong ? (
-              <TrendingUp className="size-5 text-teal-400" />
-            ) : (
-              <TrendingDown className="size-5 text-rose-400" />
-            )}
-            Trade Replay: {trade.symbol}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="size-4 text-muted-foreground cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p className="text-xs">
-                  This replay uses simulated price data based on your trade's entry, exit, MFE, and MAE. 
-                  For actual historical data, connect an EA that stores candle snapshots.
+      <DialogContent
+        showCloseButton={false}
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-5xl"
+      >
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80 max-h-[90vh]">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+            <div className={cn(
+              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent"
+            )}>
+              {isLong ? (
+                <TrendingUp className="h-3.5 w-3.5 text-teal-400" />
+              ) : (
+                <TrendingDown className="h-3.5 w-3.5 text-rose-400" />
+              )}
+            </div>
+            <div className="min-w-0 flex items-center gap-2">
+              <div>
+                <div className="text-sm font-medium text-white">Trade Replay: {trade.symbol}</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Step through the trade to analyze price action and decision points
                 </p>
-              </TooltipContent>
-            </Tooltip>
-          </DialogTitle>
-          <DialogDescription>
-            Step through the trade to analyze price action and decision points
-          </DialogDescription>
-        </DialogHeader>
+              </div>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Info className="size-4 text-white/40 cursor-help shrink-0" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p className="text-xs">
+                    This replay uses simulated price data based on your trade's entry, exit, MFE, and MAE.
+                    For actual historical data, connect an EA that stores candle snapshots.
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <DialogClose asChild>
+              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            </DialogClose>
+          </div>
+          <Separator />
+
+          {/* Content */}
+          <div className="flex flex-col flex-1 overflow-y-auto p-5 gap-4">
 
         {/* Trade Info Header */}
         <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
@@ -438,6 +464,9 @@ export function TradeReplay({ tradeId, open, onOpenChange }: TradeReplayProps) {
             {trade.pips && ` (${parseFloat(String(trade.pips)).toFixed(1)} pips)`}
           </div>
         )}
+
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -1,16 +1,20 @@
 "use client";
 
+import { Suspense } from "react";
 import { FloatingAssistant } from "@/components/ai/floating-assistant";
 import { AIInsightToast } from "@/components/ai-insight-toast";
 import { BacktestSidebar } from "@/components/backtest-sidebar";
 import { VerticalSeparator } from "@/components/ui/separator";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useAlphaPageTracking } from "@/features/platform/alpha/hooks/use-alpha-page-tracking";
 
 export default function BacktestLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  useAlphaPageTracking("backtest");
+
   return (
     <SidebarProvider defaultOpen className="h-dvh min-h-dvh w-full overflow-hidden">
       <AIInsightToast />
@@ -29,7 +33,9 @@ export default function BacktestLayout({
         </div>
       </SidebarInset>
 
-      <FloatingAssistant />
+      <Suspense fallback={null}>
+        <FloatingAssistant />
+      </Suspense>
     </SidebarProvider>
   );
 }

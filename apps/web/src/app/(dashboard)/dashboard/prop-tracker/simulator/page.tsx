@@ -84,11 +84,11 @@ export default function ChallengeSimulatorPage() {
   const [results, setResults] = useState<any>(null);
 
   const { data: tradesData } = trpc.trades.list.useQuery(
-    { accountId: accountId || "", limit: 500, offset: 0 },
+    { accountId: accountId || "", limit: 500 },
     { enabled: !!accountId }
   );
 
-  const trades = tradesData?.trades || [];
+  const trades = useMemo(() => tradesData?.trades || [], [tradesData]);
 
   // Derive trader stats from actual trades
   const traderStats = useMemo(() => {

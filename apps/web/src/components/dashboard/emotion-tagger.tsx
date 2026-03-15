@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { trpc } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
@@ -44,19 +44,19 @@ const POST_EXIT_EMOTIONS = [
 const STAGES = [
   {
     key: "pre_entry" as const,
-    label: "Before Entry",
+    label: "Before entry",
     icon: Smile,
     emotions: PRE_ENTRY_EMOTIONS,
   },
   {
     key: "during" as const,
-    label: "During Trade",
+    label: "During trade",
     icon: Zap,
     emotions: DURING_EMOTIONS,
   },
   {
     key: "post_exit" as const,
-    label: "After Exit",
+    label: "After exit",
     icon: Flag,
     emotions: POST_EXIT_EMOTIONS,
   },
@@ -93,7 +93,10 @@ export function EmotionTagger({
     { accountId: accountId || "", tradeId },
     { enabled: !!tradeId && !!accountId }
   );
-  const emotions = (emotionsRaw as TradeEmotionRecord[] | undefined) ?? [];
+  const emotions = useMemo(
+    () => (emotionsRaw as TradeEmotionRecord[] | undefined) ?? [],
+    [emotionsRaw]
+  );
 
   const tagMutation = aiApi.tagEmotion.useMutation({
     onSuccess: () => refetch(),
@@ -113,12 +116,15 @@ export function EmotionTagger({
   );
 
   // Get currently selected emotion per stage
-  const selectedByStage = emotions.reduce(
-    (acc: Record<string, string>, e: TradeEmotionRecord) => {
-      acc[e.stage as string] = e.emotion;
-      return acc;
-    },
-    {} as Record<string, string>
+  const selectedByStage = useMemo(
+    () =>
+      emotions.reduce((acc: Record<string, string>, e: TradeEmotionRecord) => {
+        if (!(e.stage in acc)) {
+          acc[e.stage as string] = e.emotion;
+        }
+        return acc;
+      }, {} as Record<string, string>),
+    [emotions]
   );
 
   const hasAnyEmotions = Object.keys(selectedByStage).length > 0;
@@ -127,14 +133,14 @@ export function EmotionTagger({
     <div className="space-y-4">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between group"
+        className="flex w-full items-center justify-between group cursor-pointer"
       >
         <h3 className="text-xs font-semibold text-white/70 tracking-wide">
           Emotions
         </h3>
         <div className="flex items-center gap-2">
           {!expanded && hasAnyEmotions && (
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               {STAGES.map((stage) => {
                 const selected = selectedByStage[stage.key];
                 const emo = stage.emotions.find((e) => e.value === selected);
@@ -161,20 +167,20 @@ export function EmotionTagger({
       </button>
 
       {expanded && (
-        <div className="space-y-3">
+        <div className="space-y-5">
           {STAGES.map((stage) => {
             const StageIcon = stage.icon;
             const selected = selectedByStage[stage.key];
 
             return (
-              <div key={stage.key} className="space-y-1.5">
+              <div key={stage.key} className="space-y-2.5">
                 <div className="flex items-center gap-1.5">
                   <StageIcon className="h-3 w-3 text-white/50" />
                   <span className="text-[11px] font-medium text-white/50">
                     {stage.label}
                   </span>
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-2">
                   {stage.emotions.map((emo) => {
                     const isSelected = selected === emo.value;
                     return (
@@ -187,7 +193,7 @@ export function EmotionTagger({
                           "gap-1 cursor-pointer",
                           isSelected
                             ? STAGE_TONES[stage.key]
-                            : "border-white/8 bg-white/[0.03] text-white/60 hover:bg-white/[0.06] hover:text-white/80"
+                            : "ring-white/8 bg-white/[0.03] text-white/60 hover:bg-white/[0.06] hover:text-white/80"
                         )}
                       >
                         <span>{emo.emoji}</span>

@@ -167,6 +167,10 @@ async function main() {
         },
       },
     ],
+    ledgerEvents: [],
+    executionContexts: [],
+    symbolSpecs: [],
+    priceSnapshots: [],
     checkpoint: {
       lastDealTime: closedAt.toISOString(),
       lastDealId: "81002",

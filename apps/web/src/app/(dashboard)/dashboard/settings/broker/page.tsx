@@ -60,7 +60,7 @@ export default function BrokerSettingsPage() {
         ? Number(currentAccount.initialBalance)
         : undefined,
     }));
-  }, [currentAccount?.id]);
+  }, [currentAccount]);
 
   const handleSaveBrokerSettings = async () => {
     if (!selectedAccountId) {

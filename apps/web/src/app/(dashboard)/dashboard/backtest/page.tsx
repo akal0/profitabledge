@@ -4,6 +4,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import { trpcClient } from "@/utils/trpc";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
+import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 import {
   Clock,
   History,
@@ -93,6 +95,8 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export default function BacktestOverviewPage() {
+  const backtestEnabled = isPublicAlphaFeatureEnabled("backtest");
+
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<SessionOption[]>([]);
@@ -100,6 +104,9 @@ export default function BacktestOverviewPage() {
 
   // Fetch session list for the selector
   useEffect(() => {
+    if (!backtestEnabled) {
+      return;
+    }
     (async () => {
       try {
         const result = await trpcClient.backtest.listSessions.query();
@@ -115,7 +122,7 @@ export default function BacktestOverviewPage() {
         // Silently fail — selector just won't populate
       }
     })();
-  }, []);
+  }, [backtestEnabled]);
 
   const fetchStats = useCallback(async (sessionId: string) => {
     setLoading(true);
@@ -132,12 +139,24 @@ export default function BacktestOverviewPage() {
   }, []);
 
   useEffect(() => {
+    if (!backtestEnabled) {
+      return;
+    }
     fetchStats(selectedSessionId);
-  }, [selectedSessionId, fetchStats]);
+  }, [backtestEnabled, selectedSessionId, fetchStats]);
 
   const handleSessionChange = (value: string) => {
     setSelectedSessionId(value);
   };
+
+  if (!backtestEnabled) {
+    return (
+      <AlphaFeatureLocked
+        feature="backtest"
+        title="Backtest is held back in this alpha"
+      />
+    );
+  }
 
   if (loading) {
     return (

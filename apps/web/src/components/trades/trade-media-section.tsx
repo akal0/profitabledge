@@ -9,10 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogClose,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -341,25 +340,45 @@ export function TradeMediaSection({ tradeId, className }: TradeMediaSectionProps
 
       {/* Caption Edit Dialog */}
       <Dialog open={!!editingCaption} onOpenChange={() => setEditingCaption(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Caption</DialogTitle>
-            <DialogDescription>
-              Add a short caption for this media.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Textarea
-              value={captionValue}
-              onChange={(e) => setCaptionValue(e.target.value)}
-              placeholder="Enter caption..."
-              className="min-h-[80px]"
-            />
-            <div className="flex justify-end gap-2">
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Edit2 className="h-3.5 w-3.5 text-white/60" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Edit Caption</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Add a short caption for this media.
+                </p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
+            {/* Body */}
+            <div className="px-5 py-4">
+              <Textarea
+                value={captionValue}
+                onChange={(e) => setCaptionValue(e.target.value)}
+                placeholder="Enter caption..."
+                className="min-h-[80px] bg-sidebar-accent border-white/10"
+              />
+            </div>
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3 shrink-0">
               <Button
-                variant="outline"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                 onClick={() => setEditingCaption(null)}
-                className={TRADE_ACTION_BUTTON_CLASS}
               >
                 Cancel
               </Button>
@@ -368,7 +387,7 @@ export function TradeMediaSection({ tradeId, className }: TradeMediaSectionProps
                   editingCaption &&
                   handleUpdateCaption(editingCaption, captionValue)
                 }
-                className={TRADE_ACTION_BUTTON_PRIMARY_CLASS}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
                 Save
               </Button>
@@ -379,25 +398,45 @@ export function TradeMediaSection({ tradeId, className }: TradeMediaSectionProps
 
       {/* Description Edit Dialog */}
       <Dialog open={!!editingDescription} onOpenChange={() => setEditingDescription(null)}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Edit Description</DialogTitle>
-            <DialogDescription>
-              Add a detailed description or analysis notes.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Textarea
-              value={descriptionValue}
-              onChange={(e) => setDescriptionValue(e.target.value)}
-              placeholder="Enter description..."
-              className="min-h-[150px]"
-            />
-            <div className="flex justify-end gap-2">
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-lg"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Edit2 className="h-3.5 w-3.5 text-white/60" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Edit Description</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Add a detailed description or analysis notes.
+                </p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
+            {/* Body */}
+            <div className="px-5 py-4">
+              <Textarea
+                value={descriptionValue}
+                onChange={(e) => setDescriptionValue(e.target.value)}
+                placeholder="Enter description..."
+                className="min-h-[150px] bg-sidebar-accent border-white/10"
+              />
+            </div>
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3 shrink-0">
               <Button
-                variant="outline"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                 onClick={() => setEditingDescription(null)}
-                className={TRADE_ACTION_BUTTON_CLASS}
               >
                 Cancel
               </Button>
@@ -406,7 +445,7 @@ export function TradeMediaSection({ tradeId, className }: TradeMediaSectionProps
                   editingDescription &&
                   handleUpdateDescription(editingDescription, descriptionValue)
                 }
-                className={TRADE_ACTION_BUTTON_PRIMARY_CLASS}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
                 Save
               </Button>
@@ -418,14 +457,6 @@ export function TradeMediaSection({ tradeId, className }: TradeMediaSectionProps
       {/* Lightbox */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="max-w-4xl p-0 overflow-hidden bg-black border-none">
-          <DialogHeader className="sr-only">
-            <DialogTitle>
-              {lightboxMedia?.fileName || lightboxMedia?.caption || "Trade media preview"}
-            </DialogTitle>
-            <DialogDescription>
-              Preview of the selected trade attachment.
-            </DialogDescription>
-          </DialogHeader>
           {lightboxMedia && (
             <>
               {isImage(lightboxMedia.mimeType) ? (

@@ -8,27 +8,24 @@ import { and, desc, eq, sql, asc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { compareBacktestToLive } from "../lib/backtest-profile-comparison";
 import { evaluateCompliance, type ComplianceRules } from "../lib/compliance-audits";
-
-// Helper to serialize Date fields to ISO strings for JSON transport (no superjson)
-function serializeSession(s: any) {
-  return {
-    ...s,
-    startDate: s.startDate instanceof Date ? s.startDate.toISOString() : s.startDate ?? null,
-    endDate: s.endDate instanceof Date ? s.endDate.toISOString() : s.endDate ?? null,
-    createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
-    updatedAt: s.updatedAt instanceof Date ? s.updatedAt.toISOString() : s.updatedAt,
-    completedAt: s.completedAt instanceof Date ? s.completedAt.toISOString() : s.completedAt ?? null,
-  };
-}
-
-function serializeTrade(t: any) {
-  return {
-    ...t,
-    entryTime: t.entryTime instanceof Date ? t.entryTime.toISOString() : t.entryTime,
-    exitTime: t.exitTime instanceof Date ? t.exitTime.toISOString() : t.exitTime ?? null,
-    createdAt: t.createdAt instanceof Date ? t.createdAt.toISOString() : t.createdAt,
-  };
-}
+import { assertAlphaFeatureEnabled } from "../lib/ops/alpha-runtime";
+import {
+  ensureActivationMilestone,
+  recordAppEvent,
+} from "../lib/ops/event-log";
+import { psychologyEmotionalStateSchema } from "./journal/shared";
+import {
+  deriveBacktestSessionTag,
+  extractBacktestTag,
+  numberOrNull,
+  serializeSession,
+  serializeTrade,
+} from "./backtest/serialization";
+import {
+  buildDrawdownSeries,
+  buildEquityCurve,
+  calculateSessionStats,
+} from "./backtest/analytics";
 
 const replayWorkspaceStateSchema = z.record(z.string(), z.unknown());
 const replaySimulationConfigSchema = z.record(z.string(), z.unknown());
@@ -53,34 +50,6 @@ async function assertOwnedRuleSet(userId: string, ruleSetId: string | null | und
   }
 
   return ruleSet;
-}
-
-function numberOrNull(value: unknown) {
-  if (value === null || value === undefined) return null;
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-      ? Number(value)
-      : Number.NaN;
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function deriveBacktestSessionTag(entryTime: Date) {
-  const hour = entryTime.getUTCHours();
-  if (hour >= 13 && hour < 16) return "London / New York";
-  if (hour >= 7 && hour < 11) return "London";
-  if (hour >= 12 && hour < 20) return "New York";
-  if (hour >= 0 && hour < 6) return "Asia";
-  return "Core";
-}
-
-function extractBacktestTag(tags: unknown, prefix: string) {
-  if (!Array.isArray(tags)) return null;
-  const match = tags.find(
-    (value): value is string => typeof value === "string" && value.startsWith(prefix)
-  );
-  return match ? match.slice(prefix.length) : null;
 }
 
 export const backtestRouter = router({
@@ -119,6 +88,7 @@ export const backtestRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("backtest");
       if (input.linkedRuleSetId) {
         await assertOwnedRuleSet(ctx.session.user.id, input.linkedRuleSetId);
       }
@@ -147,6 +117,31 @@ export const backtestRouter = router({
           status: "active",
         })
         .returning();
+
+      await Promise.all([
+        ensureActivationMilestone({
+          userId: ctx.session.user.id,
+          key: "replay_session_created",
+          source: "server",
+          metadata: {
+            sessionId: session.id,
+            symbol: session.symbol,
+            timeframe: session.timeframe,
+          },
+        }),
+        recordAppEvent({
+          userId: ctx.session.user.id,
+          category: "backtest",
+          name: "backtest.session.created",
+          source: "server",
+          summary: session.name,
+          metadata: {
+            sessionId: session.id,
+            symbol: session.symbol,
+            timeframe: session.timeframe,
+          },
+        }),
+      ]);
 
       return serializeSession(session);
     }),
@@ -1360,7 +1355,7 @@ export const backtestRouter = router({
             focus: z.number().min(1).max(10),
             fear: z.number().min(1).max(10),
             greed: z.number().min(1).max(10),
-            emotionalState: z.enum(["calm", "anxious", "excited", "frustrated", "neutral", "stressed", "confident"]),
+            emotionalState: psychologyEmotionalStateSchema,
             notes: z.string().optional(),
           })
           .optional(),
@@ -1422,7 +1417,7 @@ export const backtestRouter = router({
             focus: z.number().min(1).max(10),
             fear: z.number().min(1).max(10),
             greed: z.number().min(1).max(10),
-            emotionalState: z.enum(["calm", "anxious", "excited", "frustrated", "neutral", "stressed", "confident"]),
+            emotionalState: psychologyEmotionalStateSchema,
             notes: z.string().optional(),
           })
           .optional(),
@@ -1495,161 +1490,3 @@ export const backtestRouter = router({
       return { success: true };
     }),
 });
-
-// ============== HELPER FUNCTIONS ==============
-
-interface TradeRow {
-  pnl: string | null;
-  pnlPercent: string | null;
-  pnlPips: string | null;
-  realizedRR: string | null;
-  holdTimeSeconds: number | null;
-  entryTime: Date;
-  exitTime: Date | null;
-  direction: string;
-  mfePips: string | null;
-  maePips: string | null;
-}
-
-function calculateSessionStats(trades: TradeRow[], initialBalance: number) {
-  if (trades.length === 0) {
-    return {
-      finalBalance: String(initialBalance),
-      finalEquity: String(initialBalance),
-      totalPnL: "0",
-      totalPnLPercent: "0",
-      totalTrades: 0,
-      winningTrades: 0,
-      losingTrades: 0,
-      winRate: "0",
-      profitFactor: "0",
-      maxDrawdown: "0",
-      maxDrawdownPercent: "0",
-      sharpeRatio: "0",
-      averageRR: "0",
-      averageWin: "0",
-      averageLoss: "0",
-      largestWin: "0",
-      largestLoss: "0",
-      longestWinStreak: 0,
-      longestLoseStreak: 0,
-      averageHoldTimeSeconds: 0,
-    };
-  }
-
-  const pnls = trades.map((t) => Number(t.pnl || 0));
-  const totalPnL = pnls.reduce((sum, p) => sum + p, 0);
-  const finalBalance = initialBalance + totalPnL;
-
-  const wins = pnls.filter((p) => p > 0);
-  const losses = pnls.filter((p) => p < 0);
-
-  const totalWins = wins.reduce((sum, p) => sum + p, 0);
-  const totalLosses = Math.abs(losses.reduce((sum, p) => sum + p, 0));
-
-  const avgWin = wins.length > 0 ? totalWins / wins.length : 0;
-  const avgLoss = losses.length > 0 ? totalLosses / losses.length : 0;
-
-  // Profit factor
-  const profitFactor = totalLosses > 0 ? totalWins / totalLosses : totalWins > 0 ? Infinity : 0;
-
-  // Max drawdown
-  let peak = initialBalance;
-  let maxDD = 0;
-  let maxDDPercent = 0;
-  let runningBalance = initialBalance;
-  for (const pnl of pnls) {
-    runningBalance += pnl;
-    if (runningBalance > peak) peak = runningBalance;
-    const dd = peak - runningBalance;
-    const ddPct = peak > 0 ? dd / peak : 0;
-    if (dd > maxDD) maxDD = dd;
-    if (ddPct > maxDDPercent) maxDDPercent = ddPct;
-  }
-
-  // Sharpe ratio (annualized, using daily returns approximation)
-  const mean = pnls.length > 0 ? pnls.reduce((s, p) => s + p, 0) / pnls.length : 0;
-  const variance = pnls.length > 1
-    ? pnls.reduce((s, p) => s + (p - mean) ** 2, 0) / (pnls.length - 1)
-    : 0;
-  const stdDev = Math.sqrt(variance);
-  const sharpe = stdDev > 0 ? (mean / stdDev) * Math.sqrt(252) : 0;
-
-  // Average RR
-  const rrs = trades.filter((t) => t.realizedRR !== null).map((t) => Number(t.realizedRR));
-  const avgRR = rrs.length > 0 ? rrs.reduce((s, r) => s + r, 0) / rrs.length : 0;
-
-  // Streaks
-  let winStreak = 0, loseStreak = 0, maxWinStreak = 0, maxLoseStreak = 0;
-  for (const pnl of pnls) {
-    if (pnl > 0) {
-      winStreak++;
-      loseStreak = 0;
-      if (winStreak > maxWinStreak) maxWinStreak = winStreak;
-    } else {
-      loseStreak++;
-      winStreak = 0;
-      if (loseStreak > maxLoseStreak) maxLoseStreak = loseStreak;
-    }
-  }
-
-  // Average hold time
-  const holdTimes = trades.filter((t) => t.holdTimeSeconds !== null).map((t) => t.holdTimeSeconds!);
-  const avgHoldTime = holdTimes.length > 0
-    ? Math.round(holdTimes.reduce((s, h) => s + h, 0) / holdTimes.length)
-    : 0;
-
-  return {
-    finalBalance: String(finalBalance),
-    finalEquity: String(finalBalance),
-    totalPnL: String(totalPnL),
-    totalPnLPercent: String((totalPnL / initialBalance) * 100),
-    totalTrades: trades.length,
-    winningTrades: wins.length,
-    losingTrades: losses.length,
-    winRate: String(trades.length > 0 ? (wins.length / trades.length) * 100 : 0),
-    profitFactor: String(Math.min(profitFactor, 999)),
-    maxDrawdown: String(maxDD),
-    maxDrawdownPercent: String(maxDDPercent * 100),
-    sharpeRatio: String(sharpe),
-    averageRR: String(avgRR),
-    averageWin: String(avgWin),
-    averageLoss: String(avgLoss),
-    largestWin: String(wins.length > 0 ? Math.max(...wins) : 0),
-    largestLoss: String(losses.length > 0 ? Math.min(...losses) : 0),
-    longestWinStreak: maxWinStreak,
-    longestLoseStreak: maxLoseStreak,
-    averageHoldTimeSeconds: avgHoldTime,
-  };
-}
-
-function buildEquityCurve(
-  trades: TradeRow[],
-  initialBalance: number
-): { time: string; equity: number; tradeIndex: number }[] {
-  const curve = [{ time: "", equity: initialBalance, tradeIndex: -1 }];
-  let running = initialBalance;
-
-  for (let i = 0; i < trades.length; i++) {
-    running += Number(trades[i].pnl || 0);
-    curve.push({
-      time: trades[i].exitTime?.toISOString() || trades[i].entryTime.toISOString(),
-      equity: running,
-      tradeIndex: i,
-    });
-  }
-
-  return curve;
-}
-
-function buildDrawdownSeries(
-  equityCurve: { time: string; equity: number; tradeIndex: number }[]
-): { time: string; drawdown: number; drawdownPercent: number }[] {
-  let peak = equityCurve[0]?.equity || 0;
-  return equityCurve.map((point) => {
-    if (point.equity > peak) peak = point.equity;
-    const dd = peak - point.equity;
-    const ddPct = peak > 0 ? (dd / peak) * 100 : 0;
-    return { time: point.time, drawdown: dd, drawdownPercent: ddPct };
-  });
-}

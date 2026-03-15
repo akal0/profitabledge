@@ -44,7 +44,20 @@ export interface PsychologySnapshot {
   focus: number; // 1-10 scale (1 = distracted, 10 = laser focused)
   fear: number; // 1-10 scale (1 = no fear, 10 = terrified)
   greed: number; // 1-10 scale (1 = patient, 10 = fomo/greedy)
-  emotionalState: 'calm' | 'anxious' | 'excited' | 'frustrated' | 'neutral' | 'stressed' | 'confident';
+  emotionalState:
+    | 'calm'
+    | 'confident'
+    | 'neutral'
+    | 'excited'
+    | 'anxious'
+    | 'stressed'
+    | 'frustrated'
+    | 'angry'
+    | 'confused'
+    | 'discouraged'
+    | 'overwhelmed'
+    | 'regretful'
+    | 'impatient';
   notes?: string; // Optional free-form notes about mental state
   tradingEnvironment?: 'home' | 'office' | 'traveling' | 'mobile';
   sleepQuality?: number; // 1-10 scale
@@ -518,6 +531,21 @@ export interface JournalBlockProps {
   
   tradeId?: string;
   tradeDisplay?: 'card' | 'inline' | 'detailed';
+  trades?: Array<{
+    id: string;
+    symbol?: string | null;
+    tradeDirection?: 'long' | 'short';
+    profit?: number | null;
+    pips?: number | null;
+    close?: string | null;
+    outcome?: string | null;
+  }>;
+  symbol?: string;
+  tradeDirection?: 'long' | 'short';
+  profit?: number;
+  pips?: number;
+  closeTime?: string | null;
+  outcome?: string | null;
   
   tradeIds?: string[];
   comparisonMetrics?: string[];

@@ -1028,19 +1028,29 @@ export const socialRouter = router({
     .query(async ({ input }) => {
       // Calculate period start
       const now = new Date();
-      let periodStart: Date;
+      let periodStart: string;
 
       switch (input.period) {
         case "30d":
-          periodStart = new Date(now);
-          periodStart.setDate(now.getDate() - 30);
+          periodStart = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() - 30
+          )
+            .toISOString()
+            .slice(0, 10);
           break;
         case "90d":
-          periodStart = new Date(now);
-          periodStart.setDate(now.getDate() - 90);
+          periodStart = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() - 90
+          )
+            .toISOString()
+            .slice(0, 10);
           break;
         case "all_time":
-          periodStart = new Date(2000, 0, 1);
+          periodStart = "2000-01-01";
           break;
       }
 
@@ -1109,19 +1119,29 @@ export const socialRouter = router({
       }
 
       const now = new Date();
-      let periodStart: Date;
+      let periodStart: string;
 
       switch (input.period) {
         case "30d":
-          periodStart = new Date(now);
-          periodStart.setDate(now.getDate() - 30);
+          periodStart = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() - 30
+          )
+            .toISOString()
+            .slice(0, 10);
           break;
         case "90d":
-          periodStart = new Date(now);
-          periodStart.setDate(now.getDate() - 90);
+          periodStart = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate() - 90
+          )
+            .toISOString()
+            .slice(0, 10);
           break;
         case "all_time":
-          periodStart = new Date(2000, 0, 1);
+          periodStart = "2000-01-01";
           break;
       }
 

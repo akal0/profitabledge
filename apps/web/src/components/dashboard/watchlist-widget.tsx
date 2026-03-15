@@ -10,12 +10,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,6 +41,7 @@ import {
   CheckCircle,
   Archive,
   GripVertical,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -147,7 +146,10 @@ export function WatchlistWidget({ isEditing = false, className }: WatchlistWidge
             {watchlist.map((item) => (
               <WatchlistItemRow
                 key={item.id}
-                item={item}
+                item={{
+                  ...item,
+                  status: item.status ?? "watching",
+                }}
                 onEdit={() => setEditingItem(item.id)}
                 onDelete={() => deleteItem.mutate({ id: item.id })}
                 onUpdateStatus={(status) =>
@@ -356,66 +358,92 @@ function AddWatchlistDialog({ open, onClose, onAdd, isLoading }: AddWatchlistDia
   
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="bg-sidebar border-white/10 max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add to Watchlist</DialogTitle>
-          <DialogDescription className="text-white/40">
-            Track a symbol you're interested in trading
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4 pt-4">
-          <div className="space-y-2">
-            <label className="text-xs text-white/60">Symbol *</label>
-            <Input
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-              placeholder="e.g., EURUSD, GBPJPY"
-              className="bg-sidebar-accent border-white/10"
-            />
+      <DialogContent
+        showCloseButton={false}
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md"
+      >
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 py-4">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <Eye className="h-3.5 w-3.5 text-white/60" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-white">Add to Watchlist</div>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">Track a symbol you're interested in trading</p>
+            </div>
+            <DialogClose asChild>
+              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            </DialogClose>
           </div>
-          
-          <div className="grid grid-cols-2 gap-4">
+          <Separator />
+
+          {/* Body */}
+          <div className="space-y-4 px-5 py-4">
             <div className="space-y-2">
-              <label className="text-xs text-white/60">Target Price</label>
+              <label className="text-xs text-white/60">Symbol *</label>
               <Input
-                value={targetPrice}
-                onChange={(e) => setTargetPrice(e.target.value)}
-                placeholder="e.g., 1.0950"
+                value={symbol}
+                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                placeholder="e.g., EURUSD, GBPJPY"
                 className="bg-sidebar-accent border-white/10"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs text-white/60">Target Price</label>
+                <Input
+                  value={targetPrice}
+                  onChange={(e) => setTargetPrice(e.target.value)}
+                  placeholder="e.g., 1.0950"
+                  className="bg-sidebar-accent border-white/10"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs text-white/60">Stop Price</label>
+                <Input
+                  value={stopPrice}
+                  onChange={(e) => setStopPrice(e.target.value)}
+                  placeholder="e.g., 1.0850"
+                  className="bg-sidebar-accent border-white/10"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
-              <label className="text-xs text-white/60">Stop Price</label>
-              <Input
-                value={stopPrice}
-                onChange={(e) => setStopPrice(e.target.value)}
-                placeholder="e.g., 1.0850"
-                className="bg-sidebar-accent border-white/10"
+              <label className="text-xs text-white/60">Notes</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Why are you watching this?"
+                className="bg-sidebar-accent border-white/10 resize-none"
+                rows={3}
               />
             </div>
           </div>
-          
-          <div className="space-y-2">
-            <label className="text-xs text-white/60">Notes</label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Why are you watching this?"
-              className="bg-sidebar-accent border-white/10 resize-none"
-              rows={3}
-            />
+
+          <Separator />
+          {/* Footer */}
+          <div className="flex items-center justify-end gap-2 px-5 py-3">
+            <Button
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={isLoading}
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+            >
+              {isLoading ? "Adding..." : "Add to Watchlist"}
+            </Button>
           </div>
         </div>
-        
-        <DialogFooter className="border-t border-white/5 pt-4 mt-4">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isLoading} className="bg-teal-500 hover:bg-teal-600">
-            {isLoading ? "Adding..." : "Add to Watchlist"}
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

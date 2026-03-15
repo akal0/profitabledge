@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { Fragment, useCallback, useMemo } from "react";
 import { trpc } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { Skeleton } from "../ui/skeleton";
@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils";
 import { Lightbulb, TrendingUp, TrendingDown } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { WidgetWrapper } from "./widget-wrapper";
-import { formatSignedCurrency } from "./charts/dashboard-chart-ui";
+import {
+  formatCurrencyValue,
+  formatSignedCurrencyValue,
+} from "@/features/dashboard/widgets/lib/widget-shared";
 
 const WIDGET_CONTENT_SEPARATOR_CLASS =
   "-mx-3.5 shrink-0 self-stretch";
@@ -17,10 +20,12 @@ export function WhatIfWidget({
   accountId,
   isEditing = false,
   className,
+  currencyCode,
 }: {
   accountId?: string;
   isEditing?: boolean;
   className?: string;
+  currencyCode?: string;
 }) {
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
@@ -30,7 +35,20 @@ export function WhatIfWidget({
     { enabled: !!effectiveAccountId }
   );
 
-  const trades = tradesData?.trades || [];
+  const trades = useMemo(() => tradesData?.trades || [], [tradesData]);
+  const formatMoney = useCallback(
+    (value: number, digits = 0) =>
+      formatCurrencyValue(value, currencyCode, {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      }),
+    [currencyCode]
+  );
+  const formatSignedMoney = (value: number, digits = 0) =>
+    formatSignedCurrencyValue(value, currencyCode, {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
 
   const scenarios = useMemo(() => {
     if (trades.length < 5) return null;
@@ -88,9 +106,7 @@ export function WhatIfWidget({
         potential: heldToTpPnl,
         delta: heldToTpPnl - actualPnl,
         insight: heldToTpPnl > actualPnl
-          ? `You left ${formatSignedCurrency(
-              heldToTpPnl - actualPnl
-            )} on the table`
+          ? `You left ${formatMoney(heldToTpPnl - actualPnl)} on the table`
           : "You're managing exits well",
       },
       {
@@ -99,7 +115,7 @@ export function WhatIfWidget({
         actual: actualPnl,
         potential: skippedWorstPnl,
         delta: skippedWorstPnl - actualPnl,
-        insight: `Worst ${cutoff} trades cost ${formatSignedCurrency(
+        insight: `Worst ${cutoff} trades cost ${formatMoney(
           Math.abs(worstPnl)
         )}`,
       },
@@ -110,13 +126,11 @@ export function WhatIfWidget({
         potential: positiveRRPnl,
         delta: positiveRRPnl - actualPnl,
         insight: positiveRRPnl > actualPnl
-          ? `Filtering saves ${formatSignedCurrency(
-              positiveRRPnl - actualPnl
-            )}`
+          ? `Filtering saves ${formatMoney(positiveRRPnl - actualPnl)}`
           : "Negative RR trades are costing your edge",
       },
     ];
-  }, [trades]);
+  }, [formatMoney, trades]);
 
   if (isLoading) {
     return (
@@ -169,7 +183,7 @@ export function WhatIfWidget({
                         s.delta >= 0 ? "text-emerald-400" : "text-rose-400"
                       )}
                     >
-                      {formatSignedCurrency(s.delta)}
+                      {formatSignedMoney(s.delta)}
                     </span>
                   </div>
                 </div>
@@ -183,7 +197,7 @@ export function WhatIfWidget({
                         s.actual >= 0 ? "text-emerald-400" : "text-rose-400"
                       )}
                     >
-                      {formatSignedCurrency(s.actual)}
+                      {formatSignedMoney(s.actual)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -194,7 +208,7 @@ export function WhatIfWidget({
                         s.potential >= 0 ? "text-emerald-400" : "text-rose-400"
                       )}
                     >
-                      {formatSignedCurrency(s.potential)}
+                      {formatSignedMoney(s.potential)}
                     </p>
                   </div>
                 </div>

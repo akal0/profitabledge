@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import type { LucideIcon } from "lucide-react";
 
 interface WidgetWrapperProps {
@@ -21,11 +21,13 @@ interface WidgetWrapperProps {
   showHeader?: boolean;
   /** Optional click handler for non-edit mode */
   onClick?: () => void;
+  /** Optional ref for export/share flows that need the rendered widget node */
+  rootRef?: Ref<HTMLDivElement>;
 }
 
 /**
  * Unified WidgetWrapper - ensures consistent styling across all dashboard widgets
- * 
+ *
  * Container: bg-sidebar border border-white/5 p-1.5 rounded-sm h-72
  * Header: widget-header class with consistent padding
  * Content: bg-white dark:bg-sidebar-accent with hover brightness
@@ -41,11 +43,14 @@ export function WidgetWrapper({
   headerRight,
   showHeader = false,
   onClick,
+  rootRef,
 }: WidgetWrapperProps) {
   return (
     <div
+      ref={rootRef}
+      data-widget-share-surface="frame"
       className={cn(
-        "bg-sidebar h-72 w-full border border-white/5 p-1.5 flex flex-col rounded-sm group",
+        "bg-sidebar h-72 w-full border border-white/5 p-1 flex flex-col rounded-lg group",
         isEditing ? "animate-tilt-subtle hover:animate-none" : "",
         !isEditing && onClick ? "cursor-pointer" : "",
         className
@@ -65,14 +70,20 @@ export function WidgetWrapper({
             </h2>
           )}
           {headerRight ? (
-            <div className="ml-auto flex items-center gap-2">{headerRight}</div>
+            <div
+              className="ml-auto flex items-center gap-2"
+              data-widget-share-ignore="true"
+            >
+              {headerRight}
+            </div>
           ) : null}
         </div>
       ) : null}
-      
+
       <div
+        data-widget-share-surface="content"
         className={cn(
-          "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex h-full w-full rounded-sm",
+          "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex h-full w-full rounded-sm ring ring-white/5",
           contentClassName ?? "flex-col justify-end"
         )}
       >

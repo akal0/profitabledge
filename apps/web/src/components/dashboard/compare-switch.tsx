@@ -1,19 +1,20 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { VerticalSeparator } from "@/components/ui/separator";
 import { useDateRangeStore } from "@/stores/date-range";
 import { useComparisonStore } from "@/stores/comparison";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 import {
   countRangeDays,
@@ -29,7 +30,6 @@ export default function Component({
   hidePreviousDays?: boolean;
   effectiveRange?: { start: Date; end: Date };
 }) {
-  const id = useId();
   const [open, setOpen] = useState(false);
   const { min, max, start: globalStart, end: globalEnd } = useDateRangeStore();
   const setComparison = useComparisonStore((s) => s.setComparison);
@@ -67,7 +67,10 @@ export default function Component({
 
   const thisWeekRange = useMemo(() => {
     if (!range) return null;
-    return getComparisonRange("thisWeek", range, { minDate: min, maxDate: max });
+    return getComparisonRange("thisWeek", range, {
+      minDate: min,
+      maxDate: max,
+    });
   }, [max, min, range]);
 
   const isWeekRange = daysSelected === 7;
@@ -108,8 +111,8 @@ export default function Component({
 
   const canOpen = anyOptionAvailable || checked;
 
-  const handleOpenMenu = (e: React.SyntheticEvent) => {
-    stop(e);
+  const handleOpenMenu = (event?: React.SyntheticEvent) => {
+    event?.stopPropagation();
     if (!canOpen) return;
     setOpen(true);
   };
@@ -119,63 +122,77 @@ export default function Component({
     return daysSelected === 1 ? "day" : `${daysSelected} days`;
   })();
 
+  const comparisonButtonClass =
+    "cursor-pointer flex h-7 items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-1.5 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar disabled:hover:brightness-100";
+  const selectedChipClass =
+    "flex h-7 items-center rounded-sm border border-white/5 bg-sidebar pr-0.5 pl-3 text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110";
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <div
-        className="group inline-flex items-center gap-2 border border-white/5 px-2 py-1.5"
-        data-state={checked ? "checked" : "unchecked"}
-        onPointerDown={stop}
-        onPointerUp={stop}
-        onClick={handleOpenMenu}
-      >
+      <div className="inline-flex items-center gap-2" onPointerDown={stop}>
         <DropdownMenuTrigger asChild>
-          <span className="outline-none">
-            <Switch
-              id={id}
-              checked={checked}
-              onCheckedChange={() => {
-                if (checked) {
-                  clearMode();
-                  return;
-                }
-                if (!canOpen) return;
-                setOpen(true);
-              }}
-              aria-labelledby={`${id}-off ${id}-on`}
-            />
-          </span>
-        </DropdownMenuTrigger>
-        <span
-          id={`${id}-on`}
-          className="group-data-[state=unchecked]:text-white/25 flex-1 cursor-pointer text-left text-xs font-medium"
-          aria-controls={id}
-          onClick={handleOpenMenu}
-          onPointerDown={stop}
-        >
-          Comparison
-        </span>
-        {checked && selectedLabel ? (
-          <Badge
-            variant="outline"
-            className="text-xs gap-1 px-2 py-0.5 text-white/80 border-white/10 rounded-none ml-2"
+          <Button
+            type="button"
+            disabled={!canOpen}
+            className={cn(
+              comparisonButtonClass,
+              checked ? "text-white" : "text-white/70"
+            )}
+            onClick={stop}
           >
-            <span className="pointer-events-none">{selectedLabel}</span>
-            <button
-              aria-label="Remove comparison"
-              className="-mr-1.5 ml-1 rounded-none hover:bg-white/5 p-0.5"
+            <span
+              aria-hidden="true"
+              className={cn(
+                "relative inline-flex h-4 w-8 shrink-0 rounded-full transition-colors duration-300",
+                checked ? "bg-teal-500" : "bg-[#29292D]"
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-1/2 left-0.5 size-3 -translate-y-1/2 rounded-full bg-sidebar shadow-xs transition-transform duration-300",
+                  checked ? "translate-x-4 bg-sidebar-accent" : "translate-x-0"
+                )}
+              />
+            </span>
+            <span className="font-medium">Comparison</span>
+          </Button>
+        </DropdownMenuTrigger>
+
+        {checked && selectedLabel ? (
+          <div
+            className={selectedChipClass}
+            onClick={handleOpenMenu}
+            onPointerUp={stop}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleOpenMenu(event);
+              }
+            }}
+          >
+            <span className="whitespace-nowrap text-xs">{selectedLabel}</span>
+            <VerticalSeparator className="mr-0.5 ml-2 h-3.5" />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-5 rounded-sm text-white/70 hover:bg-white/5 hover:text-white"
               onPointerDown={stop}
-              onClick={(e) => {
-                stop(e);
+              onClick={(event) => {
+                stop(event);
                 clearMode();
               }}
             >
               <X className="size-3.5" />
-            </button>
-          </Badge>
+            </Button>
+          </div>
         ) : null}
       </div>
       <DropdownMenuContent
-        className="w-56 rounded-none border border-white/5 mr-5 mt-4 bg-sidebar"
+        align="end"
+        className="mr-5 mt-4 w-56 rounded-none border border-white/5 bg-sidebar"
         onPointerDown={stop}
         onClick={stop}
       >
@@ -205,10 +222,7 @@ export default function Component({
         >
           Last week
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={clearMode}
-          disabled={!checked}
-        >
+        <DropdownMenuItem onSelect={clearMode} disabled={!checked}>
           Turn off
         </DropdownMenuItem>
       </DropdownMenuContent>

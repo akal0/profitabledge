@@ -50,7 +50,7 @@ export function ViewSwitcher({
   const isAdvancedUnlocked = advancedGate?.isUnlocked ?? true;
   const advancedGateLabel =
     advancedGate?.isUnlocked === false
-      ? `${advancedGate.remaining} more trades needed`
+      ? advancedGate.message
       : "";
 
   const isAdvancedAlignment = (name?: string | null) =>

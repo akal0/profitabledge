@@ -2,6 +2,8 @@
 
 import type { ComponentType } from "react";
 import { BookOpen, CheckSquare, Shield, TimerReset, TrendingUp } from "lucide-react";
+import { GoalContentSeparator, GoalPanel, GoalSurface } from "./goal-surface";
+import { toSentenceCaseTitle } from "./goal-text";
 
 type ProcessMetric = {
   key: string;
@@ -54,7 +56,7 @@ export function ProcessScorecard({
   const metricCards: ProcessMetric[] = [
     {
       key: "ruleCompliance",
-      label: "Rule Compliance",
+      label: "Rule compliance",
       value: metrics.ruleCompliance,
       target: 90,
       description: "Share of recent trades marked as aligned with your protocol.",
@@ -63,7 +65,7 @@ export function ProcessScorecard({
     },
     {
       key: "edgeTradeRate",
-      label: "Edge Trade Rate",
+      label: "Edge trade rate",
       value: metrics.edgeTradeRate,
       target: 85,
       description: "How often recent trades had a tagged session or model.",
@@ -72,7 +74,7 @@ export function ProcessScorecard({
     },
     {
       key: "journalRate",
-      label: "Journal Coverage",
+      label: "Journal coverage",
       value: metrics.journalRate,
       target: 80,
       description: "Closed trades linked into journal reviews.",
@@ -81,7 +83,7 @@ export function ProcessScorecard({
     },
     {
       key: "breakAfterLoss",
-      label: "Post-Loss Pause",
+      label: "Post-loss pause",
       value: metrics.breakAfterLoss,
       target: 80,
       description: "Losses followed by at least a 15-minute pause before the next trade.",
@@ -90,7 +92,7 @@ export function ProcessScorecard({
     },
     {
       key: "checklistCompletion",
-      label: "Checklist Completion",
+      label: "Checklist completion",
       value: metrics.checklistCompletion,
       target: 90,
       description: "Average pre-trade checklist completion rate.",
@@ -103,7 +105,7 @@ export function ProcessScorecard({
     <section className="space-y-4">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-white">Process Scorecard</h2>
+          <h2 className="text-xl font-semibold text-white">Process scorecard</h2>
           <p className="text-sm text-white/55">
             Discipline metrics from your last {metrics.totalTrades} closed trades.
           </p>
@@ -126,70 +128,66 @@ export function ProcessScorecard({
           const Icon = metric.icon;
 
           return (
-            <div
-              key={metric.key}
-              className="group rounded-sm border border-white/5 bg-sidebar p-1.5"
-            >
-              <div className="rounded-sm bg-sidebar-accent p-3.5 transition-all duration-250 group-hover:brightness-120">
-                <div className="mb-3 flex items-center justify-between">
+            <GoalSurface key={metric.key}>
+              <div className="p-3.5">
+                <div className="flex items-center gap-2">
                   <Icon className={`h-3.5 w-3.5 ${metric.color}`} />
+                  <span className="text-xs text-white/50">{metric.label}</span>
+                </div>
+                <GoalContentSeparator className="mb-3.5 mt-3.5" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-xl font-semibold text-white">
+                    {metric.value.toFixed(0)}%
+                  </div>
                   <span className="text-[10px] uppercase tracking-[0.18em] text-white/35">
                     Target {metric.target}%
                   </span>
                 </div>
-                <div className="text-xl font-semibold text-white">
-                  {metric.value.toFixed(0)}%
-                </div>
-                <div className="mt-0.5 text-xs text-white/55">{metric.label}</div>
-                <p className="mt-1.5 min-h-[40px] text-[11px] leading-4 text-white/40">
+                <p className="mt-2 min-h-[40px] text-[11px] leading-4 text-white/40">
                   {metric.description}
                 </p>
-                <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/8">
                   <div
                     className={`h-full ${railClass}`}
                     style={{ width: `${Math.max(0, Math.min(metric.value, 100))}%` }}
                   />
                 </div>
               </div>
-            </div>
+            </GoalSurface>
           );
         })}
       </div>
 
       {recommendedGoals.length > 0 && onCreateGoal ? (
-        <div className="rounded-sm border border-white/5 bg-sidebar p-1.5">
-          <div className="rounded-sm bg-sidebar-accent p-4">
-            <div className="mb-3">
-              <h3 className="text-sm font-medium text-white">Recommended Process Goals</h3>
-              <p className="text-xs text-white/45">
-                Turn weak discipline spots into explicit targets.
-              </p>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              {recommendedGoals.map((goal) => {
-                const disabled = existingGoalTypes.includes(goal.targetType);
-                return (
-                  <div
-                    key={goal.targetType}
-                    className="rounded-sm border border-white/5 bg-white/[0.03] p-3"
-                  >
-                    <div className="text-xs font-medium text-white">{goal.title}</div>
-                    <p className="mt-1 text-[11px] leading-4 text-white/40">{goal.description}</p>
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onCreateGoal(goal)}
-                      className="mt-2.5 text-[11px] font-medium text-teal-300 disabled:text-white/25"
-                    >
-                      {disabled ? "Already active" : "Create goal"}
-                    </button>
+        <GoalPanel
+          title="Recommended process goals"
+          description="Turn weak discipline spots into explicit targets."
+        >
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {recommendedGoals.map((goal) => {
+              const disabled = existingGoalTypes.includes(goal.targetType);
+              return (
+                <div
+                  key={goal.targetType}
+                  className="rounded-sm border border-white/5 bg-white/[0.03] p-3"
+                >
+                  <div className="text-xs font-medium text-white">
+                    {toSentenceCaseTitle(goal.title)}
                   </div>
-                );
-              })}
-            </div>
+                  <p className="mt-1 text-[11px] leading-4 text-white/40">{goal.description}</p>
+                  <button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onCreateGoal(goal)}
+                    className="mt-2.5 text-[11px] font-medium text-teal-300 disabled:text-white/25"
+                  >
+                    {disabled ? "Already active" : "Create goal"}
+                  </button>
+                </div>
+              );
+            })}
           </div>
-        </div>
+        </GoalPanel>
       ) : null}
     </section>
   );

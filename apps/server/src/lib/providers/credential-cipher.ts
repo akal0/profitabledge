@@ -5,13 +5,14 @@
  * Generate with: openssl rand -hex 32
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
+import { getServerEnv } from "../env";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
 
 function getKey(): Buffer {
-  const hex = process.env.CREDENTIAL_ENCRYPTION_KEY;
+  const hex = getServerEnv().CREDENTIAL_ENCRYPTION_KEY;
   if (!hex || hex.length !== 64) {
     throw new Error(
       "CREDENTIAL_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). " +

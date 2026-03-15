@@ -1,10 +1,11 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { mt5SyncFrameSchema, ingestMt5SyncFrame } from "../lib/mt5/ingestion";
+import { getServerEnv } from "../lib/env";
 import { publicProcedure, router } from "../lib/trpc";
 
 function assertWorkerSecret(workerSecret: string) {
-  const expected = process.env.BROKER_WORKER_SECRET;
+  const expected = getServerEnv().BROKER_WORKER_SECRET;
 
   if (!expected) {
     throw new TRPCError({

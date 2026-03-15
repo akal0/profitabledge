@@ -1,23 +1,39 @@
 /**
  * Canonical Trade Field Registry
- * 
+ *
  * Single source of truth for all trade fields.
  * Includes types, synonyms, aggregations, and filter operations.
  */
 
 export type FieldType = "string" | "number" | "boolean" | "timestamp" | "enum";
 
-export type AggregationFn = "avg" | "sum" | "min" | "max" | "count" | "p50" | "p90";
+export type AggregationFn =
+  | "avg"
+  | "sum"
+  | "min"
+  | "max"
+  | "count"
+  | "p50"
+  | "p90";
 
-export type FilterOp = "eq" | "neq" | "gt" | "gte" | "lt" | "lte" | "in" | "contains" | "between";
+export type FilterOp =
+  | "eq"
+  | "neq"
+  | "gt"
+  | "gte"
+  | "lt"
+  | "lte"
+  | "in"
+  | "contains"
+  | "between";
 
 export type TradeField = {
-  key: string;                 // canonical key used in DB
-  label: string;               // human-readable label
+  key: string; // canonical key used in DB
+  label: string; // human-readable label
   type: FieldType;
-  unit?: string;               // pips, R, seconds, %, $
-  description: string;         // what it means
-  synonyms: string[];          // phrases users will say
+  unit?: string; // pips, R, seconds, %, $
+  description: string; // what it means
+  synonyms: string[]; // phrases users will say
   aggregations?: AggregationFn[];
   filterOps?: FilterOp[];
 };
@@ -34,16 +50,24 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Trading instrument (e.g., EURUSD, GBPUSD, XAUUSD)",
     synonyms: ["pair", "ticker", "instrument", "currency pair", "asset"],
     aggregations: ["count"],
-    filterOps: ["eq", "in", "contains"]
+    filterOps: ["eq", "in", "contains"],
   },
   {
     key: "tradeType",
     label: "Trade Direction",
     type: "enum",
     description: "Long (buy) or Short (sell)",
-    synonyms: ["direction", "side", "position type", "buy", "sell", "long", "short"],
+    synonyms: [
+      "direction",
+      "side",
+      "position type",
+      "buy",
+      "sell",
+      "long",
+      "short",
+    ],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
   {
     key: "outcome",
@@ -52,7 +76,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Win, Loss, BE (break-even), or PW (partial win)",
     synonyms: ["result", "win/loss", "trade result", "winning", "losing"],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
 
   // ===== PRICES =====
@@ -63,7 +87,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Price at which trade was opened",
     synonyms: ["entry", "entry price", "open price", "fill price"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "closePrice",
@@ -72,7 +96,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Price at which trade was closed",
     synonyms: ["exit", "exit price", "close price", "close"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "sl",
@@ -81,7 +105,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Stop loss price level",
     synonyms: ["stop loss", "sl price", "stop"],
     aggregations: ["avg"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
   {
     key: "tp",
@@ -90,7 +114,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Take profit price level",
     synonyms: ["take profit", "tp price", "target"],
     aggregations: ["avg"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
 
   // ===== MONEY METRICS =====
@@ -102,7 +126,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Net profit or loss in account currency",
     synonyms: ["p&l", "pnl", "profit", "loss", "profit/loss", "net profit"],
     aggregations: ["sum", "avg", "min", "max", "count"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "commissions",
@@ -112,7 +136,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Commission costs paid",
     synonyms: ["commission", "fees", "broker fees", "costs"],
     aggregations: ["sum", "avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "swap",
@@ -122,7 +146,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Overnight swap/rollover costs or credits",
     synonyms: ["swap costs", "rollover", "overnight fees"],
     aggregations: ["sum", "avg"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
 
   // ===== VOLUME & POSITION SIZING =====
@@ -134,7 +158,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Position size in lots",
     synonyms: ["lot size", "lots", "position size", "size"],
     aggregations: ["avg", "min", "max", "sum"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== TIME METRICS =====
@@ -145,7 +169,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "When the trade was opened",
     synonyms: ["entry time", "open time", "start time", "opened at"],
     aggregations: ["count"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "close",
@@ -154,7 +178,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "When the trade was closed",
     synonyms: ["exit time", "close time", "end time", "closed at"],
     aggregations: ["count"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "tradeDurationSeconds",
@@ -164,25 +188,33 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "How long the trade was held (in seconds)",
     synonyms: ["hold time", "duration", "time in trade", "holding period"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "weekday",
     label: "Day of Week",
     type: "enum",
-    description: "Day of the week when trade was opened (Monday, Tuesday, Wednesday, Thursday, Friday)",
+    description:
+      "Day of the week when trade was opened (Monday, Tuesday, Wednesday, Thursday, Friday)",
     synonyms: ["day of week", "day", "weekday", "which day", "what day"],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
   {
     key: "hour",
     label: "Hour of Day",
     type: "number",
     description: "Hour of day when trade was opened (0-23, UTC)",
-    synonyms: ["hour", "time of day", "what hour", "which hour", "morning hour", "evening hour"],
+    synonyms: [
+      "hour",
+      "time of day",
+      "what hour",
+      "which hour",
+      "morning hour",
+      "evening hour",
+    ],
     aggregations: ["count", "avg"],
-    filterOps: ["eq", "in", "gt", "gte", "lt", "lte", "between"]
+    filterOps: ["eq", "in", "gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "month",
@@ -191,7 +223,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Month when trade was opened (January, February, etc.)",
     synonyms: ["month", "which month", "what month", "monthly"],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
   {
     key: "quarter",
@@ -200,7 +232,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Quarter when trade was opened (Q1, Q2, Q3, Q4)",
     synonyms: ["quarter", "q1", "q2", "q3", "q4", "quarterly"],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
   {
     key: "year",
@@ -209,27 +241,45 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Year when trade was opened",
     synonyms: ["year", "which year", "yearly", "annual"],
     aggregations: ["count"],
-    filterOps: ["eq", "in", "gt", "gte", "lt", "lte"]
+    filterOps: ["eq", "in", "gt", "gte", "lt", "lte"],
   },
   {
     key: "timeOfDay",
     label: "Time of Day",
     type: "enum",
-    description: "Time period of day: Morning (6-12), Afternoon (12-18), Evening (18-24), Night (0-6)",
-    synonyms: ["time of day", "morning trades", "afternoon trades", "evening trades", "night trades", "am", "pm"],
+    description:
+      "Time period of day: Morning (6-12), Afternoon (12-18), Evening (18-24), Night (0-6)",
+    synonyms: [
+      "time of day",
+      "morning trades",
+      "afternoon trades",
+      "evening trades",
+      "night trades",
+      "am",
+      "pm",
+    ],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
 
   // ===== TAGS & CATEGORIZATION =====
   {
     key: "sessionTag",
-    label: "Session Tag",
+    label: "Session tag",
     type: "string",
     description: "User-tagged trading session (e.g., London Open, NY Session)",
-    synonyms: ["session", "killzone", "market session", "trading session", "london", "new york", "asia", "ny"],
+    synonyms: [
+      "session",
+      "killzone",
+      "market session",
+      "trading session",
+      "london",
+      "new york",
+      "asia",
+      "ny",
+    ],
     aggregations: ["count"],
-    filterOps: ["eq", "in", "contains"]
+    filterOps: ["eq", "in", "contains"],
   },
   {
     key: "modelTag",
@@ -238,16 +288,22 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Trading model/strategy used (e.g., Breaker Block, FVG)",
     synonyms: ["model", "strategy", "setup", "pattern", "entry model"],
     aggregations: ["count"],
-    filterOps: ["eq", "in", "contains"]
+    filterOps: ["eq", "in", "contains"],
   },
   {
     key: "protocolAlignment",
     label: "Protocol Alignment",
     type: "enum",
-    description: "Whether trade followed protocol: aligned, against, or discretionary",
-    synonyms: ["protocol", "rule adherence", "following rules", "discretionary"],
+    description:
+      "Whether trade followed protocol: aligned, against, or discretionary",
+    synonyms: [
+      "protocol",
+      "rule adherence",
+      "following rules",
+      "discretionary",
+    ],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
 
   // ===== INTENT/PLAN METRICS =====
@@ -259,7 +315,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Planned reward-to-risk ratio at entry",
     synonyms: ["planned rr", "intended rr", "target rr", "plan"],
     aggregations: ["avg", "min", "max", "p50"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "plannedRiskPips",
@@ -269,7 +325,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Planned risk in pips (entry to SL distance)",
     synonyms: ["planned risk", "risk pips", "sl distance"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "plannedTargetPips",
@@ -279,7 +335,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Planned target in pips (entry to TP distance)",
     synonyms: ["planned target", "target pips", "tp distance"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== MANIPULATION METRICS =====
@@ -289,9 +345,14 @@ export const TRADE_FIELDS: TradeField[] = [
     type: "number",
     unit: "pips",
     description: "Size of manipulation leg in pips",
-    synonyms: ["manipulation", "manip pips", "manipulation size", "liquidity grab"],
+    synonyms: [
+      "manipulation",
+      "manip pips",
+      "manipulation size",
+      "liquidity grab",
+    ],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "manipulationHigh",
@@ -300,7 +361,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "High price of manipulation range",
     synonyms: ["manip high", "manipulation top"],
     aggregations: ["avg"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
   {
     key: "manipulationLow",
@@ -309,7 +370,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Low price of manipulation range",
     synonyms: ["manip low", "manipulation bottom"],
     aggregations: ["avg"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
 
   // ===== PEAK/EXCURSION METRICS =====
@@ -321,7 +382,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Maximum profit reached while trade was open (in pips)",
     synonyms: ["mfe", "max favorable excursion", "peak profit", "best price"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "maePips",
@@ -337,7 +398,7 @@ export const TRADE_FIELDS: TradeField[] = [
       "worst price",
     ],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== R METRICS =====
@@ -346,20 +407,28 @@ export const TRADE_FIELDS: TradeField[] = [
     label: "MPE from Manipulation (R)",
     type: "number",
     unit: "R",
-    description: "Maximum positive excursion measured from manipulation leg in R units",
+    description:
+      "Maximum positive excursion measured from manipulation leg in R units",
     synonyms: ["mpe manip leg", "manipulation r", "continuation"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "mpeManipPE_R",
     label: "Post-Exit MPE (R)",
     type: "number",
     unit: "R",
-    description: "Maximum positive excursion after trade exit (how much was left on table)",
-    synonyms: ["post exit mpe", "left on table", "continuation after exit", "what i missed", "post exit r"],
+    description:
+      "Maximum positive excursion after trade exit (how much was left on table)",
+    synonyms: [
+      "post exit mpe",
+      "left on table",
+      "continuation after exit",
+      "what i missed",
+      "post exit r",
+    ],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "maxRR",
@@ -369,7 +438,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Maximum reward-to-risk ratio achieved while trade was open",
     synonyms: ["max rr", "peak rr", "best rr possible"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "realisedRR",
@@ -389,7 +458,7 @@ export const TRADE_FIELDS: TradeField[] = [
       "r",
     ],
     aggregations: ["avg", "min", "max", "p50", "p90", "sum"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== EFFICIENCY METRICS =====
@@ -398,20 +467,31 @@ export const TRADE_FIELDS: TradeField[] = [
     label: "R:R Capture Efficiency",
     type: "number",
     unit: "%",
-    description: "Percentage of maximum R:R that was captured (realisedRR / maxRR * 100)",
-    synonyms: ["capture efficiency", "rr efficiency", "how much did i keep", "efficiency"],
+    description:
+      "Percentage of maximum R:R that was captured (realisedRR / maxRR * 100)",
+    synonyms: [
+      "capture efficiency",
+      "rr efficiency",
+      "how much did i keep",
+      "efficiency",
+    ],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "manipRREfficiency",
     label: "Manipulation R:R Efficiency",
     type: "number",
     unit: "%",
-    description: "Percentage of manipulation leg captured relative to max available",
-    synonyms: ["manip efficiency", "manipulation efficiency", "liquidity efficiency"],
+    description:
+      "Percentage of manipulation leg captured relative to max available",
+    synonyms: [
+      "manip efficiency",
+      "manipulation efficiency",
+      "liquidity efficiency",
+    ],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "exitEfficiency",
@@ -421,7 +501,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Quality of exit timing (higher = exited closer to peak)",
     synonyms: ["exit timing", "how good was my exit", "exit quality"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== VOLATILITY METRICS =====
@@ -432,7 +512,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Raw standard deviation of price movement during trade",
     synonyms: ["stdv", "volatility", "standard deviation", "price variance"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "rawSTDV_PE",
@@ -441,7 +521,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Standard deviation after trade exit",
     synonyms: ["post exit volatility", "stdv pe", "volatility after exit"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
   {
     key: "stdvBucket",
@@ -450,7 +530,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Categorized volatility level (e.g., Low, Medium, High)",
     synonyms: ["volatility bucket", "volatility category", "vol bucket"],
     aggregations: ["count"],
-    filterOps: ["eq", "in"]
+    filterOps: ["eq", "in"],
   },
   {
     key: "estimatedWeightedMPE_R",
@@ -460,7 +540,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Volatility-adjusted maximum positive excursion",
     synonyms: ["weighted mpe", "adjusted mpe"],
     aggregations: ["avg", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== EXECUTION QUALITY =====
@@ -472,7 +552,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Bid-ask spread at entry in pips",
     synonyms: ["entry spread", "spread at entry", "entry cost"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "exitSpreadPips",
@@ -482,7 +562,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Bid-ask spread at exit in pips",
     synonyms: ["exit spread", "spread at exit", "exit cost"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "entrySlippagePips",
@@ -492,7 +572,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Slippage at entry in pips",
     synonyms: ["entry slippage", "slippage on entry"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "exitSlippagePips",
@@ -502,7 +582,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Slippage at exit in pips",
     synonyms: ["exit slippage", "slippage on exit"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "slModCount",
@@ -511,7 +591,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Number of times stop loss was modified",
     synonyms: ["sl modifications", "stop loss changes", "sl moves"],
     aggregations: ["avg", "sum", "max"],
-    filterOps: ["eq", "gt", "gte"]
+    filterOps: ["eq", "gt", "gte"],
   },
   {
     key: "tpModCount",
@@ -520,7 +600,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Number of times take profit was modified",
     synonyms: ["tp modifications", "take profit changes", "tp moves"],
     aggregations: ["avg", "sum", "max"],
-    filterOps: ["eq", "gt", "gte"]
+    filterOps: ["eq", "gt", "gte"],
   },
   {
     key: "partialCloseCount",
@@ -529,7 +609,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Number of partial closes taken",
     synonyms: ["partials", "partial closes", "scale outs"],
     aggregations: ["avg", "sum", "max"],
-    filterOps: ["eq", "gt", "gte"]
+    filterOps: ["eq", "gt", "gte"],
   },
 
   // ===== TRADE BEHAVIOR =====
@@ -540,7 +620,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Whether a trailing stop was detected",
     synonyms: ["trailing stop", "trailing sl", "used trailing"],
     aggregations: ["count"],
-    filterOps: ["eq"]
+    filterOps: ["eq"],
   },
   {
     key: "scaleInCount",
@@ -549,7 +629,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Number of times position was scaled into",
     synonyms: ["scale in", "adding to position", "scale ins"],
     aggregations: ["avg", "sum", "max"],
-    filterOps: ["eq", "gt", "gte"]
+    filterOps: ["eq", "gt", "gte"],
   },
   {
     key: "scaleOutCount",
@@ -558,7 +638,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Number of times position was scaled out of",
     synonyms: ["scale out", "reducing position", "scale outs"],
     aggregations: ["avg", "sum", "max"],
-    filterOps: ["eq", "gt", "gte"]
+    filterOps: ["eq", "gt", "gte"],
   },
 
   // ===== TIMING =====
@@ -570,7 +650,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Time from entry to peak profit (MFE) in seconds",
     synonyms: ["time to peak", "entry to peak", "time to mfe"],
     aggregations: ["avg", "min", "max", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "postExitPeakDurationSeconds",
@@ -580,7 +660,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Time from exit to post-exit peak in seconds",
     synonyms: ["post exit time", "time after exit to peak"],
     aggregations: ["avg", "p50", "p90"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
 
   // ===== ACCOUNT STATE =====
@@ -592,7 +672,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Account balance when trade was opened",
     synonyms: ["entry balance", "balance at entry"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "entryEquity",
@@ -602,7 +682,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Account equity when trade was opened",
     synonyms: ["entry equity", "equity at entry"],
     aggregations: ["avg", "min", "max"],
-    filterOps: ["gt", "gte", "lt", "lte", "between"]
+    filterOps: ["gt", "gte", "lt", "lte", "between"],
   },
   {
     key: "entryMargin",
@@ -612,7 +692,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Margin used when trade was opened",
     synonyms: ["entry margin", "margin used"],
     aggregations: ["avg", "sum"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
   {
     key: "entryFreeMargin",
@@ -622,7 +702,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Free margin available when trade was opened",
     synonyms: ["free margin", "available margin"],
     aggregations: ["avg", "min"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
   {
     key: "entryMarginLevel",
@@ -632,7 +712,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Margin level percentage when trade was opened",
     synonyms: ["margin level", "margin %"],
     aggregations: ["avg", "min"],
-    filterOps: ["gt", "gte", "lt", "lte"]
+    filterOps: ["gt", "gte", "lt", "lte"],
   },
 
   // ===== COMPUTED METRICS (calculated across multiple trades) =====
@@ -642,28 +722,36 @@ export const TRADE_FIELDS: TradeField[] = [
     type: "number",
     unit: "%",
     description: "Percentage of trades that were profitable",
-    synonyms: ["win rate", "win percentage", "winning percentage", "win ratio", "success rate"],
+    synonyms: [
+      "win rate",
+      "win percentage",
+      "winning percentage",
+      "win ratio",
+      "success rate",
+    ],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "profitFactor",
     label: "Profit Factor",
     type: "number",
-    description: "Ratio of gross profits to gross losses (above 1 = profitable)",
+    description:
+      "Ratio of gross profits to gross losses (above 1 = profitable)",
     synonyms: ["profit factor", "pf", "gross profit ratio"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "expectancy",
     label: "Expectancy",
     type: "number",
     unit: "$",
-    description: "Average expected profit per trade (winRate * avgWin - (1-winRate) * avgLoss)",
+    description:
+      "Average expected profit per trade (winRate * avgWin - (1-winRate) * avgLoss)",
     synonyms: ["expectancy", "expected value", "ev", "average expectation"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "avgWin",
@@ -673,7 +761,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Average profit on winning trades",
     synonyms: ["average win", "avg winner", "average winner", "mean win"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "avgLoss",
@@ -683,7 +771,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Average loss on losing trades (negative value)",
     synonyms: ["average loss", "avg loser", "average loser", "mean loss"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "maxDrawdown",
@@ -693,17 +781,18 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Largest peak-to-trough decline in account equity",
     synonyms: ["max drawdown", "maximum drawdown", "drawdown", "biggest drop"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "riskOfRuin",
     label: "Risk of Ruin",
     type: "number",
     unit: "%",
-    description: "Probability of losing entire account based on win rate and risk per trade",
+    description:
+      "Probability of losing entire account based on win rate and risk per trade",
     synonyms: ["risk of ruin", "ror", "ruin probability"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
   {
     key: "averageRR",
@@ -713,7 +802,7 @@ export const TRADE_FIELDS: TradeField[] = [
     description: "Average realized risk-reward ratio across all trades",
     synonyms: ["average rr", "avg rr", "mean rr", "average risk reward"],
     aggregations: [],
-    filterOps: []
+    filterOps: [],
   },
 ];
 
@@ -738,9 +827,9 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     dependsOn: ["profit"],
     compute: (trades) => {
       if (trades.length === 0) return null;
-      const wins = trades.filter(t => Number(t.profit) > 0).length;
+      const wins = trades.filter((t) => Number(t.profit) > 0).length;
       return (wins / trades.length) * 100;
-    }
+    },
   },
   {
     key: "profitFactor",
@@ -750,14 +839,16 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     dependsOn: ["profit"],
     compute: (trades) => {
       const grossProfit = trades
-        .filter(t => Number(t.profit) > 0)
+        .filter((t) => Number(t.profit) > 0)
         .reduce((sum, t) => sum + Number(t.profit), 0);
-      const grossLoss = Math.abs(trades
-        .filter(t => Number(t.profit) < 0)
-        .reduce((sum, t) => sum + Number(t.profit), 0));
+      const grossLoss = Math.abs(
+        trades
+          .filter((t) => Number(t.profit) < 0)
+          .reduce((sum, t) => sum + Number(t.profit), 0)
+      );
       if (grossLoss === 0) return grossProfit > 0 ? Infinity : 0;
       return grossProfit / grossLoss;
-    }
+    },
   },
   {
     key: "expectancy",
@@ -767,8 +858,11 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     dependsOn: ["profit"],
     compute: (trades) => {
       if (trades.length === 0) return null;
-      return trades.reduce((sum, t) => sum + Number(t.profit || 0), 0) / trades.length;
-    }
+      return (
+        trades.reduce((sum, t) => sum + Number(t.profit || 0), 0) /
+        trades.length
+      );
+    },
   },
   {
     key: "avgWin",
@@ -777,10 +871,12 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     requiresMultipleTrades: true,
     dependsOn: ["profit"],
     compute: (trades) => {
-      const winners = trades.filter(t => Number(t.profit) > 0);
+      const winners = trades.filter((t) => Number(t.profit) > 0);
       if (winners.length === 0) return null;
-      return winners.reduce((sum, t) => sum + Number(t.profit), 0) / winners.length;
-    }
+      return (
+        winners.reduce((sum, t) => sum + Number(t.profit), 0) / winners.length
+      );
+    },
   },
   {
     key: "avgLoss",
@@ -789,10 +885,12 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     requiresMultipleTrades: true,
     dependsOn: ["profit"],
     compute: (trades) => {
-      const losers = trades.filter(t => Number(t.profit) < 0);
+      const losers = trades.filter((t) => Number(t.profit) < 0);
       if (losers.length === 0) return null;
-      return losers.reduce((sum, t) => sum + Number(t.profit), 0) / losers.length;
-    }
+      return (
+        losers.reduce((sum, t) => sum + Number(t.profit), 0) / losers.length
+      );
+    },
   },
   {
     key: "maxDrawdown",
@@ -811,7 +909,7 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
         if (dd > maxDD) maxDD = dd;
       }
       return maxDD;
-    }
+    },
   },
   {
     key: "riskOfRuin",
@@ -821,17 +919,23 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     dependsOn: ["profit"],
     compute: (trades) => {
       if (trades.length < 10) return null;
-      const wins = trades.filter(t => Number(t.profit) > 0).length;
+      const wins = trades.filter((t) => Number(t.profit) > 0).length;
       const winRate = wins / trades.length;
-      const avgWin = trades.filter(t => Number(t.profit) > 0).reduce((s, t) => s + Number(t.profit), 0) / wins || 1;
-      const losses = trades.filter(t => Number(t.profit) < 0);
-      const avgLoss = Math.abs(losses.reduce((s, t) => s + Number(t.profit), 0) / losses.length) || 1;
+      const avgWin =
+        trades
+          .filter((t) => Number(t.profit) > 0)
+          .reduce((s, t) => s + Number(t.profit), 0) / wins || 1;
+      const losses = trades.filter((t) => Number(t.profit) < 0);
+      const avgLoss =
+        Math.abs(
+          losses.reduce((s, t) => s + Number(t.profit), 0) / losses.length
+        ) || 1;
       const rr = avgWin / avgLoss;
       if (winRate <= 0 || winRate >= 1 || rr <= 0) return null;
       const q = (1 - winRate) / winRate;
       const ror = Math.pow(q, 100 / (rr + 1)) * 100;
       return Math.max(0, Math.min(100, ror));
-    }
+    },
   },
   {
     key: "averageRR",
@@ -840,15 +944,19 @@ export const COMPUTED_METRICS: ComputedMetricDef[] = [
     requiresMultipleTrades: true,
     dependsOn: ["realisedRR"],
     compute: (trades) => {
-      const withRR = trades.filter(t => t.realisedRR !== null && t.realisedRR !== undefined);
+      const withRR = trades.filter(
+        (t) => t.realisedRR !== null && t.realisedRR !== undefined
+      );
       if (withRR.length === 0) return null;
-      return withRR.reduce((sum, t) => sum + Number(t.realisedRR), 0) / withRR.length;
-    }
-  }
+      return (
+        withRR.reduce((sum, t) => sum + Number(t.realisedRR), 0) / withRR.length
+      );
+    },
+  },
 ];
 
 export const COMPUTED_METRICS_MAP = new Map<string, ComputedMetricDef>(
-  COMPUTED_METRICS.map(m => [m.key, m])
+  COMPUTED_METRICS.map((m) => [m.key, m])
 );
 
 export function isComputedMetric(key: string): boolean {
@@ -863,7 +971,7 @@ export function getComputedMetric(key: string): ComputedMetricDef | undefined {
  * Field lookup by key
  */
 export const FIELD_MAP = new Map<string, TradeField>(
-  TRADE_FIELDS.map(f => [f.key, f])
+  TRADE_FIELDS.map((f) => [f.key, f])
 );
 
 /**
@@ -875,28 +983,32 @@ export const CONCEPT_SYNONYMS: Record<string, string[]> = {
   "win rate": ["winRate"],
   "win percentage": ["winRate"],
   "profit factor": ["profitFactor"],
-  "expectancy": ["expectancy"],
+  expectancy: ["expectancy"],
   "expected value": ["expectancy"],
   "average win": ["avgWin"],
   "average winner": ["avgWin"],
   "average loss": ["avgLoss"],
   "average loser": ["avgLoss"],
   "max drawdown": ["maxDrawdown"],
-  "drawdown": ["maxDrawdown"],
+  drawdown: ["maxDrawdown"],
   "trade drawdown": ["maePips"],
   "intratrade drawdown": ["maePips"],
   "risk of ruin": ["riskOfRuin"],
   "average rr": ["averageRR"],
   "average risk reward": ["averageRR"],
-  
+
   // Exit efficiency
   "leaving on the table": ["mpeManipPE_R", "maxRR", "rrCaptureEfficiency"],
   "exit timing": ["exitEfficiency", "rrCaptureEfficiency"],
-  "running longer": ["tradeDurationSeconds", "mpeManipPE_R", "rrCaptureEfficiency"],
+  "running longer": [
+    "tradeDurationSeconds",
+    "mpeManipPE_R",
+    "rrCaptureEfficiency",
+  ],
   "holding period": ["tradeDurationSeconds"],
   "peak profit": ["mfePips"],
   "commission costs": ["commissions"],
-  
+
   // Time-based queries
   "best day": ["weekday", "profit"],
   "worst day": ["weekday", "profit"],
@@ -906,9 +1018,9 @@ export const CONCEPT_SYNONYMS: Record<string, string[]> = {
   "afternoon trades": ["timeOfDay"],
   "evening trades": ["timeOfDay"],
   "night trades": ["timeOfDay"],
-  "scalps": ["tradeDurationSeconds"],
+  scalps: ["tradeDurationSeconds"],
   "swing trades": ["tradeDurationSeconds"],
-  
+
   // Session/tag queries
   "london session": ["sessionTag"],
   "ny session": ["sessionTag"],
@@ -1006,12 +1118,12 @@ function scorePhrase(query: string, phrase: string, weight: number): number {
  * Helper: Get all fields that support a specific aggregation
  */
 export function getFieldsForAggregation(agg: AggregationFn): TradeField[] {
-  return TRADE_FIELDS.filter(f => f.aggregations?.includes(agg));
+  return TRADE_FIELDS.filter((f) => f.aggregations?.includes(agg));
 }
 
 /**
  * Helper: Get all enum fields
  */
 export function getEnumFields(): TradeField[] {
-  return TRADE_FIELDS.filter(f => f.type === "enum");
+  return TRADE_FIELDS.filter((f) => f.type === "enum");
 }

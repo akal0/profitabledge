@@ -1,68 +1,125 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAccountStore } from "@/stores/account";
 import { trpcClient } from "@/utils/trpc";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { TrendingUp, AlertTriangle, Info, Sparkles } from "lucide-react";
+import { AlertTriangle, Info, Lightbulb, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const INSIGHT_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const STORAGE_KEY = "lastInsightTime";
 
+function formatInsightTitle(title: string): string {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return title;
+
+  return words
+    .map((word, index) => {
+      if (index === 0) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+
+      return /^[A-Z0-9:+/-]+$/.test(word) ? word : word.toLowerCase();
+    })
+    .join(" ");
+}
+
+type ShowInsightToastOptions = {
+  recordShownAt?: boolean;
+};
+
+export async function showInsightToast(
+  accountId: string,
+  options: ShowInsightToastOptions = {}
+) {
+  const { recordShownAt = true } = options;
+  const insight = await trpcClient.accounts.randomInsight.query({
+    accountId,
+  });
+  if (!insight) return;
+
+  const IconComponent =
+    insight.severity === "positive"
+      ? Sparkles
+      : insight.severity === "warning"
+      ? AlertTriangle
+      : Info;
+
+  const iconColor =
+    insight.severity === "positive"
+      ? "text-teal-400"
+      : insight.severity === "warning"
+      ? "text-amber-400"
+      : "text-blue-400";
+
+  toast(formatInsightTitle(insight.title), {
+    description: insight.message,
+    icon: <IconComponent className={`size-4 ${iconColor}`} />,
+    duration: 8000,
+    classNames: {
+      toast:
+        "bg-sidebar border-white/10 text-white !min-w-[300px] !max-w-[500px]",
+      title: "text-white font-medium",
+      description: "text-white/70",
+      actionButton:
+        "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 border-teal-500/30",
+    },
+  });
+
+  if (recordShownAt) {
+    localStorage.setItem(STORAGE_KEY, Date.now().toString());
+  }
+}
+
+export function InsightToastTestButton() {
+  const accountId = useAccountStore((s) => s.selectedAccountId);
+  const [isPending, setIsPending] = useState(false);
+
+  const handleClick = async () => {
+    if (!accountId || isPending) return;
+
+    setIsPending(true);
+    try {
+      await showInsightToast(accountId, { recordShownAt: false });
+    } catch (error) {
+      console.error("Failed to trigger insight toast:", error);
+      toast.error("Failed to trigger insight toast");
+    } finally {
+      setIsPending(false);
+    }
+  };
+
+  return (
+    <Button
+      onClick={() => void handleClick()}
+      disabled={!accountId || isPending}
+      className={cn(
+        "cursor-pointer flex h-[38px] w-max items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95",
+        isPending && "cursor-wait"
+      )}
+    >
+      <Lightbulb className="h-3.5 w-3.5 text-white/75" />
+      <span>{isPending ? "Testing..." : "Test insight toast"}</span>
+    </Button>
+  );
+}
+
 export function AIInsightToast() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
-  const router = useRouter();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasShownLoginInsight = useRef(false);
 
-  const showInsight = async () => {
+  const showInsight = useCallback(async () => {
     if (!accountId) return;
 
     try {
-      const insight = await trpcClient.accounts.randomInsight.query({
-        accountId,
-      });
-      if (!insight) return;
-
-      const IconComponent =
-        insight.severity === "success"
-          ? Sparkles
-          : insight.severity === "warning"
-          ? AlertTriangle
-          : Info;
-
-      const iconColor =
-        insight.severity === "success"
-          ? "text-teal-400"
-          : insight.severity === "warning"
-          ? "text-amber-400"
-          : "text-blue-400";
-
-      toast(insight.title, {
-        description: insight.message,
-        icon: <IconComponent className={`size-4 ${iconColor}`} />,
-        duration: 8000,
-        // action: {
-        //   label: "View AI Assistant",
-        //   onClick: () => router.push("/assistant"),
-        // },
-        classNames: {
-          toast:
-            "bg-sidebar border-white/10 text-white !min-w-[300px] !max-w-[500px]",
-          title: "text-white font-medium",
-          description: "text-white/70",
-          actionButton:
-            "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 border-teal-500/30",
-        },
-      });
-
-      // Update last insight time
-      localStorage.setItem(STORAGE_KEY, Date.now().toString());
+      await showInsightToast(accountId);
     } catch (error) {
       console.error("Failed to fetch insight:", error);
     }
-  };
+  }, [accountId]);
 
   useEffect(() => {
     if (!accountId) return;
@@ -94,7 +151,7 @@ export function AIInsightToast() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [accountId]);
+  }, [accountId, showInsight]);
 
   return null; // This component doesn't render anything
 }

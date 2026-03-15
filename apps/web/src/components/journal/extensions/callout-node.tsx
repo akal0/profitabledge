@@ -83,7 +83,10 @@ function CalloutNodeView({ node, updateAttributes, deleteNode, selected }: any) 
       >
         {/* Emoji/Icon - aligned with first line of text */}
         <div 
-          className={cn("flex-shrink-0 text-xl cursor-pointer select-none leading-[1.7]", config.text)}
+          className={cn(
+            "shrink-0 cursor-pointer select-none pt-[5px] text-base leading-none",
+            config.text
+          )}
           onClick={cycleType}
           title="Click to change callout type"
           contentEditable={false}
@@ -92,8 +95,8 @@ function CalloutNodeView({ node, updateAttributes, deleteNode, selected }: any) 
         </div>
 
         {/* Content - editable */}
-        <div className="flex-1 min-w-0 pt-[2px]">
-          <NodeViewContent className="prose prose-invert prose-sm max-w-none [&>p]:my-0 [&>p]:text-white/80 [&>p]:leading-[1.7]" />
+        <div className="flex-1 min-w-0">
+          <NodeViewContent className="prose prose-invert prose-sm max-w-none [&>p]:my-0 [&>p]:text-xs [&>p]:text-white/80 [&>p]:leading-[1.7]" />
         </div>
 
         {/* Controls */}

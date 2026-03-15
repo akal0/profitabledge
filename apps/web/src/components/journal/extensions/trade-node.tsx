@@ -4,18 +4,16 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
 import React, { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Trash2, ExternalLink, GripVertical, ArrowUpRight, ArrowDownRight, Search } from "lucide-react";
+import { Trash2, ExternalLink, GripVertical, ArrowUpRight, ArrowDownRight, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
+  DialogClose,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -306,137 +304,163 @@ function TradeSelectDialog({ isOpen, onClose, onSelect }: TradeSelectDialogProps
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="bg-sidebar border-white/10 max-w-lg max-h-[80vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle>Select Trade</DialogTitle>
-          <DialogDescription className="text-white/40">
-            Choose a trade to embed in your journal entry
-          </DialogDescription>
-        </DialogHeader>
-
-        {/* Account selector */}
-        {accounts && accounts.length > 1 && (
-          <div className="flex gap-2 flex-wrap">
-            {accounts.map((account) => (
-              <Button
-                key={account.id}
-                variant={selectedAccountId === account.id ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedAccountId(account.id)}
-                className={cn(
-                  selectedAccountId === account.id
-                    ? "bg-teal-500 hover:bg-teal-600"
-                    : "border-white/10 text-white/60 hover:text-white"
-                )}
-              >
-                {account.name}
-              </Button>
-            ))}
+      <DialogContent
+        showCloseButton={false}
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-lg"
+      >
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80 max-h-[80vh]">
+          {/* Header */}
+          <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <Search className="h-3.5 w-3.5 text-white/60" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-white">Select Trade</div>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">
+                Choose a trade to embed in your journal entry
+              </p>
+            </div>
+            <DialogClose asChild>
+              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+                <span className="sr-only">Close</span>
+              </button>
+            </DialogClose>
           </div>
-        )}
+          <Separator />
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search trades by symbol..."
-            className="pl-9 bg-sidebar-accent border-white/10 text-white placeholder:text-white/30"
-          />
-        </div>
-
-        {/* Trade list */}
-        <ScrollArea className="flex-1 -mx-6 px-6 min-h-[300px]">
-          <div className="space-y-1 py-2">
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 bg-sidebar-accent rounded-lg" />
-              ))
-            ) : !selectedAccountId ? (
-              <div className="text-center py-8 text-white/40">
-                No account available
-              </div>
-            ) : trades.length === 0 ? (
-              <div className="text-center py-8 text-white/40">
-                {search ? "No trades match your search" : "No trades found"}
-              </div>
-            ) : (
-              trades.map((trade) => {
-                const isLong = trade.tradeDirection === "long";
-                const profit = Number(trade.profit || 0);
-                const isWin = profit > 0;
-                const pips = Number((trade as any).pips || 0);
-
-                return (
-                  <button
-                    key={trade.id}
-                    onClick={() => onSelect(trade)}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg bg-sidebar-accent border border-transparent hover:border-white/10 transition-colors text-left"
+          {/* Body */}
+          <div className="flex flex-col flex-1 overflow-hidden px-5 py-4 gap-3">
+            {/* Account selector */}
+            {accounts && accounts.length > 1 && (
+              <div className="flex gap-2 flex-wrap shrink-0">
+                {accounts.map((account) => (
+                  <Button
+                    key={account.id}
+                    variant={selectedAccountId === account.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setSelectedAccountId(account.id)}
+                    className={cn(
+                      selectedAccountId === account.id
+                        ? "bg-teal-500 hover:bg-teal-600"
+                        : "border-white/10 text-white/60 hover:text-white"
+                    )}
                   >
-                    {/* Direction icon */}
-                    <div
-                      className={cn(
-                        "flex items-center justify-center w-8 h-8 rounded-lg",
-                        isLong ? "bg-teal-500/10" : "bg-red-500/10"
-                      )}
-                    >
-                      {isLong ? (
-                        <ArrowUpRight className="h-4 w-4 text-teal-400" />
-                      ) : (
-                        <ArrowDownRight className="h-4 w-4 text-red-400" />
-                      )}
-                    </div>
-
-                    {/* Trade info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white">{trade.symbol || "Unknown"}</span>
-                        {trade.outcome && (
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              "text-xs border-white/10",
-                              trade.outcome === "Win"
-                                ? "text-teal-400"
-                                : trade.outcome === "Loss"
-                                ? "text-red-400"
-                                : "text-yellow-400"
-                            )}
-                          >
-                            {trade.outcome}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-xs text-white/40 mt-0.5">
-                        {trade.close
-                          ? format(new Date(trade.close), "MMM d, h:mm a")
-                          : "Open"}{" "}
-                        {pips !== 0 && <>• {pips > 0 ? "+" : ""}{pips.toFixed(1)} pips</>}
-                      </div>
-                    </div>
-
-                    {/* P&L */}
-                    <div
-                      className={cn(
-                        "text-sm font-medium",
-                        isWin ? "text-teal-400" : "text-red-400"
-                      )}
-                    >
-                      {isWin ? "+" : ""}${profit.toFixed(2)}
-                    </div>
-                  </button>
-                );
-              })
+                    {account.name}
+                  </Button>
+                ))}
+              </div>
             )}
-          </div>
-        </ScrollArea>
 
-        <DialogFooter className="border-t border-white/5 pt-4">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-        </DialogFooter>
+            {/* Search */}
+            <div className="relative shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search trades by symbol..."
+                className="pl-9 bg-sidebar-accent border-white/10 text-white placeholder:text-white/30"
+              />
+            </div>
+
+            {/* Trade list */}
+            <ScrollArea className="flex-1">
+              <div className="space-y-1 py-2">
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-16 bg-sidebar-accent" />
+                  ))
+                ) : !selectedAccountId ? (
+                  <div className="text-center py-8 text-white/40">
+                    No account available
+                  </div>
+                ) : trades.length === 0 ? (
+                  <div className="text-center py-8 text-white/40">
+                    {search ? "No trades match your search" : "No trades found"}
+                  </div>
+                ) : (
+                  trades.map((trade) => {
+                    const isLong = trade.tradeDirection === "long";
+                    const profit = Number(trade.profit || 0);
+                    const isWin = profit > 0;
+                    const pips = Number((trade as any).pips || 0);
+
+                    return (
+                      <button
+                        key={trade.id}
+                        onClick={() => onSelect(trade)}
+                        className="w-full flex items-center gap-3 p-3 bg-sidebar-accent border border-transparent hover:border-white/10 transition-colors text-left"
+                      >
+                        {/* Direction icon */}
+                        <div
+                          className={cn(
+                            "flex items-center justify-center w-8 h-8",
+                            isLong ? "bg-teal-500/10" : "bg-red-500/10"
+                          )}
+                        >
+                          {isLong ? (
+                            <ArrowUpRight className="h-4 w-4 text-teal-400" />
+                          ) : (
+                            <ArrowDownRight className="h-4 w-4 text-red-400" />
+                          )}
+                        </div>
+
+                        {/* Trade info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-white">{trade.symbol || "Unknown"}</span>
+                            {trade.outcome && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs border-white/10",
+                                  trade.outcome === "Win"
+                                    ? "text-teal-400"
+                                    : trade.outcome === "Loss"
+                                    ? "text-red-400"
+                                    : "text-yellow-400"
+                                )}
+                              >
+                                {trade.outcome}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-white/40 mt-0.5">
+                            {trade.close
+                              ? format(new Date(trade.close), "MMM d, h:mm a")
+                              : "Open"}{" "}
+                            {pips !== 0 && <>• {pips > 0 ? "+" : ""}{pips.toFixed(1)} pips</>}
+                          </div>
+                        </div>
+
+                        {/* P&L */}
+                        <div
+                          className={cn(
+                            "text-sm font-medium",
+                            isWin ? "text-teal-400" : "text-red-400"
+                          )}
+                        >
+                          {isWin ? "+" : ""}${profit.toFixed(2)}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          <Separator />
+          {/* Footer */}
+          <div className="flex items-center justify-end px-5 py-3 shrink-0">
+            <Button
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              onClick={onClose}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

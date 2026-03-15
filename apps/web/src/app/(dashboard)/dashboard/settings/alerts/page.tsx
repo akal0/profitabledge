@@ -15,13 +15,10 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Bell, Plus, Trash2, Edit2 } from "lucide-react";
+import { Bell, Plus, Trash2, Edit2, X } from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions, queryClient } from "@/utils/trpc";
 import { toast } from "sonner";
@@ -291,144 +288,162 @@ export default function AlertsSettingsPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="bg-sidebar border-white/10">
-          <DialogHeader>
-            <DialogTitle className="text-white">{editingRule ? "Edit Alert Rule" : "Create Alert Rule"}</DialogTitle>
-            <DialogDescription className="text-white/60">
-              Configure when you want to be alerted about your trading performance
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label className="text-white/80">Rule Name</Label>
-              <Input
-                placeholder="e.g., Daily 5% Loss Limit"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="bg-sidebar-accent border-white/5 text-white"
-              />
-            </div>
-
-            {!editingRule && (
-              <div className="space-y-2">
-                <Label className="text-white/80">Rule Type</Label>
-                <Select value={ruleType} onValueChange={(v) => setRuleType(v as RuleType)}>
-                  <SelectTrigger className="bg-sidebar-accent border-white/5 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(RULE_TYPE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-white/50">{RULE_TYPE_DESCRIPTIONS[ruleType]}</p>
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-xl"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                <Bell className="h-3.5 w-3.5 text-white/60" />
               </div>
-            )}
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">{editingRule ? "Edit Alert Rule" : "Create Alert Rule"}</div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">Configure when you want to be alerted about your trading performance</p>
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
 
-            <div className="grid grid-cols-2 gap-4">
+            {/* Body */}
+            <div className="px-5 py-4 space-y-4">
               <div className="space-y-2">
-                <Label className="text-white/80">Threshold Value</Label>
+                <Label className="text-white/80">Rule Name</Label>
                 <Input
-                  type="number"
-                  placeholder="5"
-                  value={thresholdValue}
-                  onChange={(e) => setThresholdValue(e.target.value)}
+                  placeholder="e.g., Daily 5% Loss Limit"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="bg-sidebar-accent border-white/5 text-white"
                 />
               </div>
+
               {!editingRule && (
                 <div className="space-y-2">
-                  <Label className="text-white/80">Unit</Label>
-                  <Select value={thresholdUnit} onValueChange={(v) => setThresholdUnit(v as ThresholdUnit)}>
+                  <Label className="text-white/80">Rule Type</Label>
+                  <Select value={ruleType} onValueChange={(v) => setRuleType(v as RuleType)}>
                     <SelectTrigger className="bg-sidebar-accent border-white/5 text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="percent">Percent (%)</SelectItem>
-                      <SelectItem value="usd">USD ($)</SelectItem>
-                      <SelectItem value="count">Count</SelectItem>
+                      {Object.entries(RULE_TYPE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-white/50">{RULE_TYPE_DESCRIPTIONS[ruleType]}</p>
                 </div>
               )}
-            </div>
 
-            <div className="space-y-2">
-              <Label className="text-white/80">Severity</Label>
-              <Select value={severity} onValueChange={(v) => setSeverity(v as Severity)}>
-                <SelectTrigger className="bg-sidebar-accent border-white/5 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="info">Info</SelectItem>
-                  <SelectItem value="warning">Warning</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-white/80">Cooldown (minutes)</Label>
-              <Input
-                type="number"
-                placeholder="60"
-                value={cooldownMinutes}
-                onChange={(e) => setCooldownMinutes(e.target.value)}
-                className="bg-sidebar-accent border-white/5 text-white"
-              />
-              <p className="text-xs text-white/50">
-                Minimum time between repeat alerts of the same type
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-xs text-white/60 uppercase tracking-wider">Notification Channels</Label>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-white/80">In-App Notifications</Label>
-                  <p className="text-[10px] text-white/30">Show alert in the notification hub</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-white/80">Threshold Value</Label>
+                  <Input
+                    type="number"
+                    placeholder="5"
+                    value={thresholdValue}
+                    onChange={(e) => setThresholdValue(e.target.value)}
+                    className="bg-sidebar-accent border-white/5 text-white"
+                  />
                 </div>
-                <Switch checked={notifyInApp} onCheckedChange={setNotifyInApp} className="data-[state=checked]:bg-teal-600" />
+                {!editingRule && (
+                  <div className="space-y-2">
+                    <Label className="text-white/80">Unit</Label>
+                    <Select value={thresholdUnit} onValueChange={(v) => setThresholdUnit(v as ThresholdUnit)}>
+                      <SelectTrigger className="bg-sidebar-accent border-white/5 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percent">Percent (%)</SelectItem>
+                        <SelectItem value="usd">USD ($)</SelectItem>
+                        <SelectItem value="count">Count</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-white/80">Email Notifications</Label>
-                  <p className="text-[10px] text-white/30">Send alert to your email address</p>
-                </div>
-                <Switch checked={notifyEmail} onCheckedChange={setNotifyEmail} className="data-[state=checked]:bg-teal-600" />
+
+              <div className="space-y-2">
+                <Label className="text-white/80">Severity</Label>
+                <Select value={severity} onValueChange={(v) => setSeverity(v as Severity)}>
+                  <SelectTrigger className="bg-sidebar-accent border-white/5 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="info">Info</SelectItem>
+                    <SelectItem value="warning">Warning</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-white/80">Webhook (Discord/Slack/Custom)</Label>
+
+              <div className="space-y-2">
+                <Label className="text-white/80">Cooldown (minutes)</Label>
                 <Input
-                  type="url"
-                  placeholder="https://discord.com/api/webhooks/..."
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  className="bg-sidebar-accent border-white/5 text-white text-xs"
+                  type="number"
+                  placeholder="60"
+                  value={cooldownMinutes}
+                  onChange={(e) => setCooldownMinutes(e.target.value)}
+                  className="bg-sidebar-accent border-white/5 text-white"
                 />
+                <p className="text-xs text-white/50">
+                  Minimum time between repeat alerts of the same type
+                </p>
               </div>
+
+              <div className="space-y-3">
+                <Label className="text-xs text-white/60 uppercase tracking-wider">Notification Channels</Label>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-white/80">In-App Notifications</Label>
+                    <p className="text-[10px] text-white/30">Show alert in the notification hub</p>
+                  </div>
+                  <Switch checked={notifyInApp} onCheckedChange={setNotifyInApp} className="data-[state=checked]:bg-teal-600" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-white/80">Email Notifications</Label>
+                    <p className="text-[10px] text-white/30">Send alert to your email address</p>
+                  </div>
+                  <Switch checked={notifyEmail} onCheckedChange={setNotifyEmail} className="data-[state=checked]:bg-teal-600" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-white/80">Webhook (Discord/Slack/Custom)</Label>
+                  <Input
+                    type="url"
+                    placeholder="https://discord.com/api/webhooks/..."
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    className="bg-sidebar-accent border-white/5 text-white text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                onClick={() => setShowCreateDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreate}
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              >
+                {editingRule ? "Save Changes" : "Create Rule"}
+              </Button>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setShowCreateDialog(false)}
-              className="text-white/60"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreate}
-              className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
-            >
-              {editingRule ? "Save Changes" : "Create Rule"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

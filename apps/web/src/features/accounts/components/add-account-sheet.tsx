@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   Sheet,
@@ -37,9 +37,12 @@ import {
 } from "@/components/trades/trade-identifier-pill";
 import {
   BROKER_OPTIONS,
+  brokerSupportsMultiCsvImport,
+  getBrokerSupplementalCsvReports,
   getBrokerImage,
   isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
+import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 
 export type AddAccountForm = {
@@ -48,13 +51,34 @@ export type AddAccountForm = {
   broker: string;
   initialCurrency: "$" | "£" | "€" | "";
   initialBalance: string;
-  file: File | null;
+  files: File[];
 };
 
 export type NewAccount = {
   id: string;
   name: string;
   image: string;
+};
+
+type PendingCsvImportResolution = {
+  matchedAccount: {
+    id: string;
+    name: string;
+    broker: string;
+    accountNumber: string | null;
+  };
+  warnings: string[];
+};
+
+type DemoWorkspaceResult = {
+  tradeCount: number;
+  openTradeCount: number;
+  resetCount?: number;
+  account?: {
+    id: string;
+    name: string;
+    broker?: string | null;
+  };
 };
 
 export function AddAccountSheet({
@@ -73,9 +97,11 @@ export function AddAccountSheet({
     broker: "",
     initialCurrency: "$",
     initialBalance: "",
-    file: null,
+    files: [],
   });
   const [submitting, setSubmitting] = useState(false);
+  const [pendingCsvImportResolution, setPendingCsvImportResolution] =
+    useState<PendingCsvImportResolution | null>(null);
   const { accounts } = useAccountCatalog();
 
   const demoAccounts = useMemo(
@@ -85,10 +111,23 @@ export function AddAccountSheet({
 
   const canSubmit = useMemo(() => {
     if (form.method === "csv") {
-      return Boolean(form.file && form.name && form.broker);
+      return Boolean(form.files.length > 0 && form.name && form.broker);
     }
     return false;
   }, [form]);
+
+  const selectedBrokerSupportsMultiCsv = useMemo(
+    () => brokerSupportsMultiCsvImport(form.broker),
+    [form.broker]
+  );
+  const canQueueMultipleCsvFiles = useMemo(
+    () => !form.broker || selectedBrokerSupportsMultiCsv,
+    [form.broker, selectedBrokerSupportsMultiCsv]
+  );
+  const selectedBrokerSupplementalReports = useMemo(
+    () => getBrokerSupplementalCsvReports(form.broker),
+    [form.broker]
+  );
 
   function resetAll() {
     setStep(1);
@@ -98,17 +137,40 @@ export function AddAccountSheet({
       broker: "",
       initialCurrency: "$",
       initialBalance: "",
-      file: null,
+      files: [],
     });
+    setPendingCsvImportResolution(null);
   }
+
+  useEffect(() => {
+    if (pendingCsvImportResolution && form.broker !== "tradovate") {
+      setPendingCsvImportResolution(null);
+    }
+  }, [form.broker, pendingCsvImportResolution]);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (!next) resetAll();
   }
 
-  async function handleSubmitCSV() {
-    if (!canSubmit || !form.file) return;
+  async function fileToBase64(file: File): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(",")[1] || "";
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleSubmitCSV(input?: {
+    existingAccountAction?: "enrich" | "create_duplicate";
+    existingAccountId?: string;
+  }) {
+    if (!canSubmit || form.files.length === 0) return;
     setSubmitting(true);
 
     try {
@@ -119,24 +181,48 @@ export function AddAccountSheet({
         return Number.isFinite(n) && n >= 0 ? n : undefined;
       };
 
-      const fileAsBase64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const result = reader.result as string;
-          const base64 = result.split(",")[1] || "";
-          resolve(base64);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(form.file!);
-      });
+      const encodedFiles = await Promise.all(
+        form.files.map(async (file) => ({
+          fileName: file.name,
+          csvBase64: await fileToBase64(file),
+        }))
+      );
 
       const res = await trpcClient.upload.importCsv.mutate({
         name: form.name,
         broker: form.broker,
         initialBalance: normalizeBalance(form.initialBalance),
         initialCurrency: (form.initialCurrency || "$") as "$" | "£" | "€",
-        csvBase64: fileAsBase64,
+        csvBase64: encodedFiles[0]?.csvBase64 ?? "",
+        fileName: encodedFiles[0]?.fileName,
+        files: encodedFiles,
+        existingAccountAction: input?.existingAccountAction,
+        existingAccountId: input?.existingAccountId,
       });
+
+      if (res.status === "requires_account_resolution") {
+        setPendingCsvImportResolution({
+          matchedAccount: res.matchedExistingAccount,
+          warnings: res.warnings,
+        });
+        setSubmitting(false);
+        return;
+      }
+
+      setPendingCsvImportResolution(null);
+
+      if (res.status === "enriched_existing") {
+        toast.success(
+          getCsvImportFeedbackMessage(res, {
+            accountName: res.matchedExistingAccount.name,
+          })
+        );
+        setSubmitting(false);
+        setOpen(false);
+        resetAll();
+        window.location.reload();
+        return;
+      }
 
       onAccountCreated({
         id: res.accountId,
@@ -162,17 +248,14 @@ export function AddAccountSheet({
   async function handleDemoWorkspace() {
     try {
       setSubmitting(true);
-      const result =
-        demoAccounts.length > 0
-          ? await trpcClient.accounts.resetDemoWorkspace.mutate()
-          : await trpcClient.accounts.createSampleAccount.mutate();
+      const result = (await (demoAccounts.length > 0
+        ? trpcClient.accounts.resetDemoWorkspace.mutate()
+        : trpcClient.accounts.createSampleAccount.mutate())) as DemoWorkspaceResult;
 
       await refreshAccounts();
 
       const resetCount =
-        typeof (result as any).resetCount === "number"
-          ? (result as any).resetCount
-          : 0;
+        typeof result.resetCount === "number" ? result.resetCount : 0;
 
       toast.success(
         demoAccounts.length > 0
@@ -192,10 +275,16 @@ export function AddAccountSheet({
         return;
       }
 
+      const createdAccount = result.account;
+      if (!createdAccount) {
+        toast.error("Demo account was created without account metadata");
+        return;
+      }
+
       onAccountCreated({
-        id: result.account.id,
-        name: result.account.name,
-        image: getBrokerImage((result.account as any).broker),
+        id: createdAccount.id,
+        name: createdAccount.name,
+        image: getBrokerImage(createdAccount.broker),
       });
     } catch (e: any) {
       toast.error(
@@ -224,30 +313,26 @@ export function AddAccountSheet({
     step === 1
       ? "Choose how you want to add your trading account."
       : step === 2 && form.method === "csv"
-      ? "Upload your CSV and enter the details for this trading account."
+      ? "Upload your CSV file or broker report bundle and enter the details for this trading account."
       : step === 2 && form.method === "broker"
       ? "Use Connections to sync supported broker and platform accounts directly."
       : step === 2 && form.method === "ea"
       ? "Use the MT5 EA bridge for terminal-based sync and richer trade analytics."
       : "Your account has been added to the account switcher.";
 
-  const sectionTitleClass =
-    "text-xs font-semibold text-white/70 tracking-wide";
+  const sectionTitleClass = "text-xs font-semibold text-white/70 tracking-wide";
   const fieldLabelClass = "text-xs text-white/50";
   const fieldInputClass =
-    "rounded-sm border-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-white/25 hover:brightness-100";
-  const fieldSelectTriggerClass =
-    "h-9 rounded-sm border-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]";
-  const fieldSelectContentClass =
-    "rounded-sm border border-white/8 bg-sidebar p-1 text-white/80";
-  const fieldSelectItemClass =
-    "rounded-sm px-4 py-2.5 text-xs text-white/80 data-[highlighted]:bg-sidebar-accent/80";
+    "rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-white/25 hover:brightness-100";
+  const fieldSelectTriggerClass = "h-9 w-full px-4";
+  const fieldSelectContentClass = "";
+  const fieldSelectItemClass = "whitespace-normal";
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
         {trigger || (
-          <Button className="border border-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
+          <Button className="ring-1 ring-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250">
             <div className="flex items-center gap-2 truncate">
               <Plus className="size-3.5" />
               <span className=" truncate">Add an account</span>
@@ -393,7 +478,9 @@ export function AddAccountSheet({
                       </p>
                       <p className="text-xs leading-relaxed text-white/45">
                         {demoAccounts.length > 0
-                          ? `Replace ${demoAccounts.length} seeded demo workspace${
+                          ? `Replace ${
+                              demoAccounts.length
+                            } seeded demo workspace${
                               demoAccounts.length === 1 ? "" : "s"
                             } with a fresh fully-populated trading environment.`
                           : "Create a fully-seeded demo account with historical trades and live positions."}
@@ -403,7 +490,7 @@ export function AddAccountSheet({
                   <Button
                     className={cn(
                       TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                      "h-9 w-full border-amber-400/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
+                      "h-9 w-full ring-1 ring-amber-400/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
                     )}
                     onClick={handleDemoWorkspace}
                     disabled={submitting}
@@ -423,7 +510,9 @@ export function AddAccountSheet({
               <Separator />
               <div className="px-6 py-5">
                 <SheetClose asChild>
-                  <Button className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}>
+                  <Button
+                    className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                  >
                     Cancel
                   </Button>
                 </SheetClose>
@@ -433,17 +522,6 @@ export function AddAccountSheet({
 
           {step === 2 && form.method === "csv" && (
             <>
-              <Separator />
-              <div className="px-6 py-3">
-                <h3 className={sectionTitleClass}>Upload CSV</h3>
-              </div>
-              <Separator />
-              <div className="px-6 py-5">
-                <CsvUpload
-                  onFileChange={(f) => setForm((prev) => ({ ...prev, file: f }))}
-                />
-              </div>
-
               <Separator />
               <div className="px-6 py-3">
                 <h3 className={sectionTitleClass}>Account details</h3>
@@ -467,7 +545,16 @@ export function AddAccountSheet({
                     <Label className={fieldLabelClass}>Broker</Label>
                     <Select
                       value={form.broker}
-                      onValueChange={(v) => setForm((f) => ({ ...f, broker: v }))}
+                      onValueChange={(v) => {
+                        setPendingCsvImportResolution(null);
+                        setForm((f) => ({
+                          ...f,
+                          broker: v,
+                          files: brokerSupportsMultiCsvImport(v)
+                            ? f.files
+                            : f.files.slice(0, 1),
+                        }));
+                      }}
                     >
                       <SelectTrigger className={fieldSelectTriggerClass}>
                         <SelectValue placeholder="Select a broker" />
@@ -492,6 +579,25 @@ export function AddAccountSheet({
                         ))}
                       </SelectContent>
                     </Select>
+                    {form.broker === "tradovate" ? (
+                      <p className="text-xs leading-relaxed text-white/40">
+                        Tradovate CSV import currently supports bundle uploads.
+                        Start with{" "}
+                        <span className="text-white/65">Performance</span> or{" "}
+                        <span className="text-white/65">Position History</span>{" "}
+                        as the base report, then add{" "}
+                        <span className="text-white/65">
+                          {selectedBrokerSupplementalReports
+                            .filter(
+                              (report) =>
+                                report !== "Performance" &&
+                                report !== "Position History"
+                            )
+                            .join(", ")}
+                        </span>{" "}
+                        in the same import for richer metadata.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="grid gap-2">
@@ -508,8 +614,9 @@ export function AddAccountSheet({
                         <SelectTrigger
                           className={cn(
                             fieldSelectTriggerClass,
-                            "w-20 rounded-r-none border-r-0"
+                            "w-20 rounded-r-none"
                           )}
+                          style={{ borderRightWidth: 0 }}
                         >
                           <SelectValue placeholder="$" />
                         </SelectTrigger>
@@ -530,10 +637,8 @@ export function AddAccountSheet({
                         type="text"
                         inputMode="decimal"
                         placeholder="$100,000"
-                        className={cn(
-                          fieldInputClass,
-                          "flex-1 rounded-l-none border-l-0"
-                        )}
+                        className={cn(fieldInputClass, "flex-1 rounded-l-none")}
+                        style={{ borderLeftWidth: 0 }}
                         value={form.initialBalance}
                         onChange={(e) =>
                           setForm((f) => ({
@@ -548,7 +653,86 @@ export function AddAccountSheet({
               </div>
 
               <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Upload CSV</h3>
+              </div>
+              <Separator />
               <div className="px-6 py-5">
+                <CsvUpload
+                  multiple={canQueueMultipleCsvFiles}
+                  onFilesChange={(files) => {
+                    setPendingCsvImportResolution(null);
+                    setForm((prev) => ({ ...prev, files }));
+                  }}
+                />
+                {!form.broker ? (
+                  <p className="mt-3 text-xs leading-relaxed text-white/40">
+                    You can queue multiple CSVs before choosing a broker. If you
+                    later pick a broker that does not support bundle imports,
+                    only the first file will be kept.
+                  </p>
+                ) : null}
+              </div>
+
+              <Separator />
+              <div className="px-6 py-5">
+                {pendingCsvImportResolution ? (
+                  <div className="mb-4 rounded-sm ring-1 ring-amber-400/20 bg-amber-400/5 p-4">
+                    <p className="text-sm font-medium text-white">
+                      This Tradovate CSV bundle matches an existing imported
+                      account.
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-white/55">
+                      Matched account:{" "}
+                      <span className="text-white/80">
+                        {pendingCsvImportResolution.matchedAccount.name}
+                      </span>
+                      {pendingCsvImportResolution.matchedAccount.accountNumber
+                        ? ` (${pendingCsvImportResolution.matchedAccount.accountNumber})`
+                        : ""}
+                      . Choose whether to enrich that account or create a new
+                      duplicate account intentionally.
+                    </p>
+                    {pendingCsvImportResolution.warnings.length > 0 ? (
+                      <p className="mt-2 text-xs leading-relaxed text-white/40">
+                        {pendingCsvImportResolution.warnings[0]}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        className={cn(
+                          TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                          "h-8 px-3"
+                        )}
+                        disabled={submitting}
+                        onClick={() =>
+                          handleSubmitCSV({
+                            existingAccountAction: "enrich",
+                            existingAccountId:
+                              pendingCsvImportResolution.matchedAccount.id,
+                          })
+                        }
+                      >
+                        Enrich existing account
+                      </Button>
+                      <Button
+                        type="button"
+                        className={cn(TRADE_ACTION_BUTTON_CLASS, "h-8 px-3")}
+                        disabled={submitting}
+                        onClick={() =>
+                          handleSubmitCSV({
+                            existingAccountAction: "create_duplicate",
+                            existingAccountId:
+                              pendingCsvImportResolution.matchedAccount.id,
+                          })
+                        }
+                      >
+                        Create duplicate account
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex w-full gap-2">
                   <Button
                     className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
@@ -564,7 +748,7 @@ export function AddAccountSheet({
                       !canSubmit && "opacity-60"
                     )}
                     disabled={!canSubmit || submitting}
-                    onClick={handleSubmitCSV}
+                    onClick={() => handleSubmitCSV()}
                   >
                     {submitting ? "Uploading..." : "Upload"}
                   </Button>
@@ -635,7 +819,10 @@ export function AddAccountSheet({
                   <ol className="space-y-2 text-sm text-white/70">
                     <li>1. Open Connections.</li>
                     <li>2. Choose the provider you want to link.</li>
-                    <li>3. Complete the connection and let sync create or link the account.</li>
+                    <li>
+                      3. Complete the connection and let sync create or link the
+                      account.
+                    </li>
                   </ol>
                   <p className="text-xs leading-relaxed text-white/40">
                     Use this flow for supported direct platform and broker sync.
@@ -718,7 +905,10 @@ export function AddAccountSheet({
                   <ol className="space-y-2 text-sm text-white/70">
                     <li>1. Open EA Setup.</li>
                     <li>2. Generate the key and install the EA in MT5.</li>
-                    <li>3. Attach the EA and let the first sync register the account.</li>
+                    <li>
+                      3. Attach the EA and let the first sync register the
+                      account.
+                    </li>
                   </ol>
                   <p className="text-xs leading-relaxed text-white/40">
                     Use this flow when you specifically want MT5 terminal-side
@@ -762,7 +952,10 @@ export function AddAccountSheet({
               <div className="px-6 py-5">
                 <SheetClose asChild>
                   <Button
-                    className={cn(TRADE_ACTION_BUTTON_PRIMARY_CLASS, "h-9 w-full")}
+                    className={cn(
+                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                      "h-9 w-full"
+                    )}
                     onClick={() => setOpen(false)}
                   >
                     Done

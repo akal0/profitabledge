@@ -23,7 +23,10 @@
     "db:migrate": "../../node_modules/.bin/drizzle-kit migrate",
     "duka:download": "bun run src/scripts/fetch-dukas-ticks.ts",
     "seed:views": "bun run src/scripts/seed-views.ts",
-    "reseed:views": "bun run src/scripts/reseed-views.ts"
+    "reseed:views": "bun run src/scripts/reseed-views.ts",
+    "check-types": "node ../../scripts/run-tsc-check.mjs tsconfig.json",
+    "lint": "bun run check-types",
+    "sync:worker": "bun run src/scripts/run-sync-scheduler.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -41,7 +44,12 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "ws": "^8.18.3",
-    "zod": "^4.3.5"
+    "zod": "^4.3.5",
+    "@profitabledge/contracts": "workspace:*",
+    "@profitabledge/platform": "workspace:*",
+    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/openai": "^3.0.41",
+    "ai": "^6.0.116"
   },
   "devDependencies": {
     "@types/node": "^20",

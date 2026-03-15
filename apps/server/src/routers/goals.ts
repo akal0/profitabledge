@@ -7,6 +7,7 @@ import { tradeChecklistResult } from "../db/schema/coaching";
 import { eq, and, desc, gte, lte, asc, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { evaluateCustomGoal, checkGoalAchieved } from "../lib/goal-evaluation";
+import { createNotification } from "../lib/notifications";
 import type { CustomGoalCriteria } from "../types/custom-goals";
 
 // Goal type schemas
@@ -35,10 +36,110 @@ const PROCESS_TARGET_TYPES = [
   "breakAfterLoss",
   "checklistCompletion",
 ] as const;
+const GOAL_PROGRESS_MILESTONES = [25, 50, 75, 90] as const;
 
 function toNumber(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatGoalValue(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  if (Math.abs(value) >= 100 || Number.isInteger(value)) {
+    return value.toFixed(0);
+  }
+  if (Math.abs(value) >= 10) {
+    return value.toFixed(1).replace(/\.0$/, "");
+  }
+  return value.toFixed(2).replace(/\.00$/, "");
+}
+
+function getGoalProgressMilestone(
+  previousValue: number,
+  currentValue: number,
+  targetValue: number
+): number | null {
+  if (!(targetValue > 0)) return null;
+
+  const previousPercent = (previousValue / targetValue) * 100;
+  const currentPercent = (currentValue / targetValue) * 100;
+
+  if (currentPercent >= 100) {
+    return null;
+  }
+
+  let milestone: number | null = null;
+  for (const candidate of GOAL_PROGRESS_MILESTONES) {
+    if (previousPercent < candidate && currentPercent >= candidate) {
+      milestone = candidate;
+    }
+  }
+
+  return milestone;
+}
+
+async function notifyGoalProgressChange(input: {
+  userId: string;
+  goalId: string;
+  accountId?: string | null;
+  goalTitle: string;
+  targetType: string;
+  previousValue: number;
+  currentValue: number;
+  targetValue: number;
+  achieved: boolean;
+}) {
+  const metadata = {
+    goalId: input.goalId,
+    targetType: input.targetType,
+    currentValue: input.currentValue,
+    targetValue: input.targetValue,
+    url: "/dashboard/goals",
+  };
+
+  try {
+    if (input.achieved) {
+      await createNotification({
+        userId: input.userId,
+        accountId: input.accountId ?? null,
+        type: "goal_achieved",
+        title: `Goal achieved: ${input.goalTitle}`,
+        body: `Reached ${formatGoalValue(input.currentValue)} / ${formatGoalValue(
+          input.targetValue
+        )}.`,
+        metadata,
+        dedupeKey: `goal-achieved:${input.goalId}`,
+      });
+      return;
+    }
+
+    const milestone = getGoalProgressMilestone(
+      input.previousValue,
+      input.currentValue,
+      input.targetValue
+    );
+
+    if (!milestone) {
+      return;
+    }
+
+    await createNotification({
+      userId: input.userId,
+      accountId: input.accountId ?? null,
+      type: "goal_progress",
+      title: `${input.goalTitle} is ${milestone}% complete`,
+      body: `Progress is ${formatGoalValue(input.currentValue)} / ${formatGoalValue(
+        input.targetValue
+      )}.`,
+      metadata: {
+        ...metadata,
+        milestone,
+      },
+      dedupeKey: `goal-progress:${input.goalId}:${milestone}`,
+    });
+  } catch (error) {
+    console.error("[Goals] Notification failed:", error);
+  }
 }
 
 async function resolveScopedAccountIds(userId: string, accountId?: string) {
@@ -312,6 +413,16 @@ export const goalsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const existingGoal = await db
+        .select()
+        .from(goalTable)
+        .where(and(eq(goalTable.id, input.id), eq(goalTable.userId, userId)))
+        .limit(1);
+
+      const goal = existingGoal[0];
+      if (!goal) {
+        throw new Error("Goal not found");
+      }
 
       const updateData: any = {};
 
@@ -333,6 +444,20 @@ export const goalsRouter = router({
         .update(goalTable)
         .set(updateData)
         .where(and(eq(goalTable.id, input.id), eq(goalTable.userId, userId)));
+
+      if (input.status === "achieved" && goal.status !== "achieved") {
+        await notifyGoalProgressChange({
+          userId,
+          goalId: goal.id,
+          accountId: goal.accountId,
+          goalTitle: goal.title,
+          targetType: goal.targetType,
+          previousValue: toNumber(goal.currentValue),
+          currentValue: toNumber(goal.targetValue),
+          targetValue: toNumber(goal.targetValue),
+          achieved: true,
+        });
+      }
 
       return { ok: true };
     }),
@@ -360,6 +485,7 @@ export const goalsRouter = router({
       if (!goal) {
         throw new Error("Goal not found");
       }
+      const previousValue = toNumber(goal.currentValue);
 
       const updateData: any = {
         currentValue: input.currentValue.toString(),
@@ -396,6 +522,18 @@ export const goalsRouter = router({
         .update(goalTable)
         .set(updateData)
         .where(and(eq(goalTable.id, input.id), eq(goalTable.userId, userId)));
+
+      await notifyGoalProgressChange({
+        userId,
+        goalId: goal.id,
+        accountId: goal.accountId,
+        goalTitle: goal.title,
+        targetType: goal.targetType,
+        previousValue,
+        currentValue: input.currentValue,
+        targetValue,
+        achieved: updateData.status === "achieved",
+      });
 
       return { ok: true };
     }),
@@ -651,6 +789,7 @@ export const goalsRouter = router({
 
       // Check if goal is achieved
       const isAchieved = checkGoalAchieved(currentValue, criteria);
+      const previousValue = toNumber(goal.currentValue);
 
       // Update the goal
       const updateData: any = {
@@ -676,6 +815,18 @@ export const goalsRouter = router({
         .update(goalTable)
         .set(updateData)
         .where(eq(goalTable.id, input.goalId));
+
+      await notifyGoalProgressChange({
+        userId,
+        goalId: goal.id,
+        accountId: goal.accountId,
+        goalTitle: goal.title,
+        targetType: goal.targetType,
+        previousValue,
+        currentValue,
+        targetValue: toNumber(goal.targetValue),
+        achieved: isAchieved && goal.status === "active",
+      });
 
       return { currentValue, isAchieved, ok: true };
     }),
@@ -709,6 +860,7 @@ export const goalsRouter = router({
       for (const goal of goals) {
         const targetType = goal.targetType;
         let currentValue = 0;
+        const previousValue = toNumber(goal.currentValue);
         const scopedMetrics = computeProcessMetrics(
           filterSnapshotByAccount(snapshot, goal.accountId)
         );
@@ -754,6 +906,18 @@ export const goalsRouter = router({
           .update(goalTable)
           .set(updateData)
           .where(eq(goalTable.id, goal.id));
+
+        await notifyGoalProgressChange({
+          userId,
+          goalId: goal.id,
+          accountId: goal.accountId,
+          goalTitle: goal.title,
+          targetType: goal.targetType,
+          previousValue,
+          currentValue,
+          targetValue,
+          achieved: updateData.status === "achieved",
+        });
 
         evaluated++;
       }

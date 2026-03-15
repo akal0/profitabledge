@@ -121,6 +121,20 @@ async function getScopedClosedTrades(
     .orderBy(sql`${tradeTable.closeTime} ASC`);
 }
 
+async function getClosedTradeCountForAccount(accountId: string): Promise<number> {
+  const [countResult] = await db
+    .select({ value: count() })
+    .from(tradeTable)
+    .where(
+      and(
+        eq(tradeTable.accountId, accountId),
+        sql`${tradeTable.closeTime} IS NOT NULL`
+      )
+    );
+
+  return countResult?.value ?? 0;
+}
+
 async function computeProfileBundle(
   accountId: string,
   userId: string
@@ -725,17 +739,7 @@ export async function getOrComputeProfile(
       (Date.now() - new Date(row.computedAt).getTime()) / 60000;
 
     // Get current trade count
-    const [countResult] = await db
-      .select({ value: count() })
-      .from(tradeTable)
-      .where(
-        and(
-          eq(tradeTable.accountId, accountId),
-          sql`${tradeTable.closeTime} IS NOT NULL`
-        )
-      );
-
-    const currentCount = countResult?.value ?? 0;
+    const currentCount = await getClosedTradeCountForAccount(accountId);
 
     if (
       minutesSinceCompute < PROFILE_STALE_MINUTES &&
@@ -806,17 +810,7 @@ export async function saveProfile(
     return;
   }
 
-  const [countResult] = await db
-    .select({ value: count() })
-    .from(tradeTable)
-    .where(
-      and(
-        eq(tradeTable.accountId, accountId),
-        sql`${tradeTable.closeTime} IS NOT NULL`
-      )
-    );
-
-  const tradeCount = countResult?.value ?? 0;
+  const tradeCount = await getClosedTradeCountForAccount(accountId);
 
   // Upsert
   const existing = await db
@@ -943,25 +937,36 @@ export async function getFullProfile(
     .where(eq(traderProfile.accountId, accountId))
     .limit(1);
 
-  if (!dbRow[0]) {
-    const bundle = await computeProfileBundle(accountId, userId);
-    await saveProfile(
-      accountId,
-      userId,
-      bundle.profile,
-      bundle.edges,
-      bundle.leaks
-    );
-    return {
-      profile: bundle.profile,
-      edges: bundle.edges,
-      leaks: bundle.leaks,
-    };
+  if (dbRow[0]) {
+    const row = dbRow[0];
+    const minutesSinceCompute =
+      (Date.now() - new Date(row.computedAt).getTime()) / 60000;
+    const currentCount = await getClosedTradeCountForAccount(accountId);
+
+    if (
+      minutesSinceCompute < PROFILE_STALE_MINUTES &&
+      currentCount === row.tradeCountAtCompute
+    ) {
+      return {
+        profile: row.profileData as TraderProfileData,
+        edges: (row.edgeConditions as EdgeCondition[]) || [],
+        leaks: (row.leakConditions as LeakCondition[]) || [],
+      };
+    }
   }
 
+  const bundle = await computeProfileBundle(accountId, userId);
+  await saveProfile(
+    accountId,
+    userId,
+    bundle.profile,
+    bundle.edges,
+    bundle.leaks
+  );
+  cache.set(profileCacheKey(accountId, userId), bundle.profile, PROFILE_CACHE_TTL);
   return {
-    profile: dbRow[0].profileData as TraderProfileData,
-    edges: (dbRow[0].edgeConditions as EdgeCondition[]) || [],
-    leaks: (dbRow[0].leakConditions as LeakCondition[]) || [],
+    profile: bundle.profile,
+    edges: bundle.edges,
+    leaks: bundle.leaks,
   };
 }

@@ -17,6 +17,38 @@ interface CreateGoalDialogProps {
   accountId?: string;
 }
 
+type GoalType = "daily" | "weekly" | "monthly" | "milestone";
+type GoalTargetType =
+  | "profit"
+  | "winRate"
+  | "consistency"
+  | "rr"
+  | "trades"
+  | "streak"
+  | "journalRate"
+  | "ruleCompliance"
+  | "edgeTradeRate"
+  | "maxRiskPerTrade"
+  | "breakAfterLoss"
+  | "checklistCompletion";
+
+function mapCustomMetricToTargetType(metric: CustomGoalCriteria["metric"]): GoalTargetType {
+  switch (metric) {
+    case "avgRR":
+      return "rr";
+    case "tradeCount":
+      return "trades";
+    case "profitFactor":
+      return "consistency";
+    case "avgProfit":
+      return "profit";
+    case "avgLoss":
+      return "maxRiskPerTrade";
+    default:
+      return metric;
+  }
+}
+
 export function CreateGoalDialog({
   open,
   onOpenChange,
@@ -109,10 +141,17 @@ export function CreateGoalDialog({
     try {
       const today = new Date().toISOString().split("T")[0];
       let deadline: string | null = null;
+      const normalizedType: GoalType =
+        type === "daily" ||
+        type === "weekly" ||
+        type === "monthly" ||
+        type === "milestone"
+          ? type
+          : "weekly";
 
       // Calculate deadline based on type
       const now = new Date();
-      if (type === "daily") {
+      if (normalizedType === "daily") {
         deadline = new Date(
           now.getFullYear(),
           now.getMonth(),
@@ -120,7 +159,7 @@ export function CreateGoalDialog({
         )
           .toISOString()
           .split("T")[0];
-      } else if (type === "weekly") {
+      } else if (normalizedType === "weekly") {
         deadline = new Date(
           now.getFullYear(),
           now.getMonth(),
@@ -128,7 +167,7 @@ export function CreateGoalDialog({
         )
           .toISOString()
           .split("T")[0];
-      } else if (type === "monthly") {
+      } else if (normalizedType === "monthly") {
         deadline = new Date(now.getFullYear(), now.getMonth() + 1, 0)
           .toISOString()
           .split("T")[0];
@@ -136,8 +175,8 @@ export function CreateGoalDialog({
 
       await trpcClient.goals.create.mutate({
         accountId: accountId || null,
-        type: type,
-        targetType: criteria.metric,
+        type: normalizedType,
+        targetType: mapCustomMetricToTargetType(criteria.metric),
         targetValue: criteria.targetValue,
         startDate: today,
         deadline,
@@ -224,11 +263,7 @@ export function CreateGoalDialog({
                         if (accountId) setMode("custom");
                       }}
                       disabled={!accountId}
-                      className={`flex-1 flex items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-all ${
-                        mode === "custom"
-                          ? "bg-sidebar-accent text-white"
-                          : "text-white/40 hover:text-white/70 disabled:text-white/20 disabled:cursor-not-allowed"
-                      }`}
+                      className="flex-1 flex items-center justify-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition-all text-white/40 hover:text-white/70 disabled:text-white/20 disabled:cursor-not-allowed"
                     >
                       <Sparkles className="h-3 w-3" />
                       Custom
@@ -365,15 +400,14 @@ export function CreateGoalDialog({
                       <div className="flex items-center gap-3">
                         <Button
                           onClick={() => setSelectedTemplate(null)}
-                          variant="outline"
-                          className="flex-1"
+                          className="flex-1 cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                         >
                           Back
                         </Button>
                         <Button
                           onClick={handleCreateGoal}
                           disabled={!customTitle || !customValue || isCreating}
-                          className="flex-1"
+                          className="flex-1 cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                         >
                           {isCreating ? "Creating..." : "Create Goal"}
                         </Button>

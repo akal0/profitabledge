@@ -1,27 +1,27 @@
-import { QueryCache, QueryClient } from "@tanstack/react-query";
+import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
-import type { AppRouter } from "../../../server/src/routers";
+import type { AppRouter } from "@profitabledge/contracts/trpc";
+import { fetchFirstAvailable, getOriginCandidates } from "@profitabledge/platform";
 import { toast } from "sonner";
+import { showAIErrorToast } from "@/lib/ai-error-toast";
 
 function getCandidateBases(): string[] {
-  if (typeof window !== "undefined") {
-    const { protocol, hostname } = window.location;
-    const env = process.env.NEXT_PUBLIC_SERVER_URL || "";
-    const localhost = `${protocol}//localhost:3000`;
-    const isLanIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
-    const lan = isLanIp ? `${protocol}//${hostname}:3000` : "";
-    // Prefer explicit env first if provided, then LAN/localhost fallbacks
-    const ordered = isLanIp ? [env, lan, localhost] : [env, localhost, lan];
-    return Array.from(new Set(ordered.filter(Boolean)));
-  }
-  return [process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3000"];
+  return getOriginCandidates({
+    envUrl: process.env.NEXT_PUBLIC_SERVER_URL,
+    fallbackPort: 3000,
+    location: typeof window !== "undefined" ? window.location : undefined,
+  });
 }
 
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
+      if (showAIErrorToast(error)) {
+        return;
+      }
+
       toast.error(error.message, {
         action: {
           label: "retry",
@@ -32,10 +32,29 @@ export const queryClient = new QueryClient({
       });
     },
   }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      showAIErrorToast(error);
+    },
+  }),
 });
 
 const candidates = getCandidateBases();
 const primaryBase = `${candidates[0]}/trpc`;
+
+function toUrlString(url: RequestInfo | URL): string {
+  if (typeof url === "string") return url;
+  if (url instanceof URL) return url.toString();
+  if (url instanceof Request) return url.url;
+  return String(url);
+}
+
+function getTrpcTargets(url: RequestInfo | URL): string[] {
+  const urlString = toUrlString(url);
+  return candidates.map((base) =>
+    urlString.replace(primaryBase, `${base}/trpc`)
+  );
+}
 
 // Vanilla tRPC client for non-React contexts (server-side, effects, etc.)
 export const trpcClient = createTRPCClient<AppRouter>({
@@ -43,20 +62,10 @@ export const trpcClient = createTRPCClient<AppRouter>({
     httpBatchLink({
       url: primaryBase,
       async fetch(url, options) {
-        const bases = candidates.map((b) => `${b}/trpc`);
-        for (let i = 0; i < bases.length; i++) {
-          const target = url.toString().replace(primaryBase, bases[i]);
-          try {
-            const res = await fetch(target, {
-              ...(options || {}),
-              credentials: "include",
-            });
-            return res;
-          } catch (_) {
-            // try next base
-          }
-        }
-        return fetch(url, { ...(options || {}), credentials: "include" });
+        return fetchFirstAvailable(getTrpcTargets(url), {
+          ...(options || {}),
+          credentials: "include",
+        });
       },
     }),
   ],
@@ -71,20 +80,10 @@ export const trpcReactClient = trpc.createClient({
     httpBatchLink({
       url: primaryBase,
       async fetch(url, options) {
-        const bases = candidates.map((b) => `${b}/trpc`);
-        for (let i = 0; i < bases.length; i++) {
-          const target = url.toString().replace(primaryBase, bases[i]);
-          try {
-            const res = await fetch(target, {
-              ...(options || {}),
-              credentials: "include",
-            });
-            return res;
-          } catch (_) {
-            // try next base
-          }
-        }
-        return fetch(url, { ...(options || {}), credentials: "include" });
+        return fetchFirstAvailable(getTrpcTargets(url), {
+          ...(options || {}),
+          credentials: "include",
+        });
       },
     }),
   ],

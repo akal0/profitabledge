@@ -21,6 +21,8 @@ import {
   Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
+import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 
 type LeaderboardCategory = "consistency" | "execution" | "discipline" | "risk";
 type LeaderboardPeriod = "30d" | "90d" | "all_time";
@@ -193,6 +195,8 @@ function CategoryDescription({ category }: { category: LeaderboardCategory }) {
 }
 
 export default function LeaderboardPage() {
+  const communityEnabled = isPublicAlphaFeatureEnabled("community");
+
   const [category, setCategory] = React.useState<LeaderboardCategory>("consistency");
   const [period, setPeriod] = React.useState<LeaderboardPeriod>("30d");
 
@@ -201,6 +205,8 @@ export default function LeaderboardPage() {
     category,
     period,
     limit: 100,
+  }, {
+    enabled: communityEnabled,
   });
 
   const periodLabels = {
@@ -208,6 +214,15 @@ export default function LeaderboardPage() {
     "90d": "Last 90 Days",
     "all_time": "All Time",
   };
+
+  if (!communityEnabled) {
+    return (
+      <AlphaFeatureLocked
+        feature="community"
+        title="Leaderboard is held back in this alpha"
+      />
+    );
+  }
 
   return (
     <main className="p-6 space-y-4 py-4 max-w-5xl">

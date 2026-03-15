@@ -17,6 +17,13 @@ export function normalizeLocalEnd(date: Date) {
   return next;
 }
 
+export function normalizeDateRange(range: DateRange): DateRange {
+  return {
+    start: normalizeLocalStart(range.start),
+    end: normalizeLocalEnd(range.end),
+  };
+}
+
 export function countRangeDays(range: DateRange) {
   const start = normalizeLocalStart(range.start);
   const end = normalizeLocalStart(range.end);

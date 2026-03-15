@@ -5,20 +5,18 @@ import {
   Bell,
   ChevronsUpDown,
   CreditCard,
-  DoorClosedLocked,
   LogOut,
-  Settings2,
   Sparkles,
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -27,15 +25,19 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useQuery } from "@tanstack/react-query";
+import { authClient } from "@/lib/auth-client";
+import { trpcOptions } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
-import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Separator } from "./ui/separator";
 import { Button } from "./ui/button";
 
 import AccountSwitch from "@/public/graphics/profile/account-switch.svg";
 
 import Cmd from "@/public/graphics/cmd.svg";
-import { Skeleton } from "./ui/skeleton";
+import type { PlanKey } from "@/features/navigation/config/nav-sections";
 
 type Me = {
   name: string;
@@ -47,9 +49,77 @@ type Me = {
   username: string | null;
 };
 
+function getPlanTitle(planKey: PlanKey) {
+  switch (planKey) {
+    case "professional":
+      return "Professional";
+    case "institutional":
+      return "Institutional";
+    default:
+      return "Student";
+  }
+}
+
+function getNextPlanKey(planKey: PlanKey): PlanKey | null {
+  switch (planKey) {
+    case "student":
+      return "professional";
+    case "professional":
+      return "institutional";
+    default:
+      return null;
+  }
+}
+
+function getUpgradeOfferLabel(planKey: PlanKey | null) {
+  switch (planKey) {
+    case "professional":
+      return "10% off";
+    case "institutional":
+      return "15% off";
+    default:
+      return null;
+  }
+}
+
+function getPlanBadgeClassName(planKey: PlanKey) {
+  switch (planKey) {
+    case "professional":
+      return "ring ring-blue-500/20 bg-blue-500/10 text-blue-300";
+    case "institutional":
+      return "ring ring-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+    default:
+      return "ring ring-white/10 bg-white/5 text-white/70";
+  }
+}
+
 const NavUser: React.FC<{ user: Me }> = ({ user }) => {
   const { isMobile, state } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
+  const router = useRouter();
+  const { data: billingState } = useQuery(
+    trpcOptions.billing.getState.queryOptions()
+  );
+  const currentPlan = (billingState?.billing?.activePlanKey ??
+    "student") as PlanKey;
+  const nextPlan = getNextPlanKey(currentPlan);
+  const currentPlanTitle = getPlanTitle(currentPlan);
+  const nextPlanTitle = nextPlan ? getPlanTitle(nextPlan) : null;
+  const upgradeOfferLabel = getUpgradeOfferLabel(nextPlan);
+  const currentPlanBadgeClassName = getPlanBadgeClassName(currentPlan);
+  const nextPlanBadgeClassName = nextPlan
+    ? getPlanBadgeClassName(nextPlan)
+    : null;
+
+  const handleSignOut = () => {
+    authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/");
+        },
+      },
+    });
+  };
 
   return (
     <SidebarMenu className={cn(isCollapsed && "items-center")}>
@@ -66,7 +136,7 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
             >
               <Avatar
                 className={cn(
-                  "rounded-full shrink-0 shadow-secondary-button",
+                  "rounded-full shrink-0 shadow-secondary",
                   isCollapsed ? "size-8" : "size-7"
                 )}
               >
@@ -99,15 +169,15 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) bg-sidebar-accent min-w-80 rounded-lg p-1 flex flex-col gap-2 border-[0.5px] border-white/0"
+            className="w-(--radix-dropdown-menu-trigger-width) bg-sidebar-accent/10 min-w-80 rounded-lg p-1 flex flex-col gap-2 ring ring-white/5 border-none! backdrop-blur-xl"
             side={isMobile ? "bottom" : "right"}
             align="start"
             sideOffset={24}
           >
-            <div className="flex-1 flex flex-col rounded-sm bg-sidebar-accent brightness-120 border-white/10 pb-1">
+            <div className="flex-1 flex flex-col rounded-sm bg-sidebar-accent brightness-110 ring ring-white/5 pb-1">
               <DropdownMenuLabel className="p-3 font-normal flex justify-between items-start">
                 <div className="flex items-center gap-3  text-left text-sm h-full">
-                  <Avatar className="size-10 rounded-xs shadow-secondary-button">
+                  <Avatar className="size-10 rounded-full shadow-secondary-button">
                     {user.image ? (
                       <AvatarImage
                         src={user.image}
@@ -134,11 +204,14 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <Button className="cursor-pointer shadow-secondary-button rounded-[6px] gap-2 h-max py-1 px-4 transition-all active:scale-95 bg-indigo-700 hover:bg-indigo-700 text-white w-max text-[10px] hover:!brightness-110 duration-250">
-                    <span className=""> Student </span>
-                  </Button>
-                </div>
+                <Badge
+                  className={cn(
+                    "rounded px-2 py-1 text-[10px] font-medium",
+                    currentPlanBadgeClassName
+                  )}
+                >
+                  {currentPlanTitle}
+                </Badge>
               </DropdownMenuLabel>
 
               <div className="my-1">
@@ -146,14 +219,34 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
               </div>
 
               <DropdownMenuGroup className="px-1">
-                <DropdownMenuItem className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3">
-                  <BadgeCheck className="size-3" />
-                  <p> Account </p>
+                <DropdownMenuItem
+                  asChild
+                  className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3"
+                >
+                  <Link href="/dashboard/settings/profile">
+                    <BadgeCheck className="size-3" />
+                    <p> Account </p>
+                  </Link>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3">
-                  <Settings2 className="size-3" />
-                  <p> Settings </p>
+                <DropdownMenuItem
+                  asChild
+                  className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3"
+                >
+                  <Link href="/dashboard/settings/billing">
+                    <CreditCard className="size-3" />
+                    <p> Billing </p>
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  asChild
+                  className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3"
+                >
+                  <Link href="/dashboard/settings/notifications">
+                    <Bell className="size-3" />
+                    <p> Notifications </p>
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
 
@@ -161,22 +254,36 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
                 <Separator />
               </div>
 
-              <DropdownMenuGroup className="px-1">
-                <DropdownMenuItem className="justify-between px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120">
-                  <div className="flex items-center gap-3 text-xs">
-                    <Sparkles className="size-3" />
-                    Upgrade to Pro
-                  </div>
+              {nextPlanTitle && upgradeOfferLabel && nextPlanBadgeClassName ? (
+                <>
+                  <DropdownMenuGroup className="px-1">
+                    <DropdownMenuItem
+                      asChild
+                      className="justify-between px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120"
+                    >
+                      <Link href="/dashboard/settings/billing">
+                        <div className="flex items-center gap-3 text-xs">
+                          <Sparkles className="size-3" />
+                          {`Upgrade to ${nextPlanTitle}`}
+                        </div>
 
-                  <div className="cursor-pointer shadow-secondary-button rounded-[6px] gap-2 h-max py-1 px-3 transition-all active:scale-95 bg-emerald-700 text-white w-max text-[10px] duration-250">
-                    <span className="font-medium"> 20% off </span>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
+                        <Badge
+                          className={cn(
+                            "rounded px-2 py-1 text-[10px] font-medium",
+                            nextPlanBadgeClassName
+                          )}
+                        >
+                          {upgradeOfferLabel}
+                        </Badge>
+                      </Link>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
 
-              <div className="my-1">
-                <Separator />
-              </div>
+                  <div className="my-1">
+                    <Separator />
+                  </div>
+                </>
+              ) : null}
 
               <DropdownMenuGroup className="px-1">
                 <DropdownMenuItem className="justify-between px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 rounded-sm">
@@ -197,8 +304,11 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
               </div>
 
               <DropdownMenuGroup className="px-1">
-                <DropdownMenuItem className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3 py-3">
-                  <DoorClosedLocked className="size-3" />
+                <DropdownMenuItem
+                  className="text-xs px-2 pl-4 cursor-pointer focus:bg-sidebar-accent focus:brightness-120 flex items-center gap-3 py-3"
+                  onSelect={handleSignOut}
+                >
+                  <LogOut className="size-3" />
                   <p> Sign out </p>
                 </DropdownMenuItem>
               </DropdownMenuGroup>

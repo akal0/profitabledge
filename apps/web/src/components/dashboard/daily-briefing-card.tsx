@@ -22,17 +22,17 @@ import {
   Calendar,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Separator } from "@/components/ui/separator";
-import { formatSignedCurrency } from "./charts/dashboard-chart-ui";
 import {
   TRADE_IDENTIFIER_PILL_CLASS,
   TRADE_IDENTIFIER_TONES,
 } from "@/components/trades/trade-identifier-pill";
 import { WidgetWrapper } from "./widget-wrapper";
+import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
+import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 
-const WIDGET_CONTENT_SEPARATOR_CLASS =
-  "-mx-3.5 shrink-0 self-stretch";
+const WIDGET_CONTENT_SEPARATOR_CLASS = "-mx-3.5 shrink-0 self-stretch";
 
 function getSessionTone(session: string) {
   const normalized = session.toLowerCase();
@@ -58,13 +58,19 @@ function getSessionTone(session: string) {
 }
 
 export function DailyBriefingCard({
+  accountId,
   isEditing = false,
   className,
+  currencyCode,
 }: {
+  accountId?: string;
   isEditing?: boolean;
   className?: string;
+  currencyCode?: string;
 }) {
-  const accountId = useAccountStore((s) => s.selectedAccountId);
+  const widgetRef = useRef<HTMLDivElement | null>(null);
+  const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
+  const effectiveAccountId = accountId || selectedAccountId;
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const {
@@ -72,8 +78,8 @@ export function DailyBriefingCard({
     isLoading,
     refetch,
   } = trpc.ai.getLatestBriefing.useQuery(
-    { accountId: accountId ?? "" },
-    { enabled: !!accountId }
+    { accountId: effectiveAccountId ?? "" },
+    { enabled: !!effectiveAccountId }
   );
 
   const generateMutation = trpc.ai.generateBriefing.useMutation({
@@ -89,8 +95,15 @@ export function DailyBriefingCard({
   const progressSummary =
     content?.progress?.summary ??
     (content?.progress
-      ? `${Math.round(content.progress.weeklyWinRate ?? 0)}% weekly win rate and ${formatSignedCurrency(
-          content.progress.weeklyPnL ?? 0
+      ? `${Math.round(
+          content.progress.weeklyWinRate ?? 0
+        )}% weekly win rate and ${formatSignedCurrencyValue(
+          content.progress.weeklyPnL ?? 0,
+          currencyCode,
+          {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }
         )} P&L.`
       : "Steady performance");
   const hasReview = Boolean(content?.review);
@@ -101,6 +114,7 @@ export function DailyBriefingCard({
   return (
     <>
       <WidgetWrapper
+        rootRef={widgetRef}
         isEditing={isEditing}
         className={className}
         icon={Sun}
@@ -109,11 +123,16 @@ export function DailyBriefingCard({
         onClick={() => setSheetOpen(true)}
         contentClassName="flex-col justify-end p-3.5"
         headerRight={
-          <span className="text-[10px] text-white/30">
-            {briefing?.createdAt
-              ? new Date(briefing.createdAt).toLocaleDateString()
-              : "—"}
-          </span>
+          <>
+            <span className="text-[10px] text-white/30">
+              {briefing?.createdAt
+                ? new Date(briefing.createdAt).toLocaleDateString()
+                : "—"}
+            </span>
+            {!isEditing ? (
+              <WidgetShareButton targetRef={widgetRef} title="Daily briefing" />
+            ) : null}
+          </>
         }
       >
         {isLoading ? (
@@ -125,16 +144,16 @@ export function DailyBriefingCard({
         ) : !hasBriefing ? (
           <div className="flex flex-col items-center justify-center flex-1 text-center">
             <Sun className="h-8 w-8 text-white/20 mb-2" />
-            <p className="text-xs text-white/50 mb-3">
-              No briefing yet today
-            </p>
+            <p className="text-xs text-white/50 mb-3">No briefing yet today</p>
             <Button
               size="sm"
               variant="outline"
               className="text-xs border-white/10 h-7"
               onClick={(e) => {
                 e.stopPropagation();
-                if (accountId) generateMutation.mutate({ accountId });
+                if (effectiveAccountId) {
+                  generateMutation.mutate({ accountId: effectiveAccountId });
+                }
               }}
               disabled={generateMutation.isPending}
             >
@@ -174,7 +193,14 @@ export function DailyBriefingCard({
                         : "text-rose-400"
                     )}
                   >
-                    {formatSignedCurrency(content.review.pnl ?? 0)}
+                    {formatSignedCurrencyValue(
+                      content.review.pnl ?? 0,
+                      currencyCode,
+                      {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }
+                    )}
                   </p>
                   <p className="text-[10px] text-white/40">P&L</p>
                 </div>
@@ -217,7 +243,7 @@ export function DailyBriefingCard({
                         getSessionTone(s)
                       )}
                     >
-                        {s}
+                      {s}
                     </span>
                   ))}
                 </div>
@@ -241,7 +267,9 @@ export function DailyBriefingCard({
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => {
-                  if (accountId) generateMutation.mutate({ accountId });
+                  if (effectiveAccountId) {
+                    generateMutation.mutate({ accountId: effectiveAccountId });
+                  }
                 }}
                 disabled={generateMutation.isPending}
               >
@@ -269,7 +297,9 @@ export function DailyBriefingCard({
                 size="sm"
                 className="mt-4"
                 onClick={() => {
-                  if (accountId) generateMutation.mutate({ accountId });
+                  if (effectiveAccountId) {
+                    generateMutation.mutate({ accountId: effectiveAccountId });
+                  }
                 }}
                 disabled={generateMutation.isPending}
               >
@@ -311,9 +341,7 @@ export function DailyBriefingCard({
                         <p className="text-[10px] text-white/40 uppercase">
                           Trades
                         </p>
-                        <p className="text-xl font-bold">
-                          {reviewTradeCount}
-                        </p>
+                        <p className="text-xl font-bold">{reviewTradeCount}</p>
                       </div>
                       <div className="rounded-lg bg-white/3 p-3">
                         <p className="text-[10px] text-white/40 uppercase">
@@ -337,7 +365,14 @@ export function DailyBriefingCard({
                               : "text-rose-400"
                           )}
                         >
-                          {formatSignedCurrency(content.review.pnl ?? 0, 2)}
+                          {formatSignedCurrencyValue(
+                            content.review.pnl ?? 0,
+                            currencyCode,
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
                         </p>
                       </div>
                       <div className="rounded-lg bg-white/3 p-3">
@@ -450,9 +485,7 @@ export function DailyBriefingCard({
                       ) : (
                         <Calendar className="h-4 w-4 text-white/40" />
                       )}
-                      <p className="text-sm text-white/70">
-                        {progressSummary}
-                      </p>
+                      <p className="text-sm text-white/70">{progressSummary}</p>
                     </div>
                   </div>
                 </>

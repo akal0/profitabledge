@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Sheet,
@@ -15,11 +16,8 @@ import {
 } from "@/components/ui/sheet";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Bell,
@@ -84,11 +82,11 @@ export function JournalPrompts({
     const interval = setInterval(() => {
       autoGenerateMutation.mutate();
     }, 60000);
-    
+
     autoGenerateMutation.mutate();
-    
+
     return () => clearInterval(interval);
-  }, []);
+  }, [autoGenerateMutation]);
 
   const handleShowPrompt = async (prompt: any) => {
     await showPromptMutation.mutateAsync({ promptId: prompt.id });
@@ -109,6 +107,10 @@ export function JournalPrompts({
   };
 
   const pendingCount = prompts.filter((p: any) => p.status === "pending").length;
+
+  const PromptIcon = selectedPrompt && PROMPT_ICONS[selectedPrompt.type]
+    ? PROMPT_ICONS[selectedPrompt.type]
+    : MessageSquare;
 
   return (
     <>
@@ -180,57 +182,71 @@ export function JournalPrompts({
       </Sheet>
 
       <Dialog open={!!selectedPrompt} onOpenChange={(open) => !open && setSelectedPrompt(null)}>
-        <DialogContent className="bg-sidebar border-white/10 max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              {selectedPrompt && PROMPT_ICONS[selectedPrompt.type] && (
-                <div className={cn("p-1.5", PROMPT_COLORS[selectedPrompt.type])}>
-                  {React.createElement(PROMPT_ICONS[selectedPrompt.type], { className: "h-4 w-4" })}
-                </div>
-              )}
-              {selectedPrompt?.title}
-            </DialogTitle>
-            {selectedPrompt?.triggerType && (
-              <DialogDescription className="text-white/40 text-xs">
-                Triggered by: {selectedPrompt.triggerType.replace(/_/g, " ")}
-              </DialogDescription>
-            )}
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {selectedPrompt?.questions?.map((question: string, index: number) => (
-              <div key={index} className="space-y-2">
-                <p className="text-sm text-white/80">{question}</p>
-                <Textarea
-                  value={answers[index] || ""}
-                  onChange={(e) => setAnswers({ ...answers, [index]: e.target.value })}
-                  placeholder="Your reflection..."
-                  className="bg-sidebar-accent border-white/10 text-white placeholder:text-white/30 min-h-[80px]"
-                />
+        <DialogContent
+          showCloseButton={false}
+          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-xl"
+        >
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+            {/* Header */}
+            <div className="flex items-start gap-3 px-5 py-4">
+              <div className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent")}>
+                <PromptIcon className="h-3.5 w-3.5 text-white/60" />
               </div>
-            ))}
-          </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">{selectedPrompt?.title}</div>
+                {selectedPrompt?.triggerType && (
+                  <p className="mt-1 text-xs leading-relaxed text-white/40">
+                    Triggered by: {selectedPrompt.triggerType.replace(/_/g, " ")}
+                  </p>
+                )}
+              </div>
+              <DialogClose asChild>
+                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                  <span className="sr-only">Close</span>
+                </button>
+              </DialogClose>
+            </div>
+            <Separator />
 
-          <DialogFooter className="gap-2">
-            <Button
-              onClick={() => {
-                if (selectedPrompt) {
-                  handleDismiss(selectedPrompt.id);
-                  setSelectedPrompt(null);
-                }
-              }}
-              className={journalActionButtonMutedClassName}
-            >
-              Dismiss
-            </Button>
-            <Button
-              onClick={handleStartJournaling}
-              className={journalActionButtonClassName}
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Start Journaling
-            </Button>
-          </DialogFooter>
+            {/* Body */}
+            <div className="space-y-4 px-5 py-4">
+              {selectedPrompt?.questions?.map((question: string, index: number) => (
+                <div key={index} className="space-y-2">
+                  <p className="text-sm text-white/80">{question}</p>
+                  <Textarea
+                    value={answers[index] || ""}
+                    onChange={(e) => setAnswers({ ...answers, [index]: e.target.value })}
+                    placeholder="Your reflection..."
+                    className="bg-sidebar-accent border-white/10 text-white placeholder:text-white/30 min-h-[80px]"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <Separator />
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3">
+              <Button
+                onClick={() => {
+                  if (selectedPrompt) {
+                    handleDismiss(selectedPrompt.id);
+                    setSelectedPrompt(null);
+                  }
+                }}
+                className={journalActionButtonMutedClassName}
+              >
+                Dismiss
+              </Button>
+              <Button
+                onClick={handleStartJournaling}
+                className={journalActionButtonClassName}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Start Journaling
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </>
@@ -290,9 +306,9 @@ function PromptCard({ prompt, onShow, onDismiss }: PromptCardProps) {
 export function PromptNotificationBanner({ onJournalFromPrompt }: { onJournalFromPrompt?: (prompt: any) => void }) {
   const [dismissed, setDismissed] = useState(false);
   const { data: prompts = [] } = trpc.journal.getPrompts.useQuery();
-  
+
   const latestPrompt = prompts[0];
-  
+
   if (!latestPrompt || dismissed) return null;
 
   const Icon = PROMPT_ICONS[latestPrompt.type] || MessageSquare;

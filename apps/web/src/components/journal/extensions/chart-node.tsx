@@ -2,7 +2,7 @@
 
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { ChartEmbedType } from "../types";
 import { EquityCurveChart } from "@/components/dashboard/charts/equity-curve";
@@ -15,17 +15,12 @@ import { StreakDistributionChart } from "@/components/dashboard/charts/streak-di
 import { RMultipleDistributionChart } from "@/components/dashboard/charts/r-multiple-distribution";
 import { MAEMFEScatterChart } from "@/components/dashboard/charts/mae-mfe-scatter";
 import { EntryExitTimeChart } from "@/components/dashboard/charts/entry-exit-time";
-import { Trash2, Settings, GripVertical, LineChart } from "lucide-react";
+import { Trash2, Settings, GripVertical, LineChart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -35,35 +30,75 @@ import {
 } from "@/components/ui/select";
 import { trpc } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
+import { ChartRenderModeProvider } from "@/components/dashboard/charts/chart-render-mode";
 
 // Chart type metadata
 const chartTypeInfo: Record<ChartEmbedType, { label: string }> = {
   "equity-curve": { label: "Equity Curve" },
-  "drawdown": { label: "Drawdown" },
+  drawdown: { label: "Drawdown" },
   "daily-net": { label: "Daily P&L" },
   "performance-weekday": { label: "Performance by Day" },
   "performing-assets": { label: "Asset Performance" },
   "performance-heatmap": { label: "Performance Heatmap" },
   "streak-distribution": { label: "Win/Loss Streaks" },
   "r-multiple-distribution": { label: "R-Multiple" },
-  "mae-mfe-scatter": { label: "MAE/MFE Scatter" },
-  "entry-exit-time": { label: "Entry/Exit Time" },
+  "mae-mfe-scatter": { label: "MAE / MFE scatter" },
+  "entry-exit-time": { label: "Entry / exit time" },
 };
 
 // Node View Component
 function ChartNodeView({ node, deleteNode, selected, updateAttributes }: any) {
   const [isHovered, setIsHovered] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const chartContentRef = useRef<HTMLDivElement>(null);
   const chartType = node.attrs.chartType as ChartEmbedType;
   const accountId = node.attrs.accountId;
-  const height = node.attrs.height || 400;
-  const title = node.attrs.title || chartTypeInfo[chartType]?.label || chartType;
-  
-  const { data: accounts } = trpc.accounts.list.useQuery();
+  const height = node.attrs.height || 460;
+  const title =
+    node.attrs.title || chartTypeInfo[chartType]?.label || chartType;
+
   const { selectedAccountId } = useAccountStore();
-  
   const effectiveAccountId = accountId || selectedAccountId;
-  
+  const shouldLoadAccounts = showConfig || !effectiveAccountId;
+
+  const { data: accounts } = trpc.accounts.list.useQuery(undefined, {
+    enabled: shouldLoadAccounts,
+  });
+
+  useEffect(() => {
+    const container = chartContentRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const patchEmbeddedChartFocus = () => {
+      container
+        .querySelectorAll<SVGElement>(".recharts-surface")
+        .forEach((surface) => {
+          if (surface.getAttribute("tabindex") !== "-1") {
+            surface.setAttribute("tabindex", "-1");
+          }
+          if (surface.getAttribute("focusable") !== "false") {
+            surface.setAttribute("focusable", "false");
+          }
+        });
+    };
+
+    patchEmbeddedChartFocus();
+
+    const observer = new MutationObserver(() => {
+      patchEmbeddedChartFocus();
+    });
+
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
+  }, [chartType, effectiveAccountId]);
+
   // Config state
   const [configTitle, setConfigTitle] = useState(node.attrs.title || "");
   const [configHeight, setConfigHeight] = useState(String(height));
@@ -73,7 +108,7 @@ function ChartNodeView({ node, deleteNode, selected, updateAttributes }: any) {
   const handleSaveConfig = () => {
     updateAttributes({
       title: configTitle || null,
-      height: parseInt(configHeight) || 400,
+      height: parseInt(configHeight) || 460,
       chartType: configChartType,
       accountId: configAccountId || null,
     });
@@ -90,15 +125,17 @@ function ChartNodeView({ node, deleteNode, selected, updateAttributes }: any) {
         <div className="flex flex-col items-center justify-center h-full gap-4 py-8">
           <LineChart className="h-12 w-12 text-white/20" />
           <div className="text-center">
-            <p className="text-sm text-white/60 mb-2">Select an account to view chart data</p>
+            <p className="text-sm text-white/60 mb-2">
+              Select an account to view chart data
+            </p>
             <Select onValueChange={handleAccountChange}>
               <SelectTrigger className="w-64 bg-sidebar-accent border-white/10">
                 <SelectValue placeholder="Select account..." />
               </SelectTrigger>
               <SelectContent className="bg-sidebar border-white/10">
                 {accounts?.map((account) => (
-                  <SelectItem 
-                    key={account.id} 
+                  <SelectItem
+                    key={account.id}
                     value={account.id}
                     className="text-white focus:bg-white/10"
                   >
@@ -114,25 +151,73 @@ function ChartNodeView({ node, deleteNode, selected, updateAttributes }: any) {
 
     switch (chartType) {
       case "equity-curve":
-        return <EquityCurveChart accountId={effectiveAccountId} />;
+        return (
+          <EquityCurveChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "drawdown":
-        return <DrawdownChart accountId={effectiveAccountId} />;
+        return (
+          <DrawdownChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "daily-net":
-        return <DailyNetBarChart accountId={effectiveAccountId} ownerId={`journal-${chartType}`} comparisonMode="none" />;
+        return (
+          <DailyNetBarChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "performance-weekday":
-        return <PerformanceWeekdayChart accountId={effectiveAccountId} ownerId={`journal-${chartType}`} comparisonMode="none" />;
+        return (
+          <PerformanceWeekdayChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "performing-assets":
-        return <PerformingAssetsBarChart accountId={effectiveAccountId} ownerId={`journal-${chartType}`} />;
+        return (
+          <PerformingAssetsBarChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "performance-heatmap":
         return <PerformanceHeatmap accountId={effectiveAccountId} />;
       case "streak-distribution":
-        return <StreakDistributionChart accountId={effectiveAccountId} />;
+        return (
+          <StreakDistributionChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "r-multiple-distribution":
-        return <RMultipleDistributionChart accountId={effectiveAccountId} />;
+        return (
+          <RMultipleDistributionChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       case "mae-mfe-scatter":
         return <MAEMFEScatterChart accountId={effectiveAccountId} />;
       case "entry-exit-time":
-        return <EntryExitTimeChart accountId={effectiveAccountId} />;
+        return (
+          <EntryExitTimeChart
+            accountId={effectiveAccountId}
+            ownerId={`journal-${chartType}`}
+            comparisonMode="none"
+          />
+        );
       default:
         return (
           <div className="flex items-center justify-center h-full text-white/40">
@@ -195,117 +280,167 @@ function ChartNodeView({ node, deleteNode, selected, updateAttributes }: any) {
         </div>
 
         {/* Chart container - fixed height to contain the chart */}
-        <div className="px-3 pb-3">
-          <div className="[&_.recharts-wrapper]:!h-full [&>div]:h-full" style={{ height: `${height}px` }}>
-            {renderChart()}
+        <div ref={chartContentRef} className="px-3 pb-3">
+          <div
+            className="[&_.recharts-wrapper]:!h-full [&>div]:h-full"
+            style={{ height: `${height}px` }}
+          >
+            <ChartRenderModeProvider mode="embedded">
+              {renderChart()}
+            </ChartRenderModeProvider>
           </div>
         </div>
 
         {/* Config Dialog */}
         <Dialog open={showConfig} onOpenChange={setShowConfig}>
-          <DialogContent className="bg-sidebar border-white/10 max-w-md">
-            <DialogHeader>
-              <DialogTitle>Chart Settings</DialogTitle>
-              <DialogDescription className="text-white/40">
-                Customize how this chart appears in your journal
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-4 pt-4">
-              {/* Account */}
-              <div className="space-y-2">
-                <Label className="text-sm text-white/60">Account</Label>
-                <Select value={configAccountId} onValueChange={setConfigAccountId}>
-                  <SelectTrigger className="bg-sidebar-accent border-white/10 text-white">
-                    <SelectValue placeholder="Use selected account" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-sidebar border-white/10">
-                    <SelectItem value="" className="text-white/60 focus:bg-white/10">
-                      Use selected account
-                    </SelectItem>
-                    {accounts?.map((account) => (
-                      <SelectItem 
-                        key={account.id} 
-                        value={account.id}
-                        className="text-white focus:bg-white/10"
+          <DialogContent
+            showCloseButton={false}
+            className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-md"
+          >
+            <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+              {/* Header */}
+              <div className="flex items-start gap-3 px-5 py-4 shrink-0">
+                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+                  <Settings className="h-3.5 w-3.5 text-white/60" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-white">
+                    Chart Settings
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-white/40">
+                    Customize how this chart appears in your journal
+                  </p>
+                </div>
+                <DialogClose asChild>
+                  <button
+                    type="button"
+                    className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span className="sr-only">Close</span>
+                  </button>
+                </DialogClose>
+              </div>
+              <Separator />
+              {/* Body */}
+              <div className="space-y-4 px-5 py-4">
+                {/* Account */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-white/60">Account</Label>
+                  <Select
+                    value={configAccountId}
+                    onValueChange={setConfigAccountId}
+                  >
+                    <SelectTrigger className="bg-sidebar-accent border-white/10 text-white">
+                      <SelectValue placeholder="Use selected account" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-sidebar border-white/10">
+                      <SelectItem
+                        value=""
+                        className="text-white/60 focus:bg-white/10"
                       >
-                        {account.name}
+                        Use selected account
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      {accounts?.map((account) => (
+                        <SelectItem
+                          key={account.id}
+                          value={account.id}
+                          className="text-white focus:bg-white/10"
+                        >
+                          {account.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Chart Type */}
-              <div className="space-y-2">
-                <Label className="text-sm text-white/60">Chart Type</Label>
-                <Select value={configChartType} onValueChange={(v) => setConfigChartType(v as ChartEmbedType)}>
-                  <SelectTrigger className="bg-sidebar-accent border-white/10 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-sidebar border-white/10">
-                    {Object.entries(chartTypeInfo).map(([key, info]) => (
-                      <SelectItem 
-                        key={key} 
-                        value={key}
-                        className="text-white focus:bg-white/10 focus:text-white"
-                      >
-                        {info.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Chart Type */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-white/60">Chart Type</Label>
+                  <Select
+                    value={configChartType}
+                    onValueChange={(v) =>
+                      setConfigChartType(v as ChartEmbedType)
+                    }
+                  >
+                    <SelectTrigger className="bg-sidebar-accent border-white/10 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-sidebar border-white/10">
+                      {Object.entries(chartTypeInfo).map(([key, info]) => (
+                        <SelectItem
+                          key={key}
+                          value={key}
+                          className="text-white focus:bg-white/10 focus:text-white"
+                        >
+                          {info.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Custom Title */}
-              <div className="space-y-2">
-                <Label className="text-sm text-white/60">Custom Title (optional)</Label>
-                <Input
-                  value={configTitle}
-                  onChange={(e) => setConfigTitle(e.target.value)}
-                  placeholder={chartTypeInfo[configChartType]?.label || "Chart"}
-                  className="bg-sidebar-accent border-white/10 text-white placeholder:text-white/30"
-                />
-              </div>
-
-              {/* Height */}
-              <div className="space-y-2">
-                <Label className="text-sm text-white/60">Height (px)</Label>
-                <div className="flex gap-2">
-                  {["300", "400", "500"].map((h) => (
-                    <Button
-                      key={h}
-                      variant={configHeight === h ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setConfigHeight(h)}
-                      className={cn(
-                        configHeight === h
-                          ? "bg-teal-500 hover:bg-teal-600"
-                          : "border-white/10 text-white/60 hover:text-white"
-                      )}
-                    >
-                      {h}
-                    </Button>
-                  ))}
+                {/* Custom Title */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-white/60">
+                    Custom Title (optional)
+                  </Label>
                   <Input
-                    type="number"
-                    value={configHeight}
-                    onChange={(e) => setConfigHeight(e.target.value)}
-                    min="200"
-                    max="800"
-                    className="w-20 bg-sidebar-accent border-white/10 text-white"
+                    value={configTitle}
+                    onChange={(e) => setConfigTitle(e.target.value)}
+                    placeholder={
+                      chartTypeInfo[configChartType]?.label || "Chart"
+                    }
+                    className="bg-sidebar-accent border-white/10 text-white placeholder:text-white/30"
                   />
                 </div>
-              </div>
-            </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t border-white/5 mt-4">
-              <Button variant="ghost" onClick={() => setShowConfig(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleSaveConfig} className="bg-teal-500 hover:bg-teal-600">
-                Save Changes
-              </Button>
+                {/* Height */}
+                <div className="space-y-2">
+                  <Label className="text-sm text-white/60">Height (px)</Label>
+                  <div className="flex gap-2">
+                    {["300", "400", "500"].map((h) => (
+                      <Button
+                        key={h}
+                        variant={configHeight === h ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setConfigHeight(h)}
+                        className={cn(
+                          configHeight === h
+                            ? "bg-teal-500 hover:bg-teal-600"
+                            : "border-white/10 text-white/60 hover:text-white"
+                        )}
+                      >
+                        {h}
+                      </Button>
+                    ))}
+                    <Input
+                      type="number"
+                      value={configHeight}
+                      onChange={(e) => setConfigHeight(e.target.value)}
+                      min="200"
+                      max="800"
+                      className="w-20 bg-sidebar-accent border-white/10 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+              <Separator />
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-2 px-5 py-3 shrink-0">
+                <Button
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                  onClick={() => setShowConfig(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveConfig}
+                  className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                >
+                  Save Changes
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -344,14 +479,17 @@ export const ChartNode = Node.create({
   parseHTML() {
     return [
       {
-        tag: 'div[data-chart-embed]',
+        tag: "div[data-chart-embed]",
         getAttrs: (dom) => {
-          if (typeof dom === 'string') return {};
+          if (typeof dom === "string") return {};
           const element = dom as HTMLElement;
           return {
-            chartType: element.getAttribute('data-chart-type'),
-            accountId: element.getAttribute('data-account-id'),
-            height: element.getAttribute('data-height') ? parseInt(element.getAttribute('data-height')!) : 400,
+            chartType: element.getAttribute("data-chart-type"),
+            accountId: element.getAttribute("data-account-id"),
+            height: element.getAttribute("data-height")
+              ? parseInt(element.getAttribute("data-height")!)
+              : 400,
+            title: element.getAttribute("data-title"),
           };
         },
       },
@@ -360,12 +498,16 @@ export const ChartNode = Node.create({
 
   renderHTML({ node, HTMLAttributes }) {
     // Include all attrs as data attributes for proper serialization
-    return ['div', mergeAttributes(HTMLAttributes, { 
-      'data-chart-embed': '',
-      'data-chart-type': node.attrs.chartType || '',
-      'data-account-id': node.attrs.accountId || '',
-      'data-height': String(node.attrs.height || 300),
-    })];
+    return [
+      "div",
+      mergeAttributes(HTMLAttributes, {
+        "data-chart-embed": "",
+        "data-chart-type": node.attrs.chartType || "",
+        "data-account-id": node.attrs.accountId || "",
+        "data-height": String(node.attrs.height || 300),
+        "data-title": node.attrs.title || "",
+      }),
+    ];
   },
 
   addNodeView() {
@@ -375,7 +517,11 @@ export const ChartNode = Node.create({
   addCommands() {
     return {
       insertChart:
-        (attrs: { chartType: ChartEmbedType; accountId?: string; height?: number }) =>
+        (attrs: {
+          chartType: ChartEmbedType;
+          accountId?: string;
+          height?: number;
+        }) =>
         ({ chain }: { chain: any }) => {
           return chain()
             .insertContent({

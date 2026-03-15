@@ -33,7 +33,7 @@ import {
   Cell,
 } from "recharts";
 import { journalActionIconButtonClassName } from "./action-button-styles";
-import { JournalWidgetFrame } from "./journal-widget-shell";
+import { JournalInsightsPanelShell } from "./journal-insights-shell";
 
 interface PsychologyCorrelationChartProps {
   accountId?: string;
@@ -100,21 +100,31 @@ export function PsychologyCorrelationChart({
 }: PsychologyCorrelationChartProps) {
   const [forceRecalculate, setForceRecalculate] = React.useState(false);
 
-  const { data: correlationsData, isLoading, refetch } = trpc.journal.getPsychologyCorrelations.useQuery(
+  const { data: correlationsData, isLoading, isFetching, refetch } = trpc.journal.getPsychologyCorrelations.useQuery(
     {
       accountId,
       forceRecalculate,
       periodDays: 30,
-    },
-    {
-      onSettled: () => setForceRecalculate(false),
     }
   );
+
+  React.useEffect(() => {
+    if (!isFetching) {
+      setForceRecalculate(false);
+    }
+  }, [isFetching]);
 
   const { data: optimalConditionsData } = trpc.journal.getOptimalTradingConditions.useQuery({
     accountId,
   });
-  const correlations = (correlationsData ?? []) as PsychologyCorrelation[];
+  const correlations = React.useMemo(
+    () =>
+      [...((correlationsData ?? []) as PsychologyCorrelation[])].sort(
+        (a, b) =>
+          Math.abs(b.correlationCoefficient) - Math.abs(a.correlationCoefficient)
+      ),
+    [correlationsData]
+  );
   const optimalConditions = optimalConditionsData as OptimalTradingConditions | undefined;
 
   const handleRefresh = () => {
@@ -122,54 +132,54 @@ export function PsychologyCorrelationChart({
     refetch();
   };
 
-  const widgetHeader = (
-    <div className="flex items-center justify-between gap-3 p-3.5">
-      <div className="flex items-center gap-2 text-sm font-semibold text-white">
-        <Brain className="h-4 w-4 text-teal-300" />
-        <span>Psychology &amp; Performance</span>
-      </div>
-      <Button
-        size="sm"
-        onClick={handleRefresh}
-        disabled={forceRecalculate}
-        className={journalActionIconButtonClassName}
-      >
-        <RefreshCw
-          className={cn("h-4 w-4", forceRecalculate && "animate-spin")}
-        />
-      </Button>
-    </div>
-  );
-
   if (isLoading) {
     return (
-      <JournalWidgetFrame className={className} header={widgetHeader}>
-        <div className="p-4">
-          <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
+      <JournalInsightsPanelShell
+        icon={Brain}
+        title="Psychology & performance"
+        description="Connect tracked mental-state signals to actual trading outcomes."
+        className={className}
+        action={<Skeleton className="h-9 w-9 bg-sidebar" />}
+      >
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full bg-sidebar" />
+          ))}
         </div>
-      </JournalWidgetFrame>
+      </JournalInsightsPanelShell>
     );
   }
 
   if (!correlations || correlations.length === 0) {
     return (
-      <JournalWidgetFrame className={className} header={widgetHeader}>
-        <div className="p-4">
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <AlertCircle className="h-10 w-10 text-white/20 mb-3" />
-            <p className="text-sm text-white/40 mb-2">
-              Not enough data to analyze correlations
-            </p>
-            <p className="text-xs text-white/30">
-              Keep journaling with psychology tracking to see how your mental state affects your trading
-            </p>
-          </div>
+      <JournalInsightsPanelShell
+        icon={Brain}
+        title="Psychology & performance"
+        description="Connect tracked mental-state signals to actual trading outcomes."
+        className={className}
+        action={
+          <Button
+            size="sm"
+            onClick={handleRefresh}
+            disabled={forceRecalculate}
+            className={journalActionIconButtonClassName}
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", forceRecalculate && "animate-spin")}
+            />
+          </Button>
+        }
+      >
+        <div className="flex flex-col items-center justify-center py-8 text-center">
+          <AlertCircle className="mb-3 h-10 w-10 text-white/20" />
+          <p className="mb-2 text-sm text-white/40">
+            Not enough data to analyze correlations
+          </p>
+          <p className="text-xs text-white/30">
+            Keep journaling with psychology tracking to see how your mental state affects your trading.
+          </p>
         </div>
-      </JournalWidgetFrame>
+      </JournalInsightsPanelShell>
     );
   }
 
@@ -178,50 +188,65 @@ export function PsychologyCorrelationChart({
   );
 
   return (
-    <JournalWidgetFrame className={className} header={widgetHeader}>
-      <div className="space-y-6 p-4">
-        {optimalConditions?.recommendations && optimalConditions.recommendations.length > 0 && (
-          <div className="p-3 bg-teal-500/10 border border-teal-500/20">
+    <JournalInsightsPanelShell
+      icon={Brain}
+      title="Psychology & performance"
+      description="Connect tracked mental-state signals to actual trading outcomes."
+      className={className}
+      action={
+        <Button
+          size="sm"
+          onClick={handleRefresh}
+          disabled={forceRecalculate}
+          className={journalActionIconButtonClassName}
+        >
+          <RefreshCw
+            className={cn("h-4 w-4", forceRecalculate && "animate-spin")}
+          />
+        </Button>
+      }
+    >
+      <div className="space-y-5">
+        {optimalConditions?.recommendations && optimalConditions.recommendations.length > 0 ? (
+          <div className="rounded-sm border border-teal-500/20 bg-teal-500/10 p-3.5">
             <div className="flex items-start gap-2">
-              <Lightbulb className="h-4 w-4 text-teal-400 mt-0.5 flex-shrink-0" />
-              <div className="space-y-1">
+              <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-teal-300" />
+              <div className="space-y-1.5">
                 {optimalConditions.recommendations.map((rec, i) => (
-                  <p key={i} className="text-xs text-teal-300">
+                  <p key={i} className="text-xs leading-5 text-teal-200">
                     {rec}
                   </p>
                 ))}
               </div>
             </div>
           </div>
-        )}
+        ) : null}
 
         {significantCorrelations.length > 0 ? (
           <div className="space-y-3">
-            <h4 className="text-sm font-medium text-white/60">Key Findings</h4>
-            {significantCorrelations.map((correlation, index) => (
+            <h4 className="text-xs font-medium text-white/45">Key findings</h4>
+            {significantCorrelations.slice(0, 4).map((correlation, index) => (
               <CorrelationCard key={index} correlation={correlation} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-4">
+          <div className="rounded-sm border border-dashed border-white/10 bg-sidebar/55 py-4 text-center">
             <p className="text-sm text-white/40">
               No significant correlations found yet
             </p>
           </div>
         )}
 
-        {correlations.length > 0 && (
-          <div className="space-y-3">
-            <h4 className="text-sm font-medium text-white/60">All Correlations</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {correlations.map((correlation, index) => (
-                <CorrelationMiniCard key={index} correlation={correlation} />
-              ))}
-            </div>
+        <div className="space-y-3">
+          <h4 className="text-xs font-medium text-white/45">Correlation map</h4>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-4">
+            {correlations.map((correlation, index) => (
+              <CorrelationMiniCard key={index} correlation={correlation} />
+            ))}
           </div>
-        )}
+        </div>
       </div>
-    </JournalWidgetFrame>
+    </JournalInsightsPanelShell>
   );
 }
 
@@ -234,14 +259,8 @@ function CorrelationCard({ correlation }: CorrelationCardProps) {
   const isPositive = correlation.correlationCoefficient > 0;
   const absCorrelation = Math.abs(correlation.correlationCoefficient);
 
-  const getSignificanceColor = () => {
-    if (correlation.significance === "high") return "text-green-400";
-    if (correlation.significance === "medium") return "text-yellow-400";
-    return "text-white/40";
-  };
-
   return (
-    <div className="p-3 bg-sidebar-accent border border-white/10 space-y-3">
+    <div className="rounded-sm border border-white/10 bg-sidebar p-3.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isPositive ? (
@@ -267,7 +286,7 @@ function CorrelationCard({ correlation }: CorrelationCardProps) {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="mt-3 space-y-2">
         <div className="flex items-start gap-2">
           <CheckCircle className="h-3 w-3 text-green-400 mt-0.5" />
           <p className="text-xs text-white/60">{correlation.insights.bestConditions}</p>
@@ -278,7 +297,7 @@ function CorrelationCard({ correlation }: CorrelationCardProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-2 border-t border-white/5">
+      <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-2">
         <span className="text-xs text-white/30">
           {correlation.sampleSize} samples • {correlation.significance} significance
         </span>
@@ -357,16 +376,16 @@ function CorrelationMiniCard({ correlation }: CorrelationMiniCardProps) {
 
   const getBgColor = () => {
     if (correlation.significance === "high") {
-      return isPositive ? "bg-green-500/20 border-green-500/30" : "bg-red-500/20 border-red-500/30";
+      return isPositive ? "bg-green-500/12 border-green-500/25" : "bg-red-500/12 border-red-500/25";
     }
     if (correlation.significance === "medium") {
       return isPositive ? "bg-teal-500/10 border-teal-500/20" : "bg-orange-500/10 border-orange-500/20";
     }
-    return "bg-sidebar-accent border-white/10";
+    return "bg-sidebar border-white/10";
   };
 
   return (
-    <div className={cn("p-2 border text-center", getBgColor())}>
+    <div className={cn("rounded-sm border p-2.5 text-center", getBgColor())}>
       <p className="text-xs text-white/60 truncate">
         {PSYCHOLOGY_LABELS[correlation.psychologyFactor]}
       </p>

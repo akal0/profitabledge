@@ -3,10 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { Award, Target, TrendingUp } from "lucide-react";
+import { Award, Target, TrendingUp, type LucideIcon } from "lucide-react";
 
 import { CreateGoalDialog } from "@/components/goals/create-goal-dialog";
 import { ActiveGoalsList } from "@/components/goals/active-goals-list";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { MilestoneCelebration } from "@/components/goals/milestone-celebration";
 import { ProcessScorecard } from "@/components/goals/process-scorecard";
 import { ProgressRing } from "@/components/goals/progress-ring";
@@ -28,6 +32,31 @@ type GoalRow = {
   startDate: string;
   isCustom?: boolean | null;
 };
+
+function OverviewStatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+  color: string;
+}) {
+  return (
+    <GoalSurface>
+      <div className="p-3.5">
+        <div className="flex items-center gap-2">
+          <Icon className={`h-4 w-4 ${color}`} />
+          <span className="text-xs text-white/50">{label}</span>
+        </div>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        <div className="text-2xl font-semibold text-white">{value}</div>
+      </div>
+    </GoalSurface>
+  );
+}
 
 function invalidateGoals(queryClient: ReturnType<typeof useQueryClient>) {
   return queryClient.invalidateQueries({
@@ -88,19 +117,27 @@ export default function GoalsPage() {
     }),
   });
 
-  const activeGoals = (goals as GoalRow[]) || [];
-  const processGoals = activeGoals.filter((goal) =>
-    [
-      "journalRate",
-      "ruleCompliance",
-      "edgeTradeRate",
-      "breakAfterLoss",
-      "checklistCompletion",
-      "maxRiskPerTrade",
-    ].includes(goal.targetType)
+  const activeGoals = useMemo(() => (goals as GoalRow[]) || [], [goals]);
+  const processGoals = useMemo(
+    () =>
+      activeGoals.filter((goal) =>
+        [
+          "journalRate",
+          "ruleCompliance",
+          "edgeTradeRate",
+          "breakAfterLoss",
+          "checklistCompletion",
+          "maxRiskPerTrade",
+        ].includes(goal.targetType)
+      ),
+    [activeGoals]
   );
-  const outcomeGoals = activeGoals.filter(
-    (goal) => !processGoals.some((processGoal) => processGoal.id === goal.id)
+  const outcomeGoals = useMemo(
+    () =>
+      activeGoals.filter(
+        (goal) => !processGoals.some((processGoal) => processGoal.id === goal.id)
+      ),
+    [activeGoals, processGoals]
   );
 
   useEffect(() => {
@@ -231,7 +268,7 @@ export default function GoalsPage() {
             {[
               {
                 icon: Target,
-                label: "Active Goals",
+                label: "Active goals",
                 value: stats.active,
                 color: "text-blue-400",
               },
@@ -243,33 +280,30 @@ export default function GoalsPage() {
               },
               {
                 icon: TrendingUp,
-                label: "Total Goals",
+                label: "Total goals",
                 value: stats.total,
                 color: "text-purple-400",
               },
               {
                 icon: Target,
-                label: "Success Rate",
+                label: "Success rate",
                 value: `${stats.achievementRate.toFixed(0)}%`,
                 color: "text-orange-400",
               },
             ].map((card, index) => {
-              const Icon = card.icon;
               return (
                 <motion.div
                   key={card.label}
-                  className="group flex flex-col rounded-sm border border-white/5 bg-sidebar p-1.5"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * (index + 1) }}
                 >
-                  <div className="flex flex-1 flex-col rounded-sm bg-sidebar-accent p-4 transition-all duration-250 group-hover:brightness-120">
-                    <div className="mb-2 flex items-center gap-3">
-                      <Icon className={`h-4 w-4 ${card.color}`} />
-                      <span className="text-xs text-white/50">{card.label}</span>
-                    </div>
-                    <div className="text-2xl font-semibold text-white">{card.value}</div>
-                  </div>
+                  <OverviewStatCard
+                    icon={card.icon}
+                    label={card.label}
+                    value={card.value}
+                    color={card.color}
+                  />
                 </motion.div>
               );
             })}
@@ -279,28 +313,41 @@ export default function GoalsPage() {
         {streaks ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <StreakTracker
+              className="min-h-[220px]"
               currentStreak={streaks.currentWinStreak}
               longestStreak={streaks.longestWinStreak}
               streakType="wins"
             />
             <StreakTracker
+              className="min-h-[220px]"
               currentStreak={streaks.currentGreenDays}
               longestStreak={streaks.longestGreenDays}
               streakType="greenDays"
             />
             <motion.div
-              className="group flex items-center justify-center rounded-sm border border-white/5 bg-sidebar p-1.5"
+              className="h-full min-h-[220px]"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.35 }}
             >
-              <ProgressRing
-                progress={stats?.achievementRate || 0}
-                size={140}
-                strokeWidth={10}
-                color="#14b8a6"
-                label="Goal Hit Rate"
-              />
+              <GoalSurface className="h-full">
+                <div className="flex h-full flex-col p-3.5">
+                  <div className="flex items-center gap-2">
+                    <Target className="h-4 w-4 text-teal-300" />
+                    <span className="text-xs text-white/50">Goal hit rate</span>
+                  </div>
+                  <GoalContentSeparator className="mb-5 mt-3.5" />
+                  <div className="flex flex-1 items-center justify-center">
+                    <ProgressRing
+                      progress={stats?.achievementRate || 0}
+                      size={120}
+                      strokeWidth={9}
+                      color="#14b8a6"
+                      label="Goal hit rate"
+                    />
+                  </div>
+                </div>
+              </GoalSurface>
             </motion.div>
           </div>
         ) : null}
@@ -313,14 +360,16 @@ export default function GoalsPage() {
             onCreateGoal={handleCreateSuggestedGoal}
           />
         ) : (
-          <div className="rounded-sm border border-white/5 bg-sidebar p-5 text-sm text-white/55">
-            Process scorecard will appear once you have closed trades in this scope.
-          </div>
+          <GoalSurface>
+            <div className="p-5 text-sm text-white/55">
+              Process scorecard will appear once you have closed trades in this scope.
+            </div>
+          </GoalSurface>
         )}
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <section>
-            <h2 className="mb-4 text-xl font-semibold text-white">Outcome Goals</h2>
+            <h2 className="mb-4 text-xl font-semibold text-white">Outcome goals</h2>
             {isLoadingGoals ? (
               <div className="flex items-center justify-center py-12">
                 <p className="text-sm text-white/40">Loading goals...</p>
@@ -336,7 +385,7 @@ export default function GoalsPage() {
           </section>
 
           <section>
-            <h2 className="mb-4 text-xl font-semibold text-white">Process Goals</h2>
+            <h2 className="mb-4 text-xl font-semibold text-white">Process goals</h2>
             {isLoadingGoals ? (
               <div className="flex items-center justify-center py-12">
                 <p className="text-sm text-white/40">Loading goals...</p>

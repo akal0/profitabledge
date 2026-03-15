@@ -71,7 +71,6 @@ function parseEmbedUrl(url: string): EmbedInfo {
 // Embed Node View Component
 // ============================================================================
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function EmbedNodeView({ node, updateAttributes, deleteNode, selected }: any) {
   const { url, embedType } = node.attrs;
   const [isEditing, setIsEditing] = useState(!url || url === "placeholder");

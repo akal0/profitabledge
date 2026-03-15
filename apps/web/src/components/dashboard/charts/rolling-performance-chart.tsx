@@ -43,7 +43,7 @@ const metricConfig: Record<
     ref: 1,
     suffix: "",
   },
-  avgRR: { label: "Avg R:R", color: "#fbbf24", ref: 1, suffix: "R" },
+  avgRR: { label: "Avg RR", color: "#fbbf24", ref: 1, suffix: "R" },
   expectancy: { label: "Expectancy", color: "#38bdf8", ref: 0, suffix: "$" },
 };
 

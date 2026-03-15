@@ -22,10 +22,12 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
+import { showAIErrorToast } from "@/lib/ai-error-toast";
 import {
   journalActionButtonClassName,
   journalActionIconButtonClassName,
 } from "./action-button-styles";
+import { JournalInsightsPanelShell } from "./journal-insights-shell";
 
 interface AIAnalysisDisplayProps {
   entryId: string;
@@ -63,9 +65,11 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
       await analyzeMutation.mutateAsync({ entryId });
       await refetch();
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to analyze journal entry"
-      );
+      if (!showAIErrorToast(error)) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to analyze journal entry"
+        );
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -272,72 +276,80 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
       const result = await askJournalMutation.mutateAsync({ question });
       setAnswer(result.answer);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to query journal insights"
-      );
+      if (!showAIErrorToast(error)) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to query journal insights"
+        );
+      }
     }
   };
 
   return (
-    <div className={cn("space-y-4", className)}>
-      <Card className="bg-sidebar border-white/10">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-white">
-            <Brain className="h-5 w-5 text-teal-400" />
-            Ask Your Journal
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="What patterns do you see in my journal?"
-                className="flex-1 bg-sidebar-accent border border-white/10 px-3 py-2 text-sm text-white placeholder:text-white/30 rounded-md"
-                onKeyDown={(e) => e.key === "Enter" && handleAsk()}
-              />
-              <Button
-                onClick={handleAsk}
-                disabled={askJournalMutation.isPending || !question.trim()}
-                className={journalActionIconButtonClassName}
-              >
-                {askJournalMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-
-            {answer && (
-              <div className="p-3 bg-teal-500/10 border border-teal-500/20">
-                <p className="text-sm text-white/80">{answer}</p>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              {[
-                "What patterns do you see?",
-                "How's my psychology affecting trades?",
-                "What should I improve?",
-              ].map((q) => (
-                <button
-                  key={q}
-                  onClick={() => {
-                    setQuestion(q);
-                  }}
-                  className="text-xs px-2 py-1 bg-sidebar-accent border border-white/10 text-white/60 hover:text-white hover:border-white/20 transition-colors"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
+    <JournalInsightsPanelShell
+      icon={Brain}
+      title="Ask your journal"
+      description="Query your notes directly to surface repeat behavior, psychology cues, and next actions."
+      className={className}
+      action={
+        <Button
+          onClick={handleAsk}
+          disabled={askJournalMutation.isPending || !question.trim()}
+          className={journalActionIconButtonClassName}
+        >
+          {askJournalMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+        </Button>
+      }
+    >
+      <div className="space-y-3">
+        <div className="rounded-sm border border-white/5 bg-sidebar p-1.5">
+          <div className="rounded-sm bg-sidebar-accent p-1.5">
+            <input
+              type="text"
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="What patterns do you see in my journal?"
+              className="h-10 w-full rounded-sm border border-white/10 bg-sidebar px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-teal-400/30"
+              onKeyDown={(e) => e.key === "Enter" && handleAsk()}
+            />
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+
+        {answer ? (
+          <div className="rounded-sm border border-teal-500/20 bg-teal-500/10 p-3">
+            <p className="text-sm leading-6 text-white/80">{answer}</p>
+          </div>
+        ) : (
+          <div className="rounded-sm border border-dashed border-white/10 bg-sidebar/55 p-4 text-center">
+            <p className="text-sm font-medium text-white">No answer yet</p>
+            <p className="mt-1 text-xs text-white/40">
+              Ask about recurring mistakes, psychology, or what needs tightening next.
+            </p>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            "What patterns do you see?",
+            "How's my psychology affecting trades?",
+            "What should I improve?",
+          ].map((q) => (
+            <button
+              key={q}
+              onClick={() => {
+                setQuestion(q);
+              }}
+              className="rounded-sm border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-white/60 transition-colors hover:border-white/20 hover:text-white"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
+      </div>
+    </JournalInsightsPanelShell>
   );
 }
 
@@ -353,40 +365,41 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
     onError: (error: any) => {
       setPatterns([]);
       setErrorMessage(error.message);
+      showAIErrorToast(error);
     },
   });
 
   React.useEffect(() => {
     analyzePatternsMutation.mutate({ limit: 10 });
-  }, []);
+  }, [analyzePatternsMutation]);
 
   const isLoading = analyzePatternsMutation.isPending && patterns.length === 0;
 
   if (isLoading) {
     return (
-      <Card className={cn("bg-sidebar border-white/10", className)}>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-9 w-9" />
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 bg-sidebar-accent" />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <JournalInsightsPanelShell
+        icon={Target}
+        title="Detected patterns"
+        description="Cluster repeated journal themes and confidence-weighted opportunities."
+        className={className}
+        action={<Skeleton className="h-9 w-9 bg-sidebar" />}
+      >
+        <div className="space-y-2">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 bg-sidebar" />
+          ))}
+        </div>
+      </JournalInsightsPanelShell>
     );
   }
 
   return (
-    <Card className={cn("bg-sidebar border-white/10", className)}>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="flex items-center gap-2 text-white">
-          <Target className="h-5 w-5 text-teal-400" />
-          Detected Patterns
-        </CardTitle>
+    <JournalInsightsPanelShell
+      icon={Target}
+      title="Detected patterns"
+      description="Cluster repeated journal themes and confidence-weighted opportunities."
+      className={className}
+      action={
         <Button
           size="sm"
           onClick={() => analyzePatternsMutation.mutate({ limit: 10 })}
@@ -397,8 +410,9 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
             className={cn("h-4 w-4", analyzePatternsMutation.isPending && "animate-spin")}
           />
         </Button>
-      </CardHeader>
-      <CardContent>
+      }
+    >
+      <div>
         {patterns.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Target className="mb-3 h-10 w-10 text-white/20" />
@@ -420,11 +434,11 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
               return (
                 <div
                   key={i}
-                  className="border border-white/10 bg-sidebar-accent p-3 transition-colors hover:border-white/20"
+                  className="rounded-sm border border-white/10 bg-sidebar p-3 transition-colors hover:border-white/20"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={cn("p-1.5", config.bg)}>
+                      <div className={cn("rounded-sm border border-white/5 p-1.5", config.bg)}>
                         <Icon className={cn("h-4 w-4", config.color)} />
                       </div>
                       <div>
@@ -448,7 +462,7 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </JournalInsightsPanelShell>
   );
 }

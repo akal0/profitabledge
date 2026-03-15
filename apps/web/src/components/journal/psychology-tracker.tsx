@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { cn } from "@/lib/utils";
+
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -10,9 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import type { PsychologySnapshot } from "@/components/journal/types";
+import { cn } from "@/lib/utils";
 
 interface PsychologyTrackerProps {
   value: PsychologySnapshot;
@@ -26,7 +28,7 @@ interface SliderFieldProps {
   onChange: (value: number) => void;
   lowLabel: string;
   highLabel: string;
-  color?: "green" | "red" | "blue" | "yellow";
+  tone?: "teal" | "rose" | "amber";
 }
 
 function SliderField({
@@ -35,39 +37,41 @@ function SliderField({
   onChange,
   lowLabel,
   highLabel,
-  color = "blue",
+  tone = "teal",
 }: SliderFieldProps) {
-  const colorClasses = {
-    green: "accent-green-500",
-    red: "accent-red-500",
-    blue: "accent-blue-500",
-    yellow: "accent-yellow-500",
-  };
+  const toneClasses = {
+    teal:
+      "[&_[data-slot=slider-range]]:bg-teal-400/80 [&_[data-slot=slider-thumb]]:border-teal-400/35 [&_[data-slot=slider-thumb]]:bg-sidebar-accent",
+    rose:
+      "[&_[data-slot=slider-range]]:bg-rose-400/80 [&_[data-slot=slider-thumb]]:border-rose-400/35 [&_[data-slot=slider-thumb]]:bg-sidebar-accent",
+    amber:
+      "[&_[data-slot=slider-range]]:bg-amber-300/80 [&_[data-slot=slider-thumb]]:border-amber-300/35 [&_[data-slot=slider-thumb]]:bg-sidebar-accent",
+  } satisfies Record<NonNullable<SliderFieldProps["tone"]>, string>;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs font-medium">{label}</Label>
-        <span className="text-sm font-semibold text-primary">{value}/10</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="text-[10px] text-muted-foreground w-16 text-left">
-          {lowLabel}
+    <div className="rounded-sm border border-white/5 bg-sidebar/45 px-3 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <Label className="text-xs font-medium text-white/52">
+          {label}
+        </Label>
+        <span className="rounded-full border border-white/8 bg-sidebar-accent px-2.5 py-1 text-[11px] font-medium text-white/72">
+          {value}/10
         </span>
-        <input
-          type="range"
-          min="1"
-          max="10"
-          value={value}
-          onChange={(e) => onChange(parseInt(e.target.value))}
+      </div>
+      <div className="mt-3 grid grid-cols-[minmax(0,64px)_1fr_minmax(0,64px)] items-center gap-3">
+        <span className="text-[10px] text-white/32">{lowLabel}</span>
+        <Slider
+          min={1}
+          max={10}
+          step={1}
+          value={[value]}
+          onValueChange={(values) => onChange(values[0] ?? value)}
           className={cn(
-            "flex-1 h-2 rounded-full cursor-pointer",
-            colorClasses[color]
+            "[&_[data-slot=slider-track]]:h-2 [&_[data-slot=slider-track]]:rounded-full [&_[data-slot=slider-track]]:bg-white/8 [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:rounded-full [&_[data-slot=slider-thumb]]:shadow-none [&_[data-slot=slider-thumb]]:ring-0 [&_[data-slot=slider-thumb]]:hover:ring-4 [&_[data-slot=slider-thumb]]:hover:ring-white/8 [&_[data-slot=slider-thumb]]:focus-visible:ring-4 [&_[data-slot=slider-thumb]]:focus-visible:ring-white/8 [&_[data-slot=slider-thumb]]:transition-colors",
+            toneClasses[tone]
           )}
         />
-        <span className="text-[10px] text-muted-foreground w-16 text-right">
-          {highLabel}
-        </span>
+        <span className="text-right text-[10px] text-white/32">{highLabel}</span>
       </div>
     </div>
   );
@@ -89,10 +93,16 @@ export function PsychologyTracker({
     "calm",
     "confident",
     "neutral",
+    "excited",
     "anxious",
     "stressed",
     "frustrated",
-    "excited",
+    "angry",
+    "confused",
+    "discouraged",
+    "overwhelmed",
+    "regretful",
+    "impatient",
   ];
 
   const marketConditions: PsychologySnapshot["marketCondition"][] = [
@@ -111,73 +121,73 @@ export function PsychologyTracker({
   ];
 
   return (
-    <div className={cn("space-y-6", className)}>
-      <div className="space-y-4">
+    <div className={cn("space-y-4", className)}>
+      <div className="grid gap-3 xl:grid-cols-2">
         <SliderField
           label="Mood"
           value={value.mood}
-          onChange={(v) => updateField("mood", v)}
-          lowLabel="Terrible"
-          highLabel="Excellent"
-          color="green"
+          onChange={(nextValue) => updateField("mood", nextValue)}
+          lowLabel="Low"
+          highLabel="High"
+          tone="teal"
         />
-
         <SliderField
           label="Confidence"
           value={value.confidence}
-          onChange={(v) => updateField("confidence", v)}
-          lowLabel="Doubtful"
+          onChange={(nextValue) => updateField("confidence", nextValue)}
+          lowLabel="Doubt"
           highLabel="Certain"
-          color="blue"
+          tone="teal"
         />
-
         <SliderField
           label="Energy"
           value={value.energy}
-          onChange={(v) => updateField("energy", v)}
-          lowLabel="Exhausted"
-          highLabel="Energized"
-          color="green"
+          onChange={(nextValue) => updateField("energy", nextValue)}
+          lowLabel="Flat"
+          highLabel="Sharp"
+          tone="teal"
         />
-
         <SliderField
           label="Focus"
           value={value.focus}
-          onChange={(v) => updateField("focus", v)}
-          lowLabel="Distracted"
-          highLabel="Locked In"
-          color="blue"
+          onChange={(nextValue) => updateField("focus", nextValue)}
+          lowLabel="Scattered"
+          highLabel="Locked in"
+          tone="teal"
         />
-
         <SliderField
           label="Fear"
           value={value.fear}
-          onChange={(v) => updateField("fear", v)}
-          lowLabel="Fearless"
-          highLabel="Terrified"
-          color="red"
+          onChange={(nextValue) => updateField("fear", nextValue)}
+          lowLabel="Calm"
+          highLabel="High"
+          tone="rose"
         />
-
         <SliderField
-          label="Greed/FOMO"
+          label="Greed / FOMO"
           value={value.greed}
-          onChange={(v) => updateField("greed", v)}
+          onChange={(nextValue) => updateField("greed", nextValue)}
           lowLabel="Patient"
           highLabel="Impulsive"
-          color="red"
+          tone="amber"
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Emotional State</Label>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="rounded-sm border border-white/5 bg-sidebar/45 p-3">
+          <Label className="text-xs font-medium text-white/52">
+            Emotional state
+          </Label>
           <Select
             value={value.emotionalState}
-            onValueChange={(v) =>
-              updateField("emotionalState", v as PsychologySnapshot["emotionalState"])
+            onValueChange={(nextValue) =>
+              updateField(
+                "emotionalState",
+                nextValue as PsychologySnapshot["emotionalState"]
+              )
             }
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="mt-2 h-10 w-full">
               <SelectValue placeholder="Select state" />
             </SelectTrigger>
             <SelectContent>
@@ -190,18 +200,20 @@ export function PsychologyTracker({
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Market Condition</Label>
+        <div className="rounded-sm border border-white/5 bg-sidebar/45 p-3">
+          <Label className="text-xs font-medium text-white/52">
+            Market condition
+          </Label>
           <Select
             value={value.marketCondition || ""}
-            onValueChange={(v) =>
+            onValueChange={(nextValue) =>
               updateField(
                 "marketCondition",
-                (v || undefined) as PsychologySnapshot["marketCondition"]
+                (nextValue || undefined) as PsychologySnapshot["marketCondition"]
               )
             }
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="mt-2 h-10 w-full">
               <SelectValue placeholder="Select condition" />
             </SelectTrigger>
             <SelectContent>
@@ -214,62 +226,66 @@ export function PsychologyTracker({
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-xs font-medium">Environment</Label>
+        <div className="rounded-sm border border-white/5 bg-sidebar/45 p-3">
+          <Label className="text-xs font-medium text-white/52">
+            Environment
+          </Label>
           <Select
             value={value.tradingEnvironment || ""}
-            onValueChange={(v) =>
+            onValueChange={(nextValue) =>
               updateField(
                 "tradingEnvironment",
-                (v || undefined) as PsychologySnapshot["tradingEnvironment"]
+                (nextValue || undefined) as PsychologySnapshot["tradingEnvironment"]
               )
             }
           >
-            <SelectTrigger className="h-9">
+            <SelectTrigger className="mt-2 h-10 w-full">
               <SelectValue placeholder="Select environment" />
             </SelectTrigger>
             <SelectContent>
-              {environments.map((env) => (
-                <SelectItem key={env} value={env || "home"}>
-                  <span className="capitalize">{env}</span>
+              {environments.map((environment) => (
+                <SelectItem key={environment} value={environment || "home"}>
+                  <span className="capitalize">{environment}</span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-2">
-          <SliderField
-            label="Sleep Quality"
-            value={value.sleepQuality || 5}
-            onChange={(v) => updateField("sleepQuality", v)}
-            lowLabel="Poor"
-            highLabel="Great"
-            color="blue"
-          />
-        </div>
+        <SliderField
+          label="Sleep quality"
+          value={value.sleepQuality || 5}
+          onChange={(nextValue) => updateField("sleepQuality", nextValue)}
+          lowLabel="Poor"
+          highLabel="Great"
+          tone="teal"
+        />
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <div className="space-y-0.5">
-          <Label className="text-xs font-medium">Distractions</Label>
-          <p className="text-[10px] text-muted-foreground">
-            Any external distractions present?
+      <div className="flex items-center justify-between rounded-sm border border-white/5 bg-sidebar/45 px-3 py-3">
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-white/52">
+            Distractions
+          </Label>
+          <p className="text-[11px] text-white/34">
+            Note whether anything external affected your focus.
           </p>
         </div>
         <Switch
           checked={value.distractions || false}
-          onCheckedChange={(v) => updateField("distractions", v)}
+          onCheckedChange={(nextValue) => updateField("distractions", nextValue)}
         />
       </div>
 
-      <div className="space-y-2">
-        <Label className="text-xs font-medium">Mental State Notes</Label>
+      <div className="rounded-sm border border-white/5 bg-sidebar/45 p-3">
+        <Label className="text-xs font-medium text-white/52">
+          Mental state notes
+        </Label>
         <Textarea
           value={value.notes || ""}
-          onChange={(e) => updateField("notes", e.target.value)}
-          placeholder="Any thoughts about your current mental state..."
-          className="min-h-[80px] resize-none text-sm"
+          onChange={(event) => updateField("notes", event.target.value)}
+          placeholder="Capture anything specific about your mental state here..."
+          className="mt-2 min-h-[96px] resize-none border-white/8 bg-sidebar/70 text-sm text-white placeholder:text-white/20 focus-visible:ring-1 focus-visible:ring-teal-400/25"
         />
       </div>
     </div>
@@ -287,76 +303,82 @@ export function PsychologySummary({
 }) {
   const getEmotionalColor = (state: PsychologySnapshot["emotionalState"]) => {
     const colors: Record<PsychologySnapshot["emotionalState"], string> = {
-      calm: "text-green-500",
-      confident: "text-green-500",
-      neutral: "text-gray-500",
-      anxious: "text-yellow-500",
-      stressed: "text-orange-500",
-      frustrated: "text-red-500",
-      excited: "text-blue-500",
+      calm: "text-teal-300",
+      confident: "text-teal-300",
+      neutral: "text-white/70",
+      excited: "text-sky-300",
+      anxious: "text-amber-300",
+      stressed: "text-orange-300",
+      frustrated: "text-rose-300",
+      angry: "text-rose-300",
+      confused: "text-amber-200",
+      discouraged: "text-rose-200",
+      overwhelmed: "text-orange-200",
+      regretful: "text-amber-200",
+      impatient: "text-amber-300",
     };
     return colors[state];
   };
 
   if (compact) {
     return (
-      <div className={cn("flex items-center gap-3 text-xs", className)}>
+      <div className={cn("flex flex-wrap items-center gap-3 text-xs", className)}>
         <span className={cn("capitalize font-medium", getEmotionalColor(psychology.emotionalState))}>
           {psychology.emotionalState}
         </span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-muted-foreground">Mood: {psychology.mood}/10</span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-muted-foreground">Focus: {psychology.focus}/10</span>
+        <span className="text-white/16">•</span>
+        <span className="text-white/42">Mood {psychology.mood}/10</span>
+        <span className="text-white/16">•</span>
+        <span className="text-white/42">Focus {psychology.focus}/10</span>
       </div>
     );
   }
 
   return (
-    <div className={cn("rounded-lg border p-4 space-y-3", className)}>
-      <h4 className="text-sm font-medium">Psychology Snapshot</h4>
-      <div className="grid grid-cols-3 gap-3 text-xs">
+    <div className={cn("rounded-sm border border-white/5 bg-sidebar/45 p-4", className)}>
+      <h4 className="text-xs font-medium text-white">Psychology snapshot</h4>
+      <div className="mt-3 grid grid-cols-3 gap-3 text-xs">
         <div>
-          <span className="text-muted-foreground">Mood</span>
-          <p className="font-medium">{psychology.mood}/10</p>
+          <span className="text-white/40">Mood</span>
+          <p className="font-medium text-white">{psychology.mood}/10</p>
         </div>
         <div>
-          <span className="text-muted-foreground">Confidence</span>
-          <p className="font-medium">{psychology.confidence}/10</p>
+          <span className="text-white/40">Confidence</span>
+          <p className="font-medium text-white">{psychology.confidence}/10</p>
         </div>
         <div>
-          <span className="text-muted-foreground">Focus</span>
-          <p className="font-medium">{psychology.focus}/10</p>
+          <span className="text-white/40">Focus</span>
+          <p className="font-medium text-white">{psychology.focus}/10</p>
         </div>
         <div>
-          <span className="text-muted-foreground">Energy</span>
-          <p className="font-medium">{psychology.energy}/10</p>
+          <span className="text-white/40">Energy</span>
+          <p className="font-medium text-white">{psychology.energy}/10</p>
         </div>
         <div>
-          <span className="text-muted-foreground">Fear</span>
-          <p className="font-medium">{psychology.fear}/10</p>
+          <span className="text-white/40">Fear</span>
+          <p className="font-medium text-white">{psychology.fear}/10</p>
         </div>
         <div>
-          <span className="text-muted-foreground">Greed</span>
-          <p className="font-medium">{psychology.greed}/10</p>
+          <span className="text-white/40">Greed</span>
+          <p className="font-medium text-white">{psychology.greed}/10</p>
         </div>
       </div>
-      <div className="pt-2 border-t text-xs">
+      <div className="mt-3 border-t border-white/5 pt-3 text-xs">
         <span className={cn("capitalize font-medium", getEmotionalColor(psychology.emotionalState))}>
           {psychology.emotionalState}
         </span>
         {psychology.marketCondition && (
           <>
-            <span className="mx-2 text-muted-foreground">•</span>
-            <span className="text-muted-foreground capitalize">
+            <span className="mx-2 text-white/18">•</span>
+            <span className="capitalize text-white/42">
               {psychology.marketCondition} market
             </span>
           </>
         )}
         {psychology.distractions && (
           <>
-            <span className="mx-2 text-muted-foreground">•</span>
-            <span className="text-yellow-500">Distractions present</span>
+            <span className="mx-2 text-white/18">•</span>
+            <span className="text-amber-300">Distractions present</span>
           </>
         )}
       </div>

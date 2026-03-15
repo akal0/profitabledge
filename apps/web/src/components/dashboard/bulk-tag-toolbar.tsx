@@ -281,7 +281,9 @@ export function BulkTagToolbar({
                     <ColorPicker
                       value={sessionTagColor}
                       onChange={(rgba) => {
-                        const [r, g, b] = rgba;
+                        const [r, g, b] = Array.isArray(rgba)
+                          ? rgba
+                          : [0, 0, 0];
                         const hex = Color.rgb(r, g, b).hex();
                         setSessionTagColor(hex);
                       }}
@@ -429,7 +431,9 @@ export function BulkTagToolbar({
                     <ColorPicker
                       value={modelTagColor}
                       onChange={(rgba) => {
-                        const [r, g, b] = rgba;
+                        const [r, g, b] = Array.isArray(rgba)
+                          ? rgba
+                          : [0, 0, 0];
                         const hex = Color.rgb(r, g, b).hex();
                         setModelTagColor(hex);
                       }}

@@ -55,12 +55,6 @@ export const queryClient = new QueryClient({
 
       toast.error(error.message, {
         ...(isAuthError ? { id: "auth-required" } : {}),
-        action: {
-          label: "retry",
-          onClick: () => {
-            queryClient.invalidateQueries();
-          },
-        },
       });
     },
   }),

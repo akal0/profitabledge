@@ -74,14 +74,12 @@ export default function AuthContinuePage() {
   ]);
 
   return (
-    <Suspense>
-      <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
-        <div className="text-sm text-muted-foreground">
-          {isRecoveringSession
-            ? "Finalizing your sign-in..."
-            : "Preparing your workspace..."}
-        </div>
-      </main>
-    </Suspense>
+    <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
+      <div className="text-sm text-muted-foreground">
+        {isRecoveringSession
+          ? "Finalizing your sign-in..."
+          : "Preparing your workspace..."}
+      </div>
+    </main>
   );
 }

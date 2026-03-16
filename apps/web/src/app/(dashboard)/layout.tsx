@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { VerticalSeparator } from "@/components/ui/separator";
@@ -35,6 +35,7 @@ import {
   meetsRequirement,
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
+import { authClient } from "@/lib/auth-client";
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
@@ -48,9 +49,17 @@ export default function DashboardLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const pathname = usePathname();
   const safePathname = pathname ?? "/dashboard";
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isSessionPending && !session) {
+      router.replace("/login");
+    }
+  }, [isSessionPending, session, router]);
   const accountId = useAccountStore((state) => state.selectedAccountId);
   const setSelectedAccountId = useAccountStore(
     (state) => state.setSelectedAccountId
@@ -155,6 +164,10 @@ export default function DashboardLayout({
   }
 
   const shouldHoldAccountScopedContent = hasAccounts && !isSelectedAccountValid;
+
+  if (isSessionPending || !session) {
+    return null;
+  }
 
   return (
     <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">

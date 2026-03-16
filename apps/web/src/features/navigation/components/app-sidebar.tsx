@@ -104,6 +104,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const settingsActive =
     pathname === "/dashboard/settings" ||
     pathname?.startsWith("/dashboard/settings/");
+  const navItemButtonClass =
+    "group/navlink flex items-center justify-start gap-3 group-data-[collapsible=icon]:justify-center";
+  const footerItemButtonClass =
+    "group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center";
 
   const sections = useMemo(
     () => {
@@ -245,7 +249,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
                             asChild
-                            className="group/navlink flex items-center justify-start gap-3 cursor-not-allowed"
+                            className={cn(navItemButtonClass, "cursor-not-allowed")}
                           >
                             <div>{itemContent}</div>
                           </SidebarMenuButton>
@@ -265,7 +269,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
                             asChild
-                            className="group/navlink flex items-center justify-start gap-3 cursor-pointer"
+                            className={cn(navItemButtonClass, "cursor-pointer")}
                           >
                             <Link href="/dashboard/settings/billing">
                               {itemContent}
@@ -286,7 +290,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       asChild
                       tooltip={item.title}
                       className={cn(
-                        "group/navlink flex items-center justify-start gap-3 cursor-pointer",
+                        navItemButtonClass,
+                        "cursor-pointer",
                         item.isActive &&
                           "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
                       )}
@@ -306,7 +311,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem className="px-2 py-0.5 flex">
             <SidebarMenuButton
               asChild
-              className="group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max"
+              className={footerItemButtonClass}
               tooltip="Request a feature"
             >
               <button type="button" onClick={() => setRequestFeatureOpen(true)}>
@@ -323,7 +328,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton
               asChild
               className={cn(
-                "group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max",
+                footerItemButtonClass,
                 settingsActive &&
                   "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
               )}

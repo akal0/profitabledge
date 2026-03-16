@@ -43,7 +43,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="font-sans antialiased overflow-x-hidden">
+      <body suppressHydrationWarning className="font-sans antialiased overflow-x-hidden">
         <Providers>
           <div className="flex h-screen w-screen">{children}</div>
         </Providers>

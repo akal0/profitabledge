@@ -17,8 +17,14 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  APP_TOOLTIP_SURFACE_CLASS,
 } from "@/components/ui/tooltip";
+import {
+  toolbarFilterMenuContentClass,
+  toolbarFilterMenuItemClass,
+  toolbarFilterMenuMainSeparatorClass,
+  toolbarFilterMenuSectionTitleClass,
+  toolbarSelectTriggerButtonClassName,
+} from "@/components/ui/filter-menu-styles";
 
 interface ViewSwitcherProps {
   selectedViewId?: string | null;
@@ -72,22 +78,16 @@ export function ViewSwitcher({
     }
   }, [gatedSelected, defaultView?.id, onViewChange]);
 
-  const surfaceClass = cn(
-    APP_TOOLTIP_SURFACE_CLASS,
-    "ring-white/6 bg-sidebar/95 text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl"
-  );
-  const contentClass = cn(surfaceClass, "w-[320px] p-1.5");
-  const sectionTitleClass =
-    "px-4 py-2.5 text-[11px] font-semibold text-white/55";
-  const separatorClass = "-mx-1.5 w-[calc(100%+0.75rem)]";
-  const itemClass =
-    "px-4 py-2.5 text-xs text-white/75 cursor-pointer data-[highlighted]:bg-sidebar-accent/80";
+  const contentClass = cn(toolbarFilterMenuContentClass, "w-[320px]");
+  const sectionTitleClass = toolbarFilterMenuSectionTitleClass;
+  const separatorClass = toolbarFilterMenuMainSeparatorClass;
+  const itemClass = cn(toolbarFilterMenuItemClass, "rounded-sm");
 
   if (isLoading) {
     return (
       <Button
         disabled
-        className="cursor-pointer flex items-center justify-center gap-2 px-3 py-2 h-[38px] text-xs transition-all duration-250 ring ring-white/5 bg-sidebar text-white/40 hover:bg-sidebar-accent rounded-sm"
+        className={cn(toolbarSelectTriggerButtonClassName, "text-white/40")}
       >
         <Settings2 className="h-4 w-4 text-white/40" />
         Loading...
@@ -98,7 +98,7 @@ export function ViewSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="cursor-pointer flex items-center justify-center gap-2 px-3 py-2 h-[38px] text-xs text-white/70 transition-all active:scale-95 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent hover:brightness-110">
+        <Button className={toolbarSelectTriggerButtonClassName}>
           {currentView?.icon && <span>{currentView.icon}</span>}
           <Settings2 className="size-3 text-white/60" />
           <span className="hidden sm:inline">
@@ -112,73 +112,79 @@ export function ViewSwitcher({
 
         <Separator className={separatorClass} />
 
-        {/* Complete view (all columns, no filters) */}
-        <DropdownMenuItem
-          onClick={() => onViewChange(null)}
-          className={cn(itemClass, isCompleteView && "bg-sidebar-accent/80")}
-        >
-          <div className="flex items-center gap-2 flex-1">
-            <span>📊</span>
-            <span>Complete view</span>
-          </div>
-        </DropdownMenuItem>
+        <div className="py-1">
+          {/* Complete view (all columns, no filters) */}
+          <DropdownMenuItem
+            onClick={() => onViewChange(null)}
+            className={cn(itemClass, isCompleteView && "bg-sidebar-accent/80")}
+          >
+            <div className="flex flex-1 items-center gap-2">
+              <span>📊</span>
+              <span>Complete view</span>
+            </div>
+          </DropdownMenuItem>
+        </div>
 
         <Separator className={separatorClass} />
 
-        {/* User's saved views */}
-        {views && views.length > 0 ? (
-          views.map((view) => {
-            const isAdvanced = isAdvancedAlignment(view.name);
-            const isLocked = isAdvanced && !isAdvancedUnlocked;
-            const item = (
-              <DropdownMenuItem
-                key={view.id}
-                onClick={() => !isLocked && onViewChange(view.id)}
-                disabled={isLocked}
-                className={cn(
-                  itemClass,
-                  currentViewId === view.id && "bg-sidebar-accent/80",
-                  isLocked && "opacity-50 cursor-not-allowed"
-                )}
-              >
-                <div className="flex items-center gap-2 flex-1">
-                  {view.icon && <span>{view.icon}</span>}
-                  <span>{view.name}</span>
-                  {view.isDefault && (
-                    <Star className="ml-auto h-3 w-3 fill-yellow-500 text-yellow-500" />
+        <div className="py-1">
+          {/* User's saved views */}
+          {views && views.length > 0 ? (
+            views.map((view) => {
+              const isAdvanced = isAdvancedAlignment(view.name);
+              const isLocked = isAdvanced && !isAdvancedUnlocked;
+              const item = (
+                <DropdownMenuItem
+                  key={view.id}
+                  onClick={() => !isLocked && onViewChange(view.id)}
+                  disabled={isLocked}
+                  className={cn(
+                    itemClass,
+                    currentViewId === view.id && "bg-sidebar-accent/80",
+                    isLocked && "cursor-not-allowed opacity-50"
                   )}
-                  {isLocked && (
-                    <Lock className="ml-auto h-3 w-3 text-white/60" />
-                  )}
-                </div>
-              </DropdownMenuItem>
-            );
-            if (!isLocked) return item;
-            return (
-              <Tooltip key={view.id}>
-                <TooltipTrigger asChild>{item}</TooltipTrigger>
-                <TooltipContent>
-                  {advancedGateLabel || "Requires more trades to unlock."}
-                </TooltipContent>
-              </Tooltip>
-            );
-          })
-        ) : (
-          <DropdownMenuItem
-            disabled
-            className="text-white/40 text-xs px-4 py-2.5"
-          >
-            No saved views
-          </DropdownMenuItem>
-        )}
+                >
+                  <div className="flex flex-1 items-center gap-2">
+                    {view.icon && <span>{view.icon}</span>}
+                    <span>{view.name}</span>
+                    {view.isDefault && (
+                      <Star className="ml-auto h-3 w-3 fill-yellow-500 text-yellow-500" />
+                    )}
+                    {isLocked && (
+                      <Lock className="ml-auto h-3 w-3 text-white/60" />
+                    )}
+                  </div>
+                </DropdownMenuItem>
+              );
+              if (!isLocked) return item;
+              return (
+                <Tooltip key={view.id}>
+                  <TooltipTrigger asChild>{item}</TooltipTrigger>
+                  <TooltipContent>
+                    {advancedGateLabel || "Requires more trades to unlock."}
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })
+          ) : (
+            <DropdownMenuItem
+              disabled
+              className={cn(itemClass, "cursor-default text-white/40")}
+            >
+              No saved views
+            </DropdownMenuItem>
+          )}
+        </div>
 
         {onManageViews && (
           <>
             <Separator className={separatorClass} />
-            <DropdownMenuItem onClick={onManageViews} className={itemClass}>
-              <Settings2 className="mr-2 h-4 w-4 text-white/60" />
-              <span>Manage views...</span>
-            </DropdownMenuItem>
+            <div className="pt-1">
+              <DropdownMenuItem onClick={onManageViews} className={itemClass}>
+                <Settings2 className=" size-3.5 text-white/60" />
+                <span>Manage views...</span>
+              </DropdownMenuItem>
+            </div>
           </>
         )}
       </DropdownMenuContent>

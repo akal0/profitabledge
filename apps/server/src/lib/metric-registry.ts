@@ -16,7 +16,27 @@ import {
   type MetricDefinition,
   METRIC_CATEGORY,
   SAMPLE_GATE_TIERS,
-} from '../types/trade-view';
+} from "../types/trade-view";
+
+const SAMPLE_GATE_TIER_ORDER = [
+  SAMPLE_GATE_TIERS.BASIC,
+  SAMPLE_GATE_TIERS.INTERMEDIATE,
+  SAMPLE_GATE_TIERS.ADVANCED,
+  SAMPLE_GATE_TIERS.STATISTICAL,
+] as const;
+
+const SAMPLE_GATE_UNLOCK_SUMMARIES: Record<
+  (typeof SAMPLE_GATE_TIERS)[keyof typeof SAMPLE_GATE_TIERS],
+  string
+> = {
+  [SAMPLE_GATE_TIERS.BASIC]: "Unlocks the core planning and execution metrics.",
+  [SAMPLE_GATE_TIERS.INTERMEDIATE]:
+    "Unlocks opportunity and efficiency metrics once there is enough trade history for context.",
+  [SAMPLE_GATE_TIERS.ADVANCED]:
+    "Unlocks adaptive volatility and recommendation metrics once there is enough history for stable bucketing.",
+  [SAMPLE_GATE_TIERS.STATISTICAL]:
+    "Reserves space for future high-confidence statistical metrics and cohort analysis.",
+};
 
 export const METRIC_REGISTRY: Record<string, MetricDefinition> = {
   // ============================================================================
@@ -24,33 +44,33 @@ export const METRIC_REGISTRY: Record<string, MetricDefinition> = {
   // ============================================================================
 
   plannedRR: {
-    id: 'plannedRR',
-    name: 'Planned R:R',
+    id: "plannedRR",
+    name: "Planned R:R",
     category: METRIC_CATEGORY.INTENT,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Initial risk-to-reward ratio based on TP/SL placement at entry',
-    format: 'ratio',
-    unit: 'R',
+    tooltip: "Initial risk-to-reward ratio based on TP/SL placement at entry",
+    format: "ratio",
+    unit: "R",
   },
 
   plannedRiskPips: {
-    id: 'plannedRiskPips',
-    name: 'Planned Risk',
+    id: "plannedRiskPips",
+    name: "Planned Risk",
     category: METRIC_CATEGORY.INTENT,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Distance from entry to stop loss in pips',
-    format: 'pips',
-    unit: 'pips',
+    tooltip: "Distance from entry to stop loss in pips",
+    format: "pips",
+    unit: "pips",
   },
 
   plannedTargetPips: {
-    id: 'plannedTargetPips',
-    name: 'Planned Target',
+    id: "plannedTargetPips",
+    name: "Planned Target",
     category: METRIC_CATEGORY.INTENT,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Distance from entry to take profit in pips',
-    format: 'pips',
-    unit: 'pips',
+    tooltip: "Distance from entry to take profit in pips",
+    format: "pips",
+    unit: "pips",
   },
 
   // ============================================================================
@@ -58,41 +78,41 @@ export const METRIC_REGISTRY: Record<string, MetricDefinition> = {
   // ============================================================================
 
   realisedRR: {
-    id: 'realisedRR',
-    name: 'Realized R:R',
+    id: "realisedRR",
+    name: "Realized R:R",
     category: METRIC_CATEGORY.EXECUTION,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Actual R achieved after fees and commissions',
-    format: 'ratio',
-    unit: 'R',
+    tooltip: "Actual R achieved after fees and commissions",
+    format: "ratio",
+    unit: "R",
   },
 
   profit: {
-    id: 'profit',
-    name: 'Net P/L',
+    id: "profit",
+    name: "Net P/L",
     category: METRIC_CATEGORY.EXECUTION,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Total profit/loss including commissions and swap',
-    format: 'currency',
-    unit: '$',
+    tooltip: "Total profit/loss including commissions and swap",
+    format: "currency",
+    unit: "$",
   },
 
   holdTime: {
-    id: 'holdTime',
-    name: 'Hold Time',
+    id: "holdTime",
+    name: "Hold Time",
     category: METRIC_CATEGORY.EXECUTION,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Duration the trade was held from open to close',
-    format: 'duration',
+    tooltip: "Duration the trade was held from open to close",
+    format: "duration",
   },
 
   outcome: {
-    id: 'outcome',
-    name: 'Outcome',
+    id: "outcome",
+    name: "Outcome",
     category: METRIC_CATEGORY.EXECUTION,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: 'Trade result: Win, Loss, Break-Even (BE), or Partial Win (PW)',
-    format: 'number', // Special formatting in UI
+    tooltip: "Trade result: Win, Loss, Break-Even (BE), or Partial Win (PW)",
+    format: "number", // Special formatting in UI
   },
 
   // ============================================================================
@@ -100,89 +120,90 @@ export const METRIC_REGISTRY: Record<string, MetricDefinition> = {
   // ============================================================================
 
   maxRR: {
-    id: 'maxRR',
-    name: 'Max R:R',
+    id: "maxRR",
+    name: "Max R:R",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Best R:R offered by the market during the trade (before exit). Requires ~30 trades for statistical context.',
-    format: 'ratio',
-    unit: 'R',
+      "Best R:R offered by the market during the trade (before exit). Requires ~30 trades for statistical context.",
+    format: "ratio",
+    unit: "R",
   },
 
   manipulationPips: {
-    id: 'manipulationPips',
-    name: 'Manipulation Size',
+    id: "manipulationPips",
+    name: "Manipulation Size",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Size of the manipulation leg in pips (structural displacement before reversal)',
-    format: 'pips',
-    unit: 'pips',
+      "Size of the manipulation leg in pips (structural displacement before reversal)",
+    format: "pips",
+    unit: "pips",
   },
 
   mpeManipLegR: {
-    id: 'mpeManipLegR',
-    name: 'MPE Manip Leg',
+    id: "mpeManipLegR",
+    name: "MPE Manip Leg",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Max Price Exertion from manipulation reference during trade, normalized by SL (R units)',
-    format: 'ratio',
-    unit: 'R',
+      "Max Price Exertion from manipulation reference during trade, normalized by SL (R units)",
+    format: "ratio",
+    unit: "R",
   },
 
   mpeManipPE: {
-    id: 'mpeManipPE',
-    name: 'MPE Manip PE',
+    id: "mpeManipPE",
+    name: "MPE Manip PE",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Post-exit max price movement from manipulation reference (what you left on the table)',
-    format: 'ratio',
-    unit: 'R',
+      "Post-exit max price movement from manipulation reference (what you left on the table)",
+    format: "ratio",
+    unit: "R",
   },
 
   rawStdv: {
-    id: 'rawStdv',
-    name: 'Raw STDV',
+    id: "rawStdv",
+    name: "Raw STDV",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Raw volatility expression during trade (equivalent to MPE Manip Leg R)',
-    format: 'ratio',
-    unit: 'R',
+      "Raw volatility expression during trade (equivalent to MPE Manip Leg R)",
+    format: "ratio",
+    unit: "R",
   },
 
   rawStdvPE: {
-    id: 'rawStdvPE',
-    name: 'Raw STDV PE',
+    id: "rawStdvPE",
+    name: "Raw STDV PE",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
-    tooltip: 'Post-exit volatility excursion (how much volatility emerged after exit)',
-    format: 'ratio',
-    unit: 'R',
+    tooltip:
+      "Post-exit volatility excursion (how much volatility emerged after exit)",
+    format: "ratio",
+    unit: "R",
   },
 
   stdvBucket: {
-    id: 'stdvBucket',
-    name: 'STDV Bucket',
+    id: "stdvBucket",
+    name: "STDV Bucket",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.ADVANCED,
     tooltip:
-      'Categorical volatility regime (-2, -1, 0, +1, +2 STDV). Requires ~100 trades for reliable bucketing.',
-    format: 'number', // Special formatting in UI
+      "Categorical volatility regime (-2, -1, 0, +1, +2 STDV). Requires ~100 trades for reliable bucketing.",
+    format: "number", // Special formatting in UI
   },
 
   estimatedWeightedMpe: {
-    id: 'estimatedWeightedMpe',
-    name: 'Est. Weighted MPE',
+    id: "estimatedWeightedMpe",
+    name: "Est. Weighted MPE",
     category: METRIC_CATEGORY.OPPORTUNITY,
     sampleGate: SAMPLE_GATE_TIERS.ADVANCED,
     tooltip:
-      'Adaptive TP recommendation based on historical volatility and capture patterns. Becomes statistically reliable after ~100 trades.',
-    format: 'ratio',
-    unit: 'R',
+      "Adaptive TP recommendation based on historical volatility and capture patterns. Becomes statistically reliable after ~100 trades.",
+    format: "ratio",
+    unit: "R",
   },
 
   // ============================================================================
@@ -190,36 +211,36 @@ export const METRIC_REGISTRY: Record<string, MetricDefinition> = {
   // ============================================================================
 
   rrCaptureEfficiency: {
-    id: 'rrCaptureEfficiency',
-    name: 'Capture Efficiency',
+    id: "rrCaptureEfficiency",
+    name: "Capture Efficiency",
     category: METRIC_CATEGORY.EFFICIENCY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Percentage of max R:R captured (0-100%). Shows how much of the available opportunity you took.',
-    format: 'percentage',
-    unit: '%',
+      "Percentage of max R:R captured (0-100%). Shows how much of the available opportunity you took.",
+    format: "percentage",
+    unit: "%",
   },
 
   manipRREfficiency: {
-    id: 'manipRREfficiency',
-    name: 'Entry Efficiency',
+    id: "manipRREfficiency",
+    name: "Entry Efficiency",
     category: METRIC_CATEGORY.EFFICIENCY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Capture rate vs manipulation move (can exceed 100% if price exceeded manipulation zone)',
-    format: 'percentage',
-    unit: '%',
+      "Capture rate vs manipulation move (can exceed 100% if price exceeded manipulation zone)",
+    format: "percentage",
+    unit: "%",
   },
 
   exitEfficiency: {
-    id: 'exitEfficiency',
-    name: 'Exit Efficiency',
+    id: "exitEfficiency",
+    name: "Exit Efficiency",
     category: METRIC_CATEGORY.EFFICIENCY,
     sampleGate: SAMPLE_GATE_TIERS.INTERMEDIATE,
     tooltip:
-      'Timing quality vs post-exit peak (100% = exited at perfect time, <100% = left opportunity on table)',
-    format: 'percentage',
-    unit: '%',
+      "Timing quality vs post-exit peak (100% = exited at perfect time, <100% = left opportunity on table)",
+    format: "percentage",
+    unit: "%",
   },
 };
 
@@ -238,17 +259,18 @@ export function getMetricsByCategory(
 export function getMetricsByMaxTier(
   tier: (typeof SAMPLE_GATE_TIERS)[keyof typeof SAMPLE_GATE_TIERS]
 ): MetricDefinition[] {
-  const tierOrder = [
-    SAMPLE_GATE_TIERS.BASIC,
-    SAMPLE_GATE_TIERS.INTERMEDIATE,
-    SAMPLE_GATE_TIERS.ADVANCED,
-    SAMPLE_GATE_TIERS.STATISTICAL,
-  ];
-
-  const maxIndex = tierOrder.indexOf(tier);
+  const maxIndex = SAMPLE_GATE_TIER_ORDER.indexOf(tier);
 
   return Object.values(METRIC_REGISTRY).filter(
-    (m) => tierOrder.indexOf(m.sampleGate) <= maxIndex
+    (m) => SAMPLE_GATE_TIER_ORDER.indexOf(m.sampleGate) <= maxIndex
+  );
+}
+
+export function getMetricsByExactTier(
+  tier: (typeof SAMPLE_GATE_TIERS)[keyof typeof SAMPLE_GATE_TIERS]
+): MetricDefinition[] {
+  return Object.values(METRIC_REGISTRY).filter(
+    (metric) => metric.sampleGate === tier
   );
 }
 
@@ -299,14 +321,7 @@ export function getSampleGateStatus(
     minimumSamples?: Record<string, number>;
   }
 ) {
-  const tiers = [
-    SAMPLE_GATE_TIERS.BASIC,
-    SAMPLE_GATE_TIERS.INTERMEDIATE,
-    SAMPLE_GATE_TIERS.ADVANCED,
-    SAMPLE_GATE_TIERS.STATISTICAL,
-  ];
-
-  return tiers.map((tier) => {
+  return SAMPLE_GATE_TIER_ORDER.map((tier) => {
     const requiredSamples =
       userPreferences?.minimumSamples?.[tier] ??
       {
@@ -319,6 +334,7 @@ export function getSampleGateStatus(
     const isUnlocked =
       userPreferences?.disableAllGates || currentSampleSize >= requiredSamples;
     const remaining = Math.max(0, requiredSamples - currentSampleSize);
+    const unlocks = getMetricsByExactTier(tier).map((metric) => metric.name);
 
     return {
       tier,
@@ -327,7 +343,11 @@ export function getSampleGateStatus(
       isUnlocked,
       message: isUnlocked
         ? `${tier.charAt(0).toUpperCase() + tier.slice(1)} metrics unlocked`
-        : `${remaining} more trade${remaining === 1 ? '' : 's'} needed to unlock ${tier} metrics`,
+        : `${remaining} more trade${
+            remaining === 1 ? "" : "s"
+          } needed to unlock ${tier} metrics`,
+      unlockSummary: SAMPLE_GATE_UNLOCK_SUMMARIES[tier],
+      unlocks,
     };
   });
 }

@@ -43,6 +43,8 @@ export type SampleGateStatusRow = {
   current: number;
   isUnlocked: boolean;
   message: string;
+  unlockSummary?: string;
+  unlocks?: string[];
 };
 
 export const NO_RESULTS_FILTER_ID = "__trades_no_results__";
@@ -123,7 +125,10 @@ export function buildTradeStreakMap(trades: TradeRow[]) {
   return streakByTradeId;
 }
 
-export const mergeArrayFilter = <T extends string>(manual: T[], fromView?: T[]) => {
+export const mergeArrayFilter = <T extends string>(
+  manual: T[],
+  fromView?: T[]
+) => {
   if (!manual.length && !(fromView?.length ?? 0)) {
     return { values: [] as T[], conflict: false };
   }

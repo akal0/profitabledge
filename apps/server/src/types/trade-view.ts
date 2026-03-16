@@ -4,13 +4,14 @@
  * Sample gate tiers for progressive disclosure
  */
 export const SAMPLE_GATE_TIERS = {
-  BASIC: 'basic',
-  INTERMEDIATE: 'intermediate',
-  ADVANCED: 'advanced',
-  STATISTICAL: 'statistical',
+  BASIC: "basic",
+  INTERMEDIATE: "intermediate",
+  ADVANCED: "advanced",
+  STATISTICAL: "statistical",
 } as const;
 
-export type SampleGateTier = typeof SAMPLE_GATE_TIERS[keyof typeof SAMPLE_GATE_TIERS];
+export type SampleGateTier =
+  (typeof SAMPLE_GATE_TIERS)[keyof typeof SAMPLE_GATE_TIERS];
 
 /**
  * Default minimum sample sizes for each tier
@@ -26,37 +27,39 @@ export const DEFAULT_MINIMUM_SAMPLES: Record<SampleGateTier, number> = {
  * Protocol alignment states (factual tags, not judgmental)
  */
 export const PROTOCOL_ALIGNMENT = {
-  ALIGNED: 'aligned',
-  AGAINST: 'against',
-  DISCRETIONARY: 'discretionary',
+  ALIGNED: "aligned",
+  AGAINST: "against",
+  DISCRETIONARY: "discretionary",
 } as const;
 
-export type ProtocolAlignment = typeof PROTOCOL_ALIGNMENT[keyof typeof PROTOCOL_ALIGNMENT];
+export type ProtocolAlignment =
+  (typeof PROTOCOL_ALIGNMENT)[keyof typeof PROTOCOL_ALIGNMENT];
 
 /**
  * Trade outcome classifications
  */
 export const OUTCOME = {
-  WIN: 'Win',
-  LOSS: 'Loss',
-  BREAK_EVEN: 'BE',
-  PARTIAL_WIN: 'PW',
+  WIN: "Win",
+  LOSS: "Loss",
+  BREAK_EVEN: "BE",
+  PARTIAL_WIN: "PW",
 } as const;
 
-export type Outcome = typeof OUTCOME[keyof typeof OUTCOME];
-export type OutcomeFilter = Outcome | 'Live';
+export type Outcome = (typeof OUTCOME)[keyof typeof OUTCOME];
+export type OutcomeFilter = Outcome | "Live";
 
 /**
  * Metric categories for organization and progressive disclosure
  */
 export const METRIC_CATEGORY = {
-  INTENT: 'Intent',
-  EXECUTION: 'Execution',
-  OPPORTUNITY: 'Opportunity',
-  EFFICIENCY: 'Efficiency',
+  INTENT: "Intent",
+  EXECUTION: "Execution",
+  OPPORTUNITY: "Opportunity",
+  EFFICIENCY: "Efficiency",
 } as const;
 
-export type MetricCategory = typeof METRIC_CATEGORY[keyof typeof METRIC_CATEGORY];
+export type MetricCategory =
+  (typeof METRIC_CATEGORY)[keyof typeof METRIC_CATEGORY];
 
 /**
  * Trade view configuration structure
@@ -73,7 +76,7 @@ export interface TradeViewConfig {
 
     // Field filters
     symbols?: string[];
-    directions?: ('long' | 'short')[];
+    directions?: ("long" | "short")[];
 
     // Date range
     dateRange?: {
@@ -98,7 +101,7 @@ export interface TradeViewConfig {
   // Sorting
   sorting?: Array<{
     columnId: string;
-    direction: 'asc' | 'desc';
+    direction: "asc" | "desc";
   }>;
 
   // Emphasis (UI hints, not data changes)
@@ -136,7 +139,7 @@ export interface MetricDefinition {
   category: MetricCategory;
   sampleGate: SampleGateTier;
   tooltip: string; // Explanation of what this metric measures
-  format: 'ratio' | 'percentage' | 'currency' | 'pips' | 'duration' | 'number';
+  format: "ratio" | "percentage" | "currency" | "pips" | "duration" | "number";
   unit?: string; // Optional unit (e.g., "R", "%", "pips")
 }
 
@@ -149,20 +152,23 @@ export interface SampleGateStatus {
   current: number;
   isUnlocked: boolean;
   message?: string;
+  unlockSummary?: string;
+  unlocks?: string[];
 }
 
 /**
  * Default view templates (for new users)
  */
 export const DEFAULT_VIEW_TEMPLATES = {
-  SCOREBOARD: 'scoreboard',
-  EXECUTION_QUALITY: 'execution_quality',
-  MODEL_PERFORMANCE: 'model_performance',
-  EDGE_VS_EXECUTION: 'edge_vs_execution',
-  ADAPTIVE_METRICS: 'adaptive_metrics',
+  SCOREBOARD: "scoreboard",
+  EXECUTION_QUALITY: "execution_quality",
+  MODEL_PERFORMANCE: "model_performance",
+  EDGE_VS_EXECUTION: "edge_vs_execution",
+  ADAPTIVE_METRICS: "adaptive_metrics",
 } as const;
 
-export type DefaultViewTemplate = typeof DEFAULT_VIEW_TEMPLATES[keyof typeof DEFAULT_VIEW_TEMPLATES];
+export type DefaultViewTemplate =
+  (typeof DEFAULT_VIEW_TEMPLATES)[keyof typeof DEFAULT_VIEW_TEMPLATES];
 
 /**
  * User sample gate preferences

@@ -69,6 +69,30 @@ type SegmentedModeOption<TValue extends string> = {
   tooltip?: string;
 };
 
+function getTradesPnlModeTooltip(
+  mode: TradePnlDisplayMode,
+  baselineInitialBalance?: number | string | null
+) {
+  if (mode === "rr") {
+    return `${getTradePnlModeDescription(
+      baselineInitialBalance
+    )} Affects P&L columns, grouped P&L totals, and the summary bar.`;
+  }
+
+  return "Shows P&L values in currency. Affects P&L columns, grouped P&L totals, and the summary bar.";
+}
+
+function getTradesDrawdownModeTooltip(mode: "pips" | "percent" | "usd") {
+  switch (mode) {
+    case "pips":
+      return "Shows max drawdown in pips. Affects the drawdown column in the trades table.";
+    case "usd":
+      return "Shows max drawdown in currency. Affects the drawdown column in the trades table.";
+    default:
+      return "Shows max drawdown as a percentage. Affects the drawdown column in the trades table.";
+  }
+}
+
 function SegmentedModeControl<TValue extends string>({
   label,
   value,
@@ -338,7 +362,6 @@ export function TradesToolbarDisplayControls({
   );
 
   const canShowRR = getTradeRiskUnit(baselineInitialBalance) != null;
-  const rrDescription = getTradePnlModeDescription(baselineInitialBalance);
 
   return (
     <>
@@ -347,12 +370,16 @@ export function TradesToolbarDisplayControls({
         value={pnlMode}
         onChange={onPnlModeChange}
         options={[
-          { value: "usd", label: "$" },
+          {
+            value: "usd",
+            label: "$",
+            tooltip: getTradesPnlModeTooltip("usd", baselineInitialBalance),
+          },
           {
             value: "rr",
             label: "R",
             disabled: !canShowRR,
-            tooltip: rrDescription,
+            tooltip: getTradesPnlModeTooltip("rr", baselineInitialBalance),
           },
         ]}
       />
@@ -362,9 +389,21 @@ export function TradesToolbarDisplayControls({
         value={ddMode}
         onChange={onDdModeChange}
         options={[
-          { value: "pips", label: "Pips" },
-          { value: "percent", label: "%" },
-          { value: "usd", label: "$" },
+          {
+            value: "pips",
+            label: "Pips",
+            tooltip: getTradesDrawdownModeTooltip("pips"),
+          },
+          {
+            value: "percent",
+            label: "%",
+            tooltip: getTradesDrawdownModeTooltip("percent"),
+          },
+          {
+            value: "usd",
+            label: "$",
+            tooltip: getTradesDrawdownModeTooltip("usd"),
+          },
         ]}
       />
 

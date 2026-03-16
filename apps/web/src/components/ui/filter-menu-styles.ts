@@ -23,10 +23,10 @@ export const toolbarFilterMenuMainSeparatorClass =
   "-mx-1.5 w-[calc(100%+0.75rem)]";
 
 export const toolbarFilterMenuTriggerClass =
-  "px-4 py-2.5 text-xs text-white/75 data-[highlighted]:bg-sidebar-accent/80 data-[state=open]:bg-sidebar-accent/80";
+  "cursor-pointer px-4 py-2.5 text-xs text-white/75 data-[highlighted]:bg-sidebar-accent/80 data-[state=open]:bg-sidebar-accent/80";
 
 export const toolbarFilterMenuItemClass =
-  "px-4 py-2.5 text-xs text-white/75 data-[highlighted]:bg-sidebar-accent/80";
+  "cursor-pointer px-4 py-2.5 text-xs text-white/75 data-[highlighted]:bg-sidebar-accent/80";
 
 export const toolbarFilterMenuLabelClass =
   "px-4 py-2 text-[11px] font-medium text-white/50";

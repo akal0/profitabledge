@@ -4,13 +4,25 @@ import { playKeyClick } from "./key-clicks";
 const TYPING_SEQUENCES = [
   { text: "best trading strategies in 2026", pauseAfter: 1200 },
   { text: "how do i reach consistency?", pauseAfter: 1200 },
-  { text: "finding my edge that makes me profitable", pauseAfter: 1200 },
+  { text: "finding a profitable edge", pauseAfter: 1200 },
   { text: "profitabledge.com", pauseAfter: 800 },
 ];
 
+// Desktop speeds
 const TYPE_SPEED = 45;
 const DELETE_SPEED = 25;
 const INITIAL_DELAY = 1500;
+
+// Mobile speeds — faster typing, shorter pauses, no audio
+const MOBILE_TYPE_SPEED = 45;
+const MOBILE_DELETE_SPEED = 25;
+const MOBILE_INITIAL_DELAY = 1500;
+const MOBILE_PAUSE_RATIO = 0.5;
+
+function isMobileDevice() {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth < 768;
+}
 
 export { TYPING_SEQUENCES };
 
@@ -19,6 +31,7 @@ export function useTypewriter(onComplete: () => void) {
   const [sequenceIndex, setSequenceIndex] = useState(0);
   const [isDone, setIsDone] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileRef = useRef(isMobileDevice());
   const stateRef = useRef({
     text: "",
     seqIdx: 0,
@@ -34,6 +47,13 @@ export function useTypewriter(onComplete: () => void) {
     const current = TYPING_SEQUENCES[s.seqIdx];
     if (!current) return;
 
+    const mobile = mobileRef.current;
+    const typeSpeed = mobile ? MOBILE_TYPE_SPEED : TYPE_SPEED;
+    const deleteSpeed = mobile ? MOBILE_DELETE_SPEED : DELETE_SPEED;
+    const pauseAfter = mobile
+      ? current.pauseAfter * MOBILE_PAUSE_RATIO
+      : current.pauseAfter;
+
     const isLastSequence = s.seqIdx === TYPING_SEQUENCES.length - 1;
 
     if (!s.deleting) {
@@ -41,19 +61,19 @@ export function useTypewriter(onComplete: () => void) {
         s.text = current.text.slice(0, s.text.length + 1);
         setDisplayText(s.text);
         playKeyClick();
-        timeoutRef.current = setTimeout(tick, TYPE_SPEED);
+        timeoutRef.current = setTimeout(tick, typeSpeed);
       } else {
         if (isLastSequence) {
           timeoutRef.current = setTimeout(() => {
             s.done = true;
             setIsDone(true);
             onCompleteRef.current();
-          }, current.pauseAfter);
+          }, pauseAfter);
         } else {
           timeoutRef.current = setTimeout(() => {
             s.deleting = true;
             tick();
-          }, current.pauseAfter);
+          }, pauseAfter);
         }
       }
     } else {
@@ -61,18 +81,19 @@ export function useTypewriter(onComplete: () => void) {
         s.text = s.text.slice(0, -1);
         setDisplayText(s.text);
         playKeyClick();
-        timeoutRef.current = setTimeout(tick, DELETE_SPEED);
+        timeoutRef.current = setTimeout(tick, deleteSpeed);
       } else {
         s.deleting = false;
         s.seqIdx += 1;
         setSequenceIndex(s.seqIdx);
-        timeoutRef.current = setTimeout(tick, 300);
+        timeoutRef.current = setTimeout(tick, mobile ? 150 : 300);
       }
     }
   }, []);
 
   useEffect(() => {
-    timeoutRef.current = setTimeout(tick, INITIAL_DELAY);
+    const delay = mobileRef.current ? MOBILE_INITIAL_DELAY : INITIAL_DELAY;
+    timeoutRef.current = setTimeout(tick, delay);
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };

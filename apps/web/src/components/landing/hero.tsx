@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { motion, useScroll, useTransform, MotionValue } from "motion/react";
+import { motion, MotionValue } from "motion/react";
+
+const NAV_LINKS = [
+  { href: "/", label: "Home" },
+  { href: "#features", label: "Features" },
+  { href: "#changelog", label: "Changelog" },
+  { href: "#brokers", label: "Brokers & integrations" },
+  { href: "#pricing", label: "Pricing" },
+  { href: "#resources", label: "Resources" },
+];
 
 const BROWSER_TABS = [
   {
@@ -35,8 +44,62 @@ export function Hero({ heroOpacity }: HeroProps) {
   return (
     <motion.section
       style={{ opacity: heroOpacity }}
-      className="relative z-10 flex flex-col items-start px-6 pt-8 pb-0 md:px-8 md:pt-12 lg:px-12 lg:pt-20 xl:px-16 xl:pt-24 2xl:px-20 2xl:pt-40! 3xl:px-28 3xl:pt-48!"
+      className="relative z-10 flex h-screen flex-col items-center justify-center px-6 pb-0 md:h-auto md:items-start md:justify-start md:px-8 md:pt-12 lg:px-12 lg:pt-20 xl:px-16 xl:pt-24 2xl:px-20 2xl:pt-40! 3xl:px-28 3xl:pt-48!"
     >
+      {/* Background illustration */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url(/landing/hero-background.svg)",
+        }}
+      />
+
+      {/* Navbar */}
+      <motion.nav
+        className="absolute top-0 left-0 right-0 z-20 flex w-full items-center justify-evenly px-6 py-5 md:px-8 md:py-6 lg:px-12 xl:px-16 2xl:px-20 3xl:px-28 will-change-transform"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: 0.6,
+          ease: [0.16, 1, 0.3, 1],
+          delay: 0,
+        }}
+      >
+        <Link
+          href="/"
+          className="text-xl md:text-2xl font-bold text-white tracking-[-0.07em] w-full"
+        >
+          profitabledge
+        </Link>
+
+        <div className="hidden items-center gap-8 md:flex">
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
+              className="text-[13px] text-white/60 transition-colors hover:text-white w-max"
+            >
+              {link.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="w-full flex justify-end">
+          <Link
+            href="/login"
+            className="glass-btn relative w-max flex flex-row items-center justify-center gap-1.5 rounded-full bg-[rgba(17,17,17,0.25)] py-2.5 px-3 md:py-3 md:pr-5 md:pl-6 text-xs font-medium text-white backdrop-blur-[15px] transition-all hover:brightness-125 active:scale-99"
+          >
+            <Image
+              src="/landing/fingerprint.svg"
+              alt=""
+              width={16}
+              height={16}
+            />
+            <span className="hidden md:inline">Discover your edge</span>
+          </Link>
+        </div>
+      </motion.nav>
+
       <div className="flex w-full flex-col gap-6 md:flex-row md:items-end md:justify-between">
         {/* Heading */}
         <motion.div

@@ -59,6 +59,7 @@ export const DEFAULT_WIDGET_SPANS: Partial<Record<WidgetType, number>> = {
   "open-trades": 2,
   "session-performance": 2,
   "streak-calendar": 2,
+  "edge-coach": 2,
 };
 
 export const MAX_DASHBOARD_WIDGETS = 15;

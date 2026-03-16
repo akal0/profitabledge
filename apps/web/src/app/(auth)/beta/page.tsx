@@ -7,8 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LockKeyholeIcon } from "lucide-react";
-
-const BETA_CODE = "EDGE2026";
+import { trpcClient } from "@/utils/trpc";
 
 export default function BetaPage() {
   const router = useRouter();
@@ -18,15 +17,24 @@ export default function BetaPage() {
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(false);
 
-    if (code.trim().toUpperCase() === BETA_CODE) {
-      document.cookie = `beta_access=verified; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
-      router.push(redirectTo);
-    } else {
+    try {
+      const result = await trpcClient.billing.validatePrivateBetaCode.query({
+        code: code.trim(),
+      });
+
+      if (result.valid) {
+        document.cookie = `beta_access=verified; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+        router.push(redirectTo);
+      } else {
+        setError(true);
+        setLoading(false);
+      }
+    } catch {
       setError(true);
       setLoading(false);
     }

@@ -225,6 +225,7 @@ export function DashboardWidgetFrame({
   title,
   icon,
   headerRight,
+  shareHeaderRightInExport = false,
   isEditing = false,
   className,
   contentClassName,
@@ -233,6 +234,7 @@ export function DashboardWidgetFrame({
   title: string;
   icon?: ReactNode;
   headerRight?: ReactNode;
+  shareHeaderRightInExport?: boolean;
   isEditing?: boolean;
   className?: string;
   contentClassName?: string;
@@ -254,13 +256,20 @@ export function DashboardWidgetFrame({
             </h2>
           </div>
           {headerRight || !isEditing ? (
-            <div
-              className="ml-auto flex items-center gap-2"
-              data-widget-share-ignore="true"
-            >
-              {headerRight}
+            <div className="ml-auto flex items-center gap-2">
+              {headerRight ? (
+                <div
+                  data-widget-share-ignore={
+                    shareHeaderRightInExport ? undefined : "true"
+                  }
+                >
+                  {headerRight}
+                </div>
+              ) : null}
               {!isEditing ? (
-                <WidgetShareButton targetRef={widgetRef} title={title} />
+                <div data-widget-share-ignore="true">
+                  <WidgetShareButton targetRef={widgetRef} title={title} />
+                </div>
               ) : null}
             </div>
           ) : null}

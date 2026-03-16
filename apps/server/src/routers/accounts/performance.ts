@@ -14,6 +14,7 @@ import {
   generateInsights as generateBrainInsights,
   saveInsights,
 } from "../../lib/ai/engine";
+import { computeExecutionGrade } from "../../lib/execution-grade";
 import { createNotification } from "../../lib/notifications";
 import { protectedProcedure } from "../../lib/trpc";
 
@@ -395,44 +396,23 @@ export const executionStatsProcedure = protectedProcedure
         avgExitEfficiency:
           sql<number | null>`AVG(CAST(${trade.exitEfficiency} AS NUMERIC))`,
         tradeCount: sql<number>`COUNT(*)`,
-        tradesWithExecutionData: sql<number>`COUNT(${trade.entrySpreadPips})`,
+        tradesWithExecutionData:
+          sql<number>`COUNT(CASE WHEN ${trade.entrySpreadPips} IS NOT NULL OR ${trade.exitSpreadPips} IS NOT NULL OR ${trade.entrySlippagePips} IS NOT NULL OR ${trade.exitSlippagePips} IS NOT NULL OR ${trade.rrCaptureEfficiency} IS NOT NULL OR ${trade.exitEfficiency} IS NOT NULL THEN 1 END)`,
       })
       .from(trade)
       .where(buildAccountScopeCondition(trade.accountId, accountIds));
 
     const row = result[0];
-    let gradeScore = 100;
-    const avgSpread =
-      ((row?.avgEntrySpread || 0) + (row?.avgExitSpread || 0)) / 2;
-    const avgSlippage =
-      ((row?.avgEntrySlippage || 0) + (row?.avgExitSlippage || 0)) / 2;
-
-    if (avgSpread > 2) gradeScore -= 15;
-    else if (avgSpread > 1) gradeScore -= 5;
-
-    if (avgSlippage > 1) gradeScore -= 20;
-    else if (avgSlippage > 0.5) gradeScore -= 10;
-
-    if (
-      row?.avgRrCaptureEfficiency != null &&
-      row.avgRrCaptureEfficiency < 50
-    ) {
-      gradeScore -= 10;
-    }
-    if (row?.avgExitEfficiency != null && row.avgExitEfficiency < 50) {
-      gradeScore -= 10;
-    }
-
-    const grade =
-      gradeScore >= 90
-        ? "A"
-        : gradeScore >= 80
-          ? "B"
-          : gradeScore >= 70
-            ? "C"
-            : gradeScore >= 60
-              ? "D"
-              : "F";
+    const { grade, gradeScore } = computeExecutionGrade({
+      avgEntrySpread: row?.avgEntrySpread ?? null,
+      avgExitSpread: row?.avgExitSpread ?? null,
+      avgEntrySlippage: row?.avgEntrySlippage ?? null,
+      avgExitSlippage: row?.avgExitSlippage ?? null,
+      avgRrCaptureEfficiency: row?.avgRrCaptureEfficiency ?? null,
+      avgExitEfficiency: row?.avgExitEfficiency ?? null,
+      tradeCount: row?.tradeCount ?? 0,
+      tradesWithExecutionData: row?.tradesWithExecutionData ?? 0,
+    });
 
     return {
       avgEntrySpread: row?.avgEntrySpread ?? null,

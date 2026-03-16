@@ -39,6 +39,8 @@ import {
   TRADE_IDENTIFIER_PILL_CLASS,
 } from "@/components/trades/trade-identifier-pill";
 
+type ExecutionGrade = "A" | "B" | "C" | "D" | "F" | "N/A";
+
 export function ExecutionScorecardCard({
   accountId,
   isEditing = false,
@@ -59,11 +61,17 @@ export function ExecutionScorecardCard({
   const totalSlMods = toNumber(data?.totalSlModifications);
   const totalTpMods = toNumber(data?.totalTpModifications);
   const tradesWithExecData = toNumber(data?.tradesWithExecutionData);
-  const hasData = data?.avgEntrySpread != null || data?.avgExitSpread != null;
+  const hasExecutionMetrics =
+    data?.avgEntrySpread != null ||
+    data?.avgExitSpread != null ||
+    data?.avgEntrySlippage != null ||
+    data?.avgExitSlippage != null ||
+    data?.avgRrCaptureEfficiency != null ||
+    data?.avgExitEfficiency != null;
+  const grade = (data?.grade ?? "N/A") as ExecutionGrade;
 
   const gradeColor = useMemo(() => {
-    if (!data) return "text-white/50";
-    switch (data.grade) {
+    switch (grade) {
       case "A":
         return "text-teal-400";
       case "B":
@@ -77,7 +85,7 @@ export function ExecutionScorecardCard({
       default:
         return "text-white/50";
     }
-  }, [data]);
+  }, [grade]);
 
   return (
     <DashboardWidgetFrame
@@ -88,11 +96,10 @@ export function ExecutionScorecardCard({
       isEditing={isEditing}
       className={className}
       contentClassName="flex h-full min-h-0 w-full flex-col"
+      shareHeaderRightInExport
       headerRight={
         data ? (
-          <span className={`ml-auto text-2xl font-bold ${gradeColor}`}>
-            {data.grade}
-          </span>
+          <span className={`text-2xl font-bold ${gradeColor}`}>{grade}</span>
         ) : null
       }
     >
@@ -105,9 +112,11 @@ export function ExecutionScorecardCard({
             />
           ))}
         </div>
-      ) : !data || tradesWithExecData === 0 || !hasData ? (
-        <div className="flex h-full items-center justify-center text-xs text-white/40">
+      ) : !data || tradesWithExecData === 0 || !hasExecutionMetrics ? (
+        <div className="flex h-full items-center justify-center text-center text-xs text-white/40">
           No execution data available.
+          <br />
+          Grade: {grade}
           <br />
           Connect an EA for detailed metrics.
         </div>

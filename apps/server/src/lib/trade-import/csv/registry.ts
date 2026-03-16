@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { parseCsvDocument } from "./document";
+import { parseImportDocument } from "./document";
 import { genericTradeStatementCsvParser } from "./parsers/generic-trade-statement";
 import { tradovatePerformanceCsvParser } from "./parsers/tradovate-performance";
 import { tradovatePositionHistoryCsvParser } from "./parsers/tradovate-position-history";
@@ -21,10 +21,13 @@ function supportsBroker(parser: BrokerCsvParser, broker: string): boolean {
 
 export function parseBrokerCsvImport(input: {
   broker: string;
-  csvText: string;
+  fileContent: string | Buffer;
   fileName?: string | null;
 }): ParsedBrokerCsvImport {
-  const document = parseCsvDocument(input.csvText);
+  const document = parseImportDocument({
+    fileName: input.fileName,
+    fileContent: input.fileContent,
+  });
   const context: BrokerCsvImportContext = {
     broker: input.broker,
     fileName: input.fileName ?? null,
@@ -34,7 +37,7 @@ export function parseBrokerCsvImport(input: {
   if (document.records.length === 0) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "The CSV file is empty or does not contain any data rows.",
+      message: "The file is empty or does not contain any data rows.",
     });
   }
 
@@ -53,7 +56,7 @@ export function parseBrokerCsvImport(input: {
       message:
         input.broker === "tradovate"
           ? "Unsupported Tradovate CSV format. Export the Performance or Position History report for now."
-          : "Unsupported CSV format. The file headers could not be matched to a supported trade statement parser.",
+          : "Unsupported file format. The file headers could not be matched to a supported trade statement parser.",
     });
   }
 
@@ -76,7 +79,7 @@ export function parseBrokerCsvImport(input: {
       message:
         input.broker === "tradovate"
           ? "No trades were parsed from this Tradovate CSV. Confirm you exported the Performance or Position History report, not Orders or Cash History."
-          : "No trades were parsed from the uploaded CSV.",
+          : "No trades were parsed from the uploaded file.",
     });
   }
 

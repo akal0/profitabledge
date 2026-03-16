@@ -55,9 +55,13 @@ export const accountsRouter = router({
   create: protectedProcedure
     .input(
       z.object({
-        name: z.string().min(1),
-        broker: z.string().min(1),
-        brokerType: z.enum(["mt4", "mt5", "ctrader", "ib", "oanda"]).optional(),
+        name: z.string().trim().min(1),
+        broker: z.string().trim().min(1),
+        brokerType: z
+          .enum(["mt4", "mt5", "ctrader", "ib", "oanda", "other"])
+          .optional(),
+        brokerServer: z.string().trim().min(1).optional(),
+        accountNumber: z.string().trim().min(1).optional(),
         initialBalance: z.number().optional(),
         initialCurrency: z.string().optional(),
       })
@@ -65,9 +69,13 @@ export const accountsRouter = router({
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.session.user.id;
       const accountId = crypto.randomUUID();
+      const brokerServer =
+        input.brokerType === "mt4" || input.brokerType === "mt5"
+          ? input.brokerServer ?? null
+          : null;
       const { updates: autoPropFields } = await buildAutoPropAccountFields({
         broker: input.broker,
-        brokerServer: null,
+        brokerServer,
         initialBalance: input.initialBalance ?? null,
       });
 
@@ -79,6 +87,8 @@ export const accountsRouter = router({
           name: input.name,
           broker: input.broker,
           brokerType: input.brokerType || null,
+          brokerServer,
+          accountNumber: input.accountNumber || null,
           initialBalance: input.initialBalance?.toString() || null,
           initialCurrency: input.initialCurrency || null,
           ...autoPropFields,

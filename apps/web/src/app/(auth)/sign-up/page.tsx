@@ -58,6 +58,12 @@ const FormSchema = z.object({
     }),
 });
 
+const SESSION_CONFIRM_RETRY_DELAYS_MS = [0, 150, 350, 750] as const;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const SignupPage = () => {
   const router = useRouter();
   const [privateBetaRequired, setPrivateBetaRequired] = useState(false);
@@ -147,6 +153,21 @@ const SignupPage = () => {
     }
   }
 
+  async function waitForConfirmedSession() {
+    for (const delay of SESSION_CONFIRM_RETRY_DELAYS_MS) {
+      if (delay > 0) {
+        await sleep(delay);
+      }
+
+      const result = await authClient.getSession();
+      if (result.data) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     if (!publicConfigResolved) {
       setBetaMessage("Checking invite access requirements...");
@@ -191,7 +212,7 @@ const SignupPage = () => {
               betaCode: normalizedBetaCode,
             }
           : undefined,
-        onSuccess: () => {
+        onSuccess: async () => {
           void trackAlphaMilestone("sign_up_completed", {
             pagePath: "/sign-up",
           });
@@ -227,6 +248,7 @@ const SignupPage = () => {
             </div>
           ));
 
+          await waitForConfirmedSession();
           router.push("/onboarding");
         },
         onError: (error) => {

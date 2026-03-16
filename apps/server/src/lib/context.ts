@@ -108,11 +108,15 @@ export async function createContext(req: NextRequest) {
   }
 
   cleanupExpiredSessionCache(now);
-  sessionCache.set(cacheKey, {
-    session,
-    freshUntil: now + SESSION_CACHE_TTL_MS,
-    staleUntil: now + SESSION_CACHE_STALE_ON_ERROR_MS,
-  });
+  if (session) {
+    sessionCache.set(cacheKey, {
+      session,
+      freshUntil: now + SESSION_CACHE_TTL_MS,
+      staleUntil: now + SESSION_CACHE_STALE_ON_ERROR_MS,
+    });
+  } else {
+    sessionCache.delete(cacheKey);
+  }
 
   return {
     session,

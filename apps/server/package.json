@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })\"",
+    "build": "bun run clean:next && next build",
     "start": "next start",
     "ai:validate:deterministic": "bun run src/scripts/validate-ai-regressions.ts",
     "ai:validate:assistant": "bun run src/scripts/validate-assistant-regressions.ts",
@@ -45,11 +46,13 @@
     "dotenv": "^16.5.0",
     "drizzle-orm": "^0.45.1",
     "dukascopy-node": "^1.43.0",
+    "fast-xml-parser": "^5.5.5",
     "next": "15.5.9",
     "prettier": "2.8.8",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "ws": "^8.18.3",
+    "xlsx": "^0.18.5",
     "zod": "^4.3.5"
   },
   "devDependencies": {

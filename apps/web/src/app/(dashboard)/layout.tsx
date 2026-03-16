@@ -73,16 +73,40 @@ export default function DashboardLayout({
   const isTradesRoute = pathname?.startsWith("/dashboard/trades");
   const { setOpen: setGoalDialogOpen } = useGoalDialog();
 
-  const { accounts } = useAccountCatalog();
+  const {
+    accounts,
+    isFetched: hasFetchedAccounts,
+  } = useAccountCatalog();
   const hasAccounts = accounts.length > 0;
+  const hasScopedAccountSelection =
+    Boolean(accountId) && accountId !== ALL_ACCOUNTS_ID;
   const isSelectedAccountValid =
     accountId === ALL_ACCOUNTS_ID ||
     (Boolean(accountId) && accounts.some((account) => account.id === accountId));
-  const resolvedAccountId = isSelectedAccountValid ? accountId : undefined;
+  const shouldWaitForAccountValidation =
+    hasScopedAccountSelection && !hasFetchedAccounts;
+  const shouldHoldAccountScopedContent =
+    shouldWaitForAccountValidation ||
+    (hasScopedAccountSelection &&
+      hasFetchedAccounts &&
+      !isSelectedAccountValid);
+  const resolvedAccountId =
+    !shouldHoldAccountScopedContent && isSelectedAccountValid
+      ? accountId
+      : undefined;
   const currentAccount = accounts.find((account) => account.id === resolvedAccountId);
 
   useEffect(() => {
-    if (!hasAccounts) return;
+    if (!hasFetchedAccounts) {
+      return;
+    }
+
+    if (!hasAccounts) {
+      if (hasScopedAccountSelection) {
+        setSelectedAccountId(undefined);
+      }
+      return;
+    }
 
     if (!accountId) {
       setSelectedAccountId(accounts[0].id);
@@ -96,7 +120,14 @@ export default function DashboardLayout({
     if (!accounts.some((account) => account.id === accountId)) {
       setSelectedAccountId(accounts[0].id);
     }
-  }, [accountId, accounts, hasAccounts, setSelectedAccountId]);
+  }, [
+    accountId,
+    accounts,
+    hasAccounts,
+    hasFetchedAccounts,
+    hasScopedAccountSelection,
+    setSelectedAccountId,
+  ]);
 
   const { data: rawConnections } = useQuery(
     trpcOptions.connections.list.queryOptions()
@@ -162,8 +193,6 @@ export default function DashboardLayout({
   if (hasBlockedAdminAccess || hasBlockedAffiliateAccess || hasBlockedPlanAccess) {
     return null;
   }
-
-  const shouldHoldAccountScopedContent = hasAccounts && !isSelectedAccountValid;
 
   if (isSessionPending || !session) {
     return null;

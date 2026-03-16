@@ -19,12 +19,12 @@ const CsvUpload: React.FC<CsvUploadProps> = ({
 }) => {
   return (
     <BaseMediaUpload
-      accept=".csv,text/csv"
+      accept=".csv,text/csv,.xml,text/xml,application/xml,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.xls"
       multiple={multiple}
       maxSize={maxSize}
       disabled={disabled}
       className={className}
-      title="Upload CSV"
+      title="Upload CSV, XML, or XLSX"
       description={undefined}
       onFilesChange={(files) => {
         onFileChange?.(files[0] ?? null);

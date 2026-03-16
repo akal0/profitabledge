@@ -123,7 +123,9 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
 
   return (
     <SidebarMenu className={cn(isCollapsed && "items-center")}>
-      <SidebarMenuItem className={cn(isCollapsed && "flex justify-center")}>
+      <SidebarMenuItem
+        className={cn("w-full px-2", isCollapsed && "flex justify-center")}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton

@@ -33,6 +33,18 @@ describe("auth cookie settings", () => {
     });
   });
 
+  it("keeps first-party root and beta subdomains on default cookie settings", () => {
+    expect(
+      getAuthCookieSettings({
+        baseUrl: "https://profitabledge.com",
+        allowedWebOrigins: ["https://beta.profitabledge.com"],
+      })
+    ).toEqual({
+      useSecureCookies: true,
+      defaultCookieAttributes: undefined,
+    });
+  });
+
   it("normalizes the auth base url from env", () => {
     const env = {
       ...process.env,

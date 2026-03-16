@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 
-import { parseCsvDocument } from "./document";
+import { parseImportDocument } from "./document";
 import { parseBrokerCsvImport } from "./registry";
 import type {
   ImportedAccountHints,
@@ -51,9 +51,9 @@ export interface ParsedImportBundle {
   existingTrades: ParsedImportTrade[];
 }
 
-type CsvFileInput = {
+type ImportFileInput = {
   fileName?: string | null;
-  csvText: string;
+  fileContent: string | Buffer;
 };
 
 type TradeSourceImport = ParsedBrokerCsvImport & {
@@ -176,9 +176,12 @@ function looksLikeHeader(
 }
 
 function extractSupplementalAccountHints(
-  file: CsvFileInput
+  file: ImportFileInput
 ): ParsedImportAccountHints {
-  const document = parseCsvDocument(file.csvText);
+  const document = parseImportDocument({
+    fileName: file.fileName,
+    fileContent: file.fileContent,
+  });
   const records = document.records;
   if (records.length === 0) {
     return createEmptyAccountHints();
@@ -231,9 +234,12 @@ function extractSupplementalAccountHints(
 }
 
 function classifyTradovateSupplementalFile(
-  file: CsvFileInput
+  file: ImportFileInput
 ): SupplementalFile | null {
-  const document = parseCsvDocument(file.csvText);
+  const document = parseImportDocument({
+    fileName: file.fileName,
+    fileContent: file.fileContent,
+  });
   const headers = document.headers;
   const normalizedName = normalizeKey(file.fileName ?? "");
 
@@ -303,7 +309,7 @@ function buildBundleDescriptor(input: {
 
 export function parseBrokerCsvImportBundle(input: {
   broker: string;
-  files: CsvFileInput[];
+  files: ImportFileInput[];
   existingTrades?: ParsedImportTrade[];
 }): ParsedImportBundle {
   const tradeSources: TradeSourceImport[] = [];
@@ -314,7 +320,7 @@ export function parseBrokerCsvImportBundle(input: {
     try {
       const parsed = parseBrokerCsvImport({
         broker: input.broker,
-        csvText: file.csvText,
+        fileContent: file.fileContent,
         fileName: file.fileName ?? null,
       });
 
@@ -341,7 +347,7 @@ export function parseBrokerCsvImportBundle(input: {
       const message =
         error instanceof TRPCError
           ? error.message
-          : "Unsupported CSV format.";
+          : "Unsupported file format.";
 
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -358,7 +364,7 @@ export function parseBrokerCsvImportBundle(input: {
       message:
         input.broker === "tradovate"
           ? "No Tradovate trade report was found in the upload bundle. Include Performance or Position History as the base report."
-          : "No supported trade rows were found in the uploaded CSV bundle.",
+          : "No supported trade rows were found in the uploaded file bundle.",
     });
   }
 

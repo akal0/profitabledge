@@ -36,9 +36,7 @@ export default function EditProfilePage() {
   const clearImage = useMutation(
     trpcOptions.users.clearImage.mutationOptions()
   );
-  const { startUpload, isUploading } = useUploadThing((r) => r.imageUploader, {
-    headers: () => ({ "x-user-id": user?.id ?? "" }),
-  });
+  const { startUpload, isUploading } = useUploadThing((r) => r.imageUploader);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -131,10 +129,6 @@ export default function EditProfilePage() {
     try {
       let imageUrl = form.image;
       let persistedBannerUrl = bannerUrl;
-
-      if (!user?.id && (avatarFile || bannerFile)) {
-        throw new Error("Unable to upload images right now");
-      }
 
       if (avatarFile) {
         const upload = await startUpload([avatarFile]);

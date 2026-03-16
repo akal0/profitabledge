@@ -38,17 +38,39 @@ import {
 import {
   BROKER_OPTIONS,
   brokerSupportsMultiCsvImport,
+  getAccountImage,
   getBrokerSupplementalCsvReports,
-  getBrokerImage,
   isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 
+type ManualAccountBrokerType = "mt4" | "mt5" | "ctrader" | "other";
+
+const MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS: Array<{
+  value: ManualAccountBrokerType;
+  label: string;
+}> = [
+  { value: "mt4", label: "MetaTrader 4" },
+  { value: "mt5", label: "MetaTrader 5" },
+  { value: "ctrader", label: "cTrader" },
+  { value: "other", label: "Other" },
+];
+
+function normalizeBalanceInput(input: string): number | undefined {
+  const cleaned = String(input || "").replace(/[^0-9.\-]/g, "");
+  if (!cleaned) return undefined;
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 export type AddAccountForm = {
-  method: "csv" | "broker" | "ea" | null;
+  method: "csv" | "broker" | "ea" | "manual" | null;
   name: string;
   broker: string;
+  brokerType: ManualAccountBrokerType | "";
+  brokerServer: string;
+  accountNumber: string;
   initialCurrency: "$" | "£" | "€" | "";
   initialBalance: string;
   files: File[];
@@ -78,6 +100,7 @@ type DemoWorkspaceResult = {
     id: string;
     name: string;
     broker?: string | null;
+    brokerType?: string | null;
   };
 };
 
@@ -95,6 +118,9 @@ export function AddAccountSheet({
     method: null,
     name: "",
     broker: "",
+    brokerType: "",
+    brokerServer: "",
+    accountNumber: "",
     initialCurrency: "$",
     initialBalance: "",
     files: [],
@@ -109,12 +135,27 @@ export function AddAccountSheet({
     [accounts]
   );
 
+  const normalizedInitialBalance = useMemo(
+    () => normalizeBalanceInput(form.initialBalance),
+    [form.initialBalance]
+  );
+
   const canSubmit = useMemo(() => {
     if (form.method === "csv") {
-      return Boolean(form.files.length > 0 && form.name && form.broker);
+      return Boolean(
+        form.files.length > 0 && form.name.trim() && form.broker.trim()
+      );
+    }
+    if (form.method === "manual") {
+      return Boolean(
+        form.name.trim() &&
+          form.broker.trim() &&
+          form.brokerType &&
+          normalizedInitialBalance !== undefined
+      );
     }
     return false;
-  }, [form]);
+  }, [form, normalizedInitialBalance]);
 
   const selectedBrokerSupportsMultiCsv = useMemo(
     () => brokerSupportsMultiCsvImport(form.broker),
@@ -135,6 +176,9 @@ export function AddAccountSheet({
       method: null,
       name: "",
       broker: "",
+      brokerType: "",
+      brokerServer: "",
+      accountNumber: "",
       initialCurrency: "$",
       initialBalance: "",
       files: [],
@@ -174,13 +218,6 @@ export function AddAccountSheet({
     setSubmitting(true);
 
     try {
-      const normalizeBalance = (input: string): number | undefined => {
-        const cleaned = String(input || "").replace(/[^0-9.\-]/g, "");
-        if (!cleaned) return undefined;
-        const n = Number(cleaned);
-        return Number.isFinite(n) && n >= 0 ? n : undefined;
-      };
-
       const encodedFiles = await Promise.all(
         form.files.map(async (file) => ({
           fileName: file.name,
@@ -191,7 +228,7 @@ export function AddAccountSheet({
       const res = await trpcClient.upload.importCsv.mutate({
         name: form.name,
         broker: form.broker,
-        initialBalance: normalizeBalance(form.initialBalance),
+        initialBalance: normalizeBalanceInput(form.initialBalance),
         initialCurrency: (form.initialCurrency || "$") as "$" | "£" | "€",
         csvBase64: encodedFiles[0]?.csvBase64 ?? "",
         fileName: encodedFiles[0]?.fileName,
@@ -227,7 +264,7 @@ export function AddAccountSheet({
       onAccountCreated({
         id: res.accountId,
         name: form.name,
-        image: getBrokerImage(form.broker),
+        image: getAccountImage({ broker: form.broker }),
       });
       setSubmitting(false);
       setStep(3);
@@ -237,6 +274,42 @@ export function AddAccountSheet({
       }
     } catch (e) {
       console.error(e);
+      setSubmitting(false);
+    }
+  }
+
+  async function handleManualAccountCreate() {
+    if (form.method !== "manual" || !canSubmit) return;
+    setSubmitting(true);
+
+    try {
+      const account = await trpcClient.accounts.create.mutate({
+        name: form.name.trim(),
+        broker: form.broker.trim(),
+        brokerType: form.brokerType as ManualAccountBrokerType,
+        brokerServer:
+          form.brokerType === "mt4" || form.brokerType === "mt5"
+            ? form.brokerServer.trim() || undefined
+            : undefined,
+        accountNumber: form.accountNumber.trim() || undefined,
+        initialBalance: normalizedInitialBalance,
+        initialCurrency: form.initialCurrency || "$",
+      });
+
+      await refreshAccounts();
+      onAccountCreated({
+        id: account.id,
+        name: account.name,
+        image: getAccountImage({
+          broker: account.broker,
+          brokerType: account.brokerType,
+        }),
+      });
+      toast.success("Manual account created");
+      setStep(3);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to create manual account");
+    } finally {
       setSubmitting(false);
     }
   }
@@ -284,7 +357,10 @@ export function AddAccountSheet({
       onAccountCreated({
         id: createdAccount.id,
         name: createdAccount.name,
-        image: getBrokerImage(createdAccount.broker),
+        image: getAccountImage({
+          broker: createdAccount.broker,
+          brokerType: createdAccount.brokerType,
+        }),
       });
     } catch (e: any) {
       toast.error(
@@ -303,7 +379,9 @@ export function AddAccountSheet({
       ? "Connect your account"
       : step === 2
       ? form.method === "csv"
-        ? "Import account with CSV upload"
+        ? "Import account from file"
+        : form.method === "manual"
+        ? "Create manual account"
         : form.method === "broker"
         ? "Broker sync"
         : "EA sync"
@@ -313,7 +391,9 @@ export function AddAccountSheet({
     step === 1
       ? "Choose how you want to add your trading account."
       : step === 2 && form.method === "csv"
-      ? "Upload your CSV file or broker report bundle and enter the details for this trading account."
+      ? "Upload your CSV, XML, or XLSX file and enter the details for this trading account."
+      : step === 2 && form.method === "manual"
+      ? "Create a blank account and log trades manually inside ProfitEdge."
       : step === 2 && form.method === "broker"
       ? "Use Connections to sync supported broker and platform accounts directly."
       : step === 2 && form.method === "ea"
@@ -323,10 +403,11 @@ export function AddAccountSheet({
   const sectionTitleClass = "text-xs font-semibold text-white/70 tracking-wide";
   const fieldLabelClass = "text-xs text-white/50";
   const fieldInputClass =
-    "rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-4 text-xs text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] placeholder:text-white/25 hover:brightness-100";
-  const fieldSelectTriggerClass = "h-9 w-full px-4";
+    "rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-4 text-xs text-white/80 placeholder:text-white/25 hover:brightness-100 border-none";
+  const fieldSelectTriggerClass =
+    "h-9 w-full px-4 text-xs bg-transparent! cursor-pointer ring-white/5 hover:bg-sidebar-accent! transition duration-250";
   const fieldSelectContentClass = "";
-  const fieldSelectItemClass = "whitespace-normal";
+  const fieldSelectItemClass = "whitespace-normal cursor-pointer";
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -391,14 +472,44 @@ export function AddAccountSheet({
                   >
                     <div className="flex flex-col items-start gap-1">
                       <span className="text-sm font-medium text-white">
-                        Import account via CSV
+                        Import account via file
                       </span>
                       <span className="text-xs text-white/45">
-                        Upload a statement export and create a new account from
-                        it.
+                        Upload a CSV, XML, or XLSX statement export and create a new
+                        account from it.
                       </span>
                     </div>
                     <span className="text-white/35">→</span>
+                  </Button>
+
+                  <Button
+                    className={cn(
+                      TRADE_SURFACE_CARD_CLASS,
+                      "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                    )}
+                    onClick={() => {
+                      setForm({ ...form, method: "manual" });
+                      setStep(2);
+                    }}
+                  >
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-sm font-medium text-white">
+                        Manual account
+                      </span>
+                      <span className="text-xs text-white/45">
+                        Create an account first, then add trades manually from
+                        inside the platform.
+                      </span>
+                    </div>
+                    <span
+                      className={cn(
+                        TRADE_IDENTIFIER_PILL_CLASS,
+                        TRADE_IDENTIFIER_TONES.neutral,
+                        "min-h-6 px-2 py-0.5 text-[10px]"
+                      )}
+                    >
+                      Manual entry
+                    </span>
                   </Button>
 
                   <Button
@@ -614,7 +725,7 @@ export function AddAccountSheet({
                         <SelectTrigger
                           className={cn(
                             fieldSelectTriggerClass,
-                            "w-20 rounded-r-none"
+                            "w-16 rounded-r-none"
                           )}
                           style={{ borderRightWidth: 0 }}
                         >
@@ -654,7 +765,7 @@ export function AddAccountSheet({
 
               <Separator />
               <div className="px-6 py-3">
-                <h3 className={sectionTitleClass}>Upload CSV</h3>
+                <h3 className={sectionTitleClass}>Upload file</h3>
               </div>
               <Separator />
               <div className="px-6 py-5">
@@ -667,9 +778,9 @@ export function AddAccountSheet({
                 />
                 {!form.broker ? (
                   <p className="mt-3 text-xs leading-relaxed text-white/40">
-                    You can queue multiple CSVs before choosing a broker. If you
-                    later pick a broker that does not support bundle imports,
-                    only the first file will be kept.
+                    You can queue multiple files before choosing a broker. If
+                    you later pick a broker that does not support bundle
+                    imports, only the first file will be kept.
                   </p>
                 ) : null}
               </div>
@@ -751,6 +862,203 @@ export function AddAccountSheet({
                     onClick={() => handleSubmitCSV()}
                   >
                     {submitting ? "Uploading..." : "Upload"}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {step === 2 && form.method === "manual" && (
+            <>
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Account details</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>Account name</Label>
+                    <Input
+                      placeholder="e.g. Personal journal account"
+                      className={fieldInputClass}
+                      value={form.name}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, name: e.target.value }))
+                      }
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>
+                      Broker or prop firm
+                    </Label>
+                    <Input
+                      placeholder="e.g. FTMO, IC Markets, Tradovate"
+                      className={fieldInputClass}
+                      value={form.broker}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, broker: e.target.value }))
+                      }
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>Platform type</Label>
+                    <Select
+                      value={form.brokerType}
+                      onValueChange={(value: ManualAccountBrokerType) =>
+                        setForm((f) => ({
+                          ...f,
+                          brokerType: value,
+                          brokerServer:
+                            value === "mt4" || value === "mt5"
+                              ? f.brokerServer
+                              : "",
+                        }))
+                      }
+                    >
+                      <SelectTrigger className={fieldSelectTriggerClass}>
+                        <SelectValue placeholder="Select a platform" />
+                      </SelectTrigger>
+                      <SelectContent className={fieldSelectContentClass}>
+                        {MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS.map((option) => (
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                            className={fieldSelectItemClass}
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {(form.brokerType === "mt4" || form.brokerType === "mt5") && (
+                    <div className="grid gap-2">
+                      <Label className={fieldLabelClass}>Broker server</Label>
+                      <Input
+                        placeholder="e.g. FTMO-Demo or ICMarketsSC-Live07"
+                        className={fieldInputClass}
+                        value={form.brokerServer}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            brokerServer: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>
+                      Account number or login
+                    </Label>
+                    <Input
+                      placeholder="Optional"
+                      className={fieldInputClass}
+                      value={form.accountNumber}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          accountNumber: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>
+                      Starting account balance
+                    </Label>
+                    <div className="flex items-center gap-0">
+                      <Select
+                        value={form.initialCurrency}
+                        onValueChange={(v: "$" | "£" | "€") =>
+                          setForm((f) => ({ ...f, initialCurrency: v }))
+                        }
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            fieldSelectTriggerClass,
+                            "w-20 rounded-r-none"
+                          )}
+                          style={{ borderRightWidth: 0 }}
+                        >
+                          <SelectValue placeholder="$" />
+                        </SelectTrigger>
+                        <SelectContent className={fieldSelectContentClass}>
+                          {(["$", "£", "€"] as const).map((c) => (
+                            <SelectItem
+                              key={c}
+                              value={c}
+                              className={fieldSelectItemClass}
+                            >
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="$100,000"
+                        className={cn(fieldInputClass, "flex-1 rounded-l-none")}
+                        style={{ borderLeftWidth: 0 }}
+                        value={form.initialBalance}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            initialBalance: e.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-3">
+                <h3 className={sectionTitleClass}>Manual trade entry</h3>
+              </div>
+              <Separator />
+              <div className="px-6 py-5">
+                <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
+                  <p className="text-sm font-medium text-white">
+                    Log trades directly in ProfitEdge
+                  </p>
+                  <p className="text-xs leading-relaxed text-white/45">
+                    After creating the account, use the manual trade entry flow
+                    from your trades view or account widgets to add closed
+                    trades one by one.
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+              <div className="px-6 py-5">
+                <div className="flex w-full gap-2">
+                  <Button
+                    className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
+                    onClick={() => setStep(1)}
+                  >
+                    Back
+                  </Button>
+
+                  <Button
+                    className={cn(
+                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                      "h-9 flex-1",
+                      !canSubmit && "opacity-60"
+                    )}
+                    disabled={!canSubmit || submitting}
+                    onClick={handleManualAccountCreate}
+                  >
+                    {submitting ? "Creating..." : "Create account"}
                   </Button>
                 </div>
               </div>
@@ -942,8 +1250,9 @@ export function AddAccountSheet({
                     Your account has been added successfully.
                   </p>
                   <p className="text-xs leading-relaxed text-white/45">
-                    It is now available in the account switcher and ready to use
-                    across the dashboard.
+                    {form.method === "manual"
+                      ? "It is now available in the account switcher and ready for manual trade entry across the dashboard."
+                      : "It is now available in the account switcher and ready to use across the dashboard."}
                   </p>
                 </div>
               </div>

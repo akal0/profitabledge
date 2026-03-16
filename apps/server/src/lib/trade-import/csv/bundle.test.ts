@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import * as XLSX from "xlsx";
 
 import { parseBrokerCsvImportBundle } from "./bundle";
 
@@ -9,7 +10,7 @@ ES,"Mar 15, 2026 10:00 AM","Mar 15, 2026 10:05 AM",Buy,1,5000,5004,200`;
 
     const result = parseBrokerCsvImportBundle({
       broker: "generic",
-      files: [{ fileName: "statement.csv", csvText: csv }],
+      files: [{ fileName: "statement.csv", fileContent: csv }],
     });
 
     expect(result.trades).toHaveLength(1);
@@ -34,8 +35,8 @@ abc123,Filled`;
     const result = parseBrokerCsvImportBundle({
       broker: "tradovate",
       files: [
-        { fileName: "Performance.csv", csvText: performanceCsv },
-        { fileName: "Orders.csv", csvText: ordersCsv },
+        { fileName: "Performance.csv", fileContent: performanceCsv },
+        { fileName: "Orders.csv", fileContent: ordersCsv },
       ],
     });
 
@@ -58,11 +59,11 @@ NQ,1001,1002,1,20000,20010,100,03/15/2026 10:00 AM,03/15/2026 10:05 AM`;
     const result = parseBrokerCsvImportBundle({
       broker: "tradovate",
       files: [
-        { fileName: "Performance.csv", csvText: performanceCsv },
-        { fileName: "Order Details.csv", csvText: "undefined" },
+        { fileName: "Performance.csv", fileContent: performanceCsv },
+        { fileName: "Order Details.csv", fileContent: "undefined" },
         {
           fileName: "Account Balance History.csv",
-          csvText: accountBalanceHistoryCsv,
+          fileContent: accountBalanceHistoryCsv,
         },
       ],
     });
@@ -74,5 +75,193 @@ NQ,1001,1002,1,20000,20010,100,03/15/2026 10:00 AM,03/15/2026 10:05 AM`;
       "Order Details.csv",
       "Account Balance History.csv",
     ]);
+  });
+
+  it("parses nested XML trade rows with contextual field names", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Trades>
+  <Trade Ticket="1001">
+    <Symbol>ES</Symbol>
+    <Type>Buy</Type>
+    <Volume>1</Volume>
+    <Open>
+      <Time>2026-03-15T10:00:00Z</Time>
+      <Price>5000</Price>
+    </Open>
+    <Close>
+      <Time>2026-03-15T10:05:00Z</Time>
+      <Price>5004</Price>
+    </Close>
+    <Profit>200</Profit>
+  </Trade>
+</Trades>`;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "generic",
+      files: [{ fileName: "statement.xml", fileContent: xml }],
+    });
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]).toMatchObject({
+      ticket: "1001",
+      symbol: "ES",
+      tradeType: "long",
+      volume: 1,
+      openPrice: 5000,
+      closePrice: 5004,
+      profit: 200,
+    });
+    expect(result.trades[0]?.openTime?.toISOString()).toBe(
+      "2026-03-15T10:00:00.000Z"
+    );
+    expect(result.files).toEqual(["statement.xml"]);
+  });
+
+  it("parses statement-style XML tables even when the first row is a section label", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Report>
+  <table>
+    <tr><td>Closed Transactions</td></tr>
+    <tr>
+      <td>Ticket</td>
+      <td>Symbol</td>
+      <td>Open Time</td>
+      <td>Close Time</td>
+      <td>Type</td>
+      <td>Volume</td>
+      <td>Open Price</td>
+      <td>Close Price</td>
+      <td>Profit</td>
+    </tr>
+    <tr>
+      <td>1002</td>
+      <td>NQ</td>
+      <td>2026.03.15 10:00:00</td>
+      <td>2026.03.15 10:05:00</td>
+      <td>Sell</td>
+      <td>2</td>
+      <td>6000</td>
+      <td>5990</td>
+      <td>400</td>
+    </tr>
+  </table>
+</Report>`;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "generic",
+      files: [{ fileName: "statement.xml", fileContent: xml }],
+    });
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]).toMatchObject({
+      ticket: "1002",
+      symbol: "NQ",
+      tradeType: "short",
+      volume: 2,
+      openPrice: 6000,
+      closePrice: 5990,
+      profit: 400,
+    });
+  });
+
+  it("parses XLSX MT5 history exports and prefers the Positions section over Deals", () => {
+    const workbook = XLSX.utils.book_new();
+    const mt5Sheet = XLSX.utils.aoa_to_sheet([
+      ["Trade History Report"],
+      ["Account:", "", "", "1512745186 (USD, FTMO-Demo, demo, Hedge)"],
+      ["Positions"],
+      [
+        "Time",
+        "Position",
+        "Symbol",
+        "Type",
+        "Volume",
+        "Price",
+        "S / L",
+        "T / P",
+        "Time",
+        "Price",
+        "Commission",
+        "Swap",
+        "Profit",
+      ],
+      [
+        "2026.03.15 10:00:00",
+        "1004",
+        "EURUSD",
+        "buy",
+        "1.5",
+        "1.1000",
+        "",
+        "",
+        "2026.03.15 10:05:00",
+        "1.1010",
+        "-4.50",
+        "0",
+        "150",
+      ],
+      [],
+      ["Deals"],
+      [
+        "Time",
+        "Deal",
+        "Symbol",
+        "Type",
+        "Direction",
+        "Volume",
+        "Price",
+        "Order",
+        "Commission",
+        "Fee",
+        "Swap",
+        "Profit",
+        "Balance",
+        "Comment",
+      ],
+      [
+        "2026.03.15 09:00:00",
+        "9999",
+        "",
+        "balance",
+        "",
+        "",
+        "",
+        "",
+        "0",
+        "0",
+        "0",
+        "200000",
+        "200000",
+        "Initial account balance",
+      ],
+    ]);
+
+    XLSX.utils.book_append_sheet(workbook, mt5Sheet, "MT5 Report");
+
+    const fileContent = XLSX.write(workbook, {
+      type: "buffer",
+      bookType: "xlsx",
+    }) as Buffer;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "generic",
+      files: [{ fileName: "statement.xlsx", fileContent }],
+    });
+
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]).toMatchObject({
+      ticket: "1004",
+      symbol: "EURUSD",
+      tradeType: "long",
+      volume: 1.5,
+      openPrice: 1.1,
+      closePrice: 1.101,
+      profit: 150,
+      commissions: -4.5,
+    });
+    expect(result.trades[0]?.openTime?.toISOString()).toBe(
+      "2026-03-15T10:00:00.000Z"
+    );
+    expect(result.files).toEqual(["statement.xlsx"]);
   });
 });

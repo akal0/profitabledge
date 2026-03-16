@@ -24,7 +24,6 @@ import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
 
 import { cn } from "@/lib/utils";
-import { CircleAlertIcon, CircleCheckIcon, XIcon } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
@@ -37,6 +36,12 @@ const FormSchema = z.object({
   }),
 });
 
+const SESSION_CONFIRM_RETRY_DELAYS_MS = [0, 150, 350, 750] as const;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const LoginPage = () => {
   const router = useRouter();
 
@@ -47,6 +52,22 @@ const LoginPage = () => {
       password: "",
     },
   });
+  const isSubmitting = form.formState.isSubmitting;
+
+  async function waitForConfirmedSession() {
+    for (const delay of SESSION_CONFIRM_RETRY_DELAYS_MS) {
+      if (delay > 0) {
+        await sleep(delay);
+      }
+
+      const result = await authClient.getSession();
+      if (result.data) {
+        return true;
+      }
+    }
+
+    return false;
+  }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     await authClient.signIn.email(
@@ -55,71 +76,15 @@ const LoginPage = () => {
         password: data.password,
       },
       {
-        onSuccess: () => {
-          toast.custom((t) => (
-            <div className="bg-sidebar shadow-sidebar-button text-foreground w-full rounded-md px-4 py-3 shadow-lg sm:w-[var(--width)]">
-              <div className="flex gap-2">
-                <div className="flex grow gap-3">
-                  <CircleCheckIcon
-                    className="mt-0.5 shrink-0 text-emerald-500"
-                    size={16}
-                    aria-hidden="true"
-                  />
-                  <div className="flex grow justify-between gap-12">
-                    <p className="text-sm text-white font-medium">
-                      Account successfully created!
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  className="group -my-1.5 -me-2 size-8 shrink-0 p-0 hover:bg-transparent"
-                  onClick={() => toast.dismiss(t)}
-                  aria-label="Close banner"
-                >
-                  <XIcon
-                    size={16}
-                    className="opacity-60 transition-opacity group-hover:opacity-100"
-                    aria-hidden="true"
-                  />
-                </Button>
-              </div>
-            </div>
-          ));
-
-          router.push("/dashboard");
+        onSuccess: async () => {
+          toast.success("Login successful", { id: "auth-login-status" });
+          await waitForConfirmedSession();
+          router.replace("/dashboard");
         },
         onError: (error) => {
-          toast.custom((t) => (
-            <div className="bg-sidebar shadow-sidebar-button text-foreground w-full rounded-md px-4 py-3 shadow-lg sm:w-[var(--width)]">
-              <div className="flex gap-2">
-                <div className="flex grow gap-3">
-                  <CircleAlertIcon
-                    className="mt-0.5 shrink-0 text-red-500"
-                    size={16}
-                    aria-hidden="true"
-                  />
-                  <div className="flex grow justify-between gap-12">
-                    <p className="text-sm text-white font-medium">
-                      Uh oh! There's been a problem.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  className="group -my-1.5 -me-2 size-8 shrink-0 p-0 hover:bg-transparent"
-                  onClick={() => toast.dismiss(t)}
-                  aria-label="Close banner"
-                >
-                  <XIcon
-                    size={16}
-                    className="opacity-60 transition-opacity group-hover:opacity-100"
-                    aria-hidden="true"
-                  />
-                </Button>
-              </div>
-            </div>
-          ));
+          toast.error(error.error.message || "Unable to sign in", {
+            id: "auth-login-status",
+          });
         },
       }
     );
@@ -250,8 +215,9 @@ const LoginPage = () => {
                 <Button
                   className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full"
                   type="submit"
+                  disabled={isSubmitting}
                 >
-                  Login
+                  {isSubmitting ? "Logging in..." : "Login"}
                 </Button>
               </div>
             </form>

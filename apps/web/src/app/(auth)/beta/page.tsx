@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -14,13 +15,13 @@ export default function BetaPage() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams?.get("redirect") || "/login";
   const [code, setCode] = useState("");
-  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(false);
+    setErrorMessage(null);
 
     try {
       const result = await trpcClient.billing.validatePrivateBetaCode.query({
@@ -28,14 +29,25 @@ export default function BetaPage() {
       });
 
       if (result.valid) {
+        toast.success(
+          "label" in result && result.label
+            ? `${result.label} access unlocked`
+            : "Private beta access unlocked"
+        );
         document.cookie = `beta_access=verified; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
         router.push(redirectTo);
       } else {
-        setError(true);
-        setLoading(false);
+        const message =
+          "message" in result ? result.message : "Invalid private beta code";
+        setErrorMessage(message);
+        toast.error(message);
       }
-    } catch {
-      setError(true);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to verify beta code";
+      setErrorMessage(message);
+      toast.error(message);
+    } finally {
       setLoading(false);
     }
   };
@@ -101,14 +113,12 @@ export default function BetaPage() {
                   value={code}
                   onChange={(e) => {
                     setCode(e.target.value);
-                    setError(false);
+                    setErrorMessage(null);
                   }}
                   autoFocus
                 />
-                {error && (
-                  <p className="text-xs text-red-500">
-                    Invalid access code. Please try again.
-                  </p>
+                {errorMessage && (
+                  <p className="text-xs text-red-500">{errorMessage}</p>
                 )}
               </div>
             </div>

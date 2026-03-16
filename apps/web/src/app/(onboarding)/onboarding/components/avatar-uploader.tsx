@@ -11,7 +11,6 @@ export default function AvatarUploader({
   initialUrl,
   fallbackLabel,
   onReady,
-  userId,
 }: {
   onUploaded?: (url: string) => void;
   initialUrl?: string;
@@ -22,7 +21,6 @@ export default function AvatarUploader({
     getFile: () => File | null;
     upload: () => Promise<string | null>;
   }) => void;
-  userId?: string;
 }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(
     initialUrl ?? null
@@ -35,7 +33,6 @@ export default function AvatarUploader({
   }, [initialUrl]);
 
   const { startUpload, isUploading } = useUploadThing((r) => r.imageUploader, {
-    headers: () => ({ "x-user-id": userId ?? "" }),
     onClientUploadComplete: (res) => {
       const url = res?.[0]?.url ?? null;
       if (url) onUploaded?.(url);
@@ -53,12 +50,12 @@ export default function AvatarUploader({
   const getFile = useCallback(() => file, [file]);
 
   const upload = useCallback(async () => {
-    if (!file || !userId) return null;
+    if (!file) return null;
     const res = await startUpload([file]);
     const url = res?.[0]?.url ?? null;
     if (url) setPreviewUrl(url);
     return url;
-  }, [file, userId, startUpload]);
+  }, [file, startUpload]);
 
   useEffect(() => {
     onReady?.({ pick, clear, getFile, upload });

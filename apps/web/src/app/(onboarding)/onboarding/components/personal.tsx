@@ -25,11 +25,10 @@ import { Separator } from "@/components/ui/separator";
 import { useEffect, useState, useRef } from "react";
 import { authClient } from "@/lib/auth-client";
 import Image from "next/image";
-import { trpcClient, trpcOptions } from "@/utils/trpc";
+import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 // import AvatarUploader from "./avatar-uploader";
 import AvatarUploader from "./avatar-uploader";
-import { uploadFiles } from "@/utils/uploadthing";
 import { ArrowRightIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -83,6 +82,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
       twitter: data.twitter?.trim() || null,
       discord: data.discord?.trim() || null,
     });
+    await queryClient.invalidateQueries({ queryKey: [["users", "me"]] });
 
     toast.success("Profile updated");
     onNext();
@@ -125,7 +125,6 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
                   initialUrl={me?.image ?? undefined}
                   fallbackLabel={me?.email ?? ""}
                   onReady={(api) => (uploaderApiRef.current = api)}
-                  userId={me?.id}
                 />
 
                 <FormMessage />

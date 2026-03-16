@@ -211,7 +211,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   return (
     <SidebarMenu className={cn("h-full w-full", isCollapsed && "items-center")}>
       <SidebarMenuItem
-        className={cn("h-full w-full", isCollapsed && "flex justify-center")}
+        className={cn("h-full w-full px-2", isCollapsed && "flex justify-center")}
       >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -219,7 +219,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
               className={cn(
                 "cursor-pointer items-center gap-2 bg-sidebar-accent text-xs shadow-sm ring-1! ring-white/5 transition-all duration-150 active:scale-95 hover:!brightness-110",
                 isCollapsed
-                  ? "!h-10 !w-12 justify-center rounded-lg p-0"
+                  ? "justify-center rounded-lg"
                   : "!h-full rounded-lg px-5"
               )}
             >

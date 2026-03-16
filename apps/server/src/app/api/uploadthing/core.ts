@@ -1,5 +1,6 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
+import { auth } from "@/lib/auth";
 
 const f = createUploadthing();
 
@@ -14,8 +15,11 @@ export const ourFileRouter: FileRouter = {
   })
     // Set permissions and file types for this FileRoute
     .middleware(async ({ req }) => {
-      // Read user id from a custom header to support cross-origin uploads
-      const userId = req.headers.get("x-user-id");
+      const session = await auth.api.getSession({
+        headers: req.headers,
+      });
+      const userId = session?.user?.id;
+
       if (!userId) throw new UploadThingError("Unauthorized");
       return { userId };
     })

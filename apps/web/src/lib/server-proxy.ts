@@ -22,8 +22,8 @@ async function buildRequestBody(request: NextRequest) {
     return undefined;
   }
 
-  const body = await request.text();
-  return body.length > 0 ? body : undefined;
+  const body = await request.arrayBuffer();
+  return body.byteLength > 0 ? body : undefined;
 }
 
 function buildResponseHeaders(
@@ -53,17 +53,34 @@ function buildResponseHeaders(
     return headers;
   }
 
-  const getSetCookie = (
-    response.headers as Headers & { getSetCookie?: () => string[] }
-  ).getSetCookie;
+  // Prefer getSetCookie() which correctly returns individual Set-Cookie
+  // values. Falls back to raw() (undici) then get() as last resort.
+  const rawHeaders = response.headers as Headers & {
+    getSetCookie?: () => string[];
+    raw?: () => Record<string, string[]>;
+  };
 
-  if (typeof getSetCookie === "function") {
-    for (const cookie of getSetCookie.call(response.headers)) {
+  if (typeof rawHeaders.getSetCookie === "function") {
+    for (const cookie of rawHeaders.getSetCookie()) {
       headers.append("set-cookie", cookie);
     }
     return headers;
   }
 
+  // undici exposes raw() which preserves individual header values
+  if (typeof rawHeaders.raw === "function") {
+    const raw = rawHeaders.raw();
+    if (raw["set-cookie"]) {
+      for (const cookie of raw["set-cookie"]) {
+        headers.append("set-cookie", cookie);
+      }
+      return headers;
+    }
+  }
+
+  // Last resort: headers.get() merges multiple Set-Cookie values with ", "
+  // which can corrupt cookies containing commas (e.g. Expires dates).
+  // Still better than dropping them entirely.
   const fallbackCookie = response.headers.get("set-cookie");
   if (fallbackCookie) {
     headers.append("set-cookie", fallbackCookie);
@@ -82,6 +99,7 @@ export async function proxyToServer(
     headers: buildForwardHeaders(request),
     body: await buildRequestBody(request),
     redirect: "manual",
+    cache: "no-store",
   });
 
   return new Response(response.body, {

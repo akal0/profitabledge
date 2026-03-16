@@ -147,8 +147,8 @@ export function CsvAccountEnrichmentSheet({
             type="button"
           >
             <FileUp className="size-3.5" />
-            <span className="hidden lg:inline">Import additional CSVs</span>
-            <span className="lg:hidden">CSVs</span>
+            <span className="hidden lg:inline">Import additional files</span>
+            <span className="lg:hidden">Files</span>
           </Button>
         )}
       </SheetTrigger>
@@ -193,7 +193,7 @@ export function CsvAccountEnrichmentSheet({
             </div>
 
             <div className="grid gap-2">
-              <Label className={fieldLabelClass}>CSV files</Label>
+              <Label className={fieldLabelClass}>Files</Label>
               <CsvUpload
                 multiple
                 disabled={submitting}

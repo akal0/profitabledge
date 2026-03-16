@@ -15,7 +15,7 @@ export interface BrokerCsvImportContext {
 
 export interface BrokerCsvImportFileInput {
   fileName: string | null;
-  csvText: string;
+  fileContent: string | Buffer;
 }
 
 export interface NormalizedImportedTrade {

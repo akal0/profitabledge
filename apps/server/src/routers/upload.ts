@@ -28,7 +28,11 @@ import { protectedProcedure, router } from "../lib/trpc";
 
 const csvFileInputSchema = z.object({
   fileName: z.string().optional().nullable(),
-  csvBase64: z.string().min(1),
+  csvBase64: z.string().min(1).optional(),
+  fileBase64: z.string().min(1).optional(),
+}).refine((value) => Boolean(value.fileBase64 || value.csvBase64), {
+  message: "File content is required.",
+  path: ["fileBase64"],
 });
 
 const importCsvInputSchema = z
@@ -36,6 +40,7 @@ const importCsvInputSchema = z
     name: z.string().min(1),
     broker: z.string().min(1),
     csvBase64: z.string().optional(),
+    fileBase64: z.string().optional(),
     fileName: z.string().optional(),
     files: z.array(csvFileInputSchema).optional(),
     initialBalance: z.number().nonnegative().optional(),
@@ -46,9 +51,12 @@ const importCsvInputSchema = z
   .refine(
     (value) =>
       (value.files != null && value.files.length > 0) ||
-      Boolean(value.csvBase64 && value.csvBase64.length > 0),
+      Boolean(
+        (value.fileBase64 && value.fileBase64.length > 0) ||
+          (value.csvBase64 && value.csvBase64.length > 0)
+      ),
     {
-      message: "At least one CSV file is required.",
+      message: "At least one CSV, XML, or XLSX file is required.",
       path: ["files"],
     }
   );
@@ -59,11 +67,15 @@ const enrichCsvAccountInputSchema = z.object({
 });
 
 function decodeCsvFiles(
-  files: Array<{ fileName?: string | null; csvBase64: string }>
+  files: Array<{
+    fileName?: string | null;
+    csvBase64?: string;
+    fileBase64?: string;
+  }>
 ) {
   return files.map((file) => ({
     fileName: file.fileName ?? null,
-    csvText: Buffer.from(file.csvBase64, "base64").toString("utf8"),
+    fileContent: Buffer.from(file.fileBase64 ?? file.csvBase64 ?? "", "base64"),
   }));
 }
 
@@ -321,7 +333,7 @@ async function applyParsedImportToExistingAccount(input: {
       userId,
       accountId,
       type: "trade_imported",
-      title: "CSV enrichment complete",
+      title: "Trade enrichment complete",
       body:
         insertedTrades.length > 0
           ? `${updates.length} trade${
@@ -396,11 +408,11 @@ export const uploadRouter = router({
         input.files && input.files.length > 0
           ? input.files
           : [
-              {
-                fileName: input.fileName ?? null,
-                csvBase64: input.csvBase64 ?? "",
-              },
-            ];
+            {
+              fileName: input.fileName ?? null,
+              fileBase64: input.fileBase64 ?? input.csvBase64 ?? "",
+            },
+          ];
 
       const parsedImport = parseBrokerCsvImportBundle({
         broker: input.broker,
@@ -550,7 +562,7 @@ export const uploadRouter = router({
         userId,
         accountId,
         type: "trade_imported",
-        title: "CSV import complete",
+        title: "Trade import complete",
         body: `${inserts.length} trades imported into ${input.name}.`,
         metadata: {
           accountId,

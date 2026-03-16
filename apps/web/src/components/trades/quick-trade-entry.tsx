@@ -1,19 +1,29 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import { CalendarDate, fromDate, getLocalTimeZone } from "@internationalized/date";
+import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
+
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-  SheetTrigger,
-  SheetFooter,
-} from "@/components/ui/sheet";
-import { Separator } from "@/components/ui/separator";
+  TRADE_ACTION_BUTTON_CLASS,
+  TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+  TRADE_IDENTIFIER_PILL_CLASS,
+  TRADE_IDENTIFIER_TONES,
+  TRADE_SURFACE_CARD_CLASS,
+} from "@/components/trades/trade-identifier-pill";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar-rac";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -21,15 +31,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, ArrowUpRight, ArrowDownRight } from "lucide-react";
-import { trpcClient } from "@/utils/trpc";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { formatCurrencyValue } from "@/lib/trade-formatting";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { formatCurrencyValue } from "@/lib/trade-formatting";
-import {
-  TRADE_SURFACE_CARD_CLASS,
-  TRADE_IDENTIFIER_TONES,
-} from "@/components/trades/trade-identifier-pill";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
 
 interface QuickTradeEntryProps {
   accountId: string;
@@ -40,6 +53,11 @@ interface QuickTradeEntryProps {
   }) => void;
   trigger?: React.ReactNode;
 }
+
+type NamedTradeTag = {
+  name: string;
+  color: string;
+};
 
 const COMMON_SYMBOLS = [
   "EURUSD",
@@ -58,15 +76,195 @@ const COMMON_SYMBOLS = [
   "ETHUSD",
 ];
 
+function createRoundedNow() {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  return now;
+}
+
+function createDefaultTradeWindow() {
+  const closeTime = createRoundedNow();
+  const openTime = new Date(closeTime);
+  openTime.setHours(openTime.getHours() - 1);
+  return { openTime, closeTime };
+}
+
+function toCalendarDate(value: Date) {
+  const localDate = fromDate(value, getLocalTimeZone());
+  return new CalendarDate(localDate.year, localDate.month, localDate.day);
+}
+
+function replaceCalendarDate(current: Date, next: CalendarDate) {
+  const selected = next.toDate(getLocalTimeZone());
+  const value = new Date(current);
+  value.setFullYear(
+    selected.getFullYear(),
+    selected.getMonth(),
+    selected.getDate()
+  );
+  value.setSeconds(0, 0);
+  return value;
+}
+
+function replaceTimeValue(current: Date, nextValue: string) {
+  const [hoursRaw, minutesRaw] = nextValue.split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return current;
+  }
+
+  const value = new Date(current);
+  value.setHours(hours, minutes, 0, 0);
+  return value;
+}
+
+function formatDateButtonLabel(value: Date) {
+  return format(value, "EEE, MMM d, yyyy");
+}
+
+function formatTimeInputValue(value: Date) {
+  return format(value, "HH:mm");
+}
+
+function parseNumberInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parsePositiveNumberInput(value: string) {
+  const parsed = parseNumberInput(value);
+  return parsed !== null && parsed > 0 ? parsed : null;
+}
+
+function getEstimatedPipSize(symbol: string) {
+  const upper = symbol.toUpperCase();
+  if (upper.includes("JPY")) return 0.01;
+  if (upper.startsWith("XAU") || upper.startsWith("XAG")) return 0.1;
+  if (upper.startsWith("BTC") || upper.startsWith("ETH")) return 1;
+  return 0.0001;
+}
+
+function formatHoldDuration(openTime: Date, closeTime: Date) {
+  const diffMs = Math.max(0, closeTime.getTime() - openTime.getTime());
+  const totalMinutes = Math.floor(diffMs / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0 && minutes > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h`;
+  }
+
+  return `${minutes}m`;
+}
+
+function SuggestionChips({
+  suggestions,
+  activeValue,
+  onSelect,
+}: {
+  suggestions: string[];
+  activeValue: string;
+  onSelect: (value: string) => void;
+}) {
+  if (suggestions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 pt-1">
+      {suggestions.map((suggestion) => {
+        const isActive =
+          suggestion.trim().toLowerCase() === activeValue.trim().toLowerCase();
+
+        return (
+          <button
+            key={suggestion}
+            type="button"
+            onClick={() => onSelect(suggestion)}
+            className={cn(
+              TRADE_IDENTIFIER_PILL_CLASS,
+              isActive
+                ? TRADE_IDENTIFIER_TONES.info
+                : TRADE_IDENTIFIER_TONES.neutral,
+              "min-h-6 cursor-pointer px-2 py-0.5 text-[10px]"
+            )}
+          >
+            {suggestion}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TradeDateTimeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: Date;
+  onChange: (nextValue: Date) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs text-white/50">{label}</Label>
+      <div className="grid grid-cols-[1fr_6.75rem] gap-2">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              className={cn(
+                TRADE_ACTION_BUTTON_CLASS,
+                "h-9 w-full justify-start px-3 text-left text-white/85"
+              )}
+            >
+              {formatDateButtonLabel(value)}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto border-white/8 bg-[#1D1D20] p-3">
+            <Calendar
+              aria-label={`${label} date`}
+              value={toCalendarDate(value)}
+              onChange={(nextValue) =>
+                onChange(replaceCalendarDate(value, nextValue as CalendarDate))
+              }
+              fullWidth
+              className="w-full"
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Input
+          type="time"
+          step="60"
+          value={formatTimeInputValue(value)}
+          onChange={(event) =>
+            onChange(replaceTimeValue(value, event.target.value))
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
 export function QuickTradeEntry({
   accountId,
   onTradeCreated,
   trigger,
 }: QuickTradeEntryProps) {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Form state
   const [symbol, setSymbol] = useState("");
   const [customSymbol, setCustomSymbol] = useState("");
   const [tradeType, setTradeType] = useState<"long" | "short">("long");
@@ -74,12 +272,10 @@ export function QuickTradeEntry({
   const [openPrice, setOpenPrice] = useState("");
   const [closePrice, setClosePrice] = useState("");
   const [openTime, setOpenTime] = useState(() => {
-    const now = new Date();
-    now.setHours(now.getHours() - 1);
-    return now.toISOString().slice(0, 16);
+    return createDefaultTradeWindow().openTime;
   });
   const [closeTime, setCloseTime] = useState(() => {
-    return new Date().toISOString().slice(0, 16);
+    return createDefaultTradeWindow().closeTime;
   });
   const [sl, setSl] = useState("");
   const [tp, setTp] = useState("");
@@ -90,53 +286,203 @@ export function QuickTradeEntry({
   const [modelTag, setModelTag] = useState("");
   const [autoCalculateProfit, setAutoCalculateProfit] = useState(true);
 
-  const effectiveSymbol = symbol === "custom" ? customSymbol : symbol;
+  const recentSymbolsQuery = useQuery({
+    ...trpcOptions.trades.listSymbols.queryOptions({ accountId }),
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const sessionTagsQuery = useQuery({
+    ...trpcOptions.trades.listSessionTags.queryOptions({ accountId }),
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const modelTagsQuery = useQuery({
+    ...trpcOptions.trades.listModelTags.queryOptions({ accountId }),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const recentSymbols = useMemo(
+    () => (recentSymbolsQuery.data as string[] | undefined) ?? [],
+    [recentSymbolsQuery.data]
+  );
+  const sessionTagSuggestions = useMemo(
+    () => (sessionTagsQuery.data as NamedTradeTag[] | undefined) ?? [],
+    [sessionTagsQuery.data]
+  );
+  const modelTagSuggestions = useMemo(
+    () => (modelTagsQuery.data as NamedTradeTag[] | undefined) ?? [],
+    [modelTagsQuery.data]
+  );
+
+  const symbolOptions = useMemo(() => {
+    const ordered = [...COMMON_SYMBOLS, ...recentSymbols];
+    const seen = new Set<string>();
+    const result: string[] = [];
+
+    for (const raw of ordered) {
+      const nextValue = raw.trim().toUpperCase();
+      if (!nextValue || seen.has(nextValue)) continue;
+      seen.add(nextValue);
+      result.push(nextValue);
+    }
+
+    return result;
+  }, [recentSymbols]);
+
+  const effectiveSymbol =
+    symbol === "custom" ? customSymbol.trim().toUpperCase() : symbol;
+
+  const parsedVolume = useMemo(
+    () => parsePositiveNumberInput(volume),
+    [volume]
+  );
+  const parsedOpenPrice = useMemo(
+    () => parsePositiveNumberInput(openPrice),
+    [openPrice]
+  );
+  const parsedClosePrice = useMemo(
+    () => parsePositiveNumberInput(closePrice),
+    [closePrice]
+  );
+  const parsedSl = useMemo(() => parseNumberInput(sl), [sl]);
+  const parsedTp = useMemo(() => parseNumberInput(tp), [tp]);
+  const parsedProfit = useMemo(() => parseNumberInput(profit), [profit]);
+  const parsedCommission = useMemo(
+    () => parseNumberInput(commissions),
+    [commissions]
+  );
+  const parsedSwap = useMemo(() => parseNumberInput(swap), [swap]);
+
+  const timeOrderValid = closeTime.getTime() > openTime.getTime();
+
+  const estimatedProfit = useMemo(() => {
+    if (!autoCalculateProfit) return null;
+    if (!effectiveSymbol || !parsedOpenPrice || !parsedClosePrice || !parsedVolume) {
+      return null;
+    }
+
+    const priceDiff =
+      tradeType === "long"
+        ? parsedClosePrice - parsedOpenPrice
+        : parsedOpenPrice - parsedClosePrice;
+    const contractSize = effectiveSymbol.includes("XAU") ? 100 : 100000;
+
+    return priceDiff * parsedVolume * contractSize;
+  }, [
+    autoCalculateProfit,
+    effectiveSymbol,
+    parsedClosePrice,
+    parsedOpenPrice,
+    parsedVolume,
+    tradeType,
+  ]);
+
+  const effectiveProfit = autoCalculateProfit ? estimatedProfit : parsedProfit;
+
+  const estimatedPips = useMemo(() => {
+    if (!effectiveSymbol || !parsedOpenPrice || !parsedClosePrice) {
+      return null;
+    }
+
+    const priceDiff =
+      tradeType === "long"
+        ? parsedClosePrice - parsedOpenPrice
+        : parsedOpenPrice - parsedClosePrice;
+
+    return priceDiff / getEstimatedPipSize(effectiveSymbol);
+  }, [effectiveSymbol, parsedClosePrice, parsedOpenPrice, tradeType]);
+
+  const plannedRR = useMemo(() => {
+    if (!parsedOpenPrice || parsedSl === null || parsedTp === null) {
+      return null;
+    }
+
+    const risk = Math.abs(parsedOpenPrice - parsedSl);
+    const target = Math.abs(parsedTp - parsedOpenPrice);
+
+    if (!risk || !Number.isFinite(risk) || !Number.isFinite(target)) {
+      return null;
+    }
+
+    return target / risk;
+  }, [parsedOpenPrice, parsedSl, parsedTp]);
+
+  const netPreview = useMemo(() => {
+    if (effectiveProfit === null) {
+      return null;
+    }
+
+    return effectiveProfit + (parsedCommission ?? 0) + (parsedSwap ?? 0);
+  }, [effectiveProfit, parsedCommission, parsedSwap]);
 
   const canSubmit = useMemo(() => {
-    return (
+    return Boolean(
       effectiveSymbol &&
-      parseFloat(volume) > 0 &&
-      parseFloat(openPrice) > 0 &&
-      parseFloat(closePrice) > 0 &&
-      openTime &&
-      closeTime
+        parsedVolume &&
+        parsedOpenPrice &&
+        parsedClosePrice &&
+        timeOrderValid &&
+        effectiveProfit !== null
     );
-  }, [effectiveSymbol, volume, openPrice, closePrice, openTime, closeTime]);
-
-  // Estimated profit calculation
-  const estimatedProfit = useMemo(() => {
-    if (!autoCalculateProfit || !openPrice || !closePrice || !volume)
-      return null;
-    const open = parseFloat(openPrice);
-    const close = parseFloat(closePrice);
-    const vol = parseFloat(volume);
-    if (isNaN(open) || isNaN(close) || isNaN(vol)) return null;
-
-    const diff = tradeType === "long" ? close - open : open - close;
-    // Simplified: assume forex major with pip = 0.0001, contract = 100000
-    const pipSize = effectiveSymbol.includes("JPY") ? 0.01 : 0.0001;
-    const contractSize = effectiveSymbol.includes("XAU") ? 100 : 100000;
-    return diff * vol * contractSize;
   }, [
-    openPrice,
-    closePrice,
-    volume,
-    tradeType,
+    effectiveProfit,
     effectiveSymbol,
+    parsedClosePrice,
+    parsedOpenPrice,
+    parsedVolume,
+    timeOrderValid,
+  ]);
+
+  const validationMessage = useMemo(() => {
+    if (symbol === "custom" && !customSymbol.trim()) {
+      return "Enter a custom symbol before saving the trade.";
+    }
+
+    if (!effectiveSymbol) {
+      return "Select the symbol you traded.";
+    }
+
+    if (!parsedVolume) {
+      return "Enter a valid trade size.";
+    }
+
+    if (!parsedOpenPrice || !parsedClosePrice) {
+      return "Enter both entry and exit prices.";
+    }
+
+    if (!timeOrderValid) {
+      return "Close time must be after open time.";
+    }
+
+    if (!autoCalculateProfit && parsedProfit === null) {
+      return "Enter the trade P&L or turn auto-calculate back on.";
+    }
+
+    return null;
+  }, [
     autoCalculateProfit,
+    customSymbol,
+    effectiveSymbol,
+    parsedClosePrice,
+    parsedOpenPrice,
+    parsedProfit,
+    parsedVolume,
+    symbol,
+    timeOrderValid,
   ]);
 
   function resetForm() {
+    const defaults = createDefaultTradeWindow();
+
     setSymbol("");
     setCustomSymbol("");
     setTradeType("long");
     setVolume("0.1");
     setOpenPrice("");
     setClosePrice("");
-    const now = new Date();
-    now.setHours(now.getHours() - 1);
-    setOpenTime(now.toISOString().slice(0, 16));
-    setCloseTime(new Date().toISOString().slice(0, 16));
+    setOpenTime(defaults.openTime);
+    setCloseTime(defaults.closeTime);
     setSl("");
     setTp("");
     setProfit("");
@@ -144,45 +490,77 @@ export function QuickTradeEntry({
     setSwap("");
     setSessionTag("");
     setModelTag("");
+    setAutoCalculateProfit(true);
   }
 
-  async function handleSubmit() {
-    if (!canSubmit) return;
+  function handleOpenChange(nextValue: boolean) {
+    setOpen(nextValue);
+
+    if (!nextValue && !submitting) {
+      resetForm();
+    }
+  }
+
+  async function handleSubmit(mode: "close" | "continue") {
+    if (
+      !canSubmit ||
+      !effectiveSymbol ||
+      !parsedVolume ||
+      !parsedOpenPrice ||
+      !parsedClosePrice ||
+      effectiveProfit === null
+    ) {
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const result = await trpcClient.trades.create.mutate({
         accountId,
-        symbol: effectiveSymbol.toUpperCase(),
+        symbol: effectiveSymbol,
         tradeType,
-        volume: parseFloat(volume),
-        openPrice: parseFloat(openPrice),
-        closePrice: parseFloat(closePrice),
-        openTime: new Date(openTime).toISOString(),
-        closeTime: new Date(closeTime).toISOString(),
-        sl: sl ? parseFloat(sl) : undefined,
-        tp: tp ? parseFloat(tp) : undefined,
-        profit: profit ? parseFloat(profit) : undefined,
-        commissions: commissions ? parseFloat(commissions) : undefined,
-        swap: swap ? parseFloat(swap) : undefined,
-        sessionTag: sessionTag || undefined,
-        modelTag: modelTag || undefined,
+        volume: parsedVolume,
+        openPrice: parsedOpenPrice,
+        closePrice: parsedClosePrice,
+        openTime: openTime.toISOString(),
+        closeTime: closeTime.toISOString(),
+        sl: parsedSl ?? undefined,
+        tp: parsedTp ?? undefined,
+        profit: effectiveProfit,
+        commissions: parsedCommission ?? undefined,
+        swap: parsedSwap ?? undefined,
+        sessionTag: sessionTag.trim() || undefined,
+        modelTag: modelTag.trim() || undefined,
       });
 
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [["trades"]] }),
+        queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+        queryClient.invalidateQueries({ queryKey: ["propFirms"] }),
+      ]);
+
       toast.success(
-        `Trade added: ${result.symbol} ${formatCurrencyValue(result.profit, {
-          showPlus: true,
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}`
+        mode === "continue"
+          ? `Trade added. Ready for the next one: ${result.symbol}`
+          : `Trade added: ${result.symbol} ${formatCurrencyValue(result.profit, {
+              showPlus: true,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`
       );
+
       onTradeCreated?.({
         id: result.id,
         symbol: result.symbol || "",
         profit: result.profit,
       });
+
       resetForm();
-      setOpen(false);
+
+      if (mode === "close") {
+        setOpen(false);
+      }
     } catch (error: any) {
       toast.error(error?.message || "Failed to create trade");
     } finally {
@@ -191,7 +569,7 @@ export function QuickTradeEntry({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>
         {trigger || (
           <Button
@@ -204,14 +582,15 @@ export function QuickTradeEntry({
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto rounded-md p-0">
-        <div className="px-6 py-5">
+      <SheetContent className="w-full overflow-y-auto rounded-md p-0 sm:max-w-2xl">
+        <div className="px-6 py-5 pb-0">
           <SheetHeader className="p-0">
             <SheetTitle className="text-base font-semibold text-white">
               Add manual trade
             </SheetTitle>
             <SheetDescription className="text-xs text-white/40">
-              Manually enter a closed trade for tracking and analysis.
+              Manually enter a closed trade, reuse the tags you already track,
+              and update the dashboard immediately after save.
             </SheetDescription>
           </SheetHeader>
         </div>
@@ -219,14 +598,13 @@ export function QuickTradeEntry({
         <div className="flex flex-col">
           <Separator />
 
-          {/* Symbol & direction */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+            <h3 className="text-xs font-semibold tracking-wide text-white/70">
               Symbol & direction
             </h3>
           </div>
           <Separator />
-          <div className="px-6 py-5 space-y-4">
+          <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
               <Label className="text-xs text-white/50">Symbol</Label>
               <Select value={symbol} onValueChange={setSymbol}>
@@ -234,9 +612,9 @@ export function QuickTradeEntry({
                   <SelectValue placeholder="Select symbol" />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMON_SYMBOLS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
+                  {symbolOptions.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {option}
                     </SelectItem>
                   ))}
                   <SelectItem value="custom">Custom...</SelectItem>
@@ -244,10 +622,10 @@ export function QuickTradeEntry({
               </Select>
               {symbol === "custom" && (
                 <Input
-                  placeholder="Enter symbol (e.g., EURUSD)"
+                  placeholder="Enter symbol (e.g. EURUSD)"
                   value={customSymbol}
-                  onChange={(e) =>
-                    setCustomSymbol(e.target.value.toUpperCase())
+                  onChange={(event) =>
+                    setCustomSymbol(event.target.value.toUpperCase())
                   }
                 />
               )}
@@ -260,7 +638,7 @@ export function QuickTradeEntry({
                   type="button"
                   className={cn(
                     TRADE_SURFACE_CARD_CLASS,
-                    "px-4 py-2 text-sm font-semibold capitalize flex items-center gap-2 cursor-pointer transition-colors",
+                    "flex cursor-pointer items-center gap-2 px-4 py-2 text-sm font-semibold capitalize transition-colors",
                     tradeType === "long"
                       ? TRADE_IDENTIFIER_TONES.positive
                       : "text-white/40 opacity-50"
@@ -274,7 +652,7 @@ export function QuickTradeEntry({
                   type="button"
                   className={cn(
                     TRADE_SURFACE_CARD_CLASS,
-                    "px-4 py-2 text-sm font-semibold capitalize flex items-center gap-2 cursor-pointer transition-colors",
+                    "flex cursor-pointer items-center gap-2 px-4 py-2 text-sm font-semibold capitalize transition-colors",
                     tradeType === "short"
                       ? TRADE_IDENTIFIER_TONES.negative
                       : "text-white/40 opacity-50"
@@ -290,23 +668,35 @@ export function QuickTradeEntry({
 
           <Separator />
 
-          {/* Trade details */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+            <h3 className="text-xs font-semibold tracking-wide text-white/70">
               Trade details
             </h3>
           </div>
           <Separator />
-          <div className="px-6 py-5 space-y-4">
-            <div className="space-y-2">
-              <Label className="text-xs text-white/50">Volume (lots)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={volume}
-                onChange={(e) => setVolume(e.target.value)}
-              />
+          <div className="space-y-4 px-6 py-5">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-white/50">Volume (lots)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  value={volume}
+                  onChange={(event) => setVolume(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-white/50">Hold time</Label>
+                <div
+                  className={cn(
+                    TRADE_SURFACE_CARD_CLASS,
+                    "flex h-9 items-center px-3 text-sm text-white/75"
+                  )}
+                >
+                  {formatHoldDuration(openTime, closeTime)}
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -317,7 +707,7 @@ export function QuickTradeEntry({
                   step="0.00001"
                   placeholder="1.08500"
                   value={openPrice}
-                  onChange={(e) => setOpenPrice(e.target.value)}
+                  onChange={(event) => setOpenPrice(event.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -327,28 +717,43 @@ export function QuickTradeEntry({
                   step="0.00001"
                   placeholder="1.08750"
                   value={closePrice}
-                  onChange={(e) => setClosePrice(e.target.value)}
+                  onChange={(event) => setClosePrice(event.target.value)}
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">Open time</Label>
-                <Input
-                  type="datetime-local"
-                  value={openTime}
-                  onChange={(e) => setOpenTime(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">Close time</Label>
-                <Input
-                  type="datetime-local"
-                  value={closeTime}
-                  onChange={(e) => setCloseTime(e.target.value)}
-                />
-              </div>
+              <TradeDateTimeField
+                label="Open time"
+                value={openTime}
+                onChange={setOpenTime}
+              />
+              <TradeDateTimeField
+                label="Close time"
+                value={closeTime}
+                onChange={setCloseTime}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-8")}
+                onClick={() => setCloseTime(createRoundedNow())}
+              >
+                Set close to now
+              </Button>
+              <Button
+                type="button"
+                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-8")}
+                onClick={() => {
+                  const nextOpenTime = new Date(closeTime);
+                  nextOpenTime.setHours(nextOpenTime.getHours() - 1);
+                  setOpenTime(nextOpenTime);
+                }}
+              >
+                Make open 1h earlier
+              </Button>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -361,7 +766,7 @@ export function QuickTradeEntry({
                   step="0.00001"
                   placeholder="1.08200"
                   value={sl}
-                  onChange={(e) => setSl(e.target.value)}
+                  onChange={(event) => setSl(event.target.value)}
                 />
               </div>
               <div className="space-y-2">
@@ -373,62 +778,121 @@ export function QuickTradeEntry({
                   step="0.00001"
                   placeholder="1.09000"
                   value={tp}
-                  onChange={(e) => setTp(e.target.value)}
+                  onChange={(event) => setTp(event.target.value)}
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-1 p-3")}>
+                <p className="text-[11px] uppercase tracking-wide text-white/40">
+                  Estimated pips
+                </p>
+                <p className="text-sm font-medium text-white/80">
+                  {estimatedPips === null
+                    ? "—"
+                    : `${estimatedPips > 0 ? "+" : ""}${estimatedPips.toFixed(1)}`}
+                </p>
+              </div>
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-1 p-3")}>
+                <p className="text-[11px] uppercase tracking-wide text-white/40">
+                  Planned RR
+                </p>
+                <p className="text-sm font-medium text-white/80">
+                  {plannedRR === null ? "—" : `${plannedRR.toFixed(2)}R`}
+                </p>
+              </div>
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-1 p-3")}>
+                <p className="text-[11px] uppercase tracking-wide text-white/40">
+                  Time check
+                </p>
+                <p
+                  className={cn(
+                    "text-sm font-medium",
+                    timeOrderValid ? "text-teal-300" : "text-rose-300"
+                  )}
+                >
+                  {timeOrderValid ? "Valid" : "Close before open"}
+                </p>
               </div>
             </div>
           </div>
 
           <Separator />
 
-          {/* P&L */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+            <h3 className="text-xs font-semibold tracking-wide text-white/70">
               P&L
             </h3>
           </div>
           <Separator />
-          <div className="px-6 py-5 space-y-4">
+          <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-white/50">Profit/loss ($)</Label>
-                <label className="flex items-center gap-2 text-xs text-white/40">
-                  <input
-                    type="checkbox"
+              <div className="flex items-center justify-between gap-4">
+                <Label className="text-xs text-white/50">Trade P&amp;L</Label>
+                <label className="flex items-center gap-2 text-xs text-white/45">
+                  <Checkbox
                     checked={autoCalculateProfit}
-                    onChange={(e) => setAutoCalculateProfit(e.target.checked)}
-                    className="rounded"
+                    onCheckedChange={(checked) => {
+                      const nextChecked = checked === true;
+                      if (
+                        !nextChecked &&
+                        estimatedProfit !== null &&
+                        profit.trim().length === 0
+                      ) {
+                        setProfit(estimatedProfit.toFixed(2));
+                      }
+                      setAutoCalculateProfit(nextChecked);
+                    }}
                   />
-                  Auto-calculate
+                  Auto-calculate from price
                 </label>
               </div>
+
               {autoCalculateProfit ? (
                 <div
                   className={cn(
-                    "px-3 py-2 rounded-sm border text-sm font-medium",
+                    TRADE_SURFACE_CARD_CLASS,
+                    "space-y-2 p-3",
                     estimatedProfit === null
-                      ? "text-white/40 border-white/5"
+                      ? "text-white/45"
                       : estimatedProfit >= 0
-                      ? "text-teal-400 bg-teal-500/10 border-teal-500/20"
-                      : "text-rose-400 bg-rose-500/10 border-rose-500/20"
+                      ? TRADE_IDENTIFIER_TONES.positive
+                      : TRADE_IDENTIFIER_TONES.negative
                   )}
                 >
-                  {estimatedProfit === null
-                    ? "Enter prices to calculate"
-                    : formatCurrencyValue(estimatedProfit, {
-                        showPlus: true,
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
+                  <p className="text-[11px] uppercase tracking-wide opacity-70">
+                    Estimated P&amp;L
+                  </p>
+                  <p className="text-sm font-semibold">
+                    {estimatedProfit === null
+                      ? "Enter entry, exit, and size to calculate it."
+                      : formatCurrencyValue(estimatedProfit, {
+                          showPlus: true,
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                  </p>
                 </div>
               ) : (
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="125.50"
-                  value={profit}
-                  onChange={(e) => setProfit(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="125.50"
+                    value={profit}
+                    onChange={(event) => setProfit(event.target.value)}
+                  />
+                  {estimatedProfit !== null ? (
+                    <Button
+                      type="button"
+                      className={cn(TRADE_ACTION_BUTTON_CLASS, "h-8")}
+                      onClick={() => setProfit(estimatedProfit.toFixed(2))}
+                    >
+                      Use calculated value
+                    </Button>
+                  ) : null}
+                </div>
               )}
             </div>
 
@@ -442,8 +906,11 @@ export function QuickTradeEntry({
                   step="0.01"
                   placeholder="-7.00"
                   value={commissions}
-                  onChange={(e) => setCommissions(e.target.value)}
+                  onChange={(event) => setCommissions(event.target.value)}
                 />
+                <p className="text-[11px] text-white/35">
+                  Enter costs as negative values.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label className="text-xs text-white/50">Swap (optional)</Label>
@@ -452,62 +919,137 @@ export function QuickTradeEntry({
                   step="0.01"
                   placeholder="-1.50"
                   value={swap}
-                  onChange={(e) => setSwap(e.target.value)}
+                  onChange={(event) => setSwap(event.target.value)}
                 />
+                <p className="text-[11px] text-white/35">
+                  Negative for cost, positive for credit.
+                </p>
               </div>
+            </div>
+
+            <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-1 p-3")}>
+              <p className="text-[11px] uppercase tracking-wide text-white/40">
+                Result after costs
+              </p>
+              <p
+                className={cn(
+                  "text-sm font-semibold",
+                  netPreview === null
+                    ? "text-white/45"
+                    : netPreview >= 0
+                    ? "text-teal-300"
+                    : "text-rose-300"
+                )}
+              >
+                {netPreview === null
+                  ? "Add P&L to preview the final result."
+                  : formatCurrencyValue(netPreview, {
+                      showPlus: true,
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+              </p>
             </div>
           </div>
 
           <Separator />
 
-          {/* Tags */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+            <h3 className="text-xs font-semibold tracking-wide text-white/70">
               Tags
             </h3>
           </div>
           <Separator />
-          <div className="px-6 py-5 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">
-                  Session tag (optional)
-                </Label>
-                <Input
-                  placeholder="London Open"
-                  value={sessionTag}
-                  onChange={(e) => setSessionTag(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs text-white/50">
-                  Model tag (optional)
-                </Label>
-                <Input
-                  placeholder="Liquidity Raid"
-                  value={modelTag}
-                  onChange={(e) => setModelTag(e.target.value)}
-                />
-              </div>
+          <div className="space-y-4 px-6 py-5">
+            <div className="space-y-2">
+              <Label className="text-xs text-white/50">
+                Session tag (optional)
+              </Label>
+              <Input
+                placeholder="London Open"
+                value={sessionTag}
+                onChange={(event) => setSessionTag(event.target.value)}
+              />
+              <SuggestionChips
+                suggestions={sessionTagSuggestions
+                  .map((tag) => tag.name)
+                  .filter(Boolean)
+                  .slice(0, 6)}
+                activeValue={sessionTag}
+                onSelect={setSessionTag}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-white/50">
+                Model tag (optional)
+              </Label>
+              <Input
+                placeholder="Liquidity Raid"
+                value={modelTag}
+                onChange={(event) => setModelTag(event.target.value)}
+              />
+              <SuggestionChips
+                suggestions={modelTagSuggestions
+                  .map((tag) => tag.name)
+                  .filter(Boolean)
+                  .slice(0, 6)}
+                activeValue={modelTag}
+                onSelect={setModelTag}
+              />
             </div>
           </div>
 
           <Separator />
 
-          <div className="px-6 py-5">
-            <div className="flex justify-end gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setOpen(false)}
-                disabled={submitting}
-                className="rounded-sm"
+          <div className="space-y-4 px-6 py-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-h-5 text-xs text-rose-300">
+                {validationMessage}
+              </div>
+              <span
+                className={cn(
+                  TRADE_IDENTIFIER_PILL_CLASS,
+                  validationMessage
+                    ? TRADE_IDENTIFIER_TONES.negative
+                    : TRADE_IDENTIFIER_TONES.positive,
+                  "min-h-6 px-2 py-0.5 text-[10px]"
+                )}
               >
-                Cancel
+                {validationMessage ? "Needs attention" : "Ready to save"}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button
+                type="button"
+                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 rounded-sm")}
+                onClick={resetForm}
+                disabled={submitting}
+              >
+                Clear
               </Button>
               <Button
-                onClick={handleSubmit}
+                type="button"
+                className={cn(
+                  TRADE_ACTION_BUTTON_CLASS,
+                  "h-9 rounded-sm",
+                  !canSubmit && "opacity-60"
+                )}
+                onClick={() => void handleSubmit("continue")}
                 disabled={!canSubmit || submitting}
-                className="gap-2 rounded-sm"
+              >
+                {submitting ? "Adding..." : "Add & another"}
+              </Button>
+              <Button
+                type="button"
+                className={cn(
+                  TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                  "h-9 gap-2 rounded-sm",
+                  !canSubmit && "opacity-60"
+                )}
+                onClick={() => void handleSubmit("close")}
+                disabled={!canSubmit || submitting}
               >
                 {submitting ? "Adding..." : "Add trade"}
               </Button>

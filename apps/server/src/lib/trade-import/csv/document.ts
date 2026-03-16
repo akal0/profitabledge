@@ -1,3 +1,5 @@
+import { looksLikeSpreadsheetFile, parseSpreadsheetDocument } from "../spreadsheet/document";
+import { looksLikeXml, parseXmlDocument } from "../xml/document";
 import type { CsvRowRecord, ParsedCsvDocument } from "./types";
 
 function countDelimiters(line: string, delimiter: string): number {
@@ -134,4 +136,24 @@ export function parseCsvDocument(text: string): ParsedCsvDocument {
     rows: rows.slice(1),
     records,
   };
+}
+
+export function parseImportDocument(input: {
+  fileName?: string | null;
+  fileContent: string | Buffer;
+}): ParsedCsvDocument {
+  if (looksLikeSpreadsheetFile(input.fileName)) {
+    const buffer =
+      typeof input.fileContent === "string"
+        ? Buffer.from(input.fileContent, "utf8")
+        : input.fileContent;
+    return parseSpreadsheetDocument(buffer);
+  }
+
+  const text =
+    typeof input.fileContent === "string"
+      ? input.fileContent
+      : input.fileContent.toString("utf8");
+
+  return looksLikeXml(text) ? parseXmlDocument(text) : parseCsvDocument(text);
 }

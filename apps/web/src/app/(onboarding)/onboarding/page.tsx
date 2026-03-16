@@ -40,7 +40,6 @@ import {
   BROKER_OPTIONS,
   brokerSupportsMultiCsvImport,
   getBrokerSupplementalCsvReports,
-  getBrokerImage,
   isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
@@ -51,6 +50,24 @@ type OnboardingStep = 1 | 2 | 3;
 type BillingPlanKey = "student" | "professional" | "institutional";
 const LEGACY_ONBOARDING_STEP_STORAGE_KEY = "profitabledge-onboarding-step";
 const CHECKOUT_SYNC_RETRY_DELAYS_MS = [0, 1500, 3000, 5000] as const;
+type ManualAccountBrokerType = "mt4" | "mt5" | "ctrader" | "other";
+
+const MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS: Array<{
+  value: ManualAccountBrokerType;
+  label: string;
+}> = [
+  { value: "mt4", label: "MetaTrader 4" },
+  { value: "mt5", label: "MetaTrader 5" },
+  { value: "ctrader", label: "cTrader" },
+  { value: "other", label: "Other" },
+];
+
+function normalizeBalanceInput(input: string): number | undefined {
+  const cleaned = String(input || "").replace(/[^0-9.\-]/g, "");
+  if (!cleaned) return undefined;
+  const n = Number(cleaned);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
 
 function getOnboardingStepStorageKey(userId: string) {
   return `${LEGACY_ONBOARDING_STEP_STORAGE_KEY}:${userId}`;
@@ -140,12 +157,14 @@ function OnboardingPageContent() {
   const bootstrappedGrowthState = useRef(false);
   const bootstrappedStepState = useRef(false);
   const handledCheckoutState = useRef<string | null>(null);
+  const isSessionReady = !isSessionPending && !!session;
   const billingConfigQuery = useQuery(
     trpcOptions.billing.getPublicConfig.queryOptions()
   );
-  const billingStateQuery = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+    enabled: isSessionReady,
+  });
   const completeGrowthAccess = useMutation(
     trpcOptions.billing.completeGrowthAccess.mutationOptions()
   );
@@ -683,9 +702,12 @@ function OnboardingPageContent() {
 }
 
 type AddAccountForm = {
-  method: "csv" | "broker" | "ea" | null;
+  method: "csv" | "broker" | "ea" | "manual" | null;
   name: string;
   broker: string;
+  brokerType: ManualAccountBrokerType | "";
+  brokerServer: string;
+  accountNumber: string;
   initialCurrency: "$" | "£" | "€" | "";
   initialBalance: string;
   files: File[];
@@ -704,7 +726,11 @@ type PendingCsvImportResolution = {
 function AddAccountStep() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { data: session } = authClient.useSession();
+  const {
+    data: session,
+    isPending: isSessionPending,
+    refetch: refetchSession,
+  } = authClient.useSession();
   const setSelectedAccountId = useAccountStore(
     (state) => state.setSelectedAccountId
   );
@@ -714,6 +740,9 @@ function AddAccountStep() {
     method: null,
     name: "",
     broker: "",
+    brokerType: "",
+    brokerServer: "",
+    accountNumber: "",
     initialCurrency: "$",
     initialBalance: "",
     files: [],
@@ -722,7 +751,8 @@ function AddAccountStep() {
     useState<PendingCsvImportResolution | null>(null);
   const [hasPreparedDashboardExit, setHasPreparedDashboardExit] = useState(false);
   const onboardingStorageUserId = session?.user.id ?? null;
-  const { accounts } = useAccountCatalog();
+  const isSessionReady = !isSessionPending && !!session;
+  const { accounts } = useAccountCatalog({ enabled: isSessionReady });
   const hasAccount = accounts.length > 0;
   const accountsQueryKey = trpcOptions.accounts.list.queryOptions().queryKey;
   const canContinueToDashboard =
@@ -735,12 +765,32 @@ function AddAccountStep() {
     [accounts]
   );
 
+  const normalizedInitialBalance = useMemo(
+    () => normalizeBalanceInput(form.initialBalance),
+    [form.initialBalance]
+  );
+
   const canSubmitCsv = useMemo(() => {
     if (form.method === "csv") {
-      return Boolean(form.files.length > 0 && form.name && form.broker);
+      return Boolean(
+        form.files.length > 0 && form.name.trim() && form.broker.trim()
+      );
     }
     return false;
   }, [form]);
+
+  const canSubmitManual = useMemo(() => {
+    if (form.method !== "manual") {
+      return false;
+    }
+
+    return Boolean(
+      form.name.trim() &&
+        form.broker.trim() &&
+        form.brokerType &&
+        normalizedInitialBalance !== undefined
+    );
+  }, [form, normalizedInitialBalance]);
 
   const selectedBrokerSupportsMultiCsv = useMemo(
     () => brokerSupportsMultiCsvImport(form.broker),
@@ -767,12 +817,25 @@ function AddAccountStep() {
     }
   }, [hasAccount]);
 
+  function ensureSessionReady() {
+    if (isSessionReady) {
+      return true;
+    }
+
+    refetchSession();
+    toast.message("Finalizing your sign-in. Try again in a moment.");
+    return false;
+  }
+
   function resetAccountForm() {
     setAccountStep(1);
     setForm({
       method: null,
       name: "",
       broker: "",
+      brokerType: "",
+      brokerServer: "",
+      accountNumber: "",
       initialCurrency: "$",
       initialBalance: "",
       files: [],
@@ -797,17 +860,11 @@ function AddAccountStep() {
     existingAccountAction?: "enrich" | "create_duplicate";
     existingAccountId?: string;
   }) {
+    if (!ensureSessionReady()) return;
     if (!canSubmitCsv || form.files.length === 0) return;
     setIsSubmitting(true);
 
     try {
-      const normalizeBalance = (input: string): number | undefined => {
-        const cleaned = String(input || "").replace(/[^0-9.\-]/g, "");
-        if (!cleaned) return undefined;
-        const n = Number(cleaned);
-        return Number.isFinite(n) && n >= 0 ? n : undefined;
-      };
-
       const encodedFiles = await Promise.all(
         form.files.map(async (file) => ({
           fileName: file.name,
@@ -818,7 +875,7 @@ function AddAccountStep() {
       const res = await trpcClient.upload.importCsv.mutate({
         name: form.name,
         broker: form.broker,
-        initialBalance: normalizeBalance(form.initialBalance),
+        initialBalance: normalizeBalanceInput(form.initialBalance),
         initialCurrency: (form.initialCurrency || "$") as "$" | "£" | "€",
         csvBase64: encodedFiles[0]?.csvBase64 ?? "",
         fileName: encodedFiles[0]?.fileName,
@@ -845,7 +902,7 @@ function AddAccountStep() {
           })
         );
       } else {
-        toast.success("Account created from CSV import");
+        toast.success("Account created from file import");
       }
 
       setHasPreparedDashboardExit(true);
@@ -853,13 +910,46 @@ function AddAccountStep() {
       resetAccountForm();
     } catch (e) {
       console.error(e);
-      toast.error("Failed to import CSV");
+      toast.error("Failed to import file");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleManualAccountCreate() {
+    if (!ensureSessionReady()) return;
+    if (!canSubmitManual) return;
+    setIsSubmitting(true);
+
+    try {
+      const account = await trpcClient.accounts.create.mutate({
+        name: form.name.trim(),
+        broker: form.broker.trim(),
+        brokerType: form.brokerType as ManualAccountBrokerType,
+        brokerServer:
+          form.brokerType === "mt4" || form.brokerType === "mt5"
+            ? form.brokerServer.trim() || undefined
+            : undefined,
+        accountNumber: form.accountNumber.trim() || undefined,
+        initialBalance: normalizedInitialBalance,
+        initialCurrency: form.initialCurrency || "$",
+      });
+
+      toast.success(`Manual account created: ${account.name}`);
+      setHasPreparedDashboardExit(true);
+      setSelectedAccountId(account.id);
+      await queryClient.invalidateQueries({ queryKey: accountsQueryKey });
+      resetAccountForm();
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to create manual account");
     } finally {
       setIsSubmitting(false);
     }
   }
 
   async function handleDemoWorkspace() {
+    if (!ensureSessionReady()) return;
+
     try {
       setIsSubmitting(true);
       const result = (await (demoAccounts.length > 0
@@ -892,6 +982,8 @@ function AddAccountStep() {
   }
 
   const handleComplete = async () => {
+    if (!ensureSessionReady()) return;
+
     setIsSubmitting(true);
 
     try {
@@ -936,7 +1028,9 @@ function AddAccountStep() {
                 {accountStep === 1
                   ? "Connect your account"
                   : form.method === "csv"
-                  ? "Import account with CSV upload"
+                  ? "Import account from file"
+                  : form.method === "manual"
+                  ? "Create manual account"
                   : form.method === "broker"
                   ? "Broker sync"
                   : "EA sync"}
@@ -945,7 +1039,9 @@ function AddAccountStep() {
                 {accountStep === 1
                   ? "Choose how you want to add your trading account."
                   : form.method === "csv"
-                  ? "Upload your CSV file or broker report bundle and enter the details for this trading account."
+                  ? "Upload your CSV, XML, or XLSX file and enter the details for this trading account."
+                  : form.method === "manual"
+                  ? "Create a blank account and log trades manually inside ProfitEdge."
                   : form.method === "broker"
                   ? "Use Connections to sync supported broker and platform accounts directly."
                   : "Use the MT5 EA bridge for terminal-based sync and richer trade analytics."}
@@ -994,6 +1090,36 @@ function AddAccountStep() {
                     </span>
                   </div>
                   <span className="text-white/35">&rarr;</span>
+                </Button>
+
+                <Button
+                  className={cn(
+                    TRADE_SURFACE_CARD_CLASS,
+                    "h-auto w-full justify-between rounded-sm px-4 py-4 text-left hover:bg-white/[0.05]"
+                  )}
+                  onClick={() => {
+                    setForm({ ...form, method: "manual" });
+                    setAccountStep(2);
+                  }}
+                >
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-sm font-medium text-white">
+                      Manual account
+                    </span>
+                    <span className="text-xs text-white/45">
+                      Create an account first, then add trades manually from
+                      inside the platform.
+                    </span>
+                  </div>
+                  <span
+                    className={cn(
+                      TRADE_IDENTIFIER_PILL_CLASS,
+                      TRADE_IDENTIFIER_TONES.neutral,
+                      "min-h-6 px-2 py-0.5 text-[10px]"
+                    )}
+                  >
+                    Manual entry
+                  </span>
                 </Button>
 
                 <Button
@@ -1088,10 +1214,12 @@ function AddAccountStep() {
                     "h-9 w-full ring-1 ring-amber-400/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
                   )}
                   onClick={handleDemoWorkspace}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !isSessionReady}
                 >
                   <Sparkles className="size-3.5" />
-                  {isSubmitting
+                  {!isSessionReady
+                    ? "Finalizing sign-in..."
+                    : isSubmitting
                     ? demoAccounts.length > 0
                       ? "Regenerating..."
                       : "Creating..."
@@ -1237,7 +1365,7 @@ function AddAccountStep() {
 
             <Separator />
             <div className="px-6 py-3">
-              <h3 className={sectionTitleClass}>Upload CSV</h3>
+              <h3 className={sectionTitleClass}>Upload file</h3>
             </div>
             <Separator />
             <div className="px-6 py-5">
@@ -1250,7 +1378,7 @@ function AddAccountStep() {
               />
               {!form.broker ? (
                 <p className="mt-3 text-xs leading-relaxed text-white/40">
-                  You can queue multiple CSVs before choosing a broker. If you
+                  You can queue multiple files before choosing a broker. If you
                   later pick a broker that does not support bundle imports, only
                   the first file will be kept.
                 </p>
@@ -1330,10 +1458,215 @@ function AddAccountStep() {
                     "h-9 flex-1",
                     !canSubmitCsv && "opacity-60"
                   )}
-                  disabled={!canSubmitCsv || isSubmitting}
+                  disabled={!canSubmitCsv || isSubmitting || !isSessionReady}
                   onClick={() => handleSubmitCSV()}
                 >
-                  {isSubmitting ? "Uploading..." : "Upload"}
+                  {!isSessionReady
+                    ? "Finalizing sign-in..."
+                    : isSubmitting
+                    ? "Uploading..."
+                    : "Upload"}
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {accountStep === 2 && form.method === "manual" && (
+          <>
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Account details</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>Account name</Label>
+                  <Input
+                    placeholder="e.g. Personal journal account"
+                    className={fieldInputClass}
+                    value={form.name}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, name: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>
+                    Broker or prop firm
+                  </Label>
+                  <Input
+                    placeholder="e.g. FTMO, IC Markets, Tradovate"
+                    className={fieldInputClass}
+                    value={form.broker}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, broker: e.target.value }))
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>Platform type</Label>
+                  <Select
+                    value={form.brokerType}
+                    onValueChange={(value: ManualAccountBrokerType) =>
+                      setForm((f) => ({
+                        ...f,
+                        brokerType: value,
+                        brokerServer:
+                          value === "mt4" || value === "mt5"
+                            ? f.brokerServer
+                            : "",
+                      }))
+                    }
+                  >
+                    <SelectTrigger className={fieldSelectTriggerClass}>
+                      <SelectValue placeholder="Select a platform" />
+                    </SelectTrigger>
+                    <SelectContent className={fieldSelectContentClass}>
+                      {MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS.map((option) => (
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          className={fieldSelectItemClass}
+                        >
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {(form.brokerType === "mt4" || form.brokerType === "mt5") && (
+                  <div className="grid gap-2">
+                    <Label className={fieldLabelClass}>Broker server</Label>
+                    <Input
+                      placeholder="e.g. FTMO-Demo or ICMarketsSC-Live07"
+                      className={fieldInputClass}
+                      value={form.brokerServer}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          brokerServer: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
+
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>
+                    Account number or login
+                  </Label>
+                  <Input
+                    placeholder="Optional"
+                    className={fieldInputClass}
+                    value={form.accountNumber}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        accountNumber: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label className={fieldLabelClass}>
+                    Starting account balance
+                  </Label>
+                  <div className="flex items-center gap-0">
+                    <Select
+                      value={form.initialCurrency}
+                      onValueChange={(v: "$" | "£" | "€") =>
+                        setForm((f) => ({ ...f, initialCurrency: v }))
+                      }
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          fieldSelectTriggerClass,
+                          "w-18 rounded-r-none border-none! ring ring-white/10"
+                        )}
+                        style={{ borderRightWidth: 0 }}
+                      >
+                        <SelectValue placeholder="$" />
+                      </SelectTrigger>
+                      <SelectContent className={fieldSelectContentClass}>
+                        {(["$", "£", "€"] as const).map((c) => (
+                          <SelectItem
+                            key={c}
+                            value={c}
+                            className={fieldSelectItemClass}
+                          >
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="$100,000"
+                      className={cn(fieldInputClass, "flex-1 rounded-l-none")}
+                      style={{ borderLeftWidth: 0 }}
+                      value={form.initialBalance}
+                      onChange={(e) =>
+                        setForm((f) => ({
+                          ...f,
+                          initialBalance: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-3">
+              <h3 className={sectionTitleClass}>Manual trade entry</h3>
+            </div>
+            <Separator />
+            <div className="px-6 py-5">
+              <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
+                <p className="text-sm font-medium text-white">
+                  Log trades directly in ProfitEdge
+                </p>
+                <p className="text-xs leading-relaxed text-white/45">
+                  After creating the account, use the manual trade entry flow
+                  from your trades view or account widgets to add closed trades
+                  one by one.
+                </p>
+              </div>
+            </div>
+
+            <Separator />
+            <div className="px-6 py-5">
+              <div className="flex w-full gap-2">
+                <Button
+                  className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
+                  onClick={resetAccountForm}
+                >
+                  Back
+                </Button>
+
+                <Button
+                  className={cn(
+                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                    "h-9 flex-1",
+                    !canSubmitManual && "opacity-60"
+                  )}
+                  disabled={!canSubmitManual || isSubmitting || !isSessionReady}
+                  onClick={handleManualAccountCreate}
+                >
+                  {!isSessionReady
+                    ? "Finalizing sign-in..."
+                    : isSubmitting
+                    ? "Creating..."
+                    : "Create account"}
                 </Button>
               </div>
             </div>
@@ -1510,7 +1843,7 @@ function AddAccountStep() {
       <div className="flex w-full mt-6">
         <Button
           onClick={handleComplete}
-          disabled={!canContinueToDashboard || isSubmitting}
+          disabled={!canContinueToDashboard || isSubmitting || !isSessionReady}
           className={cn(
             TRADE_ACTION_BUTTON_PRIMARY_CLASS,
             "h-9 w-full",
@@ -1519,7 +1852,9 @@ function AddAccountStep() {
               : "opacity-50"
           )}
         >
-          {isSubmitting
+          {!isSessionReady
+            ? "Finalizing sign-in..."
+            : isSubmitting
             ? "Setting up..."
             : canContinueToDashboard
             ? "Go to dashboard"

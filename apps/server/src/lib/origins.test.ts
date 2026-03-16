@@ -14,6 +14,30 @@ afterEach(() => {
 });
 
 describe("getAllowedWebOrigins", () => {
+  it("includes the beta hostname when the canonical app domain is configured", () => {
+    process.env.CORS_ORIGIN = undefined;
+    process.env.WEB_URL = "https://profitabledge.com";
+    process.env.NEXT_PUBLIC_WEB_URL = undefined;
+
+    expect(getAllowedWebOrigins()).toEqual([
+      "http://localhost:3001",
+      "https://profitabledge.com",
+      "https://beta.profitabledge.com",
+    ]);
+  });
+
+  it("includes the canonical app hostname when the beta domain is configured", () => {
+    process.env.CORS_ORIGIN = "https://beta.profitabledge.com";
+    process.env.WEB_URL = undefined;
+    process.env.NEXT_PUBLIC_WEB_URL = undefined;
+
+    expect(getAllowedWebOrigins()).toEqual([
+      "http://localhost:3001",
+      "https://profitabledge.com",
+      "https://beta.profitabledge.com",
+    ]);
+  });
+
   it("normalizes trailing slashes for configured web origins", () => {
     process.env.CORS_ORIGIN = "https://profitabledge-web.vercel.app/";
     process.env.WEB_URL = "https://profitabledge-web.vercel.app/";

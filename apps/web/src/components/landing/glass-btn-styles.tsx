@@ -7,7 +7,7 @@ export function GlassBtnStyles() {
         inset: 0;
         border-radius: inherit;
         padding: 1px;
-        opacity: 0.2;
+        opacity: 0.1;
         background: conic-gradient(
           from 0deg,
           rgba(180,180,180,0.6) 3%,

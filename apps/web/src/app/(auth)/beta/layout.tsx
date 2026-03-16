@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 export const metadata: Metadata = {
-  title: { absolute: "profitabledge - Private Beta" },
+  title: { absolute: "profitabledge - Private beta" },
   description: "Enter your beta access code to join profitabledge.",
 };
 

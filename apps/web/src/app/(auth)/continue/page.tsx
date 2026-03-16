@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Suspense } from "react";
 import {
   buildLoginPath,
   buildOnboardingPath,
@@ -73,12 +74,14 @@ export default function AuthContinuePage() {
   ]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
-      <div className="text-sm text-muted-foreground">
-        {isRecoveringSession
-          ? "Finalizing your sign-in..."
-          : "Preparing your workspace..."}
-      </div>
-    </main>
+    <Suspense>
+      <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
+        <div className="text-sm text-muted-foreground">
+          {isRecoveringSession
+            ? "Finalizing your sign-in..."
+            : "Preparing your workspace..."}
+        </div>
+      </main>
+    </Suspense>
   );
 }

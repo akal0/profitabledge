@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { VerticalSeparator } from "@/components/ui/separator";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { trpcOptions } from "@/utils/trpc";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 import {
@@ -36,6 +36,7 @@ import {
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
 import { authClient } from "@/lib/auth-client";
+import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
@@ -53,13 +54,19 @@ export default function DashboardLayout({
     authClient.useSession();
   const pathname = usePathname();
   const safePathname = pathname ?? "/dashboard";
+  const searchParams = useSearchParams();
   const router = useRouter();
+  const currentDashboardPath = useMemo(() => {
+    const query = searchParams?.toString();
+    return query ? `${safePathname}?${query}` : safePathname;
+  }, [safePathname, searchParams]);
+  const isSessionReady = !isSessionPending && Boolean(session);
 
   useEffect(() => {
     if (!isSessionPending && !session) {
-      router.replace("/login");
+      router.replace(buildLoginPath(currentDashboardPath));
     }
-  }, [isSessionPending, session, router]);
+  }, [currentDashboardPath, isSessionPending, router, session]);
   const accountId = useAccountStore((state) => state.selectedAccountId);
   const setSelectedAccountId = useAccountStore(
     (state) => state.setSelectedAccountId
@@ -72,11 +79,22 @@ export default function DashboardLayout({
   const isPropTrackerRoute = pathname === "/dashboard/prop-tracker";
   const isTradesRoute = pathname?.startsWith("/dashboard/trades");
   const { setOpen: setGoalDialogOpen } = useGoalDialog();
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+    enabled: isSessionReady,
+  });
+  const billingState = billingStateQuery.data;
+  const hasFetchedBillingState = billingStateQuery.isFetched;
+  const hasIncompleteOnboarding = Boolean(
+    billingState && !billingState.onboarding.isComplete
+  );
+  const canLoadDashboardShellData =
+    isSessionReady && hasFetchedBillingState && !hasIncompleteOnboarding;
 
   const {
     accounts,
     isFetched: hasFetchedAccounts,
-  } = useAccountCatalog();
+  } = useAccountCatalog({ enabled: canLoadDashboardShellData });
   const hasAccounts = accounts.length > 0;
   const hasScopedAccountSelection =
     Boolean(accountId) && accountId !== ALL_ACCOUNTS_ID;
@@ -129,12 +147,10 @@ export default function DashboardLayout({
     setSelectedAccountId,
   ]);
 
-  const { data: rawConnections } = useQuery(
-    trpcOptions.connections.list.queryOptions()
-  );
-  const { data: billingState } = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
+  const { data: rawConnections } = useQuery({
+    ...trpcOptions.connections.list.queryOptions(),
+    enabled: canLoadDashboardShellData,
+  });
   const connections = (rawConnections as ConnectionRow[] | undefined) ?? [];
   const currentAccountConnection =
     resolvedAccountId && resolvedAccountId !== ALL_ACCOUNTS_ID
@@ -176,7 +192,9 @@ export default function DashboardLayout({
   useAssistantShortcut(openFloatingAssistant);
 
   useEffect(() => {
-    if (hasBlockedAdminAccess) {
+    if (hasIncompleteOnboarding) {
+      router.replace(buildOnboardingPath(currentDashboardPath));
+    } else if (hasBlockedAdminAccess) {
       router.replace("/dashboard/growth");
     } else if (hasBlockedAffiliateAccess) {
       router.replace("/dashboard/referrals");
@@ -184,13 +202,21 @@ export default function DashboardLayout({
       router.replace("/dashboard/settings/billing");
     }
   }, [
+    currentDashboardPath,
+    hasIncompleteOnboarding,
     hasBlockedAdminAccess,
     hasBlockedAffiliateAccess,
     hasBlockedPlanAccess,
     router,
   ]);
 
-  if (hasBlockedAdminAccess || hasBlockedAffiliateAccess || hasBlockedPlanAccess) {
+  if (
+    (isSessionReady && !hasFetchedBillingState) ||
+    hasIncompleteOnboarding ||
+    hasBlockedAdminAccess ||
+    hasBlockedAffiliateAccess ||
+    hasBlockedPlanAccess
+  ) {
     return null;
   }
 

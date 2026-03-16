@@ -71,7 +71,9 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">In-app</Label>
-          <p className="text-xs text-white/40 mt-0.5">Notification hub.</p>
+          <p className="text-xs text-white/40 mt-0.5">
+            Notification hub and in-app toast fallback.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -89,7 +91,9 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Push</Label>
-          <p className="text-xs text-white/40 mt-0.5">Browser notifications.</p>
+          <p className="text-xs text-white/40 mt-0.5">
+            Browser desktop notifications when available.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch

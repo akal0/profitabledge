@@ -207,8 +207,12 @@ class NotificationHub {
         null
     );
 
-    if (!prefs.inApp || !isTypeEnabled(prefs, type)) {
+    if (!isTypeEnabled(prefs, type)) {
       return { skipped: true, reason: "disabled" };
+    }
+
+    if (!prefs.inApp && !prefs.push) {
+      return { skipped: true, reason: "channels_disabled" };
     }
 
     if (dedupeKey) {

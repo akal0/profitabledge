@@ -25,7 +25,12 @@ import X from "@/public/icons/social-media/x.svg";
 
 import { cn } from "@/lib/utils";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import {
+  buildPostAuthContinuePath,
+  resolvePostAuthPath,
+} from "@/lib/post-auth-paths";
+import { useRouter, useSearchParams } from "next/navigation";
+import { waitForConfirmedSession } from "@/lib/session-confirmation";
 
 const FormSchema = z.object({
   email: z.string().email({
@@ -36,14 +41,11 @@ const FormSchema = z.object({
   }),
 });
 
-const SESSION_CONFIRM_RETRY_DELAYS_MS = [0, 150, 350, 750] as const;
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 const LoginPage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
+  const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -53,21 +55,6 @@ const LoginPage = () => {
     },
   });
   const isSubmitting = form.formState.isSubmitting;
-
-  async function waitForConfirmedSession() {
-    for (const delay of SESSION_CONFIRM_RETRY_DELAYS_MS) {
-      if (delay > 0) {
-        await sleep(delay);
-      }
-
-      const result = await authClient.getSession();
-      if (result.data) {
-        return true;
-      }
-    }
-
-    return false;
-  }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     await authClient.signIn.email(
@@ -79,7 +66,7 @@ const LoginPage = () => {
         onSuccess: async () => {
           toast.success("Login successful", { id: "auth-login-status" });
           await waitForConfirmedSession();
-          router.replace("/dashboard");
+          router.replace(postAuthContinuePath);
         },
         onError: (error) => {
           toast.error(error.error.message || "Unable to sign in", {
@@ -93,14 +80,14 @@ const LoginPage = () => {
   const handleGoogleLogin = async () => {
     await authClient.signIn.social({
       provider: "google",
-      callbackURL: `${window.location.origin}/dashboard`,
+      callbackURL: `${window.location.origin}${postAuthContinuePath}`,
     });
   };
 
   const handleTwitterLogin = async () => {
     await authClient.signIn.social({
       provider: "twitter",
-      callbackURL: `${window.location.origin}/dashboard`,
+      callbackURL: `${window.location.origin}${postAuthContinuePath}`,
     });
   };
 

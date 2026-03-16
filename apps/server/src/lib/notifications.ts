@@ -113,7 +113,7 @@ export async function createNotification(input: {
     (rows[0]?.notificationPreferences as Partial<NotificationPreferences>) ||
       null
   );
-  if (!prefs.inApp || !isTypeEnabled(prefs, type)) {
+  if (!isTypeEnabled(prefs, type) || (!prefs.inApp && !prefs.push)) {
     return { skipped: true } as const;
   }
 

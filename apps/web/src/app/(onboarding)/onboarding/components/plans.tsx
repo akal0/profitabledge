@@ -87,22 +87,22 @@ const Plans = ({
         {plans.map((plan) => {
           const meta = CARD_META[plan.key];
           const isActive = activePlanKey === plan.key;
+          const isLockedCurrentPlan = isActive && !plan.isFree;
           const isSelected = selectedPlanKey === plan.key;
           const isPending = pendingPlanKey === plan.key;
           const buttonLabel = isPending
             ? "Redirecting..."
-            : isActive
+            : isLockedCurrentPlan
             ? "Current plan"
             : !plan.isConfigured
             ? "Unavailable"
-            : isSelected && plan.isFree
-            ? "Selected"
+            : plan.isFree
+            ? "Stick with this plan"
             : plan.ctaLabel;
           const isButtonDisabled =
             isPending ||
-            isActive ||
-            !plan.isConfigured ||
-            (isSelected && plan.isFree);
+            isLockedCurrentPlan ||
+            !plan.isConfigured;
           const isProfessional = plan.key === "professional";
           const isInstitutional = plan.key === "institutional";
           const price = splitPriceLabel(plan.priceLabel);
@@ -240,7 +240,7 @@ const Plans = ({
                       className={cn(
                         "h-max w-full cursor-pointer rounded-sm text-xs font-medium transition-all duration-250 active:scale-95 disabled:cursor-not-allowed disabled:opacity-100",
                         isButtonDisabled
-                          ? isActive
+                          ? isLockedCurrentPlan
                             ? currentPlanCn
                             : isSelected && plan.isFree
                             ? selectedFreePlanCn

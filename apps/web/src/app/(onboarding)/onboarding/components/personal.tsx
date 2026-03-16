@@ -162,7 +162,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
                           profitabledge.com/
                         </span>
                         <Input
-                          className=" bg-sidebar relative z-0 focus-visible:scale-[100%] rounded-l-none"
+                          className=" bg-sidebar relative z-0 focus-visible:scale-[100%] rounded-l-none ring"
                           placeholder="profitabletrader"
                           type="text"
                           {...field}

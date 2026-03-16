@@ -20,6 +20,10 @@ import {
   clearStoredGrowthIntent,
   getStoredGrowthIntent,
 } from "@/features/growth/lib/access-intent";
+import {
+  buildOnboardingPath,
+  resolvePostOnboardingPath,
+} from "@/lib/post-auth-paths";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -158,6 +162,14 @@ function OnboardingPageContent() {
   const bootstrappedStepState = useRef(false);
   const handledCheckoutState = useRef<string | null>(null);
   const isSessionReady = !isSessionPending && !!session;
+  const returnToAfterOnboarding = useMemo(
+    () => resolvePostOnboardingPath(searchParams?.get("returnTo")),
+    [searchParams]
+  );
+  const onboardingPathWithReturnTo = useMemo(
+    () => buildOnboardingPath(returnToAfterOnboarding),
+    [returnToAfterOnboarding]
+  );
   const billingConfigQuery = useQuery(
     trpcOptions.billing.getPublicConfig.queryOptions()
   );
@@ -404,9 +416,9 @@ function OnboardingPageContent() {
   useEffect(() => {
     if (shouldSkipOnboarding) {
       clearStoredOnboardingStep(onboardingStorageUserId);
-      router.replace("/dashboard");
+      router.replace(returnToAfterOnboarding);
     }
-  }, [onboardingStorageUserId, router, shouldSkipOnboarding]);
+  }, [onboardingStorageUserId, returnToAfterOnboarding, router, shouldSkipOnboarding]);
 
   const steps = [
     {
@@ -491,6 +503,7 @@ function OnboardingPageContent() {
     setSelectedPlanKey(planKey);
 
     if (planKey === "student") {
+      setCurrentStep(3);
       return;
     }
 
@@ -498,7 +511,7 @@ function OnboardingPageContent() {
       setPendingPlanKey(planKey);
       const result = await createCheckout.mutateAsync({
         planKey,
-        returnPath: "/onboarding",
+        returnPath: onboardingPathWithReturnTo,
       });
 
       window.location.assign(result.url);
@@ -725,6 +738,7 @@ type PendingCsvImportResolution = {
 
 function AddAccountStep() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const {
     data: session,
@@ -751,6 +765,10 @@ function AddAccountStep() {
     useState<PendingCsvImportResolution | null>(null);
   const [hasPreparedDashboardExit, setHasPreparedDashboardExit] = useState(false);
   const onboardingStorageUserId = session?.user.id ?? null;
+  const returnToAfterOnboarding = useMemo(
+    () => resolvePostOnboardingPath(searchParams?.get("returnTo")),
+    [searchParams]
+  );
   const isSessionReady = !isSessionPending && !!session;
   const { accounts } = useAccountCatalog({ enabled: isSessionReady });
   const hasAccount = accounts.length > 0;
@@ -1005,7 +1023,7 @@ function AddAccountStep() {
       setSelectedAccountId(accounts[0].id);
     }
     setIsSubmitting(false);
-    router.push("/dashboard");
+    router.push(returnToAfterOnboarding);
   };
 
   const sectionTitleClass = "text-xs font-semibold text-white/70 tracking-wide";

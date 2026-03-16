@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, Check, Dot } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -447,6 +448,27 @@ function buildNotificationUrl(item: NotificationItem) {
   }
 }
 
+function getNotificationTargetUrl(item: NotificationItem) {
+  return item.type === "news_upcoming"
+    ? buildCalendarUrl(item.metadata)
+    : buildNotificationUrl(item);
+}
+
+function showNotificationToast(item: NotificationItem) {
+  toast(item.title || "Notification", {
+    id: `notification-toast:${item.id}`,
+    description: item.body || undefined,
+    duration:
+      getNotificationPriority(item.type) === "urgent" ? 12000 : 8000,
+    classNames: {
+      toast:
+        "bg-sidebar ring-white/10 text-white !min-w-[300px] !max-w-[500px]",
+      title: "text-white font-medium",
+      description: "text-white/70",
+    },
+  });
+}
+
 function NotificationsList({
   items,
   markRead,
@@ -473,9 +495,7 @@ function NotificationsList({
           <div className="px-1.5 py-1">
             {group.items.map((item, index) => {
               const isNews = item.type === "news_upcoming";
-              const targetUrl = isNews
-                ? buildCalendarUrl(item.metadata)
-                : buildNotificationUrl(item);
+              const targetUrl = getNotificationTargetUrl(item);
               const impact =
                 isNews && item.metadata?.impact
                   ? normalizeImpact(item.metadata.impact)
@@ -637,7 +657,11 @@ export default function NotificationsHub() {
   const trpc = useTRPC();
   const [activeTab, setActiveTab] = useState<NotificationTab>("all");
   const [open, setOpen] = useState(false);
-  const { data: notifications = [], refetch } =
+  const {
+    data: notifications = [],
+    refetch,
+    isFetched: hasFetchedNotifications,
+  } =
     trpc.notifications.list.useQuery(
       { limit: 25 },
       {
@@ -653,13 +677,17 @@ export default function NotificationsHub() {
   const markRead = trpc.notifications.markRead.useMutation({
     onSuccess: () => refetch(),
   });
-  const shownRef = useRef<Set<string>>(new Set());
+  const deliveredRef = useRef<Set<string>>(new Set());
+  const initializedDeliveryRef = useRef(false);
 
   const items = notifications as NotificationItem[];
+  const canUseInAppChannel = preferences?.inApp ?? true;
+  const canUsePushChannel = preferences?.push === true;
+  const visibleItems = canUseInAppChannel ? items : [];
 
   const notificationsByTab = useMemo(() => {
     const grouped: Record<NotificationTab, NotificationItem[]> = {
-      all: items,
+      all: visibleItems,
       trades: [],
       "review-ready": [],
       goals: [],
@@ -669,16 +697,16 @@ export default function NotificationsHub() {
       system: [],
     };
 
-    for (const item of items) {
+    for (const item of visibleItems) {
       grouped[getNotificationPrimaryTab(item.type)].push(item);
     }
 
     return grouped;
-  }, [items]);
+  }, [visibleItems]);
 
   const unreadCounts = useMemo(() => {
     const counts: Record<NotificationTab, number> = {
-      all: items.filter((item) => !item.readAt).length,
+      all: visibleItems.filter((item) => !item.readAt).length,
       trades: notificationsByTab.trades.filter((item) => !item.readAt).length,
       "review-ready": notificationsByTab["review-ready"].filter(
         (item) => !item.readAt
@@ -690,9 +718,9 @@ export default function NotificationsHub() {
       system: notificationsByTab.system.filter((item) => !item.readAt).length,
     };
     return counts;
-  }, [items, notificationsByTab]);
+  }, [notificationsByTab, visibleItems]);
 
-  const unreadCount = items.filter((item) => !item.readAt).length;
+  const unreadCount = visibleItems.filter((item) => !item.readAt).length;
 
   const handleNavigate = (url: string) => {
     setOpen(false);
@@ -700,26 +728,48 @@ export default function NotificationsHub() {
   };
 
   useEffect(() => {
-    if (!preferences?.push) return;
+    if (!canUsePushChannel) return;
     if (typeof Notification === "undefined") return;
     if (Notification.permission === "default") {
       Notification.requestPermission();
     }
-  }, [preferences?.push]);
+  }, [canUsePushChannel]);
 
   useEffect(() => {
-    if (!preferences?.push) return;
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission !== "granted") return;
-    notifications.forEach((item) => {
+    if (!hasFetchedNotifications) return;
+
+    const unreadItems = items.filter((item) => !item.readAt);
+
+    if (!initializedDeliveryRef.current) {
+      unreadItems.forEach((item) => {
+        deliveredRef.current.add(item.id);
+      });
+      initializedDeliveryRef.current = true;
+      return;
+    }
+
+    const canShowDesktopNotifications =
+      canUsePushChannel &&
+      typeof Notification !== "undefined" &&
+      Notification.permission === "granted";
+
+    unreadItems.forEach((item) => {
       if (item.readAt) return;
-      if (shownRef.current.has(item.id)) return;
-      shownRef.current.add(item.id);
-      const title = item.title || "Notification";
-      const body = item.body || "";
-      new Notification(title, { body });
+      if (deliveredRef.current.has(item.id)) return;
+      deliveredRef.current.add(item.id);
+
+      if (canShowDesktopNotifications) {
+        const title = item.title || "Notification";
+        const body = item.body || "";
+        new Notification(title, { body });
+        return;
+      }
+
+      if (!canUseInAppChannel) return;
+
+      showNotificationToast(item);
     });
-  }, [notifications, preferences?.push]);
+  }, [canUseInAppChannel, canUsePushChannel, hasFetchedNotifications, items]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -760,60 +810,78 @@ export default function NotificationsHub() {
         </div>
         <Separator />
 
-        {/* Tabs */}
-        <Tabs
-          value={activeTab}
-          onValueChange={(value) => {
-            if (NOTIFICATION_TABS.includes(value as NotificationTab)) {
-              setActiveTab(value as NotificationTab);
-            }
-          }}
-          className="flex-1 flex flex-col overflow-hidden"
-        >
-          <div className="shrink-0">
-            <div className="overflow-x-auto px-4 overscroll-x-contain">
-              <TabsListUnderlined className="inline-flex h-auto min-w-max items-stretch gap-5 border-b-0 pr-4">
-                {NOTIFICATION_TABS.map((tab) => {
-                  const unread = unreadCounts[tab];
+        {!canUseInAppChannel ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <p className="text-sm font-medium text-white/80">
+              In-app notifications are off
+            </p>
+            <p className="max-w-xs text-xs leading-relaxed text-white/45">
+              Turn them back on to use the notification hub and the toast
+              fallback when desktop push is unavailable.
+            </p>
+            <Button
+              size="sm"
+              className="rounded-sm bg-sidebar-accent text-white hover:bg-sidebar-accent/80"
+              onClick={() => handleNavigate("/dashboard/settings/notifications")}
+            >
+              Open settings
+            </Button>
+          </div>
+        ) : (
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              if (NOTIFICATION_TABS.includes(value as NotificationTab)) {
+                setActiveTab(value as NotificationTab);
+              }
+            }}
+            className="flex-1 flex flex-col overflow-hidden"
+          >
+            <div className="shrink-0">
+              <div className="overflow-x-auto px-4 overscroll-x-contain">
+                <TabsListUnderlined className="inline-flex h-auto min-w-max items-stretch gap-5 border-b-0 pr-4">
+                  {NOTIFICATION_TABS.map((tab) => {
+                    const unread = unreadCounts[tab];
 
-                  return (
-                    <TabsTriggerUnderlined
-                      key={tab}
-                      value={tab}
-                      className="h-10 shrink-0 gap-2 pb-0 pt-0 text-xs font-medium text-white/50 hover:text-white/80 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
-                    >
-                      <span>{notificationTabLabels[tab]}</span>
-                      {unread > 0 ? (
-                        <span
-                          className={cn(
-                            "flex h-4 min-w-4 items-center justify-center rounded-sm px-1 text-[9px] font-semibold",
-                            notificationTabBadgeClasses[tab]
-                          )}
-                        >
-                          {unread > 9 ? "9+" : unread}
-                        </span>
-                      ) : null}
-                    </TabsTriggerUnderlined>
-                  );
-                })}
-              </TabsListUnderlined>
+                    return (
+                      <TabsTriggerUnderlined
+                        key={tab}
+                        value={tab}
+                        className="h-10 shrink-0 gap-2 pb-0 pt-0 text-xs font-medium text-white/50 hover:text-white/80 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                      >
+                        <span>{notificationTabLabels[tab]}</span>
+                        {unread > 0 ? (
+                          <span
+                            className={cn(
+                              "flex h-4 min-w-4 items-center justify-center rounded-sm px-1 text-[9px] font-semibold",
+                              notificationTabBadgeClasses[tab]
+                            )}
+                          >
+                            {unread > 9 ? "9+" : unread}
+                          </span>
+                        ) : null}
+                      </TabsTriggerUnderlined>
+                    );
+                  })}
+                </TabsListUnderlined>
+              </div>
+              <Separator />
             </div>
-            <Separator />
-          </div>
 
-          <div className="flex-1 overflow-auto min-h-[300px]">
-            {NOTIFICATION_TABS.map((tab) => (
-              <NotificationTabPanel
-                key={tab}
-                value={tab}
-                items={notificationsByTab[tab]}
-                emptyMessage={notificationTabEmptyStates[tab]}
-                markRead={markRead}
-                onNavigate={handleNavigate}
-              />
-            ))}
-          </div>
-        </Tabs>
+            <div className="flex-1 overflow-auto min-h-[300px]">
+              {NOTIFICATION_TABS.map((tab) => (
+                <NotificationTabPanel
+                  key={tab}
+                  value={tab}
+                  items={notificationsByTab[tab]}
+                  emptyMessage={notificationTabEmptyStates[tab]}
+                  markRead={markRead}
+                  onNavigate={handleNavigate}
+                />
+              ))}
+            </div>
+          </Tabs>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

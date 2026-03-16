@@ -11,5 +11,9 @@ export default function GrowthAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <Suspense>{children}</Suspense>;
+  return (
+    <Suspense fallback={<div> Loading growth admin...</div>}>
+      {children}
+    </Suspense>
+  );
 }

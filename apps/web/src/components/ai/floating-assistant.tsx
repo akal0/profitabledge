@@ -34,7 +34,8 @@ export function FloatingAssistant() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const accountId = useAccountStore((state) => state.selectedAccountId);
-  const { isOpen, close, initialQuery, setInitialQuery } = useFloatingAssistant();
+  const { isOpen, close, initialQuery, setInitialQuery } =
+    useFloatingAssistant();
   const { state, startStream, reset } = useAssistantStream();
   const pageContext = useAssistantPageContext("floating-assistant");
   const [input, setInput] = useState("");
@@ -295,7 +296,9 @@ export function FloatingAssistant() {
                           key={message.id}
                           className={cn(
                             "flex",
-                            message.role === "user" ? "justify-end" : "justify-start"
+                            message.role === "user"
+                              ? "justify-end"
+                              : "justify-start"
                           )}
                         >
                           <div
@@ -381,7 +384,8 @@ function StreamingContent({
     ? STAGE_CONFIG[stage as keyof typeof STAGE_CONFIG]
     : null;
 
-  const displayMessage = statusMessage || stageConfig?.message || "Processing...";
+  const displayMessage =
+    statusMessage || stageConfig?.message || "Processing...";
 
   return (
     <div className="space-y-2">

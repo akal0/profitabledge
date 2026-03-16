@@ -5,7 +5,11 @@ import { FloatingAssistant } from "@/components/ai/floating-assistant";
 import { AIInsightToast } from "@/components/ai-insight-toast";
 import { BacktestSidebar } from "@/components/backtest-sidebar";
 import { VerticalSeparator } from "@/components/ui/separator";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { useAlphaPageTracking } from "@/features/platform/alpha/hooks/use-alpha-page-tracking";
 
 export default function BacktestLayout({
@@ -16,16 +20,17 @@ export default function BacktestLayout({
   useAlphaPageTracking("backtest");
 
   return (
-    <SidebarProvider defaultOpen className="h-dvh min-h-dvh w-full overflow-hidden">
+    <SidebarProvider
+      defaultOpen
+      className="h-dvh min-h-dvh w-full overflow-hidden"
+    >
       <AIInsightToast />
       <BacktestSidebar />
       <VerticalSeparator />
 
       <SidebarInset className="relative h-dvh min-h-dvh overflow-hidden bg-background dark:bg-sidebar">
         <div className="absolute left-4 top-4 z-40">
-          <SidebarTrigger
-            className="size-10 border border-white/10 bg-black/35 text-white/75 backdrop-blur-sm hover:bg-black/45 hover:text-white"
-          />
+          <SidebarTrigger className="size-10 border border-white/10 bg-black/35 text-white/75 backdrop-blur-sm hover:bg-black/45 hover:text-white" />
         </div>
 
         <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
@@ -33,9 +38,9 @@ export default function BacktestLayout({
         </div>
       </SidebarInset>
 
-      <Suspense fallback={null}>
+      {/*<Suspense fallback={null}>
         <FloatingAssistant />
-      </Suspense>
+      </Suspense>*/}
     </SidebarProvider>
   );
 }

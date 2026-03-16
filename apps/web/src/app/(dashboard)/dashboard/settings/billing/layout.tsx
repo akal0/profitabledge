@@ -1,6 +1,7 @@
 "use client";
 
 import { useSelectedLayoutSegment } from "next/navigation";
+import { Suspense } from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { BillingSettingsTabs } from "@/features/settings/billing/components/billing-settings-tabs";
@@ -13,12 +14,16 @@ export default function BillingLayout({
   const segment = useSelectedLayoutSegment();
 
   return (
-    <div className="flex w-full flex-col">
-      <BillingSettingsTabs
-        activeTab={segment === "payment-methods" ? "payment-methods" : "overview"}
-      />
-      <Separator />
-      {children}
-    </div>
+    <Suspense fallback={<div> Loading billing...</div>}>
+      <div className="flex w-full flex-col">
+        <BillingSettingsTabs
+          activeTab={
+            segment === "payment-methods" ? "payment-methods" : "overview"
+          }
+        />
+        <Separator />
+        {children}
+      </div>
+    </Suspense>
   );
 }

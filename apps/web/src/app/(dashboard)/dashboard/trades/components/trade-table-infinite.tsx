@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { Suspense } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useInView } from "react-intersection-observer";
 import { toast } from "sonner";
@@ -356,19 +357,16 @@ export default function TradeTableInfinite() {
     () => Array.from(selectedTradeIds),
     [selectedTradeIds]
   );
-  const selectedTrades = React.useMemo(
-    () => {
-      if (selectedTradeIdList.length === 0) {
-        return [];
-      }
+  const selectedTrades = React.useMemo(() => {
+    if (selectedTradeIdList.length === 0) {
+      return [];
+    }
 
-      const tradeById = new Map(displayRows.map((trade) => [trade.id, trade]));
-      return selectedTradeIdList
-        .map((tradeId) => tradeById.get(tradeId))
-        .filter((trade): trade is TradeRow => Boolean(trade));
-    },
-    [displayRows, selectedTradeIdList]
-  );
+    const tradeById = new Map(displayRows.map((trade) => [trade.id, trade]));
+    return selectedTradeIdList
+      .map((tradeId) => tradeById.get(tradeId))
+      .filter((trade): trade is TradeRow => Boolean(trade));
+  }, [displayRows, selectedTradeIdList]);
   const singleSelectedTrade =
     selectedTradeIdList.length === 1 && selectedTrades.length === 1
       ? selectedTrades[0]
@@ -565,149 +563,151 @@ export default function TradeTableInfinite() {
 
   return (
     <div className="w-full overflow-hidden">
-      <TradesToolbar
-        q={q}
-        table={table}
-        tableId="trades"
-        accountId={accountId || null}
-        onQChange={(val) => setQParam(val || null)}
-        tradeDirection={tradeDirection}
-        onDirectionChange={(d) => setDirParam(d)}
-        symbols={symbols}
-        onSymbolsChange={(arr) =>
-          setSymbolsParam(arr.length ? arr.join(",") : null)
-        }
-        symbolCounts={symbolCounts}
-        symbolTotal={symbolTotal}
-        killzones={killzones}
-        onKillzonesChange={(arr) =>
-          setKillzonesParam(arr.length ? arr.join(",") : null)
-        }
-        allKillzones={allKillzones}
-        sessionTags={sessionTags}
-        onSessionTagsChange={(arr) =>
-          setSessionTagsParam(arr.length ? arr.join(",") : null)
-        }
-        allSessionTags={allSessionTags}
-        modelTags={modelTags}
-        onModelTagsChange={(arr) =>
-          setModelTagsParam(arr.length ? arr.join(",") : null)
-        }
-        allModelTags={allModelTags}
-        protocolAlignments={protocolAlignments}
-        onProtocolAlignmentsChange={(arr) =>
-          setProtocolParam(arr.length ? arr.join(",") : null)
-        }
-        outcomes={outcomes}
-        onOutcomesChange={(arr) =>
-          setOutcomeParam(arr.length ? arr.join(",") : null)
-        }
-        sortValue={sortParam || ""}
-        onSortChange={(value) => {
-          const [id, dir] = value.split(":");
-          if (!id) return;
-          setSorting([{ id, desc: dir === "desc" }] as any);
-          setSortParam(value || null);
-        }}
-        onClearSort={() => {
-          setSorting([{ id: "open", desc: true }] as any);
-          setSortParam("open:desc");
-        }}
-        start={start}
-        end={end}
-        minBound={minBound}
-        maxBound={maxBound}
-        allSymbols={allSymbols}
-        holdMin={holdRange?.[0]}
-        holdMax={holdRange?.[1]}
-        holdHistogram={holdHistogram}
-        onHoldCommit={(lo, hi) => setHoldParam(serializeIntegerRange(lo, hi))}
-        onHoldClear={() => setHoldParam(null)}
-        volumeMin={volRange?.[0]}
-        volumeMax={volRange?.[1]}
-        volumeHistogram={volumeHistogram}
-        onVolumeCommit={(lo, hi) =>
-          setVolParam(serializeDecimalRange(lo, hi, 4))
-        }
-        onVolumeClear={() => setVolParam(null)}
-        profitMin={rawPlRange?.[0]}
-        profitMax={rawPlRange?.[1]}
-        profitHistogram={profitHistogram}
-        onProfitCommit={(lo, hi) =>
-          setPlParam(serializeDecimalRange(lo, hi, 2))
-        }
-        onProfitClear={() => setPlParam(null)}
-        commissionsMin={rawComRange?.[0]}
-        commissionsMax={rawComRange?.[1]}
-        commissionsHistogram={commissionsHistogram}
-        onCommissionsCommit={(lo, hi) =>
-          setComParam(serializeDecimalRange(lo, hi, 2))
-        }
-        onCommissionsClear={() => setComParam(null)}
-        swapMin={rawSwapRange?.[0]}
-        swapMax={rawSwapRange?.[1]}
-        swapHistogram={swapHistogram}
-        onSwapCommit={(lo, hi) =>
-          setSwapParam(serializeDecimalRange(lo, hi, 2))
-        }
-        onSwapClear={() => setSwapParam(null)}
-        rrHistogram={rrHistogram}
-        mfeHistogram={mfeHistogram}
-        maeHistogram={maeHistogram}
-        efficiencyHistogram={efficiencyHistogram}
-        statFilters={statFilters}
-        onStatFiltersChange={setStatFilters}
-        onStatFiltersApply={(filters) => {
-          const nextFilters = filters || statFilters;
-          setRrParam(
-            nextFilters.rrMin != null || nextFilters.rrMax != null
-              ? `${nextFilters.rrMin ?? ""}:${nextFilters.rrMax ?? ""}`
-              : null
-          );
-          setMfeParam(
-            nextFilters.mfeMin != null || nextFilters.mfeMax != null
-              ? `${nextFilters.mfeMin ?? ""}:${nextFilters.mfeMax ?? ""}`
-              : null
-          );
-          setMaeParam(
-            nextFilters.maeMin != null || nextFilters.maeMax != null
-              ? `${nextFilters.maeMin ?? ""}:${nextFilters.maeMax ?? ""}`
-              : null
-          );
-          setEffParam(
-            nextFilters.efficiencyMin != null ||
-              nextFilters.efficiencyMax != null
-              ? `${nextFilters.efficiencyMin ?? ""}:${
-                  nextFilters.efficiencyMax ?? ""
-                }`
-              : null
-          );
-        }}
-        pnlMode={tradePnlMode}
-        onPnlModeChange={(mode) => setPnlMode(mode)}
-        baselineInitialBalance={baselineInitialBalance}
-        ddMode={tradeDdMode}
-        onDdModeChange={(m) => setDdMode(m)}
-        selectedViewId={viewParam || null}
-        onViewChange={(viewId) => setViewParam(viewId || null)}
-        onManageViews={() => setManageViewsOpen(true)}
-        groupBy={groupBy}
-        onGroupByChange={setGroupBy}
-        onRangeChange={(s, e) => {
-          if (!s || !e) {
-            setRangeParams({ oStart: null, oEnd: null });
-          } else {
-            const toYMD = (d: Date) => d.toISOString().slice(0, 10);
-            const ns = toYMD(s);
-            const ne = toYMD(e);
-            const updates: { oStart?: string | null; oEnd?: string | null } =
-              {};
-            if (ns !== (oStart || "")) updates.oStart = ns;
-            if (ne !== (oEnd || "")) updates.oEnd = ne;
-            if (Object.keys(updates).length) setRangeParams(updates);
+      <Suspense fallback={<div> Loading toolbar... </div>}>
+        <TradesToolbar
+          q={q}
+          table={table}
+          tableId="trades"
+          accountId={accountId || null}
+          onQChange={(val) => setQParam(val || null)}
+          tradeDirection={tradeDirection}
+          onDirectionChange={(d) => setDirParam(d)}
+          symbols={symbols}
+          onSymbolsChange={(arr) =>
+            setSymbolsParam(arr.length ? arr.join(",") : null)
           }
-        }}
-      />
+          symbolCounts={symbolCounts}
+          symbolTotal={symbolTotal}
+          killzones={killzones}
+          onKillzonesChange={(arr) =>
+            setKillzonesParam(arr.length ? arr.join(",") : null)
+          }
+          allKillzones={allKillzones}
+          sessionTags={sessionTags}
+          onSessionTagsChange={(arr) =>
+            setSessionTagsParam(arr.length ? arr.join(",") : null)
+          }
+          allSessionTags={allSessionTags}
+          modelTags={modelTags}
+          onModelTagsChange={(arr) =>
+            setModelTagsParam(arr.length ? arr.join(",") : null)
+          }
+          allModelTags={allModelTags}
+          protocolAlignments={protocolAlignments}
+          onProtocolAlignmentsChange={(arr) =>
+            setProtocolParam(arr.length ? arr.join(",") : null)
+          }
+          outcomes={outcomes}
+          onOutcomesChange={(arr) =>
+            setOutcomeParam(arr.length ? arr.join(",") : null)
+          }
+          sortValue={sortParam || ""}
+          onSortChange={(value) => {
+            const [id, dir] = value.split(":");
+            if (!id) return;
+            setSorting([{ id, desc: dir === "desc" }] as any);
+            setSortParam(value || null);
+          }}
+          onClearSort={() => {
+            setSorting([{ id: "open", desc: true }] as any);
+            setSortParam("open:desc");
+          }}
+          start={start}
+          end={end}
+          minBound={minBound}
+          maxBound={maxBound}
+          allSymbols={allSymbols}
+          holdMin={holdRange?.[0]}
+          holdMax={holdRange?.[1]}
+          holdHistogram={holdHistogram}
+          onHoldCommit={(lo, hi) => setHoldParam(serializeIntegerRange(lo, hi))}
+          onHoldClear={() => setHoldParam(null)}
+          volumeMin={volRange?.[0]}
+          volumeMax={volRange?.[1]}
+          volumeHistogram={volumeHistogram}
+          onVolumeCommit={(lo, hi) =>
+            setVolParam(serializeDecimalRange(lo, hi, 4))
+          }
+          onVolumeClear={() => setVolParam(null)}
+          profitMin={rawPlRange?.[0]}
+          profitMax={rawPlRange?.[1]}
+          profitHistogram={profitHistogram}
+          onProfitCommit={(lo, hi) =>
+            setPlParam(serializeDecimalRange(lo, hi, 2))
+          }
+          onProfitClear={() => setPlParam(null)}
+          commissionsMin={rawComRange?.[0]}
+          commissionsMax={rawComRange?.[1]}
+          commissionsHistogram={commissionsHistogram}
+          onCommissionsCommit={(lo, hi) =>
+            setComParam(serializeDecimalRange(lo, hi, 2))
+          }
+          onCommissionsClear={() => setComParam(null)}
+          swapMin={rawSwapRange?.[0]}
+          swapMax={rawSwapRange?.[1]}
+          swapHistogram={swapHistogram}
+          onSwapCommit={(lo, hi) =>
+            setSwapParam(serializeDecimalRange(lo, hi, 2))
+          }
+          onSwapClear={() => setSwapParam(null)}
+          rrHistogram={rrHistogram}
+          mfeHistogram={mfeHistogram}
+          maeHistogram={maeHistogram}
+          efficiencyHistogram={efficiencyHistogram}
+          statFilters={statFilters}
+          onStatFiltersChange={setStatFilters}
+          onStatFiltersApply={(filters) => {
+            const nextFilters = filters || statFilters;
+            setRrParam(
+              nextFilters.rrMin != null || nextFilters.rrMax != null
+                ? `${nextFilters.rrMin ?? ""}:${nextFilters.rrMax ?? ""}`
+                : null
+            );
+            setMfeParam(
+              nextFilters.mfeMin != null || nextFilters.mfeMax != null
+                ? `${nextFilters.mfeMin ?? ""}:${nextFilters.mfeMax ?? ""}`
+                : null
+            );
+            setMaeParam(
+              nextFilters.maeMin != null || nextFilters.maeMax != null
+                ? `${nextFilters.maeMin ?? ""}:${nextFilters.maeMax ?? ""}`
+                : null
+            );
+            setEffParam(
+              nextFilters.efficiencyMin != null ||
+                nextFilters.efficiencyMax != null
+                ? `${nextFilters.efficiencyMin ?? ""}:${
+                    nextFilters.efficiencyMax ?? ""
+                  }`
+                : null
+            );
+          }}
+          pnlMode={tradePnlMode}
+          onPnlModeChange={(mode) => setPnlMode(mode)}
+          baselineInitialBalance={baselineInitialBalance}
+          ddMode={tradeDdMode}
+          onDdModeChange={(m) => setDdMode(m)}
+          selectedViewId={viewParam || null}
+          onViewChange={(viewId) => setViewParam(viewId || null)}
+          onManageViews={() => setManageViewsOpen(true)}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
+          onRangeChange={(s, e) => {
+            if (!s || !e) {
+              setRangeParams({ oStart: null, oEnd: null });
+            } else {
+              const toYMD = (d: Date) => d.toISOString().slice(0, 10);
+              const ns = toYMD(s);
+              const ne = toYMD(e);
+              const updates: { oStart?: string | null; oEnd?: string | null } =
+                {};
+              if (ns !== (oStart || "")) updates.oStart = ns;
+              if (ne !== (oEnd || "")) updates.oEnd = ne;
+              if (Object.keys(updates).length) setRangeParams(updates);
+            }
+          }}
+        />
+      </Suspense>
 
       {sampleGateStatus?.length ? (
         <SampleGateBanner status={sampleGateStatus} />

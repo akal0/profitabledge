@@ -2,28 +2,21 @@
 
 import { PremiumAssistant } from "@/components/ai/premium-assistant";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
-import { trpcClient } from "@/utils/trpc";
+import { Suspense } from "react";
+import { trpcOptions } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
-import type { Me } from "@/types/user";
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
+import { useQuery } from "@tanstack/react-query";
 
 function AssistantPageContent() {
   const searchParams = useSearchParams();
   const accountId = searchParams?.get("accountId") || undefined;
   const sourcePath = searchParams?.get("sourcePath") || undefined;
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
-  const [me, setMe] = useState<Me | null>(null);
+  const { data: me } = useQuery(trpcOptions.users.me.queryOptions());
 
   const activeAccountId = accountId || selectedAccountId;
-
-  useEffect(() => {
-    (async () => {
-      const data = await trpcClient.users.me.query();
-      setMe(data);
-    })();
-  }, []);
 
   return (
     <PremiumAssistant

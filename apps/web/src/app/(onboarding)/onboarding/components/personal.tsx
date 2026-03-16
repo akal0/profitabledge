@@ -25,12 +25,13 @@ import { Separator } from "@/components/ui/separator";
 import { useEffect, useState, useRef } from "react";
 import { authClient } from "@/lib/auth-client";
 import Image from "next/image";
-import { trpcClient } from "@/utils/trpc";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 // import AvatarUploader from "./avatar-uploader";
 import AvatarUploader from "./avatar-uploader";
 import { uploadFiles } from "@/utils/uploadthing";
 import { ArrowRightIcon } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 type Me = Awaited<ReturnType<typeof trpcClient.users.me.query>>;
 
@@ -87,28 +88,23 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
     onNext();
   }
 
-  const getInfo = async () => {
-    const me = await trpcClient.users.me.query();
-
-    return me;
-  };
-
-  const [me, setMe] = useState<Me | null>(null);
+  const { data: me } = useQuery({
+    ...trpcOptions.users.me.queryOptions(),
+    staleTime: 5 * 60_000,
+  });
 
   useEffect(() => {
-    (async () => {
-      const data = await getInfo();
-      setMe(data);
-      form.reset({
-        fullName: data?.name ?? "",
-        username: data?.username ?? "",
-        email: data?.email ?? "",
-        avatar: null,
-        twitter: data?.twitter ?? "",
-        discord: data?.discord ?? "",
-      });
-    })();
-  }, [form]);
+    if (!me) return;
+
+    form.reset({
+      fullName: me.name ?? "",
+      username: me.username ?? "",
+      email: me.email ?? "",
+      avatar: null,
+      twitter: me.twitter ?? "",
+      discord: me.discord ?? "",
+    });
+  }, [form, me]);
 
   return (
     <div className="w-full max-w-lg bg-sidebar rounded-xl shadow-sidebar-button">

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { StateCreator } from "zustand";
-import { trpcClient } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 
 export type AccountStats = {
   totalProfit: number;
@@ -50,7 +50,10 @@ const createStatsSlice: StateCreator<StatsState, [], [], StatsState> = (
       loadingByAccount: { ...s.loadingByAccount, [accountId]: true },
     }));
     try {
-      const data = await trpcClient.accounts.stats.query({ accountId });
+      const data = await queryClient.fetchQuery({
+        ...trpcOptions.accounts.stats.queryOptions({ accountId }),
+        staleTime: 30_000,
+      });
       set((s) => ({
         statsByAccount: { ...s.statsByAccount, [accountId]: data },
         lastFetchedAt: { ...s.lastFetchedAt, [accountId]: Date.now() },

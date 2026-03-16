@@ -30,7 +30,18 @@ function getCandidateBases(): string[] {
   return candidates;
 }
 
+const DEFAULT_QUERY_STALE_TIME = 10_000;
+const DEFAULT_QUERY_GC_TIME = 30 * 60_000;
+
 export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: DEFAULT_QUERY_STALE_TIME,
+      gcTime: DEFAULT_QUERY_GC_TIME,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
   queryCache: new QueryCache({
     onError: (error) => {
       if (showAIErrorToast(error)) {
@@ -108,6 +119,76 @@ export const trpcOptions = createTRPCOptionsProxy<AppRouter>({
   client: trpcClient,
   queryClient,
 });
+
+// Stable identity/config queries should stay hot across route transitions.
+queryClient.setQueryDefaults(trpcOptions.users.me.queryOptions().queryKey, {
+  staleTime: 5 * 60_000,
+  gcTime: 60 * 60_000,
+});
+queryClient.setQueryDefaults(
+  trpcOptions.billing.getState.queryOptions().queryKey,
+  {
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.billing.getPublicConfig.queryOptions().queryKey,
+  {
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.accounts.list.queryOptions().queryKey,
+  {
+    staleTime: 30_000,
+    gcTime: 15 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.connections.list.queryOptions().queryKey,
+  {
+    staleTime: 15_000,
+    gcTime: 10 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.notifications.getPreferences.queryOptions().queryKey,
+  {
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(trpcOptions.views.list.queryOptions().queryKey, {
+  staleTime: 60_000,
+  gcTime: 15 * 60_000,
+});
+queryClient.setQueryDefaults(
+  trpcOptions.views.getDefault.queryOptions().queryKey,
+  {
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.operations.getSupportSnapshot.queryOptions().queryKey,
+  {
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(trpcOptions.aiKeys.list.queryOptions().queryKey, {
+  staleTime: 60_000,
+  gcTime: 15 * 60_000,
+});
+queryClient.setQueryDefaults(
+  trpcOptions.aiKeys.usage.queryOptions({ days: 30 }).queryKey,
+  {
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+  }
+);
 
 // Export for React components - use trpc.useQuery(), trpc.useMutation(), etc.
 export const useTRPC = () => trpc;

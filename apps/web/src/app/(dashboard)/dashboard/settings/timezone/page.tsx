@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { trpcClient } from "@/utils/trpc";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { toast } from "sonner";
 
 const TIMEZONES = [
@@ -59,18 +60,17 @@ export default function TimezonePage() {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [currentTime, setCurrentTime] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  const { data: user, isLoading } = useQuery({
+    ...trpcOptions.users.me.queryOptions(),
+    staleTime: 5 * 60_000,
+  });
 
   useEffect(() => {
-    (async () => {
-      try {
-        const user = await trpcClient.users.me.query();
-        const prefs = (user as any)?.widgetPreferences || {};
-        if (prefs.timezone) setSelectedTz(prefs.timezone);
-      } catch {}
-      setLoaded(true);
-    })();
-  }, []);
+    const prefs = (user as any)?.widgetPreferences || {};
+    if (prefs.timezone) {
+      setSelectedTz(prefs.timezone);
+    }
+  }, [user]);
 
   useEffect(() => {
     setCurrentTime(getCurrentTimeInTimezone(selectedTz));
@@ -102,7 +102,7 @@ export default function TimezonePage() {
     setSaving(false);
   };
 
-  if (!loaded) {
+  if (isLoading) {
     return (
       <div className="flex flex-col w-full">
         <div className="px-6 sm:px-8 py-5 space-y-4">

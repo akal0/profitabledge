@@ -60,9 +60,9 @@ export function Hero({ heroOpacity }: HeroProps) {
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{
-          duration: 0.6,
+          duration: 5,
           ease: [0.16, 1, 0.3, 1],
-          delay: 0,
+          delay: 1.5,
         }}
       >
         <Link
@@ -107,9 +107,9 @@ export function Hero({ heroOpacity }: HeroProps) {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            duration: 0.7,
+            duration: 5,
             ease: [0.16, 1, 0.3, 1],
-            delay: 0.15,
+            delay: 0.25,
           }}
         >
           <h1
@@ -131,9 +131,9 @@ export function Hero({ heroOpacity }: HeroProps) {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{
-            duration: 0.6,
+            duration: 5,
             ease: [0.16, 1, 0.3, 1],
-            delay: 0.3,
+            delay: 0.25,
           }}
         >
           <Link
@@ -160,9 +160,9 @@ export function Hero({ heroOpacity }: HeroProps) {
           initial={{ y: "100%" }}
           animate={{ y: "0%" }}
           transition={{
-            duration: 2.2,
-            ease: [0.12, 0.8, 0.2, 1],
-            delay: 0.4,
+            duration: 4,
+            ease: [0.4, 0.8, 0.2, 1],
+            delay: 1.5,
           }}
         >
           <div className="w-full">

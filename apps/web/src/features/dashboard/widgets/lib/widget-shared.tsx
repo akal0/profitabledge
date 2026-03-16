@@ -1,13 +1,15 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { ChartConfig } from "@/components/ui/chart";
 import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
 import { useStatsStore, type AccountStats } from "@/stores/stats";
 import { cn } from "@/lib/utils";
 import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import { isAllAccountsScope } from "@/stores/account";
 
 export const chartConfig = {
   wins: {
@@ -277,16 +279,22 @@ export function DashboardWidgetFrame({
 export function useAccountStats(accountId?: string) {
   const fetchStats = useStatsStore((state) => state.fetchStats);
   const getStats = useStatsStore((state) => state.getStats);
+  const { accounts } = useAccountCatalog();
+  const hasValidAccountScope = useMemo(() => {
+    if (!accountId) return false;
+    if (isAllAccountsScope(accountId)) return true;
+    return accounts.some((account) => account.id === accountId);
+  }, [accountId, accounts]);
   const isLoading = useStatsStore((state) => state.isLoading(accountId));
 
   useEffect(() => {
-    if (accountId) {
+    if (accountId && hasValidAccountScope) {
       fetchStats(accountId);
     }
-  }, [accountId, fetchStats]);
+  }, [accountId, fetchStats, hasValidAccountScope]);
 
   return {
-    data: getStats(accountId) ?? null,
-    loading: isLoading,
+    data: hasValidAccountScope ? getStats(accountId) ?? null : null,
+    loading: hasValidAccountScope ? isLoading : false,
   };
 }

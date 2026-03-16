@@ -115,21 +115,21 @@ export function TotalLossesCard({
       contentClassName="flex h-full w-full flex-col"
       headerRight={
         !isEditing && rows.length > pageSize ? (
-          <div className="flex items-center gap-2 border border-white/5">
+          <div className="flex h-7 items-center overflow-hidden rounded-sm ring ring-white/5 bg-sidebar">
             <Button
-              className="rounded-sm border-r border-white/5 bg-transparent px-2 py-1 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
+              className="size-7 rounded-none ring-0 bg-transparent p-0 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
               disabled={page === 0}
               onClick={() => setPage((value) => Math.max(0, value - 1))}
             >
               <ChevronLeft className="size-3.5" />
             </Button>
 
-            <span className="px-1 text-[10px] text-white/40">
+            <span className="px-2 text-[10px] text-white/40">
               {page + 1}/{pageCount}
             </span>
 
             <Button
-              className="rounded-sm border-l border-white/5 bg-transparent py-1 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
+              className="size-7 rounded-none ring-0 bg-transparent p-0 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
               disabled={page >= pageCount - 1}
               onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}
             >
@@ -462,30 +462,30 @@ export function AssetProfitabilityCard({
       contentClassName="flex h-full w-full flex-col"
       headerRight={
         !isEditing ? (
-          <div className="flex items-center gap-8">
-            <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center justify-end gap-1.5">
               <Switch checked={showWorst} onCheckedChange={setShowWorst} />
-              <span className="text-xs text-white/50">
-                {showWorst ? "Worst performing" : "Best performing"}
+              <span className="text-[11px] text-white/50">
+                {showWorst ? "Worst" : "Best"}
               </span>
             </div>
 
             {rows.length > pageSize ? (
-              <div className="flex items-center gap-2 border border-white/5">
+              <div className="flex h-7 items-center overflow-hidden rounded-sm ring ring-white/5 bg-sidebar">
                 <Button
-                  className="rounded-sm border-r border-white/5 bg-transparent px-2 py-1 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
+                  className="size-7 rounded-none ring-0 bg-transparent p-0 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
                   disabled={page === 0}
                   onClick={() => setPage((value) => Math.max(0, value - 1))}
                 >
                   <ChevronLeft className="size-3.5" />
                 </Button>
 
-                <span className="px-1 text-[10px] text-white/40">
+                <span className="px-2 text-[10px] text-white/40">
                   {page + 1}/{pageCount}
                 </span>
 
                 <Button
-                  className="rounded-sm border-l border-white/5 bg-transparent py-1 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
+                  className="size-7 rounded-none ring-0 bg-transparent p-0 text-xs text-white/50 hover:bg-sidebar-accent hover:brightness-120 hover:text-white disabled:opacity-40"
                   disabled={page >= pageCount - 1}
                   onClick={() => setPage((value) => Math.min(pageCount - 1, value + 1))}
                 >

@@ -45,6 +45,7 @@ import {
 } from "@/features/accounts/lib/account-metadata";
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import { useAccountStore } from "@/stores/account";
 
 type OnboardingStep = 1 | 2 | 3;
 type BillingPlanKey = "student" | "professional" | "institutional";
@@ -704,6 +705,9 @@ function AddAccountStep() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { data: session } = authClient.useSession();
+  const setSelectedAccountId = useAccountStore(
+    (state) => state.setSelectedAccountId
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [accountStep, setAccountStep] = useState<1 | 2>(1);
   const [form, setForm] = useState<AddAccountForm>({
@@ -905,6 +909,9 @@ function AddAccountStep() {
     }
 
     clearStoredOnboardingStep(onboardingStorageUserId);
+    if (accounts[0]?.id) {
+      setSelectedAccountId(accounts[0].id);
+    }
     setIsSubmitting(false);
     router.push("/dashboard");
   };

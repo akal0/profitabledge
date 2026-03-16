@@ -64,9 +64,31 @@ export default function DashboardLayout({
   const isTradesRoute = pathname?.startsWith("/dashboard/trades");
   const { setOpen: setGoalDialogOpen } = useGoalDialog();
 
-  // Get current account to check if it's a prop account
   const { accounts } = useAccountCatalog();
-  const currentAccount = accounts?.find((acc) => acc.id === accountId);
+  const hasAccounts = accounts.length > 0;
+  const isSelectedAccountValid =
+    accountId === ALL_ACCOUNTS_ID ||
+    (Boolean(accountId) && accounts.some((account) => account.id === accountId));
+  const resolvedAccountId = isSelectedAccountValid ? accountId : undefined;
+  const currentAccount = accounts.find((account) => account.id === resolvedAccountId);
+
+  useEffect(() => {
+    if (!hasAccounts) return;
+
+    if (!accountId) {
+      setSelectedAccountId(accounts[0].id);
+      return;
+    }
+
+    if (accountId === ALL_ACCOUNTS_ID) {
+      return;
+    }
+
+    if (!accounts.some((account) => account.id === accountId)) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  }, [accountId, accounts, hasAccounts, setSelectedAccountId]);
+
   const { data: rawConnections } = useQuery(
     trpcOptions.connections.list.queryOptions()
   );
@@ -75,8 +97,8 @@ export default function DashboardLayout({
   );
   const connections = (rawConnections as ConnectionRow[] | undefined) ?? [];
   const currentAccountConnection =
-    accountId && accountId !== ALL_ACCOUNTS_ID
-      ? pickPreferredAccountConnection(connections, accountId)
+    resolvedAccountId && resolvedAccountId !== ALL_ACCOUNTS_ID
+      ? pickPreferredAccountConnection(connections, resolvedAccountId)
       : null;
 
   const connectionBadge = getConnectionBadge(currentAccountConnection);
@@ -107,7 +129,7 @@ export default function DashboardLayout({
   useAlphaPageTracking("dashboard");
   useSettingsAccountScopeGuard({
     pathname: safePathname,
-    accountId,
+    accountId: resolvedAccountId,
     firstAccountId: accounts[0]?.id,
     setSelectedAccountId,
   });
@@ -132,6 +154,8 @@ export default function DashboardLayout({
     return null;
   }
 
+  const shouldHoldAccountScopedContent = hasAccounts && !isSelectedAccountValid;
+
   return (
     <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
       <DashboardShellBootstrap />
@@ -142,7 +166,7 @@ export default function DashboardLayout({
       <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden">
         <DashboardShellHeader
           breadcrumbs={breadcrumbs}
-          accountId={accountId}
+          accountId={resolvedAccountId}
           currentAccountName={currentAccount?.name}
           currentAccountBroker={currentAccount?.broker}
           currentAccountIsProp={currentAccount?.isPropAccount}
@@ -166,7 +190,7 @@ export default function DashboardLayout({
             isJournalRoute ? "overflow-hidden" : "overflow-y-auto gap-4 pb-12"
           )}
         >
-          {children}
+          {shouldHoldAccountScopedContent ? null : children}
         </div>
       </SidebarInset>
 

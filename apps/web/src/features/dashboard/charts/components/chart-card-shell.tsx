@@ -67,6 +67,7 @@ export function ChartWidgetFrame({
           {headerRight || !isEditing ? (
             <div
               className="ml-auto shrink-0 pl-2"
+              data-widget-share-ignore="true"
               onPointerDown={stopHeaderInteraction}
               onClick={stopHeaderInteraction}
             >

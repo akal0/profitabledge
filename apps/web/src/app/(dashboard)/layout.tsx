@@ -91,16 +91,16 @@ export default function DashboardLayout({
   const canLoadDashboardShellData =
     isSessionReady && hasFetchedBillingState && !hasIncompleteOnboarding;
 
-  const {
-    accounts,
-    isFetched: hasFetchedAccounts,
-  } = useAccountCatalog({ enabled: canLoadDashboardShellData });
+  const { accounts, isFetched: hasFetchedAccounts } = useAccountCatalog({
+    enabled: canLoadDashboardShellData,
+  });
   const hasAccounts = accounts.length > 0;
   const hasScopedAccountSelection =
     Boolean(accountId) && accountId !== ALL_ACCOUNTS_ID;
   const isSelectedAccountValid =
     accountId === ALL_ACCOUNTS_ID ||
-    (Boolean(accountId) && accounts.some((account) => account.id === accountId));
+    (Boolean(accountId) &&
+      accounts.some((account) => account.id === accountId));
   const shouldWaitForAccountValidation =
     hasScopedAccountSelection && !hasFetchedAccounts;
   const shouldHoldAccountScopedContent =
@@ -112,7 +112,9 @@ export default function DashboardLayout({
     !shouldHoldAccountScopedContent && isSelectedAccountValid
       ? accountId
       : undefined;
-  const currentAccount = accounts.find((account) => account.id === resolvedAccountId);
+  const currentAccount = accounts.find(
+    (account) => account.id === resolvedAccountId
+  );
 
   useEffect(() => {
     if (!hasFetchedAccounts) {
@@ -172,7 +174,8 @@ export default function DashboardLayout({
       !hasAdminAccess
   );
 
-  const activePlanKey = (billingState?.billing?.activePlanKey ?? null) as PlanKey | null;
+  const activePlanKey = (billingState?.billing?.activePlanKey ??
+    null) as PlanKey | null;
   const hasBlockedPlanAccess = Boolean(
     activePlanKey &&
       safePathname &&
@@ -225,46 +228,50 @@ export default function DashboardLayout({
   }
 
   return (
-    <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
-      <DashboardShellBootstrap />
-      <AIInsightToast />
-      <DashboardShellSidebar pathname={safePathname} />
-      <VerticalSeparator />
+    <Suspense>
+      <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
+        <DashboardShellBootstrap />
+        <AIInsightToast />
+        <DashboardShellSidebar pathname={safePathname} />
+        <VerticalSeparator />
 
-      <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden">
-        <DashboardShellHeader
-          breadcrumbs={breadcrumbs}
-          accountId={resolvedAccountId}
-          currentAccountName={currentAccount?.name}
-          currentAccountBroker={currentAccount?.broker}
-          currentAccountIsProp={currentAccount?.isPropAccount}
-          currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
-          currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
-          currentAccountSupportsLiveSync={accountSupportsLiveSync(currentAccount)}
-          currentAccountLastImportedAt={currentAccount?.lastImportedAt}
-          connectionBadge={connectionBadge}
-          isAccountsRoute={Boolean(isAccountsRoute)}
-          isGoalsRoute={Boolean(isGoalsRoute)}
-          isPropTrackerRoute={Boolean(isPropTrackerRoute)}
-          isTradesRoute={Boolean(isTradesRoute)}
-          onOpenCommandPalette={openCommandPalette}
-          onOpenGoalDialog={() => setGoalDialogOpen(true)}
-        />
+        <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden">
+          <DashboardShellHeader
+            breadcrumbs={breadcrumbs}
+            accountId={resolvedAccountId}
+            currentAccountName={currentAccount?.name}
+            currentAccountBroker={currentAccount?.broker}
+            currentAccountIsProp={currentAccount?.isPropAccount}
+            currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
+            currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
+            currentAccountSupportsLiveSync={accountSupportsLiveSync(
+              currentAccount
+            )}
+            currentAccountLastImportedAt={currentAccount?.lastImportedAt}
+            connectionBadge={connectionBadge}
+            isAccountsRoute={Boolean(isAccountsRoute)}
+            isGoalsRoute={Boolean(isGoalsRoute)}
+            isPropTrackerRoute={Boolean(isPropTrackerRoute)}
+            isTradesRoute={Boolean(isTradesRoute)}
+            onOpenCommandPalette={openCommandPalette}
+            onOpenGoalDialog={() => setGoalDialogOpen(true)}
+          />
 
-        {/* Main content */}
-        <div
-          className={cn(
-            "flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
-            isJournalRoute ? "overflow-hidden" : "overflow-y-auto gap-4 pb-12"
-          )}
-        >
-          {shouldHoldAccountScopedContent ? null : children}
-        </div>
-      </SidebarInset>
+          {/* Main content */}
+          <div
+            className={cn(
+              "flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
+              isJournalRoute ? "overflow-hidden" : "overflow-y-auto gap-4 pb-12"
+            )}
+          >
+            {shouldHoldAccountScopedContent ? null : children}
+          </div>
+        </SidebarInset>
 
-      <Suspense fallback={null}>
-        <FloatingAssistant />
-      </Suspense>
-    </SidebarProvider>
+        <Suspense fallback={null}>
+          <FloatingAssistant />
+        </Suspense>
+      </SidebarProvider>
+    </Suspense>
   );
 }

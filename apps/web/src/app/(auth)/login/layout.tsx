@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 export const metadata: Metadata = {
   title: { absolute: "profitabledge - Log in" },
@@ -11,5 +12,7 @@ export default function LoginLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return (
+    <Suspense fallback={<div> Loading login...</div>}>{children}</Suspense>
+  );
 }

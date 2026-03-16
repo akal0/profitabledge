@@ -48,7 +48,12 @@ export const queryClient = new QueryClient({
         return;
       }
 
+      const isAuthError =
+        error.message === "Authentication required" ||
+        error.message === "UNAUTHORIZED";
+
       toast.error(error.message, {
+        ...(isAuthError ? { id: "auth-required" } : {}),
         action: {
           label: "retry",
           onClick: () => {

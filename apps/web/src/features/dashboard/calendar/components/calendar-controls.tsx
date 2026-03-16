@@ -16,20 +16,20 @@ const SEGMENTED_CONTROL_CLASS =
   "flex h-max w-max items-center gap-1 rounded-lg bg-white p-[3px] dark:bg-muted/25 ring ring-white/5";
 
 const ACTION_BUTTON_CLASS =
-  "flex h-[38px] w-max items-center justify-center gap-1.5 rounded-md border border-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
+  "flex h-[38px] w-max items-center justify-center gap-1.5 rounded-md ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
 
 const ACTION_GROUP_CLASS =
-  "flex items-center overflow-hidden rounded-md border border-white/5 bg-sidebar";
+  "flex items-center overflow-hidden rounded-md ring ring-white/5 bg-sidebar";
 
 const ACTION_GROUP_BUTTON_CLASS =
-  "h-[38px] rounded-none border-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
+  "h-[38px] rounded-none ring-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
 
 function getSegmentedButtonClass(active: boolean) {
   return cn(
     "flex h-8 w-max items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-all duration-250 active:scale-95",
     active
       ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-      : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+      : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
   );
 }
 
@@ -125,7 +125,7 @@ export function CalendarControls({
             <ChevronLeft className="size-3.5" />
           </Button>
           <Button
-            className="h-[38px] cursor-default rounded-none border-x border-white/5 bg-sidebar px-3 py-2 text-xs text-white/70 hover:bg-sidebar"
+            className="h-[38px] cursor-default rounded-none ring-x ring-white/5 bg-sidebar px-3 py-2 text-xs text-white/70 hover:bg-sidebar"
             disabled
           >
             {activePeriodLabel}

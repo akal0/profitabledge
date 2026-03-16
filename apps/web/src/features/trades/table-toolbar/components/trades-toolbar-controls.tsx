@@ -91,7 +91,7 @@ function SegmentedModeControl<TValue extends string>({
               "flex h-max cursor-pointer items-center justify-center rounded-sm px-3 py-2 text-xs transition-all duration-250 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40",
               value === option.value
                 ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-                : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+                : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
             )}
             onClick={() => onChange?.(option.value)}
           >

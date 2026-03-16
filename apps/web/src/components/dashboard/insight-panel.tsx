@@ -34,28 +34,25 @@ const SEVERITY_CONFIG = {
     icon: AlertTriangle,
     label: "Critical",
     color: "text-red-400",
-    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "border-l-2 border-l-red-500/60"),
+    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "ring-l-2 ring-l-red-500/60"),
   },
   warning: {
     icon: AlertTriangle,
     label: "Warning",
     color: "text-amber-400",
-    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "border-l-2 border-l-amber-500/60"),
+    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "ring-l-2 ring-l-amber-500/60"),
   },
   info: {
     icon: Info,
     label: "Info",
     color: "text-blue-400",
-    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "border-l-2 border-l-blue-500/60"),
+    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "ring-l-2 ring-l-blue-500/60"),
   },
   positive: {
     icon: CheckCircle,
     label: "Positive",
     color: "text-emerald-400",
-    cardColor: cn(
-      TRADE_SURFACE_CARD_CLASS,
-      "border-l-2 border-l-emerald-500/60"
-    ),
+    cardColor: cn(TRADE_SURFACE_CARD_CLASS, "ring-l-2 ring-l-emerald-500/60"),
   },
 } as const;
 
@@ -109,14 +106,12 @@ export function InsightPanel() {
     <Sheet open={open} onOpenChange={setOpen}>
       <button
         onClick={() => setOpen(true)}
-        className="relative flex h-[38px] w-max items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95 cursor-pointer"
+        className="relative flex h-[38px] w-max items-center justify-center gap-1 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95 cursor-pointer"
       >
-        <Lightbulb className="h-3.5 w-3.5 text-white/75" />
+        <Lightbulb className="size-3 text-white/75" />
         <span>Insights</span>
         {unreadCount > 0 && (
-          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-black">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </span>
+          <span className="flex size-1 ml-1 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-black"></span>
         )}
       </button>
 
@@ -144,7 +139,7 @@ export function InsightPanel() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-8 gap-1.5 rounded-sm border border-white/5 bg-sidebar-accent px-3 text-xs text-white/60 hover:text-white"
+                  className="h-8 gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-xs text-white/60 hover:text-white"
                   onClick={() => {
                     if (accountId) generate.mutate({ accountId });
                   }}
@@ -169,7 +164,7 @@ export function InsightPanel() {
 
         {insights.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent">
+            <div className="flex h-12 w-12 items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent">
               <Lightbulb className="h-5 w-5 text-white/30" />
             </div>
             <p className="mt-4 text-sm font-medium text-white/60">
@@ -184,7 +179,7 @@ export function InsightPanel() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="mt-4 h-8 gap-1.5 rounded-sm border border-white/5 bg-sidebar-accent px-4 text-xs text-white/60 hover:text-white"
+                className="mt-4 h-8 gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-4 text-xs text-white/60 hover:text-white"
                 onClick={() => generate.mutate({ accountId })}
                 disabled={generate.isPending}
               >
@@ -256,7 +251,7 @@ export function InsightPanel() {
 
                     {insight.recommendation && (
                       <div className="mt-4">
-                        <div className="px-4 py-3 rounded-sm border border-teal-500/10 bg-teal-500/5">
+                        <div className="px-4 py-3 rounded-sm ring ring-teal-500/10 bg-teal-500/5">
                           <p className="text-xs font-semibold tracking-wide text-white/50 mb-1.5">
                             Recommendation
                           </p>
@@ -268,13 +263,13 @@ export function InsightPanel() {
                     )}
 
                     <div className="mt-4 flex items-center gap-3">
-                      <span className="inline-flex items-center gap-1 rounded-sm border border-white/5 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/40">
+                      <span className="inline-flex items-center gap-1 rounded-sm ring ring-white/5 bg-white/5 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white/40">
                         <CategoryIcon className="h-2.5 w-2.5" />
                         {category.label}
                       </span>
                       <span
                         className={cn(
-                          "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-medium border border-white/5 bg-white/5",
+                          "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[10px] uppercase tracking-wide font-medium ring ring-white/5 bg-white/5",
                           severity.color
                         )}
                       >

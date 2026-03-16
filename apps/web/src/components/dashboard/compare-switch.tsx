@@ -123,13 +123,13 @@ export default function Component({
   })();
 
   const comparisonButtonClass =
-    "cursor-pointer flex h-7 items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-1.5 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar disabled:hover:brightness-100";
+    "cursor-pointer flex h-7 shrink-0 items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-1.5 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar disabled:hover:brightness-100";
   const selectedChipClass =
-    "flex h-7 items-center rounded-sm border border-white/5 bg-sidebar pr-0.5 pl-3 text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110";
+    "flex h-7 shrink-0 items-center rounded-sm ring ring-white/5 bg-sidebar pr-0.5 pl-3 text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110";
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
-      <div className="inline-flex items-center gap-2" onPointerDown={stop}>
+      <div className="inline-flex shrink-0 items-center gap-2" onPointerDown={stop}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
@@ -192,7 +192,7 @@ export default function Component({
       </div>
       <DropdownMenuContent
         align="end"
-        className="mr-5 mt-4 w-56 rounded-none border border-white/5 bg-sidebar"
+        className="mr-5 mt-4 w-56 rounded-none ring ring-white/5 bg-sidebar"
         onPointerDown={stop}
         onClick={stop}
       >

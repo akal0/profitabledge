@@ -126,7 +126,7 @@ const DashboardActionButtons: React.FC<Props> = ({
             "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
             valueMode === "usd"
               ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
           )}
         >
           <span className="px-2">{currencyLabel}</span>
@@ -138,7 +138,7 @@ const DashboardActionButtons: React.FC<Props> = ({
             "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
             valueMode === "percent"
               ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
           )}
         >
           <span className="px-0">Return (%)</span>
@@ -150,7 +150,7 @@ const DashboardActionButtons: React.FC<Props> = ({
             "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
             valueMode === "rr"
               ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white"
+              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
           )}
         >
           <span className="px-2">RR</span>
@@ -158,7 +158,7 @@ const DashboardActionButtons: React.FC<Props> = ({
       </div>
 
       {accountAction ? (
-        <div className="flex items-center overflow-hidden border border-white/5 bg-sidebar group rounded-md">
+        <div className="flex items-center overflow-hidden ring ring-white/5 bg-sidebar group rounded-md">
           <Button
             className={cn(
               "rounded-l-sm! rounded-r-none bg-sidebar hover:bg-sidebar-accent text-white/25 text-xs py-2 px-4 cursor-default",
@@ -198,7 +198,7 @@ const DashboardActionButtons: React.FC<Props> = ({
       />
       <Button
         onClick={onToggleEdit}
-        className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-md hover:bg-sidebar-accent px-3"
+        className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-md hover:bg-sidebar-accent px-3"
       >
         <EditWidgets className="size-3.5 fill-white/75" />
         <span>{isEditing ? "Save" : "Customize widgets"}</span>

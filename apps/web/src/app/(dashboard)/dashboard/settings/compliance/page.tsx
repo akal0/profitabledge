@@ -103,7 +103,9 @@ export default function ComplianceSettingsPage() {
       {/* Require SL */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Require stop loss</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Require stop loss
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -119,7 +121,9 @@ export default function ComplianceSettingsPage() {
       {/* Require TP */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Require take profit</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Require take profit
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -135,7 +139,9 @@ export default function ComplianceSettingsPage() {
       {/* Require Session Tag */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Require session tag</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Require session tag
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -151,7 +157,9 @@ export default function ComplianceSettingsPage() {
       {/* Require Model Tag */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Require model tag</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Require model tag
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -177,13 +185,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Planned Risk */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max planned risk (pips)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max planned risk (pips)
+          </Label>
         </div>
         <Input
           value={rules.maxPlannedRiskPips ?? ""}
-          onChange={(e) => updateRule("maxPlannedRiskPips", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxPlannedRiskPips", parseNumber(e.target.value))
+          }
           placeholder="e.g. 20"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -192,13 +204,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Drawdown */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max drawdown (% of risk)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max drawdown (% of risk)
+          </Label>
         </div>
         <Input
           value={rules.maxDrawdownPct ?? ""}
-          onChange={(e) => updateRule("maxDrawdownPct", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxDrawdownPct", parseNumber(e.target.value))
+          }
           placeholder="e.g. 75"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -207,13 +223,17 @@ export default function ComplianceSettingsPage() {
       {/* Min Planned R:R */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Min planned R:R</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Min planned R:R
+          </Label>
         </div>
         <Input
           value={rules.minPlannedRR ?? ""}
-          onChange={(e) => updateRule("minPlannedRR", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("minPlannedRR", parseNumber(e.target.value))
+          }
           placeholder="e.g. 1.5"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -222,13 +242,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Planned R:R */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max planned R:R</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max planned R:R
+          </Label>
         </div>
         <Input
           value={rules.maxPlannedRR ?? ""}
-          onChange={(e) => updateRule("maxPlannedRR", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxPlannedRR", parseNumber(e.target.value))
+          }
           placeholder="e.g. 5"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -247,13 +271,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Entry Spread */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max entry spread (pips)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max entry spread (pips)
+          </Label>
         </div>
         <Input
           value={rules.maxEntrySpreadPips ?? ""}
-          onChange={(e) => updateRule("maxEntrySpreadPips", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxEntrySpreadPips", parseNumber(e.target.value))
+          }
           placeholder="e.g. 1.2"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -262,13 +290,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Entry Slippage */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max entry slippage (pips)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max entry slippage (pips)
+          </Label>
         </div>
         <Input
           value={rules.maxEntrySlippagePips ?? ""}
-          onChange={(e) => updateRule("maxEntrySlippagePips", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxEntrySlippagePips", parseNumber(e.target.value))
+          }
           placeholder="e.g. 0.8"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -277,13 +309,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Exit Slippage */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max exit slippage (pips)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max exit slippage (pips)
+          </Label>
         </div>
         <Input
           value={rules.maxExitSlippagePips ?? ""}
-          onChange={(e) => updateRule("maxExitSlippagePips", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxExitSlippagePips", parseNumber(e.target.value))
+          }
           placeholder="e.g. 1.0"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -292,13 +328,17 @@ export default function ComplianceSettingsPage() {
       {/* Min Hold Time */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Min hold time (seconds)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Min hold time (seconds)
+          </Label>
         </div>
         <Input
           value={rules.minHoldSeconds ?? ""}
-          onChange={(e) => updateRule("minHoldSeconds", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("minHoldSeconds", parseNumber(e.target.value))
+          }
           placeholder="e.g. 60"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -307,13 +347,17 @@ export default function ComplianceSettingsPage() {
       {/* Max Hold Time */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max hold time (seconds)</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max hold time (seconds)
+          </Label>
         </div>
         <Input
           value={rules.maxHoldSeconds ?? ""}
-          onChange={(e) => updateRule("maxHoldSeconds", parseNumber(e.target.value))}
+          onChange={(e) =>
+            updateRule("maxHoldSeconds", parseNumber(e.target.value))
+          }
           placeholder="e.g. 14400"
-          className="bg-sidebar-accent border-white/5 text-white w-40"
+          className="bg-sidebar-accent ring-white/5 text-white w-40"
         />
       </div>
 
@@ -321,7 +365,9 @@ export default function ComplianceSettingsPage() {
 
       {/* Position Management heading */}
       <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">Position Management</h2>
+        <h2 className="text-sm font-semibold text-white">
+          Position Management
+        </h2>
         <p className="text-xs text-white/40 mt-0.5">
           Restrict certain trade management actions.
         </p>
@@ -332,7 +378,9 @@ export default function ComplianceSettingsPage() {
       {/* Disallow Scale-Ins */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Disallow scale-ins</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Disallow scale-ins
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -348,7 +396,9 @@ export default function ComplianceSettingsPage() {
       {/* Disallow Scale-Outs */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Disallow scale-outs</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Disallow scale-outs
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -364,7 +414,9 @@ export default function ComplianceSettingsPage() {
       {/* Disallow Partial Closes */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Disallow partial closes</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Disallow partial closes
+          </Label>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -382,7 +434,7 @@ export default function ComplianceSettingsPage() {
         <Button
           onClick={handleSave}
           disabled={updateCompliancePrefs.isPending}
-          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
         >
           {updateCompliancePrefs.isPending ? "Saving..." : "Save changes"}
         </Button>

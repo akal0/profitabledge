@@ -1,3 +1,14 @@
+import { TRPCError } from "@trpc/server";
+
+import { parseCsvDocument } from "./document";
+import { parseBrokerCsvImport } from "./registry";
+import type {
+  ImportedAccountHints,
+  NormalizedImportedTrade,
+  ParsedBrokerCsvImport,
+} from "./types";
+import { normalizeKey, pickNumber, pickValue } from "./utils";
+
 export interface ParsedImportTrade {
   ticket: string | null;
   open: string | null;
@@ -40,117 +51,350 @@ export interface ParsedImportBundle {
   existingTrades: ParsedImportTrade[];
 }
 
-function parseNumber(value: string | undefined) {
-  if (!value) return null;
-  const normalized = value.replace(/,/g, "").trim();
-  if (!normalized) return null;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+type CsvFileInput = {
+  fileName?: string | null;
+  csvText: string;
+};
+
+type TradeSourceImport = ParsedBrokerCsvImport & {
+  fileName: string | null;
+};
+
+type SupplementalCategory =
+  | "fills"
+  | "orders"
+  | "cash-history"
+  | "account-balance-history";
+
+type SupplementalFile = {
+  category: SupplementalCategory;
+  accountHints: ParsedImportAccountHints;
+};
+
+const TRADE_SOURCE_PRIORITY: Record<string, number> = {
+  "tradovate-performance": 0,
+  "tradovate-position-history": 1,
+};
+
+function toParsedImportTrade(trade: NormalizedImportedTrade): ParsedImportTrade {
+  return {
+    ticket: trade.ticket,
+    open: trade.openTime?.toISOString() ?? null,
+    tradeType: trade.tradeType,
+    volume: trade.volume,
+    symbol: trade.symbol,
+    openPrice: trade.openPrice,
+    sl: trade.sl,
+    tp: trade.tp,
+    close: trade.closeTime?.toISOString() ?? null,
+    closePrice: trade.closePrice,
+    swap: trade.swap,
+    commissions: trade.commissions,
+    profit: trade.profit,
+    pips: trade.pips,
+    tradeDurationSeconds: null,
+    openTime: trade.openTime,
+    closeTime: trade.closeTime,
+    sessionTag: null,
+    sessionTagColor: null,
+  };
 }
 
-function parseTradeType(value: string | undefined) {
-  const lowered = value?.trim().toLowerCase() ?? "";
-  if (["buy", "long"].includes(lowered)) return "long" as const;
-  if (["sell", "short"].includes(lowered)) return "short" as const;
-  return null;
+function toParsedImportAccountHints(
+  accountHints?: ImportedAccountHints
+): ParsedImportAccountHints {
+  return {
+    brokerType: accountHints?.brokerType ?? null,
+    brokerServer: accountHints?.brokerServer ?? null,
+    accountNumber: accountHints?.accountNumber ?? null,
+    currency: accountHints?.currency ?? null,
+    liveBalance: accountHints?.liveBalance ?? null,
+    liveEquity: accountHints?.liveEquity ?? null,
+  };
 }
 
-function parseDate(value: string | undefined) {
-  if (!value) return null;
-  const parsed = new Date(value.trim());
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+function mergeAccountHints(
+  current: ParsedImportAccountHints,
+  next: ParsedImportAccountHints
+): ParsedImportAccountHints {
+  return {
+    brokerType: current.brokerType ?? next.brokerType,
+    brokerServer: current.brokerServer ?? next.brokerServer,
+    accountNumber: current.accountNumber ?? next.accountNumber,
+    currency: current.currency ?? next.currency,
+    liveBalance: next.liveBalance ?? current.liveBalance,
+    liveEquity: next.liveEquity ?? current.liveEquity,
+  };
 }
 
-function getField(
-  row: Record<string, string>,
-  candidates: string[]
-): string | undefined {
-  const entries = Object.entries(row);
-  for (const candidate of candidates) {
-    const match = entries.find(
-      ([key]) => key.trim().toLowerCase() === candidate.toLowerCase()
-    );
-    if (match) return match[1];
+function createEmptyAccountHints(): ParsedImportAccountHints {
+  return {
+    brokerType: null,
+    brokerServer: null,
+    accountNumber: null,
+    currency: null,
+    liveBalance: null,
+    liveEquity: null,
+  };
+}
+
+function uniqueWarnings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function normalizeFileName(fileName: string | null | undefined): string | null {
+  const trimmed = fileName?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function getTradeFingerprint(trade: ParsedImportTrade): string {
+  return [
+    trade.symbol ?? "",
+    trade.tradeType ?? "",
+    trade.openTime?.toISOString() ?? "",
+    trade.closeTime?.toISOString() ?? "",
+    trade.volume ?? "",
+    trade.profit ?? "",
+  ].join("|");
+}
+
+function getTradeSourcePriority(parserId: string): number {
+  return TRADE_SOURCE_PRIORITY[parserId] ?? 10;
+}
+
+function looksLikeHeader(
+  headers: string[],
+  candidates: string[],
+  mode: "all" | "any" = "all"
+): boolean {
+  const normalizedHeaders = headers.map(normalizeKey);
+  const matches = candidates.map((candidate) =>
+    normalizedHeaders.some((header) => header === normalizeKey(candidate))
+  );
+
+  return mode === "all" ? matches.every(Boolean) : matches.some(Boolean);
+}
+
+function extractSupplementalAccountHints(
+  file: CsvFileInput
+): ParsedImportAccountHints {
+  const document = parseCsvDocument(file.csvText);
+  const records = document.records;
+  if (records.length === 0) {
+    return createEmptyAccountHints();
   }
-  return undefined;
+
+  const accountNumber =
+    records
+      .map((record) =>
+        pickValue(record, ["Account", "Account Number", "Account Num"])
+      )
+      .find((value): value is string => Boolean(value && value.trim())) ?? null;
+  const currency =
+    records
+      .map((record) => pickValue(record, ["Currency"]))
+      .find((value): value is string => Boolean(value && value.trim())) ?? null;
+
+  const liveBalanceCandidates = records
+    .map((record) =>
+      pickNumber(record, [
+        "Balance",
+        "Account Balance",
+        "Ending Balance",
+        "Total Amount",
+        "Cash Balance",
+        "Net Cash",
+        "Net Liquidating Value",
+      ])
+    )
+    .filter((value): value is number => value != null && Number.isFinite(value));
+
+  const liveEquityCandidates = records
+    .map((record) =>
+      pickNumber(record, [
+        "Equity",
+        "Net Liquidating Value",
+        "Net Liq",
+        "NetLiq",
+      ])
+    )
+    .filter((value): value is number => value != null && Number.isFinite(value));
+
+  return {
+    brokerType: null,
+    brokerServer: null,
+    accountNumber,
+    currency,
+    liveBalance: liveBalanceCandidates.at(-1) ?? null,
+    liveEquity: liveEquityCandidates.at(-1) ?? null,
+  };
 }
 
-function parseCsvText(csvText: string) {
-  const lines = csvText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (lines.length < 2) return [];
+function classifyTradovateSupplementalFile(
+  file: CsvFileInput
+): SupplementalFile | null {
+  const document = parseCsvDocument(file.csvText);
+  const headers = document.headers;
+  const normalizedName = normalizeKey(file.fileName ?? "");
 
-  const headers = lines[0]!.split(",").map((cell) => cell.trim());
-  return lines.slice(1).map((line) => {
-    const values = line.split(",").map((cell) => cell.trim());
-    const row: Record<string, string> = {};
-    headers.forEach((header, index) => {
-      row[header] = values[index] ?? "";
-    });
-    return row;
-  });
+  const category: SupplementalCategory | null =
+    normalizedName.includes("account balance")
+      ? "account-balance-history"
+      : normalizedName.includes("cash history") ||
+          normalizedName.includes("client statement")
+        ? "cash-history"
+      : normalizedName.includes("fills")
+          ? "fills"
+          : normalizedName.includes("orders") ||
+              normalizedName.includes("order details")
+            ? "orders"
+            : looksLikeHeader(headers, ["Order ID", "Status"], "all")
+              ? "orders"
+              : looksLikeHeader(headers, ["Fill ID", "Order ID"], "all")
+                ? "fills"
+                : looksLikeHeader(
+                      headers,
+                      ["Net Liquidating Value", "Balance", "Equity"],
+                      "any"
+                    )
+                  ? "account-balance-history"
+                  : looksLikeHeader(
+                        headers,
+                        ["Cash Balance", "Net Cash", "Transaction Type", "Amount"],
+                        "any"
+                      )
+                    ? "cash-history"
+                    : null;
+
+  if (!category) {
+    return null;
+  }
+
+  return {
+    category,
+    accountHints: extractSupplementalAccountHints(file),
+  };
+}
+
+function buildBundleDescriptor(input: {
+  broker: string;
+  tradeSources: TradeSourceImport[];
+}) {
+  if (input.tradeSources.length === 1) {
+    const [first] = input.tradeSources;
+    return {
+      parserId: first.parserId,
+      parserLabel: first.parserLabel,
+      reportType: first.reportType,
+    };
+  }
+
+  const brokerLabel =
+    input.broker.length > 0
+      ? `${input.broker[0]!.toUpperCase()}${input.broker.slice(1)}`
+      : "Broker";
+
+  return {
+    parserId: `csv-bundle:${input.broker}`,
+    parserLabel: `${brokerLabel} CSV Bundle`,
+    reportType: "bundle",
+  };
 }
 
 export function parseBrokerCsvImportBundle(input: {
   broker: string;
-  files: Array<{ fileName?: string | null; csvText: string }>;
+  files: CsvFileInput[];
   existingTrades?: ParsedImportTrade[];
 }): ParsedImportBundle {
-  const parsedRows = input.files.flatMap((file) => parseCsvText(file.csvText));
+  const tradeSources: TradeSourceImport[] = [];
+  let accountHints = createEmptyAccountHints();
+  const warnings: string[] = [];
 
-  const trades: ParsedImportTrade[] = parsedRows.map((row, index) => {
-    const openTime =
-      parseDate(getField(row, ["open time", "openTime", "entry time"])) ?? null;
-    const closeTime =
-      parseDate(getField(row, ["close time", "closeTime", "exit time"])) ?? null;
-    const profit = parseNumber(getField(row, ["profit", "pnl", "net pnl"]));
-    const openPrice = parseNumber(getField(row, ["open price", "entry", "entry price"]));
-    const closePrice = parseNumber(
-      getField(row, ["close price", "exit", "exit price"])
-    );
+  for (const file of input.files) {
+    try {
+      const parsed = parseBrokerCsvImport({
+        broker: input.broker,
+        csvText: file.csvText,
+        fileName: file.fileName ?? null,
+      });
 
-    return {
-      ticket: getField(row, ["ticket", "trade id", "id"]) ?? `csv-${index + 1}`,
-      open: openTime?.toISOString() ?? null,
-      tradeType: parseTradeType(getField(row, ["type", "side", "direction"])),
-      volume: parseNumber(getField(row, ["volume", "lot", "lots"])),
-      symbol: getField(row, ["symbol", "instrument", "market"]) ?? null,
-      openPrice,
-      sl: parseNumber(getField(row, ["sl", "stop loss"])),
-      tp: parseNumber(getField(row, ["tp", "take profit"])),
-      close: closeTime?.toISOString() ?? null,
-      closePrice,
-      swap: parseNumber(getField(row, ["swap"])),
-      commissions: parseNumber(getField(row, ["commission", "commissions"])),
-      profit,
-      pips: parseNumber(getField(row, ["pips"])),
-      tradeDurationSeconds: null,
-      openTime,
-      closeTime,
-      sessionTag: null,
-      sessionTagColor: null,
-    };
+      tradeSources.push({
+        ...parsed,
+        fileName: normalizeFileName(file.fileName),
+      });
+      accountHints = mergeAccountHints(
+        accountHints,
+        toParsedImportAccountHints(parsed.accountHints)
+      );
+      warnings.push(...parsed.warnings);
+      continue;
+    } catch (error) {
+      if (input.broker === "tradovate") {
+        const supplemental = classifyTradovateSupplementalFile(file);
+        if (supplemental) {
+          accountHints = mergeAccountHints(accountHints, supplemental.accountHints);
+          continue;
+        }
+      }
+
+      const fileLabel = normalizeFileName(file.fileName);
+      const message =
+        error instanceof TRPCError
+          ? error.message
+          : "Unsupported CSV format.";
+
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: fileLabel
+          ? `Unable to parse ${fileLabel}: ${message}`
+          : message,
+      });
+    }
+  }
+
+  if (tradeSources.length === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        input.broker === "tradovate"
+          ? "No Tradovate trade report was found in the upload bundle. Include Performance or Position History as the base report."
+          : "No supported trade rows were found in the uploaded CSV bundle.",
+    });
+  }
+
+  tradeSources.sort(
+    (left, right) =>
+      getTradeSourcePriority(left.parserId) - getTradeSourcePriority(right.parserId)
+  );
+
+  const dedupedTrades = new Map<string, ParsedImportTrade>();
+  for (const source of tradeSources) {
+    for (const trade of source.trades.map(toParsedImportTrade)) {
+      const fingerprint = getTradeFingerprint(trade);
+      if (!dedupedTrades.has(fingerprint)) {
+        dedupedTrades.set(fingerprint, trade);
+      }
+    }
+  }
+
+  const descriptor = buildBundleDescriptor({
+    broker: input.broker,
+    tradeSources,
   });
 
   return {
-    parserId: `csv:${input.broker.toLowerCase()}`,
-    parserLabel: `${input.broker} CSV`,
-    reportType: "csv",
-    files: input.files.map((file) => file.fileName ?? "upload.csv"),
-    warnings: [],
-    accountHints: {
-      brokerType: input.broker.toLowerCase().includes("mt")
-        ? "mt5"
-        : "other",
-      brokerServer: null,
-      accountNumber: null,
-      currency: null,
-      liveBalance: null,
-      liveEquity: null,
-    },
-    trades,
+    parserId: descriptor.parserId,
+    parserLabel: descriptor.parserLabel,
+    reportType: descriptor.reportType,
+    files: input.files.map((file) => normalizeFileName(file.fileName) ?? "upload.csv"),
+    warnings: uniqueWarnings(warnings),
+    accountHints: accountHints.brokerType
+      ? accountHints
+      : {
+          ...accountHints,
+          brokerType: input.broker.toLowerCase().includes("mt") ? "mt5" : "other",
+        },
+    trades: [...dedupedTrades.values()],
     existingTrades: input.existingTrades ?? [],
   };
 }

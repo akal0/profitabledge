@@ -132,7 +132,9 @@ function loadCustomPresets(): ChartWidgetPreset[] {
         name: String(preset?.name ?? "").trim(),
         widgets: sanitizeWidgetList(preset?.widgets),
       }))
-      .filter((preset) => preset.id && preset.name && preset.widgets.length > 0);
+      .filter(
+        (preset) => preset.id && preset.name && preset.widgets.length > 0
+      );
   } catch (error) {
     console.error("Failed to load chart widget presets:", error);
     return [];
@@ -218,7 +220,9 @@ export function ChartWidgetPresets({
   };
 
   const handleDeletePreset = (presetId: string) => {
-    const nextPresets = customPresets.filter((preset) => preset.id !== presetId);
+    const nextPresets = customPresets.filter(
+      (preset) => preset.id !== presetId
+    );
     setCustomPresets(nextPresets);
     saveCustomPresets(nextPresets);
     toast.success("Preset deleted");
@@ -228,7 +232,7 @@ export function ChartWidgetPresets({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button className="cursor-pointer flex h-[38px] w-max items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110">
+          <Button className="cursor-pointer flex h-[38px] w-max items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110">
             <Bookmark className="size-3" />
             Presets
           </Button>
@@ -238,7 +242,9 @@ export function ChartWidgetPresets({
           className={`w-72 ${toolbarFilterMenuContentClass}`}
         >
           <div className={toolbarFilterMenuSectionTitleClass}>Built-in</div>
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
           {builtInPresets.map((preset) => (
             <DropdownMenuItem
               key={preset.id}
@@ -289,7 +295,9 @@ export function ChartWidgetPresets({
             </>
           ) : null}
 
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
 
           <DropdownMenuItem
             onClick={() => setIsSaveDialogOpen(true)}
@@ -304,11 +312,11 @@ export function ChartWidgetPresets({
       <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
         <DialogContent
           showCloseButton={false}
-          className="max-w-sm gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg"
+          className="max-w-sm gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg"
         >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <Bookmark className="h-3.5 w-3.5 text-white/60" />
               </div>
               <div className="min-w-0">
@@ -322,7 +330,7 @@ export function ChartWidgetPresets({
               <DialogClose asChild>
                 <button
                   type="button"
-                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
                 >
                   <X className="h-3.5 w-3.5" />
                   <span className="sr-only">Close</span>
@@ -340,7 +348,7 @@ export function ChartWidgetPresets({
                 value={presetName}
                 onChange={(event) => setPresetName(event.target.value)}
                 placeholder="Enter preset name..."
-                className="h-10 rounded-sm border-white/5 bg-sidebar text-sm text-white placeholder:text-white/25"
+                className="h-10 rounded-sm ring-white/5 bg-sidebar text-sm text-white placeholder:text-white/25"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     handleSavePreset();
@@ -353,13 +361,13 @@ export function ChartWidgetPresets({
 
             <div className="flex items-center justify-end gap-2 px-5 py-4">
               <DialogClose asChild>
-                <Button className="h-9 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent hover:text-white">
+                <Button className="h-9 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent hover:text-white">
                   Cancel
                 </Button>
               </DialogClose>
               <Button
                 onClick={handleSavePreset}
-                className="h-9 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white hover:bg-sidebar-accent"
+                className="h-9 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white hover:bg-sidebar-accent"
               >
                 Save preset
               </Button>

@@ -33,13 +33,29 @@ import {
 
 interface QuickTradeEntryProps {
   accountId: string;
-  onTradeCreated?: (trade: { id: string; symbol: string; profit: number }) => void;
+  onTradeCreated?: (trade: {
+    id: string;
+    symbol: string;
+    profit: number;
+  }) => void;
   trigger?: React.ReactNode;
 }
 
 const COMMON_SYMBOLS = [
-  "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
-  "XAUUSD", "XAGUSD", "US30", "NAS100", "SPX500", "BTCUSD", "ETHUSD",
+  "EURUSD",
+  "GBPUSD",
+  "USDJPY",
+  "USDCHF",
+  "AUDUSD",
+  "USDCAD",
+  "NZDUSD",
+  "XAUUSD",
+  "XAGUSD",
+  "US30",
+  "NAS100",
+  "SPX500",
+  "BTCUSD",
+  "ETHUSD",
 ];
 
 export function QuickTradeEntry({
@@ -89,18 +105,26 @@ export function QuickTradeEntry({
 
   // Estimated profit calculation
   const estimatedProfit = useMemo(() => {
-    if (!autoCalculateProfit || !openPrice || !closePrice || !volume) return null;
+    if (!autoCalculateProfit || !openPrice || !closePrice || !volume)
+      return null;
     const open = parseFloat(openPrice);
     const close = parseFloat(closePrice);
     const vol = parseFloat(volume);
     if (isNaN(open) || isNaN(close) || isNaN(vol)) return null;
-    
+
     const diff = tradeType === "long" ? close - open : open - close;
     // Simplified: assume forex major with pip = 0.0001, contract = 100000
     const pipSize = effectiveSymbol.includes("JPY") ? 0.01 : 0.0001;
     const contractSize = effectiveSymbol.includes("XAU") ? 100 : 100000;
     return diff * vol * contractSize;
-  }, [openPrice, closePrice, volume, tradeType, effectiveSymbol, autoCalculateProfit]);
+  }, [
+    openPrice,
+    closePrice,
+    volume,
+    tradeType,
+    effectiveSymbol,
+    autoCalculateProfit,
+  ]);
 
   function resetForm() {
     setSymbol("");
@@ -152,7 +176,11 @@ export function QuickTradeEntry({
           maximumFractionDigits: 2,
         })}`
       );
-      onTradeCreated?.({ id: result.id, symbol: result.symbol || '', profit: result.profit });
+      onTradeCreated?.({
+        id: result.id,
+        symbol: result.symbol || "",
+        profit: result.profit,
+      });
       resetForm();
       setOpen(false);
     } catch (error: any) {
@@ -166,16 +194,22 @@ export function QuickTradeEntry({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         {trigger || (
-          <Button variant="outline" size="sm" className="gap-2">
-            <Plus className="size-4" />
-            Add Trade
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 ring-white/10! borer-none!"
+          >
+            <Plus className="size-3" />
+            Add trade
           </Button>
         )}
       </SheetTrigger>
       <SheetContent className="w-full sm:max-w-lg overflow-y-auto rounded-md p-0">
         <div className="px-6 py-5">
           <SheetHeader className="p-0">
-            <SheetTitle className="text-base font-semibold text-white">Add manual trade</SheetTitle>
+            <SheetTitle className="text-base font-semibold text-white">
+              Add manual trade
+            </SheetTitle>
             <SheetDescription className="text-xs text-white/40">
               Manually enter a closed trade for tracking and analysis.
             </SheetDescription>
@@ -187,7 +221,9 @@ export function QuickTradeEntry({
 
           {/* Symbol & direction */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">Symbol & direction</h3>
+            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+              Symbol & direction
+            </h3>
           </div>
           <Separator />
           <div className="px-6 py-5 space-y-4">
@@ -210,7 +246,9 @@ export function QuickTradeEntry({
                 <Input
                   placeholder="Enter symbol (e.g., EURUSD)"
                   value={customSymbol}
-                  onChange={(e) => setCustomSymbol(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    setCustomSymbol(e.target.value.toUpperCase())
+                  }
                 />
               )}
             </div>
@@ -254,7 +292,9 @@ export function QuickTradeEntry({
 
           {/* Trade details */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">Trade details</h3>
+            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+              Trade details
+            </h3>
           </div>
           <Separator />
           <div className="px-6 py-5 space-y-4">
@@ -313,7 +353,9 @@ export function QuickTradeEntry({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Stop loss (optional)</Label>
+                <Label className="text-xs text-white/50">
+                  Stop loss (optional)
+                </Label>
                 <Input
                   type="number"
                   step="0.00001"
@@ -323,7 +365,9 @@ export function QuickTradeEntry({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Take profit (optional)</Label>
+                <Label className="text-xs text-white/50">
+                  Take profit (optional)
+                </Label>
                 <Input
                   type="number"
                   step="0.00001"
@@ -339,7 +383,9 @@ export function QuickTradeEntry({
 
           {/* P&L */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">P&L</h3>
+            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+              P&L
+            </h3>
           </div>
           <Separator />
           <div className="px-6 py-5 space-y-4">
@@ -357,20 +403,23 @@ export function QuickTradeEntry({
                 </label>
               </div>
               {autoCalculateProfit ? (
-                <div className={cn(
-                  "px-3 py-2 rounded-sm border text-sm font-medium",
-                  estimatedProfit === null ? "text-white/40 border-white/5" :
-                  estimatedProfit >= 0 ? "text-teal-400 bg-teal-500/10 border-teal-500/20" :
-                  "text-rose-400 bg-rose-500/10 border-rose-500/20"
-                )}>
+                <div
+                  className={cn(
+                    "px-3 py-2 rounded-sm border text-sm font-medium",
+                    estimatedProfit === null
+                      ? "text-white/40 border-white/5"
+                      : estimatedProfit >= 0
+                      ? "text-teal-400 bg-teal-500/10 border-teal-500/20"
+                      : "text-rose-400 bg-rose-500/10 border-rose-500/20"
+                  )}
+                >
                   {estimatedProfit === null
                     ? "Enter prices to calculate"
                     : formatCurrencyValue(estimatedProfit, {
                         showPlus: true,
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      })
-                  }
+                      })}
                 </div>
               ) : (
                 <Input
@@ -385,7 +434,9 @@ export function QuickTradeEntry({
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Commissions (optional)</Label>
+                <Label className="text-xs text-white/50">
+                  Commissions (optional)
+                </Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -411,13 +462,17 @@ export function QuickTradeEntry({
 
           {/* Tags */}
           <div className="px-6 py-3">
-            <h3 className="text-xs font-semibold text-white/70 tracking-wide">Tags</h3>
+            <h3 className="text-xs font-semibold text-white/70 tracking-wide">
+              Tags
+            </h3>
           </div>
           <Separator />
           <div className="px-6 py-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Session tag (optional)</Label>
+                <Label className="text-xs text-white/50">
+                  Session tag (optional)
+                </Label>
                 <Input
                   placeholder="London Open"
                   value={sessionTag}
@@ -425,7 +480,9 @@ export function QuickTradeEntry({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Model tag (optional)</Label>
+                <Label className="text-xs text-white/50">
+                  Model tag (optional)
+                </Label>
                 <Input
                   placeholder="Liquidity Raid"
                   value={modelTag}

@@ -66,11 +66,17 @@ export default function RiskProfilePage() {
     } catch {}
   }, []);
 
-  const update = <K extends keyof RiskProfile>(key: K, value: RiskProfile[K]) => {
+  const update = <K extends keyof RiskProfile>(
+    key: K,
+    value: RiskProfile[K]
+  ) => {
     setProfile((prev) => ({ ...prev, [key]: value }));
   };
 
-  const updateEscalation = (key: keyof RiskProfile["escalation"], value: boolean) => {
+  const updateEscalation = (
+    key: keyof RiskProfile["escalation"],
+    value: boolean
+  ) => {
     setProfile((prev) => ({
       ...prev,
       escalation: { ...prev.escalation, [key]: value },
@@ -103,18 +109,22 @@ export default function RiskProfilePage() {
       {/* Max Risk Per Trade */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max Risk Per Trade</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max Risk Per Trade
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">Percentage of account.</p>
         </div>
         <div className="flex items-center gap-2">
           <Input
             type="number"
             value={profile.maxRiskPerTrade}
-            onChange={(e) => update("maxRiskPerTrade", parseFloat(e.target.value) || 0)}
+            onChange={(e) =>
+              update("maxRiskPerTrade", parseFloat(e.target.value) || 0)
+            }
             min={0.1}
             max={10}
             step={0.1}
-            className="bg-sidebar-accent border-white/5 text-white w-32"
+            className="bg-sidebar-accent ring-white/5 text-white w-32"
           />
           <span className="text-xs text-white/30">%</span>
         </div>
@@ -125,14 +135,18 @@ export default function RiskProfilePage() {
       {/* Sizing Method */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Sizing Method</Label>
-          <p className="text-xs text-white/40 mt-0.5">How positions are sized.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Sizing Method
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">
+            How positions are sized.
+          </p>
         </div>
         <Select
           value={profile.sizingMethod}
           onValueChange={(v) => update("sizingMethod", v as any)}
         >
-          <SelectTrigger className="bg-sidebar-accent border-white/5 text-white">
+          <SelectTrigger className="bg-sidebar-accent ring-white/5 text-white">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -149,17 +163,21 @@ export default function RiskProfilePage() {
       {/* Default Lot Size */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Default Lot Size</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Default Lot Size
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">For fixed lot sizing.</p>
         </div>
         <Input
           type="number"
           value={profile.defaultLotSize}
-          onChange={(e) => update("defaultLotSize", parseFloat(e.target.value) || 0)}
+          onChange={(e) =>
+            update("defaultLotSize", parseFloat(e.target.value) || 0)
+          }
           min={0.01}
           max={100}
           step={0.01}
-          className="bg-sidebar-accent border-white/5 text-white w-32"
+          className="bg-sidebar-accent ring-white/5 text-white w-32"
         />
       </div>
 
@@ -178,18 +196,24 @@ export default function RiskProfilePage() {
       {/* Max Daily Loss */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max Daily Loss</Label>
-          <p className="text-xs text-white/40 mt-0.5">Stop trading after this loss.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Max Daily Loss
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">
+            Stop trading after this loss.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Input
             type="number"
             value={profile.maxDailyLoss}
-            onChange={(e) => update("maxDailyLoss", parseFloat(e.target.value) || 0)}
+            onChange={(e) =>
+              update("maxDailyLoss", parseFloat(e.target.value) || 0)
+            }
             min={0.5}
             max={20}
             step={0.5}
-            className="bg-sidebar-accent border-white/5 text-white w-32"
+            className="bg-sidebar-accent ring-white/5 text-white w-32"
           />
           <span className="text-xs text-white/30">%</span>
         </div>
@@ -200,16 +224,22 @@ export default function RiskProfilePage() {
       {/* Max Daily Trades */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max Daily Trades</Label>
-          <p className="text-xs text-white/40 mt-0.5">Maximum trades per day.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Max Daily Trades
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">
+            Maximum trades per day.
+          </p>
         </div>
         <Input
           type="number"
           value={profile.maxDailyTrades}
-          onChange={(e) => update("maxDailyTrades", parseFloat(e.target.value) || 0)}
+          onChange={(e) =>
+            update("maxDailyTrades", parseFloat(e.target.value) || 0)
+          }
           min={1}
           max={100}
-          className="bg-sidebar-accent border-white/5 text-white w-32"
+          className="bg-sidebar-accent ring-white/5 text-white w-32"
         />
       </div>
 
@@ -218,16 +248,22 @@ export default function RiskProfilePage() {
       {/* Max Concurrent */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max Concurrent Positions</Label>
-          <p className="text-xs text-white/40 mt-0.5">Open positions at once.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Max Concurrent Positions
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">
+            Open positions at once.
+          </p>
         </div>
         <Input
           type="number"
           value={profile.maxConcurrent}
-          onChange={(e) => update("maxConcurrent", parseFloat(e.target.value) || 0)}
+          onChange={(e) =>
+            update("maxConcurrent", parseFloat(e.target.value) || 0)
+          }
           min={1}
           max={50}
-          className="bg-sidebar-accent border-white/5 text-white w-32"
+          className="bg-sidebar-accent ring-white/5 text-white w-32"
         />
       </div>
 
@@ -235,7 +271,9 @@ export default function RiskProfilePage() {
 
       {/* Drawdown Management heading */}
       <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">Drawdown Management</h2>
+        <h2 className="text-sm font-semibold text-white">
+          Drawdown Management
+        </h2>
         <p className="text-xs text-white/40 mt-0.5">
           Weekly and monthly drawdown limits.
         </p>
@@ -246,18 +284,22 @@ export default function RiskProfilePage() {
       {/* Max Weekly Loss */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max Weekly Loss</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Max Weekly Loss
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">Weekly loss threshold.</p>
         </div>
         <div className="flex items-center gap-2">
           <Input
             type="number"
             value={profile.maxWeeklyLoss}
-            onChange={(e) => update("maxWeeklyLoss", parseFloat(e.target.value) || 0)}
+            onChange={(e) =>
+              update("maxWeeklyLoss", parseFloat(e.target.value) || 0)
+            }
             min={1}
             max={30}
             step={0.5}
-            className="bg-sidebar-accent border-white/5 text-white w-32"
+            className="bg-sidebar-accent ring-white/5 text-white w-32"
           />
           <span className="text-xs text-white/30">%</span>
         </div>
@@ -268,18 +310,24 @@ export default function RiskProfilePage() {
       {/* Max Monthly Drawdown */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Max Monthly Drawdown</Label>
-          <p className="text-xs text-white/40 mt-0.5">Monthly max loss threshold.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Max Monthly Drawdown
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">
+            Monthly max loss threshold.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Input
             type="number"
             value={profile.maxMonthlyDrawdown}
-            onChange={(e) => update("maxMonthlyDrawdown", parseFloat(e.target.value) || 0)}
+            onChange={(e) =>
+              update("maxMonthlyDrawdown", parseFloat(e.target.value) || 0)
+            }
             min={1}
             max={50}
             step={1}
-            className="bg-sidebar-accent border-white/5 text-white w-32"
+            className="bg-sidebar-accent ring-white/5 text-white w-32"
           />
           <span className="text-xs text-white/30">%</span>
         </div>
@@ -289,7 +337,9 @@ export default function RiskProfilePage() {
 
       {/* Risk Escalation heading */}
       <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">Risk Escalation Rules</h2>
+        <h2 className="text-sm font-semibold text-white">
+          Risk Escalation Rules
+        </h2>
         <p className="text-xs text-white/40 mt-0.5">
           Automatic risk adjustments triggered by trading behavior.
         </p>
@@ -351,7 +401,7 @@ export default function RiskProfilePage() {
         </Button>
         <Button
           onClick={save}
-          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
         >
           Save changes
         </Button>

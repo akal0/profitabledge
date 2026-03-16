@@ -9,11 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -62,13 +58,15 @@ export function TradeSelectorDialog({
 }: TradeSelectorDialogProps) {
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
-  const { data: accounts } = trpc.accounts.list.useQuery(undefined, { enabled: isOpen });
+
+  const { data: accounts } = trpc.accounts.list.useQuery(undefined, {
+    enabled: isOpen,
+  });
   const { selectedAccountId: storeAccountId } = useAccountStore();
-  
+
   const effectiveAccountId = accountId || storeAccountId;
   const [localAccountId, setLocalAccountId] = useState<string | null>(null);
-  
+
   const activeAccountId = localAccountId || effectiveAccountId;
 
   // Fetch trades
@@ -129,11 +127,16 @@ export function TradeSelectorDialog({
             <div className="min-w-0">
               <div className="text-sm font-medium text-white">{title}</div>
               <p className="mt-1 text-xs leading-relaxed text-white/40">
-                {multiple ? "Select one or more trades to compare" : description}
+                {multiple
+                  ? "Select one or more trades to compare"
+                  : description}
               </p>
             </div>
             <DialogClose asChild>
-              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+              <button
+                type="button"
+                className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+              >
                 <X className="h-3.5 w-3.5" />
                 <span className="sr-only">Close</span>
               </button>
@@ -149,7 +152,9 @@ export function TradeSelectorDialog({
                 {accounts.map((account) => (
                   <Button
                     key={account.id}
-                    variant={activeAccountId === account.id ? "default" : "outline"}
+                    variant={
+                      activeAccountId === account.id ? "default" : "outline"
+                    }
                     size="sm"
                     onClick={() => setLocalAccountId(account.id)}
                     className={cn(
@@ -194,7 +199,9 @@ export function TradeSelectorDialog({
                     ))
                   ) : trades.length === 0 ? (
                     <div className="text-center py-8 text-white/40">
-                      {search ? "No trades match your search" : "No trades found"}
+                      {search
+                        ? "No trades match your search"
+                        : "No trades found"}
                     </div>
                   ) : (
                     trades.map((trade) => (
@@ -218,7 +225,8 @@ export function TradeSelectorDialog({
             <div className="text-sm text-white/40">
               {selectedIds.size > 0 && (
                 <>
-                  {selectedIds.size} {selectedIds.size === 1 ? "trade" : "trades"} selected
+                  {selectedIds.size}{" "}
+                  {selectedIds.size === 1 ? "trade" : "trades"} selected
                 </>
               )}
             </div>
@@ -234,7 +242,7 @@ export function TradeSelectorDialog({
                 disabled={selectedIds.size === 0}
                 className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
-                {multiple ? "Add Trades" : "Add Trade"}
+                {multiple ? "Add trades" : "Add trade"}
               </Button>
             </div>
           </div>
@@ -300,7 +308,9 @@ function TradeSelectItem({
       {/* Trade info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-white">{trade.symbol || "Unknown"}</span>
+          <span className="font-medium text-white">
+            {trade.symbol || "Unknown"}
+          </span>
           {trade.outcome && (
             <Badge
               variant="outline"
@@ -321,7 +331,8 @@ function TradeSelectItem({
           {trade.close
             ? format(new Date(trade.close), "MMM d, h:mm a")
             : "Open"}{" "}
-          • {pips > 0 ? "+" : ""}{pips.toFixed(1)} pips
+          • {pips > 0 ? "+" : ""}
+          {pips.toFixed(1)} pips
         </div>
       </div>
 
@@ -358,10 +369,12 @@ export function QuickTradePicker({
   accountId,
 }: QuickTradePickerProps) {
   const [search, setSearch] = useState("");
-  
-  const { data: accounts } = trpc.accounts.list.useQuery(undefined, { enabled: isOpen && !accountId });
+
+  const { data: accounts } = trpc.accounts.list.useQuery(undefined, {
+    enabled: isOpen && !accountId,
+  });
   const { selectedAccountId: storeAccountId } = useAccountStore();
-  
+
   const effectiveAccountId = accountId || storeAccountId;
 
   const { data: tradesData, isLoading } = trpc.trades.listInfinite.useQuery(
@@ -415,7 +428,9 @@ export function QuickTradePicker({
       {/* Trade list */}
       <div className="max-h-64 overflow-y-auto">
         {isLoading ? (
-          <div className="p-4 text-center text-white/40 text-sm">Loading...</div>
+          <div className="p-4 text-center text-white/40 text-sm">
+            Loading...
+          </div>
         ) : !effectiveAccountId ? (
           <div className="p-4 text-center text-white/40 text-sm">
             Select an account from the sidebar first

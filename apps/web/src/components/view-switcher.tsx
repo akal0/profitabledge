@@ -49,9 +49,7 @@ export function ViewSwitcher({
   const advancedGate = gateStatus?.find((g) => g.tier === "advanced");
   const isAdvancedUnlocked = advancedGate?.isUnlocked ?? true;
   const advancedGateLabel =
-    advancedGate?.isUnlocked === false
-      ? advancedGate.message
-      : "";
+    advancedGate?.isUnlocked === false ? advancedGate.message : "";
 
   const isAdvancedAlignment = (name?: string | null) =>
     (name || "").toLowerCase().includes("advanced alignment");
@@ -76,7 +74,7 @@ export function ViewSwitcher({
 
   const surfaceClass = cn(
     APP_TOOLTIP_SURFACE_CLASS,
-    "border-white/6 bg-sidebar/95 text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl"
+    "ring-white/6 bg-sidebar/95 text-white/80 shadow-[0_18px_40px_rgba(0,0,0,0.42)] backdrop-blur-xl"
   );
   const contentClass = cn(surfaceClass, "w-[320px] p-1.5");
   const sectionTitleClass =
@@ -89,7 +87,7 @@ export function ViewSwitcher({
     return (
       <Button
         disabled
-        className="cursor-pointer flex items-center justify-center gap-2 px-3 py-2 h-[38px] text-xs transition-all duration-250 border border-white/5 bg-sidebar text-white/40 hover:bg-sidebar-accent rounded-sm"
+        className="cursor-pointer flex items-center justify-center gap-2 px-3 py-2 h-[38px] text-xs transition-all duration-250 ring ring-white/5 bg-sidebar text-white/40 hover:bg-sidebar-accent rounded-sm"
       >
         <Settings2 className="h-4 w-4 text-white/40" />
         Loading...
@@ -100,9 +98,9 @@ export function ViewSwitcher({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="cursor-pointer flex items-center justify-center gap-2 px-3 py-2 h-[38px] text-xs text-white/70 transition-all active:scale-95 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent hover:brightness-110">
+        <Button className="cursor-pointer flex items-center justify-center gap-2 px-3 py-2 h-[38px] text-xs text-white/70 transition-all active:scale-95 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent hover:brightness-110">
           {currentView?.icon && <span>{currentView.icon}</span>}
-          <Settings2 className="h-4 w-4 text-white/60" />
+          <Settings2 className="size-3 text-white/60" />
           <span className="hidden sm:inline">
             {currentView?.name || "Complete view"}
           </span>
@@ -117,10 +115,7 @@ export function ViewSwitcher({
         {/* Complete view (all columns, no filters) */}
         <DropdownMenuItem
           onClick={() => onViewChange(null)}
-          className={cn(
-            itemClass,
-            isCompleteView && "bg-sidebar-accent/80"
-          )}
+          className={cn(itemClass, isCompleteView && "bg-sidebar-accent/80")}
         >
           <div className="flex items-center gap-2 flex-1">
             <span>📊</span>
@@ -169,7 +164,10 @@ export function ViewSwitcher({
             );
           })
         ) : (
-          <DropdownMenuItem disabled className="text-white/40 text-xs px-4 py-2.5">
+          <DropdownMenuItem
+            disabled
+            className="text-white/40 text-xs px-4 py-2.5"
+          >
             No saved views
           </DropdownMenuItem>
         )}
@@ -177,10 +175,7 @@ export function ViewSwitcher({
         {onManageViews && (
           <>
             <Separator className={separatorClass} />
-            <DropdownMenuItem
-              onClick={onManageViews}
-              className={itemClass}
-            >
+            <DropdownMenuItem onClick={onManageViews} className={itemClass}>
               <Settings2 className="mr-2 h-4 w-4 text-white/60" />
               <span>Manage views...</span>
             </DropdownMenuItem>

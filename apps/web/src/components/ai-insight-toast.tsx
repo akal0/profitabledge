@@ -60,11 +60,11 @@ export async function showInsightToast(
     duration: 8000,
     classNames: {
       toast:
-        "bg-sidebar border-white/10 text-white !min-w-[300px] !max-w-[500px]",
+        "bg-sidebar ring-white/10 text-white !min-w-[300px] !max-w-[500px]",
       title: "text-white font-medium",
       description: "text-white/70",
       actionButton:
-        "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 border-teal-500/30",
+        "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 ring-teal-500/30",
     },
   });
 
@@ -96,11 +96,11 @@ export function InsightToastTestButton() {
       onClick={() => void handleClick()}
       disabled={!accountId || isPending}
       className={cn(
-        "cursor-pointer flex h-[38px] w-max items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95",
+        "cursor-pointer flex h-[38px] w-max items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 active:scale-95",
         isPending && "cursor-wait"
       )}
     >
-      <Lightbulb className="h-3.5 w-3.5 text-white/75" />
+      <Lightbulb className="size-3 text-white/75" />
       <span>{isPending ? "Testing..." : "Test insight toast"}</span>
     </Button>
   );
@@ -127,7 +127,8 @@ export function AIInsightToast() {
     // Check if we should show an insight on mount
     const lastInsightTime = localStorage.getItem(STORAGE_KEY);
     const now = Date.now();
-    const shouldShowInsight = !lastInsightTime || now - parseInt(lastInsightTime) > INSIGHT_INTERVAL;
+    const shouldShowInsight =
+      !lastInsightTime || now - parseInt(lastInsightTime) > INSIGHT_INTERVAL;
 
     // Show insight on login (once per session) if enough time has passed
     if (!hasShownLoginInsight.current && shouldShowInsight) {

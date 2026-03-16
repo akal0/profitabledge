@@ -66,14 +66,16 @@ export function ChartWidgetFrame({
           </h2>
           {headerRight || !isEditing ? (
             <div
-              className="ml-auto flex max-w-full flex-nowrap items-center justify-end gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+              className="ml-auto shrink-0 pl-2"
               onPointerDown={stopHeaderInteraction}
               onClick={stopHeaderInteraction}
             >
-              {!isEditing ? (
-                <WidgetShareButton targetRef={widgetRef} title={title} />
-              ) : null}
-              {headerRight}
+              <div className="-m-1 flex items-center justify-end gap-2 overflow-visible p-1">
+                {!isEditing ? (
+                  <WidgetShareButton targetRef={widgetRef} title={title} />
+                ) : null}
+                {headerRight}
+              </div>
             </div>
           ) : null}
         </div>

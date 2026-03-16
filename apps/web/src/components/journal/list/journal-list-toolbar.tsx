@@ -129,13 +129,13 @@ export function JournalListToolbar({
               <Input
                 value={searchInput}
                 onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Search (title)"
-                className="h-full ring-0 bg-transparent px-0 py-0 text-xs text-white placeholder:text-white/30 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 group-hover:bg-transparent"
+                placeholder="Search by title"
+                className="h-full ring-0 bg-transparent px-0 py-0 text-xs text-white placeholder:text-white/30 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 group-hover:bg-transparent border-none hover:bg-transparent"
               />
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button className="relative bg-transparent px-1 py-0 text-[11px] text-white/60 shadow-none hover:bg-transparent hover:text-white">
+                  <Button className="relative bg-transparent px-1 py-0 text-[11px] text-white/60 shadow-none hover:bg-transparent hover:text-white ring-0">
                     <ListFilterPlus className="size-4" />
                     {appliedFilters.length > 0 ? (
                       <span className="absolute -right-1.5 -top-1.5 inline-flex min-w-4 items-center justify-center rounded-md ring ring-white/10 bg-white/[0.08] px-1 text-[10px] font-medium leading-none text-white/80">
@@ -254,19 +254,20 @@ export function JournalListToolbar({
             </Button>
           </div>
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-2">
             <Button
               onClick={onCreateEntry}
               className={journalToolbarPrimaryButtonClassName}
+              size="sm"
             >
-              <Plus className="mr-1 h-4 w-4" />
+              <Plus className="size-3" />
               New entry
             </Button>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" className={journalActionButtonMutedClassName}>
-                  <SortAsc className="mr-1 h-4 w-4" />
+                  <SortAsc className="size-3" />
                   Sort
                 </Button>
               </DropdownMenuTrigger>

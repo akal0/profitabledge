@@ -143,7 +143,7 @@ export function CsvAccountEnrichmentSheet({
       <SheetTrigger asChild>
         {trigger ?? (
           <Button
-            className="cursor-pointer flex items-center justify-center gap-2 py-2 h-9 transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
+            className="cursor-pointer flex items-center justify-center gap-2 py-2 h-9 transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
             type="button"
           >
             <FileUp className="size-3.5" />

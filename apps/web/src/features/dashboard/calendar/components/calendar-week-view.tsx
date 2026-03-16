@@ -100,6 +100,8 @@ export function CalendarWeekView({
   onHoverDay,
   onLeaveDay,
 }: CalendarWeekViewProps) {
+  const isSingleDayView = days.length === 1;
+
   return (
     <div className="flex w-full">
       {days.map((dayRow) => {
@@ -121,7 +123,12 @@ export function CalendarWeekView({
         const cell = (
           <div
             key={dayRow.dateISO}
-            className="first:rounded-l-sm last:rounded-r-sm first:border not-first:border not-last:border-l-0 last:border-l-0 w-full cursor-pointer border-black/10 bg-white p-5 transition-colors duration-250 hover:bg-sidebar-accent dark:border-white/5 dark:bg-sidebar"
+            className={cn(
+              "flex min-h-[180px] w-full cursor-pointer flex-col border-black/10 bg-white p-5 transition-colors duration-250 hover:bg-sidebar-accent dark:border-white/5 dark:bg-sidebar",
+              isSingleDayView
+                ? "rounded-sm border"
+                : "first:rounded-l-sm last:rounded-r-sm first:border not-first:border not-last:border-l-0 last:border-l-0"
+            )}
             role="button"
             tabIndex={0}
             aria-label={`View trades for ${formatAccessibleDate(dayDate)}`}
@@ -244,7 +251,7 @@ export function CalendarWeekView({
                 </div>
               </div>
             ) : (
-              <>
+              <div className="flex h-full flex-col">
                 <div className="mb-8 flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-medium text-secondary">
@@ -271,7 +278,7 @@ export function CalendarWeekView({
                     {pctLabel}
                   </h1>
                 </div>
-                <div className="flex items-end justify-between">
+                <div className="mt-auto flex items-end justify-between">
                   <div
                     className={cn(
                       "text-xl font-medium",
@@ -286,7 +293,7 @@ export function CalendarWeekView({
                   {formatTradeCount(dayRow.count)}{" "}
                   {dayRow.count === 1 ? "trade" : "trades"}
                 </div>
-              </>
+              </div>
             )}
           </div>
         );

@@ -8,11 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogClose,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogClose } from "@/components/ui/dialog";
 import {
   Sheet,
   SheetContent,
@@ -38,7 +34,11 @@ import { TRADE_SURFACE_CARD_CLASS } from "@/components/trades/trade-identifier-p
 // Template categories with icons
 const categoryConfig = {
   daily: { label: "Daily Review", icon: Calendar, color: "text-blue-400" },
-  weekly: { label: "Weekly Review", icon: CalendarDays, color: "text-purple-400" },
+  weekly: {
+    label: "Weekly Review",
+    icon: CalendarDays,
+    color: "text-purple-400",
+  },
   trade_review: { label: "Trade Review", icon: Target, color: "text-teal-400" },
   strategy: { label: "Strategy", icon: Sparkles, color: "text-yellow-400" },
   custom: { label: "Custom", icon: FileText, color: "text-white/60" },
@@ -57,15 +57,27 @@ const systemTemplates = [
     content: [
       { id: "1", type: "heading1", content: "Daily Trading Review" },
       { id: "2", type: "heading2", content: "Market Overview" },
-      { id: "3", type: "paragraph", content: "What were the key market conditions today?" },
+      {
+        id: "3",
+        type: "paragraph",
+        content: "What were the key market conditions today?",
+      },
       { id: "4", type: "heading2", content: "Trades Taken" },
-      { id: "5", type: "paragraph", content: "List your trades and brief analysis:" },
+      {
+        id: "5",
+        type: "paragraph",
+        content: "List your trades and brief analysis:",
+      },
       { id: "6", type: "heading2", content: "What Went Well" },
       { id: "7", type: "checkList", content: "" },
       { id: "8", type: "heading2", content: "Areas for Improvement" },
       { id: "9", type: "checkList", content: "" },
       { id: "10", type: "heading2", content: "Tomorrow's Plan" },
-      { id: "11", type: "paragraph", content: "Key levels and setups to watch:" },
+      {
+        id: "11",
+        type: "paragraph",
+        content: "Key levels and setups to watch:",
+      },
     ],
   },
   {
@@ -78,13 +90,30 @@ const systemTemplates = [
       { id: "1", type: "heading1", content: "Weekly Performance Review" },
       { id: "2", type: "paragraph", content: "Week of [DATE]" },
       { id: "3", type: "heading2", content: "Performance Summary" },
-      { id: "4", type: "chart", content: "", props: { chartType: "equity-curve" } },
+      {
+        id: "4",
+        type: "chart",
+        content: "",
+        props: { chartType: "equity-curve" },
+      },
       { id: "5", type: "heading2", content: "Key Statistics" },
-      { id: "6", type: "bulletList", content: "Total trades: \nWin rate: \nProfit factor: \nAverage R: " },
+      {
+        id: "6",
+        type: "bulletList",
+        content: "Total trades: \nWin rate: \nProfit factor: \nAverage R: ",
+      },
       { id: "7", type: "heading2", content: "Best Trade of the Week" },
-      { id: "8", type: "paragraph", content: "Describe your best trade and what made it work:" },
+      {
+        id: "8",
+        type: "paragraph",
+        content: "Describe your best trade and what made it work:",
+      },
       { id: "9", type: "heading2", content: "Worst Trade of the Week" },
-      { id: "10", type: "paragraph", content: "What went wrong and how to avoid it:" },
+      {
+        id: "10",
+        type: "paragraph",
+        content: "What went wrong and how to avoid it:",
+      },
       { id: "11", type: "heading2", content: "Lessons Learned" },
       { id: "12", type: "numberedList", content: "" },
       { id: "13", type: "heading2", content: "Goals for Next Week" },
@@ -102,16 +131,33 @@ const systemTemplates = [
       { id: "2", type: "heading2", content: "Trade Details" },
       { id: "3", type: "paragraph", content: "Insert your trade below:" },
       { id: "4", type: "heading2", content: "Setup & Entry" },
-      { id: "5", type: "paragraph", content: "What was the setup? Why did you enter?" },
+      {
+        id: "5",
+        type: "paragraph",
+        content: "What was the setup? Why did you enter?",
+      },
       { id: "6", type: "heading2", content: "Trade Management" },
-      { id: "7", type: "paragraph", content: "How did you manage the trade? Any adjustments?" },
+      {
+        id: "7",
+        type: "paragraph",
+        content: "How did you manage the trade? Any adjustments?",
+      },
       { id: "8", type: "heading2", content: "Exit Analysis" },
-      { id: "9", type: "paragraph", content: "Why did you exit? Was it according to plan?" },
+      {
+        id: "9",
+        type: "paragraph",
+        content: "Why did you exit? Was it according to plan?",
+      },
       { id: "10", type: "heading2", content: "What I Did Well" },
       { id: "11", type: "bulletList", content: "" },
       { id: "12", type: "heading2", content: "What I Could Improve" },
       { id: "13", type: "bulletList", content: "" },
-      { id: "14", type: "callout", content: "Key takeaway from this trade", props: { calloutType: "info" } },
+      {
+        id: "14",
+        type: "callout",
+        content: "Key takeaway from this trade",
+        props: { calloutType: "info" },
+      },
     ],
   },
   {
@@ -123,19 +169,41 @@ const systemTemplates = [
     content: [
       { id: "1", type: "heading1", content: "Strategy: [Name]" },
       { id: "2", type: "heading2", content: "Overview" },
-      { id: "3", type: "paragraph", content: "Brief description of the strategy and its edge:" },
+      {
+        id: "3",
+        type: "paragraph",
+        content: "Brief description of the strategy and its edge:",
+      },
       { id: "4", type: "heading2", content: "Market Conditions" },
       { id: "5", type: "paragraph", content: "When to use this strategy:" },
-      { id: "6", type: "bulletList", content: "Trending markets\nHigh volatility\nSpecific sessions" },
+      {
+        id: "6",
+        type: "bulletList",
+        content: "Trending markets\nHigh volatility\nSpecific sessions",
+      },
       { id: "7", type: "heading2", content: "Entry Rules" },
       { id: "8", type: "numberedList", content: "" },
       { id: "9", type: "heading2", content: "Exit Rules" },
       { id: "10", type: "numberedList", content: "" },
       { id: "11", type: "heading2", content: "Risk Management" },
-      { id: "12", type: "bulletList", content: "Position size: \nStop loss: \nTake profit: \nMax daily loss: " },
+      {
+        id: "12",
+        type: "bulletList",
+        content:
+          "Position size: \nStop loss: \nTake profit: \nMax daily loss: ",
+      },
       { id: "13", type: "heading2", content: "Backtesting Results" },
-      { id: "14", type: "paragraph", content: "Add charts and statistics here:" },
-      { id: "15", type: "callout", content: "Remember: Stick to the rules!", props: { calloutType: "warning" } },
+      {
+        id: "14",
+        type: "paragraph",
+        content: "Add charts and statistics here:",
+      },
+      {
+        id: "15",
+        type: "callout",
+        content: "Remember: Stick to the rules!",
+        props: { calloutType: "warning" },
+      },
     ],
   },
   {
@@ -146,7 +214,11 @@ const systemTemplates = [
     category: "trade_review",
     content: [
       { id: "1", type: "heading1", content: "Trade Comparison" },
-      { id: "2", type: "paragraph", content: "Comparing trades to identify patterns and improvements" },
+      {
+        id: "2",
+        type: "paragraph",
+        content: "Comparing trades to identify patterns and improvements",
+      },
       { id: "3", type: "heading2", content: "Trade 1" },
       { id: "4", type: "paragraph", content: "Insert first trade:" },
       { id: "5", type: "heading2", content: "Trade 2" },
@@ -158,7 +230,12 @@ const systemTemplates = [
       { id: "11", type: "heading2", content: "Differences" },
       { id: "12", type: "bulletList", content: "" },
       { id: "13", type: "heading2", content: "Key Insights" },
-      { id: "14", type: "callout", content: "What can you learn from comparing these trades?", props: { calloutType: "info" } },
+      {
+        id: "14",
+        type: "callout",
+        content: "What can you learn from comparing these trades?",
+        props: { calloutType: "info" },
+      },
     ],
   },
 ];
@@ -189,19 +266,23 @@ export function TemplateBrowser({
     : undefined;
 
   // Fetch user templates
-  const { data: userTemplates, isLoading } = trpc.journal.listTemplates.useQuery(
-    templateFilters,
-    { enabled: isOpen }
-  );
+  const { data: userTemplates, isLoading } =
+    trpc.journal.listTemplates.useQuery(templateFilters, { enabled: isOpen });
 
   // Combine system templates with user templates
   const allTemplates = [
-    ...systemTemplates.filter(t => 
-      (!selectedCategory || t.category === selectedCategory) &&
-      (!search || t.name.toLowerCase().includes(search.toLowerCase()) || t.description.toLowerCase().includes(search.toLowerCase()))
+    ...systemTemplates.filter(
+      (t) =>
+        (!selectedCategory || t.category === selectedCategory) &&
+        (!search ||
+          t.name.toLowerCase().includes(search.toLowerCase()) ||
+          t.description.toLowerCase().includes(search.toLowerCase()))
     ),
-    ...(userTemplates || []).filter((t: any) =>
-      (!search || t.name.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase()))
+    ...(userTemplates || []).filter(
+      (t: any) =>
+        !search ||
+        t.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.description || "").toLowerCase().includes(search.toLowerCase())
     ),
   ];
 
@@ -242,10 +323,10 @@ export function TemplateBrowser({
               }}
               className={cn(
                 TRADE_SURFACE_CARD_CLASS,
-                "group flex w-full items-center gap-4 border border-white/8 px-4 py-4 text-left transition-colors hover:border-white/12 hover:bg-white/[0.05]"
+                "group flex w-full items-center gap-4 ring ring-white/8 px-4 py-4 text-left transition-colors hover:ring-white/12 hover:bg-white/[0.05]"
               )}
             >
-              <div className="flex size-11 items-center justify-center rounded-sm border border-white/8 bg-white/[0.03] transition-colors group-hover:bg-white/[0.06]">
+              <div className="flex size-11 items-center justify-center rounded-sm ring ring-white/8 bg-white/[0.03] transition-colors group-hover:bg-white/[0.06]">
                 <Plus className="size-5 text-white/55 group-hover:text-white" />
               </div>
               <div className="min-w-0 flex-1">
@@ -276,7 +357,7 @@ export function TemplateBrowser({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search templates..."
-                className="h-10 rounded-sm border-white/8 bg-white/[0.03] pl-9 text-sm text-white placeholder:text-white/30"
+                className="h-10 rounded-sm ring-white/8 bg-white/[0.03] pl-9 text-sm text-white placeholder:text-white/30"
               />
             </div>
 
@@ -285,17 +366,22 @@ export function TemplateBrowser({
                 size="sm"
                 onClick={() => setSelectedCategory(null)}
                 className={cn(
-                  "h-8 rounded-sm border px-3 text-xs font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+                  "h-8 rounded-sm ring px-3 text-xs font-medium ",
                   selectedCategory === null
-                    ? "border-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]"
-                    : "border-white/8 bg-white/[0.03] text-white/65 hover:bg-white/[0.06] hover:text-white"
+                    ? "ring-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]"
+                    : "ring-white/8 bg-white/[0.03] text-white/65 hover:bg-white/[0.06] hover:text-white"
                 )}
               >
                 All
               </Button>
-              {(Object.entries(categoryConfig) as Array<
-                [JournalTemplateCategory, (typeof categoryConfig)[JournalTemplateCategory]]
-              >).map(([key, config]) => {
+              {(
+                Object.entries(categoryConfig) as Array<
+                  [
+                    JournalTemplateCategory,
+                    (typeof categoryConfig)[JournalTemplateCategory]
+                  ]
+                >
+              ).map(([key, config]) => {
                 const Icon = config.icon;
                 return (
                   <Button
@@ -303,10 +389,10 @@ export function TemplateBrowser({
                     size="sm"
                     onClick={() => setSelectedCategory(key)}
                     className={cn(
-                      "h-8 gap-1.5 rounded-sm border px-3 text-xs font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+                      "h-8 gap-1.5 rounded-sm ring px-3 text-xs font-medium ",
                       selectedCategory === key
-                        ? "border-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]"
-                        : "border-white/8 bg-white/[0.03] text-white/65 hover:bg-white/[0.06] hover:text-white"
+                        ? "ring-white/10 bg-white/[0.08] text-white hover:bg-white/[0.12]"
+                        : "ring-white/8 bg-white/[0.03] text-white/65 hover:bg-white/[0.06] hover:text-white"
                     )}
                   >
                     <Icon className="size-3.5" />
@@ -320,7 +406,7 @@ export function TemplateBrowser({
           <Separator />
 
           <ScrollArea className="min-h-0 flex-1 px-6 py-5">
-            <div className="grid grid-cols-1 gap-3 pb-1 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 pb-1 sm:grid-cols-2 px-0.5 py-2">
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <Skeleton
@@ -351,10 +437,10 @@ export function TemplateBrowser({
                       onClick={() => handleSelectTemplate(template)}
                       className={cn(
                         TRADE_SURFACE_CARD_CLASS,
-                        "group flex flex-col items-start border border-white/8 p-4 text-left transition-colors hover:border-white/12 hover:bg-white/[0.05]"
+                        "group flex flex-col items-center ring ring-white/8 p-4 text-left transition-colors hover:ring-white/12 hover:bg-white/[0.05]"
                       )}
                     >
-                      <div className="flex w-full items-start gap-3">
+                      <div className="flex w-full items-center gap-3">
                         <div className="text-3xl leading-none">
                           {template.emoji || "📄"}
                         </div>
@@ -371,7 +457,7 @@ export function TemplateBrowser({
                         <Badge
                           variant="outline"
                           className={cn(
-                            "rounded-sm border-white/10 text-[11px]",
+                            "rounded-sm ring-white/10 text-[11px]",
                             category.color
                           )}
                         >
@@ -381,7 +467,7 @@ export function TemplateBrowser({
                         {isSystem ? (
                           <Badge
                             variant="outline"
-                            className="rounded-sm border-white/10 text-[11px] text-white/40"
+                            className="rounded-sm ring-white/10 text-[11px] text-white/40"
                           >
                             Built-in
                           </Badge>
@@ -440,28 +526,46 @@ export function SaveTemplateDialog({
     });
   };
 
-  const commonEmojis = ["📄", "📅", "📊", "🎯", "📝", "💡", "🔥", "✨", "📈", "🏆", "⚖️", "🧪"];
+  const commonEmojis = [
+    "📄",
+    "📅",
+    "📊",
+    "🎯",
+    "📝",
+    "💡",
+    "🔥",
+    "✨",
+    "📈",
+    "🏆",
+    "⚖️",
+    "🧪",
+  ];
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-md"
+        className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-md"
       >
-        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
           {/* Header */}
           <div className="flex items-start gap-3 px-5 py-4 shrink-0">
-            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
               <FileText className="h-3.5 w-3.5 text-white/60" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-medium text-white">Save as Template</div>
+              <div className="text-sm font-medium text-white">
+                Save as Template
+              </div>
               <p className="mt-1 text-xs leading-relaxed text-white/40">
                 Create a reusable template from this entry
               </p>
             </div>
             <DialogClose asChild>
-              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+              <button
+                type="button"
+                className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+              >
                 <X className="h-3.5 w-3.5" />
                 <span className="sr-only">Close</span>
               </button>
@@ -480,7 +584,9 @@ export function SaveTemplateDialog({
                     onClick={() => setEmoji(e)}
                     className={cn(
                       "text-xl p-1.5 rounded transition-colors",
-                      emoji === e ? "bg-teal-500/20 ring-1 ring-teal-500" : "hover:bg-white/5"
+                      emoji === e
+                        ? "bg-teal-500/20 ring-1 ring-teal-500"
+                        : "hover:bg-white/5"
                     )}
                   >
                     {e}
@@ -491,33 +597,44 @@ export function SaveTemplateDialog({
 
             {/* Name */}
             <div>
-              <label className="text-sm text-white/60 mb-2 block">Template Name</label>
+              <label className="text-sm text-white/60 mb-2 block">
+                Template Name
+              </label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="My Template"
-                className="bg-sidebar-accent border-white/10 text-white"
+                className="bg-sidebar-accent ring-white/10 text-white"
               />
             </div>
 
             {/* Description */}
             <div>
-              <label className="text-sm text-white/60 mb-2 block">Description</label>
+              <label className="text-sm text-white/60 mb-2 block">
+                Description
+              </label>
               <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="What is this template for?"
-                className="bg-sidebar-accent border-white/10 text-white"
+                className="bg-sidebar-accent ring-white/10 text-white"
               />
             </div>
 
             {/* Category */}
             <div>
-              <label className="text-sm text-white/60 mb-2 block">Category</label>
+              <label className="text-sm text-white/60 mb-2 block">
+                Category
+              </label>
               <div className="flex gap-2 flex-wrap">
-                {(Object.entries(categoryConfig) as Array<
-                  [JournalTemplateCategory, (typeof categoryConfig)[JournalTemplateCategory]]
-                >).map(([key, config]) => {
+                {(
+                  Object.entries(categoryConfig) as Array<
+                    [
+                      JournalTemplateCategory,
+                      (typeof categoryConfig)[JournalTemplateCategory]
+                    ]
+                  >
+                ).map(([key, config]) => {
                   const Icon = config.icon;
                   return (
                     <Button
@@ -528,7 +645,7 @@ export function SaveTemplateDialog({
                       className={cn(
                         category === key
                           ? "bg-teal-500 hover:bg-teal-600"
-                          : "border-white/10 text-white/60 hover:text-white"
+                          : "ring-white/10 text-white/60 hover:text-white"
                       )}
                     >
                       <Icon className="h-3.5 w-3.5 mr-1.5" />
@@ -543,7 +660,7 @@ export function SaveTemplateDialog({
           {/* Footer */}
           <div className="flex items-center justify-end gap-2 px-5 py-3 shrink-0">
             <Button
-              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               onClick={onClose}
             >
               Cancel
@@ -551,7 +668,7 @@ export function SaveTemplateDialog({
             <Button
               onClick={handleSave}
               disabled={!name.trim() || createTemplate.isPending}
-              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+              className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
             >
               {createTemplate.isPending ? "Saving..." : "Save Template"}
             </Button>

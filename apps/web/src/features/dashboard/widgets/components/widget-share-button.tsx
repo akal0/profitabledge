@@ -65,8 +65,8 @@ export function WidgetShareButton({
           data-widget-share-ignore="true"
           className={cn(
             buttonLabel
-              ? "h-9 w-max shrink-0 gap-2 rounded-sm border border-white/5 bg-sidebar px-4 text-xs text-white/70 transition-all duration-250 hover:bg-sidebar-accent hover:text-white"
-              : "size-7 shrink-0 rounded-sm border border-white/5 bg-sidebar/85 text-white/65 backdrop-blur-sm transition-all duration-250 hover:bg-sidebar-accent hover:text-white",
+              ? "h-9 w-max shrink-0 gap-2 rounded-sm ring ring-white/5 bg-sidebar px-4 text-xs text-white/70 transition-all duration-250 hover:bg-sidebar-accent hover:text-white"
+              : "size-7 shrink-0 rounded-sm ring ring-white/5 bg-sidebar/85 text-white/65 backdrop-blur-sm transition-all duration-250 hover:bg-sidebar-accent hover:text-white",
             className
           )}
           disabled={isExporting}

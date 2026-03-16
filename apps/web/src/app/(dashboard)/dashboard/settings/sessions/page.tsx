@@ -18,10 +18,38 @@ interface SessionConfig {
 }
 
 const DEFAULT_SESSIONS: SessionConfig[] = [
-  { id: "sydney", name: "Sydney", startHourUTC: 21, endHourUTC: 6, color: "#22c55e", daysActive: [1, 2, 3, 4, 5] },
-  { id: "tokyo", name: "Tokyo", startHourUTC: 0, endHourUTC: 9, color: "#f59e0b", daysActive: [1, 2, 3, 4, 5] },
-  { id: "london", name: "London", startHourUTC: 7, endHourUTC: 16, color: "#8b5cf6", daysActive: [1, 2, 3, 4, 5] },
-  { id: "new-york", name: "New York", startHourUTC: 12, endHourUTC: 21, color: "#3b82f6", daysActive: [1, 2, 3, 4, 5] },
+  {
+    id: "sydney",
+    name: "Sydney",
+    startHourUTC: 21,
+    endHourUTC: 6,
+    color: "#22c55e",
+    daysActive: [1, 2, 3, 4, 5],
+  },
+  {
+    id: "tokyo",
+    name: "Tokyo",
+    startHourUTC: 0,
+    endHourUTC: 9,
+    color: "#f59e0b",
+    daysActive: [1, 2, 3, 4, 5],
+  },
+  {
+    id: "london",
+    name: "London",
+    startHourUTC: 7,
+    endHourUTC: 16,
+    color: "#8b5cf6",
+    daysActive: [1, 2, 3, 4, 5],
+  },
+  {
+    id: "new-york",
+    name: "New York",
+    startHourUTC: 12,
+    endHourUTC: 21,
+    color: "#3b82f6",
+    daysActive: [1, 2, 3, 4, 5],
+  },
 ];
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -31,7 +59,9 @@ export default function SessionsSettingsPage() {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("profitabledge-sessions");
       if (saved) {
-        try { return JSON.parse(saved); } catch {}
+        try {
+          return JSON.parse(saved);
+        } catch {}
       }
     }
     return DEFAULT_SESSIONS;
@@ -89,7 +119,9 @@ export default function SessionsSettingsPage() {
       {/* Header with actions */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Trading Sessions</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Trading Sessions
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Trades are auto-tagged based on these time ranges.
           </p>
@@ -97,16 +129,16 @@ export default function SessionsSettingsPage() {
         <div className="flex items-center gap-2">
           <Button
             onClick={resetDefaults}
-            className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white/60 text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-4"
+            className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white/60 text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-4"
           >
-            Reset Defaults
+            Reset defaults
           </Button>
           <Button
             onClick={addSession}
-            className="border border-white/5 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+            className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start transition-all active:scale-95 duration-250 gap-1"
           >
-            <Plus className="size-3.5" />
-            Add Session
+            <Plus className="size-3" />
+            Add session
           </Button>
         </div>
       </div>
@@ -142,7 +174,7 @@ export default function SessionsSettingsPage() {
           {Array.from({ length: 24 }, (_, i) => (
             <div
               key={i}
-              className="absolute top-0 h-full border-l border-white/5"
+              className="absolute top-0 h-full ring-l ring-white/5"
               style={{ left: `${(i / 24) * 100}%` }}
             >
               {i % 4 === 0 && (
@@ -168,7 +200,7 @@ export default function SessionsSettingsPage() {
                 onChange={(e) =>
                   updateSession(session.id, { color: e.target.value })
                 }
-                className="size-6 rounded cursor-pointer border-0 bg-transparent"
+                className="size-6 rounded cursor-pointer ring-0 bg-transparent"
               />
               <div>
                 <Label className="text-sm text-white/80 font-medium">
@@ -187,7 +219,7 @@ export default function SessionsSettingsPage() {
                   updateSession(session.id, { name: e.target.value })
                 }
                 placeholder="Session name"
-                className="bg-sidebar-accent border-white/5 text-white text-sm"
+                className="bg-sidebar-accent ring-white/5 text-white text-sm"
               />
 
               {/* Time range */}
@@ -203,7 +235,7 @@ export default function SessionsSettingsPage() {
                       startHourUTC: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="w-16 text-center text-xs bg-sidebar-accent border-white/5 text-white"
+                  className="w-16 text-center text-xs bg-sidebar-accent ring-white/5 text-white"
                 />
                 <span className="text-white/40 text-xs">:00 to</span>
                 <Input
@@ -216,7 +248,7 @@ export default function SessionsSettingsPage() {
                       endHourUTC: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="w-16 text-center text-xs bg-sidebar-accent border-white/5 text-white"
+                  className="w-16 text-center text-xs bg-sidebar-accent ring-white/5 text-white"
                 />
                 <span className="text-white/40 text-xs">:00 UTC</span>
               </div>
@@ -228,10 +260,10 @@ export default function SessionsSettingsPage() {
                     key={label}
                     type="button"
                     onClick={() => toggleDay(session.id, i)}
-                    className={`px-2 py-0.5 text-[10px] rounded-sm border transition-all cursor-pointer ${
+                    className={`px-2 py-0.5 text-[10px] rounded-sm ring transition-all cursor-pointer ${
                       session.daysActive.includes(i)
-                        ? "border-white/20 bg-white/10 text-white"
-                        : "border-white/5 bg-transparent text-white/25"
+                        ? "ring-white/20 bg-white/10 text-white"
+                        : "ring-white/5 bg-transparent text-white/25"
                     }`}
                   >
                     {label}
@@ -258,7 +290,7 @@ export default function SessionsSettingsPage() {
       <div className="flex justify-end px-6 sm:px-8 py-6">
         <Button
           onClick={save}
-          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
         >
           Save changes
         </Button>

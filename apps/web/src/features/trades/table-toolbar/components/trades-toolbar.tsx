@@ -242,7 +242,7 @@ export default function TradesToolbar({
           />
         ) : null}
 
-        <div className="group relative flex h-[38px] w-128 items-center rounded-sm border border-white/5 pl-8 pr-2 transition duration-250 hover:bg-sidebar-accent">
+        <div className="group relative flex h-[38px] w-128 items-center rounded-sm ring ring-white/5 pl-8 pr-2 transition duration-250 hover:bg-sidebar-accent">
           <SearchIcon className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-white/40 transition-colors group-hover:text-white/60" />
           <Input
             type="search"
@@ -253,7 +253,7 @@ export default function TradesToolbar({
               setSearchValue(nextValue);
               debouncedQ(nextValue);
             }}
-            className="h-full ring-0 bg-transparent px-0 py-0 text-xs focus-visible:scale-100 group-hover:bg-transparent! hover:bg-transparent! focus-visible:bg-transparent"
+            className="h-full ring-0 bg-transparent px-0 py-0 text-xs focus-visible:scale-100 group-hover:bg-transparent! hover:bg-transparent! focus-visible:bg-transparent border-none!"
           />
           <TradesToolbarFilterMenu
             appliedFilterCount={appliedFilters.length}

@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useMemo } from "react";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -127,12 +123,7 @@ const builtInPresets: WidgetPreset[] = [
     id: "builtin-psychology",
     name: "Psychology",
     createdAt: new Date().toISOString(),
-    widgets: [
-      "tiltmeter",
-      "daily-briefing",
-      "consistency-score",
-      "win-streak",
-    ],
+    widgets: ["tiltmeter", "daily-briefing", "consistency-score", "win-streak"],
     spans: {},
   },
   {
@@ -186,7 +177,9 @@ export function WidgetPresets({
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showRenameDialog, setShowRenameDialog] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [exportDialogType, setExportDialogType] = useState<"json" | "csv">("json");
+  const [exportDialogType, setExportDialogType] = useState<"json" | "csv">(
+    "json"
+  );
   const [exportFileName, setExportFileName] = useState("");
   const [presetName, setPresetName] = useState("");
   const [renamePresetId, setRenamePresetId] = useState<string | null>(null);
@@ -342,7 +335,10 @@ export function WidgetPresets({
       } else {
         // File only had built-in presets — apply the first one
         const first = validPresets[0];
-        handleApplyPreset({ ...first, widgets: sanitizeWidgetList(first.widgets) });
+        handleApplyPreset({
+          ...first,
+          widgets: sanitizeWidgetList(first.widgets),
+        });
         toast.info("Applied built-in preset");
       }
     } catch (err) {
@@ -372,7 +368,7 @@ export function WidgetPresets({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+          <Button className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
             <Bookmark className="size-3 " />
             Presets
           </Button>
@@ -381,10 +377,10 @@ export function WidgetPresets({
           align="end"
           className={`w-76 ${toolbarFilterMenuContentClass}`}
         >
-          <div className={toolbarFilterMenuSectionTitleClass}>
-            Built-in
-          </div>
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <div className={toolbarFilterMenuSectionTitleClass}>Built-in</div>
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
           {builtInPresets.map((preset) => (
             <DropdownMenuItem
               key={preset.id}
@@ -400,11 +396,13 @@ export function WidgetPresets({
 
           {customPresets.length > 0 && (
             <>
-              <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
-              <div className={toolbarFilterMenuSectionTitleClass}>
-                Custom
-              </div>
-              <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+              <DropdownMenuSeparator
+                className={toolbarFilterMenuMainSeparatorClass}
+              />
+              <div className={toolbarFilterMenuSectionTitleClass}>Custom</div>
+              <DropdownMenuSeparator
+                className={toolbarFilterMenuMainSeparatorClass}
+              />
               {customPresets.map((preset) => (
                 <DropdownMenuItem
                   key={preset.id}
@@ -442,7 +440,9 @@ export function WidgetPresets({
             </>
           )}
 
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
 
           <DropdownMenuItem
             onClick={() => setShowSaveDialog(true)}
@@ -452,12 +452,16 @@ export function WidgetPresets({
             Save current as preset
           </DropdownMenuItem>
 
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
 
           <div className={toolbarFilterMenuSectionTitleClass}>
             Export / Import
           </div>
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
 
           <DropdownMenuItem
             onClick={() => openExportDialog("json")}
@@ -483,7 +487,9 @@ export function WidgetPresets({
             Import presets
           </DropdownMenuItem>
 
-          <DropdownMenuSeparator className={toolbarFilterMenuMainSeparatorClass} />
+          <DropdownMenuSeparator
+            className={toolbarFilterMenuMainSeparatorClass}
+          />
 
           <DropdownMenuItem
             onClick={handleResetToDefault}
@@ -499,20 +505,27 @@ export function WidgetPresets({
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent
           showCloseButton={false}
-          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
+          className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
         >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             {/* Header */}
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <Bookmark className="h-3.5 w-3.5 text-white/60" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-white">Save widget preset</div>
-                <p className="mt-1 text-xs leading-relaxed text-white/40">Save your current widget layout as a reusable preset</p>
+                <div className="text-sm font-medium text-white">
+                  Save widget preset
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Save your current widget layout as a reusable preset
+                </p>
               </div>
               <DialogClose asChild>
-                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <button
+                  type="button"
+                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                >
                   <X className="h-3.5 w-3.5" />
                   <span className="sr-only">Close</span>
                 </button>
@@ -526,7 +539,7 @@ export function WidgetPresets({
                 value={presetName}
                 onChange={(e) => setPresetName(e.target.value)}
                 placeholder="Enter preset name..."
-                className="bg-sidebar-accent border-white/10 rounded-sm text-white text-sm"
+                className="bg-sidebar-accent ring-white/10 rounded-sm text-white text-sm"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleSavePreset();
                 }}
@@ -540,14 +553,14 @@ export function WidgetPresets({
             {/* Footer */}
             <div className="flex items-center justify-end gap-2 px-5 py-3">
               <Button
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                 onClick={() => setShowSaveDialog(false)}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleSavePreset}
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
                 Save preset
               </Button>
@@ -560,20 +573,27 @@ export function WidgetPresets({
       <Dialog open={showRenameDialog} onOpenChange={setShowRenameDialog}>
         <DialogContent
           showCloseButton={false}
-          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
+          className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
         >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             {/* Header */}
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <Pencil className="h-3.5 w-3.5 text-white/60" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-white">Rename preset</div>
-                <p className="mt-1 text-xs leading-relaxed text-white/40">Enter a new name for this preset</p>
+                <div className="text-sm font-medium text-white">
+                  Rename preset
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Enter a new name for this preset
+                </p>
               </div>
               <DialogClose asChild>
-                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <button
+                  type="button"
+                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                >
                   <X className="h-3.5 w-3.5" />
                   <span className="sr-only">Close</span>
                 </button>
@@ -587,7 +607,7 @@ export function WidgetPresets({
                 value={renamePresetName}
                 onChange={(e) => setRenamePresetName(e.target.value)}
                 placeholder="Enter new name..."
-                className="bg-sidebar-accent border-white/10 rounded-sm text-white text-sm"
+                className="bg-sidebar-accent ring-white/10 rounded-sm text-white text-sm"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleRenamePreset();
                 }}
@@ -599,14 +619,14 @@ export function WidgetPresets({
             {/* Footer */}
             <div className="flex items-center justify-end gap-2 px-5 py-3">
               <Button
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                 onClick={() => setShowRenameDialog(false)}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleRenamePreset}
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
                 Rename
               </Button>
@@ -619,19 +639,24 @@ export function WidgetPresets({
       <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
         <DialogContent
           showCloseButton={false}
-          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
+          className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-sm"
         >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <Download className="h-3.5 w-3.5 text-white/60" />
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-white">Export</div>
-                <p className="mt-1 text-xs leading-relaxed text-white/40">Choose a filename for your export</p>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Choose a filename for your export
+                </p>
               </div>
               <DialogClose asChild>
-                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <button
+                  type="button"
+                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                >
                   <X className="h-3.5 w-3.5" />
                   <span className="sr-only">Close</span>
                 </button>
@@ -643,25 +668,28 @@ export function WidgetPresets({
                 value={exportFileName}
                 onChange={(e) => setExportFileName(e.target.value)}
                 placeholder="Enter filename..."
-                className="bg-sidebar-accent border-white/10 rounded-sm text-white text-sm"
-                onKeyDown={(e) => { if (e.key === "Enter") handleConfirmExport(); }}
+                className="bg-sidebar-accent ring-white/10 rounded-sm text-white text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleConfirmExport();
+                }}
                 autoFocus
               />
               <p className="text-[10px] text-white/40 mt-2">
-                .{exportDialogType === "csv" ? "csv" : "json"} will be appended automatically
+                .{exportDialogType === "csv" ? "csv" : "json"} will be appended
+                automatically
               </p>
             </div>
             <Separator />
             <div className="flex items-center justify-end gap-2 px-5 py-3">
               <Button
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                 onClick={() => setShowExportDialog(false)}
               >
                 Cancel
               </Button>
               <Button
                 onClick={handleConfirmExport}
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
                 Export
               </Button>

@@ -2,17 +2,22 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { trpcOptions } from "@/utils/trpc";
 import { useState } from "react";
-import { Copy, Check, Trash2, Key, Download, ExternalLink, X, AlertTriangle } from "lucide-react";
+import {
+  Copy,
+  Check,
+  Trash2,
+  Key,
+  Download,
+  ExternalLink,
+  X,
+  AlertTriangle,
+} from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -27,7 +32,9 @@ export default function APISettingsPage() {
   const { data: apiKeys, refetch: refetchKeys } = useQuery(
     trpcOptions.apiKeys.list.queryOptions()
   );
-  const generateKey = useMutation(trpcOptions.apiKeys.generate.mutationOptions());
+  const generateKey = useMutation(
+    trpcOptions.apiKeys.generate.mutationOptions()
+  );
   const revokeKey = useMutation(trpcOptions.apiKeys.revoke.mutationOptions());
   const deleteKey = useMutation(trpcOptions.apiKeys.delete.mutationOptions());
 
@@ -92,14 +99,14 @@ export default function APISettingsPage() {
         <div className="flex items-center gap-3">
           <Button
             onClick={() => setShowGenerateDialog(true)}
-            className="border border-white/5 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+            className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
           >
             <Key className="size-3.5" />
-            Generate Key
+            Generate key
           </Button>
           <Link
             href="/dashboard/settings/ea-setup"
-            className="flex items-center gap-2 px-4 py-2 h-[38px] bg-blue-900/20 border border-blue-500/30 rounded-md text-blue-300 text-xs hover:bg-blue-900/30 transition"
+            className="flex items-center gap-2 px-4 py-2 h-[38px] bg-blue-900/20 ring ring-blue-500/30 rounded-md text-blue-300 text-xs hover:bg-blue-900/30 transition"
           >
             <Download className="size-3.5" />
             <span>Setup EA</span>
@@ -125,7 +132,7 @@ export default function APISettingsPage() {
             apiKeys?.map((key) => (
               <div
                 key={key.id}
-                className="flex items-center justify-between p-4 bg-sidebar-accent border border-white/5 rounded-md"
+                className="flex items-center justify-between p-4 bg-sidebar-accent ring ring-white/5 rounded-md"
               >
                 <div className="flex flex-col gap-1">
                   <span className="text-white font-medium text-sm">
@@ -136,15 +143,14 @@ export default function APISettingsPage() {
                   </code>
                   {key.lastUsedAt && (
                     <span className="text-xs text-white/40">
-                      Last used:{" "}
-                      {new Date(key.lastUsedAt).toLocaleString()}
+                      Last used: {new Date(key.lastUsedAt).toLocaleString()}
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center gap-2">
                   {key.isActive ? (
-                    <Badge className="bg-teal-900/30 text-teal-400 border-teal-500/30">
+                    <Badge className="bg-teal-900/30 text-teal-400 ring-teal-500/30">
                       Active
                     </Badge>
                   ) : (
@@ -183,20 +189,27 @@ export default function APISettingsPage() {
       <Dialog open={showGenerateDialog} onOpenChange={setShowGenerateDialog}>
         <DialogContent
           showCloseButton={false}
-          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md"
+          className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md"
         >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             {/* Header */}
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <Key className="h-3.5 w-3.5 text-white/60" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-white">Generate API Key</div>
-                <p className="mt-1 text-xs leading-relaxed text-white/40">Create a new API key for your MetaTrader Expert Advisor</p>
+                <div className="text-sm font-medium text-white">
+                  Generate API Key
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-white/40">
+                  Create a new API key for your MetaTrader Expert Advisor
+                </p>
               </div>
               <DialogClose asChild>
-                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <button
+                  type="button"
+                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                >
                   <X className="h-3.5 w-3.5" />
                   <span className="sr-only">Close</span>
                 </button>
@@ -212,7 +225,7 @@ export default function APISettingsPage() {
                   placeholder="e.g., My FTMO Account EA"
                   value={newApiKeyName}
                   onChange={(e) => setNewApiKeyName(e.target.value)}
-                  className="bg-sidebar-accent border-white/5 text-white"
+                  className="bg-sidebar-accent ring-white/5 text-white"
                 />
                 <p className="text-xs text-white/40">
                   Choose a descriptive name to identify this key
@@ -224,7 +237,7 @@ export default function APISettingsPage() {
             {/* Footer */}
             <div className="flex items-center justify-end gap-2 px-5 py-3">
               <Button
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                 onClick={() => setShowGenerateDialog(false)}
               >
                 Cancel
@@ -232,7 +245,7 @@ export default function APISettingsPage() {
               <Button
                 onClick={handleGenerateKey}
                 disabled={generateKey.isPending || !newApiKeyName.trim()}
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
               >
                 {generateKey.isPending ? "Generating..." : "Generate"}
               </Button>
@@ -245,20 +258,27 @@ export default function APISettingsPage() {
       <Dialog open={showKeyDialog} onOpenChange={setShowKeyDialog}>
         <DialogContent
           showCloseButton={false}
-          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-2xl"
+          className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-2xl"
         >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             {/* Header */}
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <AlertTriangle className="h-3.5 w-3.5 text-yellow-400" />
               </div>
               <div className="min-w-0">
-                <div className="text-sm font-medium text-white">Your API Key Has Been Generated</div>
-                <p className="mt-1 text-xs leading-relaxed text-rose-400">Copy this key now - you won't be able to see it again!</p>
+                <div className="text-sm font-medium text-white">
+                  Your API Key Has Been Generated
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-rose-400">
+                  Copy this key now - you won't be able to see it again!
+                </p>
               </div>
               <DialogClose asChild>
-                <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+                <button
+                  type="button"
+                  className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                >
                   <X className="h-3.5 w-3.5" />
                   <span className="sr-only">Close</span>
                 </button>
@@ -268,14 +288,14 @@ export default function APISettingsPage() {
 
             {/* Body */}
             <div className="px-5 py-4 space-y-4">
-              <div className="flex items-center gap-2 p-4 bg-sidebar-accent border border-white/10 rounded-md">
+              <div className="flex items-center gap-2 p-4 bg-sidebar-accent ring ring-white/10 rounded-md">
                 <code className="flex-1 text-white font-mono text-sm break-all">
                   {generatedKey}
                 </code>
                 <Button
                   size="sm"
                   onClick={handleCopyKey}
-                  className="border border-white/5 bg-teal-600/25 hover:bg-teal-600/35 text-teal-300"
+                  className="ring ring-white/5 bg-teal-600/25 hover:bg-teal-600/35 text-teal-300"
                 >
                   {copiedKey ? (
                     <Check className="size-4" />
@@ -285,7 +305,7 @@ export default function APISettingsPage() {
                 </Button>
               </div>
 
-              <div className="bg-yellow-900/20 border border-yellow-500/30 p-4 rounded-md">
+              <div className="bg-yellow-900/20 ring ring-yellow-500/30 p-4 rounded-md">
                 <p className="text-yellow-300 text-sm font-medium mb-2">
                   Important:
                 </p>
@@ -299,7 +319,7 @@ export default function APISettingsPage() {
 
               <Link
                 href="/dashboard/settings/ea-setup"
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-900/20 border border-blue-500/30 rounded-md text-blue-300 text-sm hover:bg-blue-900/30 transition"
+                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-900/20 ring ring-blue-500/30 rounded-md text-blue-300 text-sm hover:bg-blue-900/30 transition"
               >
                 <Download className="size-4" />
                 <span>Next: Download &amp; Setup Expert Advisor</span>
@@ -315,7 +335,7 @@ export default function APISettingsPage() {
                   setShowKeyDialog(false);
                   setGeneratedKey("");
                 }}
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none w-full"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none w-full"
               >
                 I've Saved My Key
               </Button>

@@ -99,13 +99,13 @@ export interface ChartWidgetsProps {
 }
 
 const ACTION_BUTTON_CLASS =
-  "flex h-[38px] w-max items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
+  "flex h-[38px] w-max items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
 
 const ACTION_GROUP_CLASS =
-  "flex items-center overflow-hidden rounded-sm border border-white/5 bg-sidebar";
+  "flex items-center overflow-hidden rounded-sm ring ring-white/5 bg-sidebar";
 
 const ACTION_GROUP_BUTTON_CLASS =
-  "h-[38px] rounded-none border-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
+  "h-[38px] rounded-none ring-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
 
 const CHART_WIDGET_PICKER_POPOVER_MAX_WIDTH_REM = 16;
 
@@ -353,6 +353,7 @@ export function ChartWidgets({
             <Skeleton className="h-full w-full rounded-none bg-sidebar-accent" />
           </div>
         )}
+
         {showMonthSelector ? (
           <div className={ACTION_GROUP_CLASS}>
             <Button
@@ -364,7 +365,7 @@ export function ChartWidgets({
               <ChevronLeft className="size-3.5" />
             </Button>
             <Button
-              className="h-[38px] min-w-[10rem] cursor-default rounded-none border-x border-white/5 bg-sidebar px-4 py-2 text-xs text-white/70 hover:bg-sidebar"
+              className="h-[38px] min-w-[10rem] cursor-default rounded-none ring-x ring-white/5 bg-sidebar px-4 py-2 text-xs text-white/70 hover:bg-sidebar"
               disabled
             >
               {activeMonthLabel || "Select month"}
@@ -379,6 +380,7 @@ export function ChartWidgets({
             </Button>
           </div>
         ) : null}
+
         <ChartWidgetPresets
           currentWidgets={enabledWidgets}
           onApplyPreset={onApplyPreset || (() => undefined)}
@@ -418,7 +420,7 @@ export function ChartWidgets({
                     >
                       {isEditing ? (
                         <div className="absolute right-5 top-5 z-10 flex items-center gap-2">
-                          <div className="flex size-6 items-center justify-center border border-white/5">
+                          <div className="flex size-6 items-center justify-center ring ring-white/5">
                             <svg
                               viewBox="0 0 24 24"
                               className="size-3 fill-white"

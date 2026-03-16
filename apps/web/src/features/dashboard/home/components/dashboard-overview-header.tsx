@@ -67,7 +67,7 @@ export function DashboardOverviewHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        <InsightToastTestButton />
+        {/*<InsightToastTestButton />*/}
         <InsightPanel />
         <DashboardActionButtons
           isEditing={isEditing}

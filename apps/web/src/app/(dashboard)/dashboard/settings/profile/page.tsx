@@ -17,6 +17,7 @@ import {
   MapPin,
   Link as LinkIcon,
 } from "lucide-react";
+import { useUploadThing } from "@/utils/uploadthing";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -35,6 +36,9 @@ export default function EditProfilePage() {
   const clearImage = useMutation(
     trpcOptions.users.clearImage.mutationOptions()
   );
+  const { startUpload, isUploading } = useUploadThing((r) => r.imageUploader, {
+    headers: () => ({ "x-user-id": user?.id ?? "" }),
+  });
 
   const [form, setForm] = useState({
     fullName: "",
@@ -49,6 +53,8 @@ export default function EditProfilePage() {
   });
 
   const [bannerUrl, setBannerUrl] = useState("");
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +72,8 @@ export default function EditProfilePage() {
       image: user.image || "",
     });
     setBannerUrl((user as any).profileBannerUrl || "");
+    setAvatarFile(null);
+    setBannerFile(null);
   }, [user]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -77,6 +85,7 @@ export default function EditProfilePage() {
     }
     const reader = new FileReader();
     reader.onload = () => {
+      setAvatarFile(file);
       setForm((prev) => ({ ...prev, image: reader.result as string }));
     };
     reader.readAsDataURL(file);
@@ -91,6 +100,7 @@ export default function EditProfilePage() {
     }
     const reader = new FileReader();
     reader.onload = () => {
+      setBannerFile(file);
       setBannerUrl(reader.result as string);
     };
     reader.readAsDataURL(file);
@@ -99,6 +109,7 @@ export default function EditProfilePage() {
   const handleRemoveAvatar = async () => {
     try {
       await clearImage.mutateAsync();
+      setAvatarFile(null);
       setForm((prev) => ({ ...prev, image: "" }));
       queryClient.invalidateQueries({ queryKey: [["users", "me"]] });
       toast.success("Profile photo removed");
@@ -118,6 +129,31 @@ export default function EditProfilePage() {
     }
 
     try {
+      let imageUrl = form.image;
+      let persistedBannerUrl = bannerUrl;
+
+      if (!user?.id && (avatarFile || bannerFile)) {
+        throw new Error("Unable to upload images right now");
+      }
+
+      if (avatarFile) {
+        const upload = await startUpload([avatarFile]);
+        imageUrl = upload?.[0]?.url ?? "";
+
+        if (!imageUrl) {
+          throw new Error("Failed to upload profile photo");
+        }
+      }
+
+      if (bannerFile) {
+        const upload = await startUpload([bannerFile]);
+        persistedBannerUrl = upload?.[0]?.url ?? "";
+
+        if (!persistedBannerUrl) {
+          throw new Error("Failed to upload cover image");
+        }
+      }
+
       await updateProfile.mutateAsync({
         fullName: form.fullName,
         username: form.username,
@@ -127,11 +163,13 @@ export default function EditProfilePage() {
         website: form.website || null,
         twitter: form.twitter || null,
         discord: form.discord || null,
-        ...(form.image && form.image.startsWith("http")
-          ? { image: form.image }
-          : {}),
-        profileBannerUrl: bannerUrl || null,
+        ...(imageUrl && imageUrl.startsWith("http") ? { image: imageUrl } : {}),
+        profileBannerUrl: persistedBannerUrl || null,
       });
+      setAvatarFile(null);
+      setBannerFile(null);
+      setForm((prev) => ({ ...prev, image: imageUrl }));
+      setBannerUrl(persistedBannerUrl);
       queryClient.invalidateQueries({ queryKey: [["users", "me"]] });
       toast.success("Profile updated");
     } catch (error: any) {
@@ -142,7 +180,7 @@ export default function EditProfilePage() {
   if (isLoading) {
     return (
       <div className="flex flex-col w-full">
-        <div className="h-36 bg-sidebar-accent animate-pulse" />
+        <div className="h-52 bg-sidebar-accent animate-pulse" />
         <div className="px-6 py-8 space-y-6">
           <div className="h-6 w-48 bg-sidebar-accent animate-pulse rounded" />
           <div className="h-10 w-full bg-sidebar-accent animate-pulse rounded" />
@@ -155,7 +193,7 @@ export default function EditProfilePage() {
   return (
     <div className="flex flex-col w-full">
       {/* Cover / Banner */}
-      <div className="relative h-36 bg-gradient-to-r from-teal-900/40 to-indigo-900/40">
+      <div className="relative h-52 bg-gradient-to-r from-teal-900/40 to-indigo-900/40">
         {bannerUrl && (
           <img
             src={bannerUrl}
@@ -178,7 +216,10 @@ export default function EditProfilePage() {
               variant="ghost"
               size="sm"
               className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
-              onClick={() => setBannerUrl("")}
+              onClick={() => {
+                setBannerFile(null);
+                setBannerUrl("");
+              }}
             >
               <Trash2 className="size-4" />
             </Button>
@@ -196,7 +237,7 @@ export default function EditProfilePage() {
       {/* Avatar overlapping banner */}
       <div className="px-6 sm:px-8 -mt-10 pb-6">
         <div className="relative group w-max">
-          <Avatar className="size-20 rounded-full border-4 border-sidebar shadow-lg">
+          <Avatar className="size-20 rounded-full ring-4 ring-sidebar shadow-lg">
             {form.image ? (
               <AvatarImage
                 src={form.image}
@@ -227,7 +268,7 @@ export default function EditProfilePage() {
       <Separator />
 
       {/* Profile Photo */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+      <div className="flex flex-col items-start gap-2 sm:gap-4 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
             Profile photo
@@ -249,9 +290,9 @@ export default function EditProfilePage() {
               {form.fullName?.charAt(0)?.toUpperCase() ?? "U"}
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col gap-1.5">
+          <div className="flex gap-2">
             <Button
-              className="border border-white/5 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+              className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
               onClick={() => avatarInputRef.current?.click()}
             >
               <Camera className="size-3.5" />
@@ -259,7 +300,7 @@ export default function EditProfilePage() {
             </Button>
             {form.image && (
               <Button
-                className="border border-white/5 bg-red-600/15 hover:bg-red-600/25 px-4 py-2 h-[38px] w-max text-xs text-red-400 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+                className="ring ring-red-500/25 bg-red-600/15 hover:bg-red-600/25 px-4 py-2 h-[38px] w-max text-xs text-red-400 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
                 onClick={handleRemoveAvatar}
               >
                 <Trash2 className="size-3.5" />
@@ -284,7 +325,7 @@ export default function EditProfilePage() {
             setForm((prev) => ({ ...prev, fullName: e.target.value }))
           }
           placeholder="John Doe"
-          className="bg-sidebar-accent border-white/5 text-white"
+          className="bg-sidebar-accent ring-white/5 text-white"
         />
       </div>
 
@@ -299,7 +340,7 @@ export default function EditProfilePage() {
           </p>
         </div>
         <div className="flex items-center">
-          <span className="px-3 py-2 text-sm text-white/40 bg-sidebar-accent border border-white/5 border-r-0 rounded-l-md whitespace-nowrap">
+          <span className="px-3 py-2 text-xs text-white/40 bg-sidebar-accent ring ring-white/5 ring-r-0 rounded-l-md whitespace-nowrap border-none!">
             profitabledge.com/
           </span>
           <Input
@@ -313,7 +354,7 @@ export default function EditProfilePage() {
               }))
             }
             placeholder="johndoe"
-            className="bg-sidebar-accent border-white/5 text-white rounded-l-none"
+            className="bg-sidebar-accent ring-white/5 text-white rounded-l-none"
           />
         </div>
       </div>
@@ -336,7 +377,7 @@ export default function EditProfilePage() {
             setForm((prev) => ({ ...prev, displayName: e.target.value }))
           }
           placeholder="Optional display name"
-          className="bg-sidebar-accent border-white/5 text-white"
+          className="bg-sidebar-accent ring-white/5 text-white"
         />
       </div>
 
@@ -359,7 +400,7 @@ export default function EditProfilePage() {
             placeholder="I'm a trader who..."
             rows={3}
             maxLength={500}
-            className="bg-sidebar-accent border-white/5 text-white resize-none"
+            className="ring-white/5 text-white resize-none text-xs! bg-transparent!"
           />
           <p className="text-[11px] text-white/30 text-right">
             {form.bio.length}/500
@@ -383,11 +424,10 @@ export default function EditProfilePage() {
               setForm((prev) => ({ ...prev, location: e.target.value }))
             }
             placeholder="e.g., London, UK"
-            className="bg-sidebar-accent border-white/5 text-white pl-9"
+            className="bg-sidebar-accent ring-white/5 text-white pl-9"
           />
         </div>
       </div>
-
 
       <Separator />
 
@@ -396,9 +436,7 @@ export default function EditProfilePage() {
         <h2 className="text-sm font-semibold text-white">
           Connect with your socials
         </h2>
-        <p className="text-xs text-white/40 mt-0.5">
-          Add your social links.
-        </p>
+        <p className="text-xs text-white/40 mt-0.5">Add your social links.</p>
       </div>
 
       <Separator />
@@ -414,7 +452,7 @@ export default function EditProfilePage() {
           </Label>
         </div>
         <div className="flex items-center">
-          <span className="px-3 py-2 text-sm text-white/40 bg-sidebar-accent border border-white/5 border-r-0 rounded-l-md whitespace-nowrap">
+          <span className="px-3 py-2 text-xs text-white/40 bg-sidebar-accent ring ring-white/5 ring-r-0 rounded-l-md whitespace-nowrap">
             x.com/
           </span>
           <Input
@@ -423,7 +461,7 @@ export default function EditProfilePage() {
               setForm((prev) => ({ ...prev, twitter: e.target.value }))
             }
             placeholder="handle"
-            className="bg-sidebar-accent border-white/5 text-white rounded-l-none"
+            className="bg-sidebar-accent ring-white/5 text-white rounded-l-none"
           />
         </div>
       </div>
@@ -442,7 +480,7 @@ export default function EditProfilePage() {
             setForm((prev) => ({ ...prev, discord: e.target.value }))
           }
           placeholder="username#0000"
-          className="bg-sidebar-accent border-white/5 text-white"
+          className="bg-sidebar-accent ring-white/5 text-white"
         />
       </div>
 
@@ -452,10 +490,12 @@ export default function EditProfilePage() {
       <div className="flex justify-end px-6 sm:px-8 py-6">
         <Button
           onClick={handleSave}
-          disabled={updateProfile.isPending}
-          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+          disabled={updateProfile.isPending || isUploading}
+          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
         >
-          {updateProfile.isPending ? "Saving..." : "Save changes"}
+          {updateProfile.isPending || isUploading
+            ? "Saving..."
+            : "Save changes"}
         </Button>
       </div>
     </div>

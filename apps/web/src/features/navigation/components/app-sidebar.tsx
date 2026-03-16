@@ -17,6 +17,7 @@ import {
   SidebarHeader,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenu,
 } from "@/components/ui/sidebar";
 import AccountSwitcher, {
   type Account,
@@ -196,7 +197,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               {section.label}
             </p>
 
-            <div className="flex flex-col gap-0.5">
+            <SidebarMenu className="gap-0.5">
               {section.items.map((item) => {
                 const disabledByFeature =
                   item.featureFlag !== undefined &&
@@ -207,122 +208,128 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     item.planRequirement.slice(1)
                   : null;
 
-                const inner = (
-                  <SidebarMenuItem className="px-2 py-0.5 flex">
-                    <SidebarMenuButton
-                      className="flex items-center justify-center gap-3 cursor-pointer"
-                      tooltip={locked ? undefined : item.title}
+                const itemContent = (
+                  <>
+                    <item.icon
+                      className={cn(
+                        "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] size-[18px]",
+                        locked
+                          ? "opacity-35"
+                          : "group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
+                        !locked &&
+                          item.isActive &&
+                          "fill-black dark:fill-transparent dark:stroke-white"
+                      )}
+                    />
+                    <p
+                      className={cn(
+                        "text-xs font-normal transition-all duration-250 min-w-max group-data-[collapsible=icon]:hidden",
+                        locked || disabledByFeature
+                          ? "text-[#8b8b97] opacity-35"
+                          : "text-secondary dark:text-[#8b8b97] group-hover/navlink:!text-black dark:group-hover/navlink:!text-white",
+                        !locked &&
+                          !disabledByFeature &&
+                          item.isActive &&
+                          "text-black dark:text-white font-medium"
+                      )}
                     >
-                      <item.icon
-                        className={cn(
-                          "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] size-[18px]",
-                          locked
-                            ? "opacity-35"
-                            : "group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
-                          !locked &&
-                            item.isActive &&
-                            "fill-black dark:fill-transparent dark:stroke-white"
-                        )}
-                      />
-                      <p
-                        className={cn(
-                          "text-xs font-normal transition-all duration-250 min-w-max group-data-[collapsible=icon]:hidden",
-                          locked || disabledByFeature
-                            ? "text-[#8b8b97] opacity-35"
-                            : "text-secondary dark:text-[#8b8b97] group-hover/navlink:!text-black dark:group-hover/navlink:!text-white",
-                          !locked &&
-                            !disabledByFeature &&
-                            item.isActive &&
-                            "text-black dark:text-white font-medium"
-                        )}
-                      >
-                        {item.title}
-                      </p>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                      {item.title}
+                    </p>
+                  </>
                 );
 
                 if (disabledByFeature) {
                   return (
-                    <Tooltip key={item.title}>
-                      <TooltipTrigger asChild>
-                        <div className="group/navlink flex items-center gap-3 rounded-md transition-all duration-150 bg-transparent h-max min-w-max cursor-not-allowed">
-                          {inner}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        {item.disabledTooltip ?? "Coming soon!"}
-                      </TooltipContent>
-                    </Tooltip>
+                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <SidebarMenuButton
+                            asChild
+                            className="group/navlink flex items-center justify-start gap-3 cursor-not-allowed"
+                          >
+                            <div>{itemContent}</div>
+                          </SidebarMenuButton>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="text-xs">
+                          {item.disabledTooltip ?? "Coming soon!"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </SidebarMenuItem>
                   );
                 }
 
                 if (locked) {
                   return (
-                    <Tooltip key={item.title}>
-                      <TooltipTrigger asChild>
-                        <Link
-                          href="/dashboard/settings/billing"
-                          className="group/navlink flex items-center gap-3 rounded-md transition-all duration-150 bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer"
-                        >
-                          {inner}
-                        </Link>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        Requires {planLabel} plan
-                      </TooltipContent>
-                    </Tooltip>
+                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <SidebarMenuButton
+                            asChild
+                            className="group/navlink flex items-center justify-start gap-3 cursor-pointer"
+                          >
+                            <Link href="/dashboard/settings/billing">
+                              {itemContent}
+                            </Link>
+                          </SidebarMenuButton>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="text-xs">
+                          Requires {planLabel} plan
+                        </TooltipContent>
+                      </Tooltip>
+                    </SidebarMenuItem>
                   );
                 }
 
                 return (
-                  <Link
-                    href={item.url}
-                    key={item.title}
-                    className={cn(
-                      "group/navlink flex items-center gap-3 rounded-md transition-all duration-150 bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer",
-                      item.isActive &&
-                        "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
-                    )}
-                  >
-                    {inner}
-                  </Link>
+                  <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex">
+                    <SidebarMenuButton
+                      asChild
+                      tooltip={item.title}
+                      className={cn(
+                        "group/navlink flex items-center justify-start gap-3 cursor-pointer",
+                        item.isActive &&
+                          "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
+                      )}
+                    >
+                      <Link href={item.url}>{itemContent}</Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 );
               })}
-            </div>
+            </SidebarMenu>
           </div>
         ))}
       </SidebarContent>
 
       <SidebarFooter className="p-4 pt-5 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-3">
         <div className="mb-3 flex flex-col gap-1">
-          <SidebarMenuItem className="flex">
+          <SidebarMenuItem className="px-2 py-0.5 flex">
             <SidebarMenuButton
-              className="group/navlink flex h-max min-w-max items-center gap-3 rounded-md bg-transparent px-2 py-0.5 text-left transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent cursor-pointer"
+              asChild
+              className="group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max"
               tooltip="Request a feature"
-              onClick={() => setRequestFeatureOpen(true)}
             >
-              <LifeBuoy className="size-[18px] stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white" />
+              <button type="button" onClick={() => setRequestFeatureOpen(true)}>
+                <LifeBuoy className="size-[18px] stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white" />
 
-              <p className="min-w-max text-xs font-normal text-secondary transition-all duration-250 group-hover/navlink:!text-black dark:text-[#8b8b97] dark:group-hover/navlink:!text-white group-data-[collapsible=icon]:hidden">
-                Request a feature
-              </p>
+                <p className="text-xs text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden">
+                  Request a feature
+                </p>
+              </button>
             </SidebarMenuButton>
           </SidebarMenuItem>
 
-          <Link
-            href="/dashboard/settings"
-            className={cn(
-              "group/navlink flex items-center gap-3 rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max cursor-pointer",
-              settingsActive &&
-                "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
-            )}
-          >
-            <SidebarMenuItem className="px-2 py-0.5 flex">
-              <SidebarMenuButton
-                className="flex items-center justify-center gap-3 cursor-pointer"
-                tooltip="Settings"
-              >
+          <SidebarMenuItem className="px-2 py-0.5 flex">
+            <SidebarMenuButton
+              asChild
+              className={cn(
+                "group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent h-max min-w-max",
+                settingsActive &&
+                  "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
+              )}
+              tooltip="Settings"
+            >
+              <Link href="/dashboard/settings">
                 <Settings
                   className={cn(
                     "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white size-[18px]",
@@ -339,9 +346,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 >
                   Settings
                 </p>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </Link>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </div>
 
         {me && <NavUser user={me} />}

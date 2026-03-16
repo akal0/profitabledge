@@ -17,7 +17,7 @@ export const TRADE_ACTION_ICON_BUTTON_CLASS =
   "rounded-sm ring-1 ring-white/10 bg-black/45 text-white/80 hover:bg-black/60 hover:text-white disabled:opacity-50";
 
 export const TRADE_SURFACE_CARD_CLASS =
-  "rounded-sm ring-1 ring-white/8 bg-white/[0.03]";
+  "rounded-sm ring ring-white/8 bg-white/[0.03] border-none";
 
 export const TRADE_IDENTIFIER_TONES = {
   subdued: "ring-white/0 bg-white/[0.025] text-white/45",

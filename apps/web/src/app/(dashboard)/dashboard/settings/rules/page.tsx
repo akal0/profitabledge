@@ -72,9 +72,7 @@ export default function ConditionalRulesPage() {
     <div className="flex flex-col w-full">
       {/* Heading */}
       <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">
-          Conditional Rules
-        </h2>
+        <h2 className="text-sm font-semibold text-white">Conditional rules</h2>
         <p className="text-xs text-white/40 mt-0.5">
           Dynamic rules that activate based on your recent trading behavior.
         </p>
@@ -86,22 +84,26 @@ export default function ConditionalRulesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Status</Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            Current rule activity.
-          </p>
+          <p className="text-xs text-white/40 mt-0.5">Current rule activity.</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded border border-white/5">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 rounded ring ring-white/5">
             <span className="text-[10px] text-white/40">Total:</span>
-            <span className="text-xs text-white font-medium">{rules.length}</span>
+            <span className="text-xs text-white font-medium">
+              {rules.length}
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 rounded border border-amber-500/10">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 rounded ring ring-amber-500/10">
             <span className="text-[10px] text-amber-400/70">Triggered:</span>
-            <span className="text-xs text-amber-400 font-medium">{activeCount}</span>
+            <span className="text-xs text-amber-400 font-medium">
+              {activeCount}
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 rounded border border-emerald-500/10">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 rounded ring ring-emerald-500/10">
             <span className="text-[10px] text-emerald-400/70">Clear:</span>
-            <span className="text-xs text-emerald-400 font-medium">{rules.length - activeCount}</span>
+            <span className="text-xs text-emerald-400 font-medium">
+              {rules.length - activeCount}
+            </span>
           </div>
         </div>
       </div>
@@ -112,7 +114,8 @@ export default function ConditionalRulesPage() {
       {rules.length === 0 ? (
         <div className="px-6 sm:px-8 py-8">
           <p className="text-sm text-white/40 text-center">
-            No conditional rules configured. Trade data is needed to evaluate behavioral rules.
+            No conditional rules configured. Trade data is needed to evaluate
+            behavioral rules.
           </p>
         </div>
       ) : (
@@ -170,7 +173,7 @@ export default function ConditionalRulesPage() {
                   </div>
 
                   {rule.active && rule.recommendation && (
-                    <div className="px-2 py-1.5 bg-amber-500/10 border border-amber-500/10 rounded text-[10px] text-amber-300/80">
+                    <div className="px-2 py-1.5 bg-amber-500/10 ring ring-amber-500/10 rounded text-[10px] text-amber-300/80">
                       {rule.recommendation}
                     </div>
                   )}

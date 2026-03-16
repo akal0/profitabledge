@@ -18,6 +18,8 @@ import {
   Dialog,
   DialogClose,
   DialogContent,
+  DialogDescription,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -189,14 +191,14 @@ export function RequestFeatureDialog({
               <LifeBuoy className="h-3.5 w-3.5 text-blue-300" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-medium text-white">
+              <DialogTitle className="text-sm font-medium text-white">
                 Request a feature
-              </div>
-              <p className="mt-1 text-xs leading-relaxed text-white/40">
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-xs leading-relaxed text-white/40">
                 Requests are sent privately to the Profitabledge team, stored
                 internally, and can also be forwarded straight into the private
                 GitHub repo.
-              </p>
+              </DialogDescription>
             </div>
             <DialogClose asChild>
               <button

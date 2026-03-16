@@ -78,7 +78,7 @@ export function DashboardShellHeader({
   return (
     <div className="flex flex-col shrink-0">
       <header className="flex h-[3.725rem] shrink-0 items-center gap-1 bg-background dark:bg-sidebar rounded-t-[8px] px-4 sm:px-6 lg:px-8 pr-4 sm:pr-6 min-w-0 overflow-hidden">
-        <SidebarTrigger className="h-9 w-9 shrink-0 border border-white/5 bg-sidebar hover:bg-sidebar-accent text-white/70 hover:text-white rounded-sm" />
+        <SidebarTrigger className="h-9 w-9 shrink-0 ring ring-white/5 bg-sidebar hover:bg-sidebar-accent text-white/70 hover:text-white rounded-sm" />
         <button
           onClick={onOpenCommandPalette}
           className="flex items-center gap-2 flex-1 min-w-0 group transition-all duration-250 cursor-pointer px-2 sm:px-4"
@@ -201,8 +201,8 @@ export function DashboardShellHeader({
           <AddAccountSheet
             onAccountCreated={() => {}}
             trigger={
-              <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
-                <Plus className="size-3.5" />
+              <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+                <Plus className="size-3" />
                 <span>Add Account</span>
               </Button>
             }
@@ -211,9 +211,9 @@ export function DashboardShellHeader({
 
         {isPropTrackerRoute && (
           <Link href="/dashboard/accounts?tab=prop">
-            <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
-              <Plus className="size-3.5" />
-              <span>Add Prop Account</span>
+            <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+              <Plus className="size-3" />
+              <span>Add prop account</span>
             </Button>
           </Link>
         )}
@@ -221,9 +221,9 @@ export function DashboardShellHeader({
         {isGoalsRoute && (
           <Button
             onClick={onOpenGoalDialog}
-            className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
+            className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
           >
-            <Plus className="size-3.5" />
+            <Plus className="size-3" />
             <span>New goal</span>
           </Button>
         )}
@@ -232,9 +232,9 @@ export function DashboardShellHeader({
           <QuickTradeEntry
             accountId={accountId}
             trigger={
-              <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
-                <Plus className="size-3.5" />
-                <span>Add trade</span>
+              <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+                <Plus className="size-3" />
+                <span>Add trade </span>
               </Button>
             }
           />

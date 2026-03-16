@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -10,10 +10,17 @@ import { Input } from "@/components/ui/input";
 import { LockKeyholeIcon } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 
+function resolveRedirectTarget(value: string | null | undefined) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/sign-up";
+  }
+
+  return value;
+}
+
 export default function BetaPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams?.get("redirect") || "/login";
+  const redirectTo = resolveRedirectTarget(searchParams?.get("redirect"));
   const [code, setCode] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,8 +41,10 @@ export default function BetaPage() {
             ? `${result.label} access unlocked`
             : "Private beta access unlocked"
         );
-        document.cookie = `beta_access=verified; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
-        router.push(redirectTo);
+        document.cookie = `beta_access=verified; path=/; max-age=${
+          60 * 60 * 24 * 365
+        }; SameSite=Lax`;
+        window.location.assign(redirectTo);
       } else {
         const message =
           "message" in result ? result.message : "Invalid private beta code";

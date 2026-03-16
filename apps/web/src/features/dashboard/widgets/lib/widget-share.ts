@@ -24,10 +24,9 @@ export async function exportWidgetAsPng(input: {
   node: HTMLElement;
   title: string;
 }) {
-  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
   const finalDataUrl = await toPng(input.node, {
     cacheBust: true,
-    pixelRatio,
+    pixelRatio: 3,
     filter: (node) =>
       !(
         node instanceof HTMLElement && node.dataset.widgetShareIgnore === "true"

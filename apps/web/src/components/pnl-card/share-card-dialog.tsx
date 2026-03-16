@@ -146,8 +146,8 @@ export function ShareCardDialog({
     try {
       const dataUrl =
         format === "png"
-          ? await toPng(cardRef.current, { quality: 1, pixelRatio: 2 })
-          : await toJpeg(cardRef.current, { quality: 0.95, pixelRatio: 2 });
+          ? await toPng(cardRef.current, { quality: 1, pixelRatio: 3 })
+          : await toJpeg(cardRef.current, { quality: 0.95, pixelRatio: 3 });
 
       const link = document.createElement("a");
       link.download = `pnl-card-${tradeData.symbol}-${Date.now()}.${format}`;

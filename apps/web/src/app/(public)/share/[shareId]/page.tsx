@@ -26,7 +26,7 @@ export default function SharePage({ params }: SharePageProps) {
     if (!cardRef.current) return;
 
     try {
-      const dataUrl = await toPng(cardRef.current, { quality: 1, pixelRatio: 2 });
+      const dataUrl = await toPng(cardRef.current, { quality: 1, pixelRatio: 3 });
 
       const link = document.createElement("a");
       link.download = `pnl-card-${Date.now()}.png`;

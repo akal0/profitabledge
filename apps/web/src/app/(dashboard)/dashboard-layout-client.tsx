@@ -33,8 +33,8 @@ import {
   meetsRequirement,
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
-import { authClient } from "@/lib/auth-client";
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
+import { useConfirmedSession } from "@/lib/use-confirmed-session";
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
@@ -48,8 +48,12 @@ export default function DashboardLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
-  const { data: session, isPending: isSessionPending } =
-    authClient.useSession();
+  const {
+    isSessionPending,
+    hasConfirmedSession,
+    hasAttemptedSessionRecovery,
+    isRecoveringSession,
+  } = useConfirmedSession();
   const pathname = usePathname();
   const safePathname = pathname ?? "/dashboard";
   const searchParams = useSearchParams();
@@ -59,13 +63,24 @@ export default function DashboardLayoutClient({
     const query = searchParams?.toString() ?? "";
     return query ? `${safePathname}?${query}` : safePathname;
   }, [safePathname, searchParams]);
-  const isSessionReady = !isSessionPending && Boolean(session);
+  const isSessionReady = !isSessionPending && hasConfirmedSession;
 
   useEffect(() => {
-    if (!isSessionPending && !session) {
+    if (isSessionPending || isRecoveringSession) {
+      return;
+    }
+
+    if (!hasConfirmedSession && hasAttemptedSessionRecovery) {
       router.replace(buildLoginPath(currentDashboardPath));
     }
-  }, [currentDashboardPath, isSessionPending, router, session]);
+  }, [
+    currentDashboardPath,
+    hasAttemptedSessionRecovery,
+    hasConfirmedSession,
+    isRecoveringSession,
+    isSessionPending,
+    router,
+  ]);
 
   const accountId = useAccountStore((state) => state.selectedAccountId);
   const setSelectedAccountId = useAccountStore(
@@ -188,7 +203,7 @@ export default function DashboardLayoutClient({
       )
   );
 
-  useAlphaPageTracking("dashboard");
+  useAlphaPageTracking("dashboard", hasConfirmedSession && !isRecoveringSession);
   useSettingsAccountScopeGuard({
     pathname: safePathname,
     accountId: resolvedAccountId,
@@ -217,16 +232,15 @@ export default function DashboardLayoutClient({
   ]);
 
   if (
+    isSessionPending ||
+    isRecoveringSession ||
+    !hasConfirmedSession ||
     (isSessionReady && !hasFetchedBillingState) ||
     hasIncompleteOnboarding ||
     hasBlockedAdminAccess ||
     hasBlockedAffiliateAccess ||
     hasBlockedPlanAccess
   ) {
-    return null;
-  }
-
-  if (isSessionPending || !session) {
     return null;
   }
 

@@ -3,14 +3,17 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
+import { authClient } from "@/lib/auth-client";
 import { trackAlphaEvent } from "@/lib/alpha-analytics";
 
-export function useAlphaPageTracking(surface: string) {
+export function useAlphaPageTracking(surface: string, enabled = true) {
   const pathname = usePathname();
+  const { data: session, isPending } = authClient.useSession();
+  const userId = session?.user?.id ?? null;
   const lastTrackedPathRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!pathname) {
+    if (!enabled || isPending || !pathname || !userId) {
       return;
     }
 
@@ -31,5 +34,9 @@ export function useAlphaPageTracking(surface: string) {
         surface,
       },
     });
-  }, [pathname, surface]);
+  }, [enabled, isPending, pathname, surface, userId]);
+
+  useEffect(() => {
+    lastTrackedPathRef.current = null;
+  }, [userId]);
 }

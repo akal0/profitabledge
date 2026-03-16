@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Separator } from "@/components/ui/separator";
+import { OverlapSeparator, Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LockKeyholeIcon } from "lucide-react";
@@ -101,21 +101,21 @@ export default function BetaPage() {
 
       <div className="flex flex-col items-center justify-center gap-8 h-full w-full relative z-100">
         <div className="w-full max-w-md bg-sidebar rounded-3xl shadow-sidebar-button">
-          <div className="flex flex-col items-center justify-center gap-1 py-6">
-            <LockKeyholeIcon className="size-5 text-muted-foreground mb-1" />
-            <h1 className="text-xl font-bold">Private Beta</h1>
-            <p className="text-xs text-muted-foreground text-center px-8">
-              profitabledge is currently in private beta. Enter your access code
-              to continue.
-            </p>
+          <div className="flex flex-col items-center justify-center gap-1 py-6 pb-0">
+            <h1 className="text-xl font-semibold">Private beta</h1>
           </div>
 
-          <Separator />
+          <OverlapSeparator>
+            {" "}
+            Enter your access code to continue
+          </OverlapSeparator>
 
-          <form onSubmit={handleSubmit} className="w-full space-y-6 py-6 pb-0">
+          <form
+            onSubmit={handleSubmit}
+            className="w-full space-y-6 py-6 pb-0 pt-0"
+          >
             <div className="p-10 py-0 space-y-5">
               <div className="space-y-1">
-                <label className="text-xs font-medium">Beta access code</label>
                 <Input
                   type="text"
                   placeholder="Enter your access code"
@@ -125,6 +125,7 @@ export default function BetaPage() {
                     setErrorMessage(null);
                   }}
                   autoFocus
+                  className="mt-2"
                 />
                 {errorMessage && (
                   <p className="text-xs text-red-500">{errorMessage}</p>

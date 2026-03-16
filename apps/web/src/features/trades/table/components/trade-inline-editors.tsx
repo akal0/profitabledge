@@ -18,9 +18,18 @@ const LIVE_TRADE_EDIT_BLOCK_MESSAGE = "You can't edit a live trade.";
 const EDITABLE_DISPLAY_CLASS =
   "max-w-full cursor-text rounded-sm px-1.5 py-1 text-left transition-colors hover:bg-white/[0.05]";
 const EDITABLE_INPUT_CLASS =
-  "h-8 w-full max-w-full min-w-0 rounded-sm bg-sidebar-accent! px-2 text-xs text-white/90 placeholder:text-white/25 ring ring-white/8! focus-visible:border-none! focus-visible:ring-[1px] focus-visible:ring-white/16";
+  "field-sizing-content h-8 w-auto max-w-full min-w-0 rounded-sm bg-sidebar-accent! px-2 text-xs text-white/90 placeholder:text-white/25 ring ring-white/8! focus-visible:border-none! focus-visible:ring-[1px] focus-visible:ring-white/16";
 const DIRECTION_BUTTON_CLASS =
   "min-h-6 cursor-pointer px-2 py-0.5 text-[10px] font-semibold";
+const EDITABLE_INPUT_MIN_WIDTH_PX = 44;
+const EDITABLE_INPUT_PADDING_PX = 10;
+
+function estimateEditableInputWidth(value: string) {
+  return Math.max(
+    EDITABLE_INPUT_MIN_WIDTH_PX,
+    Math.ceil(value.length * 7 + EDITABLE_INPUT_PADDING_PX)
+  );
+}
 
 type EditableTradeInputCellProps<TValue> = {
   value: TValue;
@@ -84,12 +93,32 @@ function EditableTradeInputCell<TValue>({
   const [draft, setDraft] = React.useState(() => formatForDraft(value));
   const [isSaving, setIsSaving] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const sizerRef = React.useRef<HTMLSpanElement | null>(null);
+  const [inputWidth, setInputWidth] = React.useState(() =>
+    estimateEditableInputWidth(formatForDraft(value))
+  );
 
   React.useEffect(() => {
     if (!editing) {
       setDraft(formatForDraft(value));
     }
   }, [editing, formatForDraft, value]);
+
+  React.useLayoutEffect(() => {
+    if (!editing) return;
+
+    const nextWidth = Math.max(
+      EDITABLE_INPUT_MIN_WIDTH_PX,
+      Math.ceil(
+        (sizerRef.current?.getBoundingClientRect().width ?? 0) +
+          EDITABLE_INPUT_PADDING_PX
+      )
+    );
+
+    setInputWidth((currentWidth) =>
+      currentWidth === nextWidth ? currentWidth : nextWidth
+    );
+  }, [draft, editing]);
 
   React.useEffect(() => {
     if (!editing) return;
@@ -143,11 +172,24 @@ function EditableTradeInputCell<TValue>({
     return (
       <div
         data-cell-interactive="true"
-        className="flex w-full max-w-full min-w-0 items-center gap-1"
+        className={cn(
+          "relative flex w-full max-w-full min-w-0 items-center gap-1",
+          align === "right" ? "justify-end" : "justify-start"
+        )}
         onClick={(event) => event.stopPropagation()}
         onDoubleClick={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
       >
+        <span
+          ref={sizerRef}
+          aria-hidden="true"
+          className={cn(
+            "pointer-events-none invisible absolute left-0 top-0 whitespace-pre px-2 text-xs",
+            align === "right" ? "text-right" : "text-left"
+          )}
+        >
+          {draft || " "}
+        </span>
         <Input
           ref={inputRef}
           value={draft}
@@ -159,6 +201,10 @@ function EditableTradeInputCell<TValue>({
             EDITABLE_INPUT_CLASS,
             align === "right" ? "text-right" : "text-left"
           )}
+          style={{
+            width: `${inputWidth}px`,
+            maxWidth: "100%",
+          }}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={() => void handleSave()}
           onKeyDown={(event) => {

@@ -156,13 +156,13 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
                 <FormItem className="space-y-1">
                   <FormLabel className="text-xs">Username</FormLabel>
                   <FormControl>
-                    <div className="*:not-first:mt-2 rounded-md border-[0.5px] border-white/0">
-                      <div className="flex rounded-md overflow-hidden">
-                        <span className="bg-sidebar text-secondary z-10 inline-flex items-center px-3 text-xs border border-white/5 border-r-0 rounded-l-md pointer-events-none select-none">
+                    <div className="*:not-first:mt-2 rounded-md ring ring-white/0">
+                      <div className="flex rounded-md">
+                        <span className="bg-sidebar text-secondary z-10 inline-flex items-center px-3 text-xs ring ring-white/5 border-r-0 rounded-l-md pointer-events-none select-none">
                           profitabledge.com/
                         </span>
                         <Input
-                          className=" bg-sidebar relative z-0 focus-visible:scale-[100%] rounded-l-none ring"
+                          className="bg-sidebar relative focus-visible:scale-[100%] rounded-l-none z-0"
                           placeholder="profitabletrader"
                           type="text"
                           {...field}

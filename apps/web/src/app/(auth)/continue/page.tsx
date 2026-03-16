@@ -74,7 +74,7 @@ export default function AuthContinuePage() {
   ]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar w-full">
+    <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar w-screen">
       <div className="text-sm text-muted-foreground">
         {isRecoveringSession
           ? "Finalizing your sign-in..."

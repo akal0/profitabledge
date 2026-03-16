@@ -49,6 +49,7 @@ export const queryClient = new QueryClient({
       }
 
       const isAuthError =
+        error.message === "Please login to access the platform." ||
         error.message === "Authentication required" ||
         error.message === "UNAUTHORIZED";
 

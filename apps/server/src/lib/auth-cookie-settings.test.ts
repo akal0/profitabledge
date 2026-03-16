@@ -57,4 +57,17 @@ describe("auth cookie settings", () => {
       resolveAuthBaseUrl(env)
     ).toBe("https://profitabledge-web.vercel.app");
   });
+
+  it("falls back to localhost cors origin when no explicit web url is set", () => {
+    const env = {
+      ...process.env,
+      WEB_URL: "",
+      NEXT_PUBLIC_WEB_URL: "",
+      CORS_ORIGIN: "http://localhost:3001/",
+      BETTER_AUTH_URL: "http://localhost:3000/",
+      NEXT_PUBLIC_SERVER_URL: "http://localhost:3000/",
+    };
+
+    expect(resolveAuthBaseUrl(env)).toBe("http://localhost:3001");
+  });
 });

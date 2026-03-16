@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
   DEFAULT_SESSION_CONFIRM_RETRY_DELAYS_MS,
@@ -25,12 +25,21 @@ export function useConfirmedSession({
   const [hasAttemptedSessionRecovery, setHasAttemptedSessionRecovery] =
     useState(false);
   const [isRecoveringSession, setIsRecoveringSession] = useState(false);
+  const hasStartedSessionRecovery = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!session) {
       return;
     }
 
+    hasStartedSessionRecovery.current = false;
     setHasRecoveredSession(false);
     setHasAttemptedSessionRecovery(false);
     setIsRecoveringSession(false);
@@ -42,41 +51,32 @@ export function useConfirmedSession({
       isSessionPending ||
       session ||
       isRecoveringSession ||
-      hasAttemptedSessionRecovery
+      hasAttemptedSessionRecovery ||
+      hasStartedSessionRecovery.current
     ) {
       return;
     }
 
-    let cancelled = false;
+    hasStartedSessionRecovery.current = true;
     setIsRecoveringSession(true);
 
     void (async () => {
       const confirmed = await waitForConfirmedSession(retryDelays);
-      if (cancelled) {
+      if (!isMountedRef.current) {
         return;
       }
 
       setHasRecoveredSession(confirmed);
 
       if (confirmed) {
-        try {
-          await refetchSession();
-        } catch {
+        void Promise.resolve(refetchSession()).catch(() => {
           // Let the recovered-session flag keep protected queries alive.
-        }
-
-        if (cancelled) {
-          return;
-        }
+        });
       }
 
       setHasAttemptedSessionRecovery(true);
       setIsRecoveringSession(false);
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [
     autoRecover,
     hasAttemptedSessionRecovery,

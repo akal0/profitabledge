@@ -54,6 +54,20 @@ function firstNonLocalhostOrigin(csv: string | undefined | null): string | null 
   return null;
 }
 
+function firstOrigin(csv: string | undefined | null): string | null {
+  if (!csv) return null;
+  for (const entry of csv.split(",")) {
+    const origin = normalizeOrigin(entry);
+    if (!origin) continue;
+    try {
+      return new URL(origin).origin;
+    } catch {
+      // skip malformed entries
+    }
+  }
+  return null;
+}
+
 export function resolveAuthBaseUrl(env: NodeJS.ProcessEnv = process.env) {
   return (
     normalizeOrigin(env.WEB_URL) ||
@@ -64,6 +78,7 @@ export function resolveAuthBaseUrl(env: NodeJS.ProcessEnv = process.env) {
     // domain, which prevents cookies from being marked cross-origin
     // unnecessarily.
     firstNonLocalhostOrigin(env.CORS_ORIGIN) ||
+    firstOrigin(env.CORS_ORIGIN) ||
     normalizeOrigin(env.BETTER_AUTH_URL) ||
     normalizeOrigin(env.NEXT_PUBLIC_SERVER_URL) ||
     "http://localhost:3000"

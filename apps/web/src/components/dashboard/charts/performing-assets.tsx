@@ -23,7 +23,7 @@ import {
   useComparisonStore,
   type WidgetComparisonMode,
 } from "@/stores/comparison";
-import { trpcClient } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 import {
   formatRangeLabel,
   getComparisonRange,
@@ -38,6 +38,7 @@ import { useChartDateRange } from "./use-chart-date-range";
 const CHART_MARGIN = 35;
 
 type Point = { label: string; value: number };
+export type PerformingAssetPoint = Point;
 
 const chartConfig = {
   profit: {
@@ -50,10 +51,27 @@ export function PerformingAssetsBarChart({
   accountId,
   ownerId = "performing-assets",
   comparisonMode,
+  rows,
+  comparisonRows,
+  currencyCode,
+  chartMargin,
+  contentClassName,
+  titleClassName,
 }: {
   accountId?: string;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
+  rows?: PerformingAssetPoint[];
+  comparisonRows?: PerformingAssetPoint[] | null;
+  currencyCode?: string | null;
+  chartMargin?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
+  contentClassName?: string;
+  titleClassName?: string;
 }) {
   const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
@@ -97,18 +115,24 @@ export function PerformingAssetsBarChart({
     let cancelled = false;
 
     (async () => {
-      if (!accountId || !resolvedRange) return;
+      if (rows || !accountId || !resolvedRange) return;
 
-      const primaryPromise = trpcClient.accounts.profitByAssetRange.query({
-        accountId,
-        startISO: resolvedRange.start.toISOString(),
-        endISO: resolvedRange.end.toISOString(),
+      const primaryPromise = queryClient.fetchQuery({
+        ...trpcOptions.accounts.profitByAssetRange.queryOptions({
+          accountId,
+          startISO: resolvedRange.start.toISOString(),
+          endISO: resolvedRange.end.toISOString(),
+        }),
+        staleTime: 30_000,
       });
       const comparisonPromise = comparisonRange
-        ? trpcClient.accounts.profitByAssetRange.query({
-            accountId,
-            startISO: comparisonRange.start.toISOString(),
-            endISO: comparisonRange.end.toISOString(),
+        ? queryClient.fetchQuery({
+            ...trpcOptions.accounts.profitByAssetRange.queryOptions({
+              accountId,
+              startISO: comparisonRange.start.toISOString(),
+              endISO: comparisonRange.end.toISOString(),
+            }),
+            staleTime: 30_000,
           })
         : Promise.resolve(null);
 
@@ -170,7 +194,7 @@ export function PerformingAssetsBarChart({
     return () => {
       cancelled = true;
     };
-  }, [accountId, comparisonRange, resolvedRange]);
+  }, [accountId, comparisonRange, resolvedRange, rows]);
   const [activeIndex, setActiveIndex] = React.useState<number | undefined>(
     undefined
   );
@@ -178,16 +202,19 @@ export function PerformingAssetsBarChart({
     "profit" | "compare" | undefined
   >(undefined);
 
+  const primarySeries = rows ?? series;
+  const secondarySeries = comparisonRows ?? comparisonSeries;
+
   const dataForChart = React.useMemo(
-    () => series.map((p) => ({ asset: p.label, profit: p.value })),
-    [series]
+    () => primarySeries.map((p) => ({ asset: p.label, profit: p.value })),
+    [primarySeries]
   );
   const comparisonDataForChart = React.useMemo(
     () =>
-      comparisonSeries
-        ? comparisonSeries.map((p) => ({ asset: p.label, compare: p.value }))
+      secondarySeries
+        ? secondarySeries.map((p) => ({ asset: p.label, compare: p.value }))
         : [],
-    [comparisonSeries]
+    [secondarySeries]
   );
 
   // Merge primary and comparison series into one dataset for Recharts
@@ -283,18 +310,16 @@ export function PerformingAssetsBarChart({
   }, [dataForChart, comparisonDataForChart]);
 
   const currencyTick = (v: number) => {
-    const abs = Math.abs(Math.round(v));
-    const prefix = v < 0 ? "-$" : "$";
-    return `${prefix}${abs.toLocaleString()}`;
+    return formatSignedCurrency(v, 0, currencyCode);
   };
 
   // Compute most/least profitable assets (include comparison if enabled)
   const bestWorst = React.useMemo(() => {
     const totals = new Map<string, number>();
-    for (const p of series)
+    for (const p of primarySeries)
       totals.set(p.label, (totals.get(p.label) ?? 0) + Number(p.value || 0));
-    if (comparisonSeries) {
-      for (const c of comparisonSeries)
+    if (secondarySeries) {
+      for (const c of secondarySeries)
         totals.set(c.label, (totals.get(c.label) ?? 0) + Number(c.value || 0));
     }
     let best: { symbol: string; v: number } | null = null;
@@ -304,39 +329,43 @@ export function PerformingAssetsBarChart({
       if (worst === null || v < worst.v) worst = { symbol, v };
     }
     return { best, worst };
-  }, [series, comparisonSeries]);
+  }, [primarySeries, secondarySeries]);
 
   const primaryLabel = React.useMemo(() => "Selected range", []);
   const comparisonLabel = React.useMemo(() => {
-    if (!comparisonSeries) return undefined;
+    if (!secondarySeries) return undefined;
     if (myMode === "thisWeek") return "This week";
     if (myMode === "lastWeek") return "Last week";
     return "Previous range";
-  }, [comparisonSeries, myMode]);
+  }, [secondarySeries, myMode]);
 
   const selectedRangeStr = React.useMemo(() => {
+    if (rows) return undefined;
     if (!resolvedRange) return undefined;
     return formatRangeLabel(resolvedRange);
-  }, [resolvedRange]);
+  }, [resolvedRange, rows]);
 
   const comparisonRangeStr = React.useMemo(() => {
+    if (rows) return undefined;
     if (!comparisonRange) return undefined;
     return formatRangeLabel(comparisonRange);
-  }, [comparisonRange]);
+  }, [comparisonRange, rows]);
 
   return (
-    <Card className="w-full h-full rounded-none bg-transparent border-none shadow-none">
+    <Card className="flex h-full w-full flex-col justify-end rounded-none border-none bg-transparent shadow-none">
       <CardHeader className="p-0">
-        <CardTitle className="flex items-center -mt-3">
+        <CardTitle className={cn("flex items-center -mt-3", titleClassName)}>
           {bestWorst.best && bestWorst.worst ? (
             <p className="font-normal text-white/40 text-sm tracking-wide">
               Most profitable asset:{" "}
               <span className="text-teal-400 font-medium">
-                {bestWorst.best.symbol} ({formatSignedCurrency(bestWorst.best.v, 0)})
+                {bestWorst.best.symbol} (
+                {formatSignedCurrency(bestWorst.best.v, 0, currencyCode)})
               </span>{" "}
               · Least profitable asset:{" "}
               <span className="text-rose-400 font-medium">
-                {bestWorst.worst.symbol} ({formatSignedCurrency(bestWorst.worst.v, 0)})
+                {bestWorst.worst.symbol} (
+                {formatSignedCurrency(bestWorst.worst.v, 0, currencyCode)})
               </span>
             </p>
           ) : (
@@ -347,25 +376,30 @@ export function PerformingAssetsBarChart({
         </CardTitle>
       </CardHeader>
 
-      <CardContent className="p-0 overflow-visible">
+      <CardContent
+        className={cn(
+          "mt-auto overflow-visible pl-2 pr-0 pt-0 pb-0",
+          contentClassName
+        )}
+      >
         <AnimatePresence mode="wait">
-          <ChartContainer config={chartConfig} className="w-full h-52 md:h-74">
+          <ChartContainer config={chartConfig} className="h-60 w-full md:h-80">
             <BarChart
               accessibilityLayer
               data={mergedData}
               onMouseLeave={() => {}}
               margin={{
-                left: 36,
-                right: 0,
-                top: 12,
-                bottom: -4,
+                left: chartMargin?.left ?? 44,
+                right: chartMargin?.right ?? 0,
+                top: chartMargin?.top ?? 12,
+                bottom: chartMargin?.bottom ?? -4,
               }}
             >
               <YAxis
                 domain={[niceScale.min, niceScale.max]}
                 tickLine={false}
                 axisLine={false}
-                width={20}
+                width={64}
                 tickMargin={6}
                 tickFormatter={currencyTick}
                 ticks={niceScale.ticks}
@@ -461,17 +495,17 @@ export function PerformingAssetsBarChart({
                               item.name ??
                               (key === "profit" ? "Selected" : "Previous")
                             }
-                            value={formatSignedCurrency(v, 0)}
+                            value={formatSignedCurrency(v, 0, currencyCode)}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
                             indicatorColor={
                               typeof item.color === "string"
                                 ? item.color
                                 : key === "compare"
-                                  ? "#FCA070"
-                                  : v < 0
-                                    ? "#fb7185"
-                                    : "#2dd4bf"
+                                ? "#FCA070"
+                                : v < 0
+                                ? "#fb7185"
+                                : "#2dd4bf"
                             }
                           />
                         );

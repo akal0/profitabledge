@@ -53,7 +53,7 @@ export function useTradeTableReferenceData({
 }: UseTradeTableReferenceDataArgs) {
   const advancedPrefsQuery =
     trpcOptions.users.getAdvancedMetricsPreferences.queryOptions();
-  const { data: advancedPrefsRaw } = useQuery({
+  const { data: advancedPrefsRaw, isLoading: isLoadingAdvancedPrefs } = useQuery({
     ...advancedPrefsQuery,
     staleTime: 0,
     refetchOnMount: true,
@@ -71,7 +71,7 @@ export function useTradeTableReferenceData({
   const boundsOpts = trpcOptions.accounts.opensBounds.queryOptions({
     accountId: accountId || "",
   });
-  const { data: boundsRaw } = useQuery({
+  const { data: boundsRaw, isLoading: isLoadingBounds } = useQuery({
     ...boundsOpts,
     enabled: Boolean(accountId),
   });
@@ -82,7 +82,7 @@ export function useTradeTableReferenceData({
   const symbolsOpts = trpcOptions.trades.listSymbols.queryOptions({
     accountId: accountId || "",
   });
-  const { data: allSymbolsRaw } = useQuery({
+  const { data: allSymbolsRaw, isLoading: isLoadingSymbols } = useQuery({
     ...symbolsOpts,
     enabled: Boolean(accountId),
   });
@@ -94,7 +94,7 @@ export function useTradeTableReferenceData({
   const killzonesOpts = trpcOptions.trades.listKillzones.queryOptions({
     accountId: accountId || "",
   });
-  const { data: allKillzonesRaw } = useQuery({
+  const { data: allKillzonesRaw, isLoading: isLoadingKillzones } = useQuery({
     ...killzonesOpts,
     enabled: Boolean(accountId),
   });
@@ -106,7 +106,7 @@ export function useTradeTableReferenceData({
   const sessionTagsOpts = trpcOptions.trades.listSessionTags.queryOptions({
     accountId: accountId || "",
   });
-  const { data: allSessionTagsRaw } = useQuery({
+  const { data: allSessionTagsRaw, isLoading: isLoadingSessionTags } = useQuery({
     ...sessionTagsOpts,
     enabled: Boolean(accountId),
   });
@@ -118,7 +118,7 @@ export function useTradeTableReferenceData({
   const modelTagsOpts = trpcOptions.trades.listModelTags.queryOptions({
     accountId: accountId || "",
   });
-  const { data: allModelTagsRaw } = useQuery({
+  const { data: allModelTagsRaw, isLoading: isLoadingModelTags } = useQuery({
     ...modelTagsOpts,
     enabled: Boolean(accountId),
   });
@@ -130,7 +130,7 @@ export function useTradeTableReferenceData({
   const statsOpts = trpcOptions.accounts.stats.queryOptions({
     accountId: accountId || "",
   });
-  const { data: acctStatsRaw } = useQuery({
+  const { data: acctStatsRaw, isLoading: isLoadingStats } = useQuery({
     ...statsOpts,
     enabled: Boolean(accountId),
   });
@@ -216,7 +216,7 @@ export function useTradeTableReferenceData({
   const sampleGateOpts = trpcOptions.trades.getSampleGateStatus.queryOptions({
     accountId: accountId || "",
   });
-  const { data: sampleGateStatusRaw } = useQuery({
+  const { data: sampleGateStatusRaw, isLoading: isLoadingSampleGate } = useQuery({
     ...sampleGateOpts,
     enabled: Boolean(accountId),
   });
@@ -347,8 +347,13 @@ export function useTradeTableReferenceData({
     { getNextPageParam: (last: any) => last?.nextCursor }
   );
 
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery({ ...infiniteOpts, enabled: Boolean(accountId) });
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+  } = useInfiniteQuery({ ...infiniteOpts, enabled: Boolean(accountId) });
 
   const rows = React.useMemo<TradeRow[]>(() => {
     const pages = (data as any)?.pages as Array<{ items: TradeRow[] }> | undefined;
@@ -413,6 +418,18 @@ export function useTradeTableReferenceData({
     return pages?.[0]?.totalTradesCount ?? 0;
   }, [data]);
 
+  const isWorkspaceLoading = Boolean(accountId) && (
+    isLoadingAdvancedPrefs ||
+    isLoadingBounds ||
+    isLoadingSymbols ||
+    isLoadingKillzones ||
+    isLoadingSessionTags ||
+    isLoadingModelTags ||
+    isLoadingStats ||
+    isLoadingSampleGate ||
+    isLoading
+  );
+
   return {
     acctStats,
     allKillzones,
@@ -425,6 +442,7 @@ export function useTradeTableReferenceData({
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isWorkspaceLoading,
     maxBound,
     minBound,
     sampleGateStatus,

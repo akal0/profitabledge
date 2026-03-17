@@ -31,6 +31,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import AvatarUploader from "./avatar-uploader";
 import { ArrowRightIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 
 type Me = Awaited<ReturnType<typeof trpcClient.users.me.query>>;
 
@@ -268,7 +269,10 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
 
           <div className="flex gap-4 px-6">
             <Button
-              className="rounded-md h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2.5 items-center justify-center w-full"
+              className={getOnboardingButtonClassName({
+                tone: "teal",
+                className: "w-full flex-1",
+              })}
               type="submit"
             >
               Update profile

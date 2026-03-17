@@ -17,13 +17,21 @@ export type CalendarRange = {
   end: Date;
 };
 
-export type CalendarWidgetType =
-  | "net-pl"
-  | "win-rate"
-  | "largest-trade"
-  | "largest-loss"
-  | "hold-time"
-  | "avg-trade";
+export const ALL_CALENDAR_WIDGET_TYPES = [
+  "net-pl",
+  "win-rate",
+  "largest-trade",
+  "largest-loss",
+  "hold-time",
+  "avg-trade",
+  "weekly-breakdown",
+  "active-days",
+  "avg-active-day",
+  "best-day",
+  "worst-day",
+] as const;
+
+export type CalendarWidgetType = (typeof ALL_CALENDAR_WIDGET_TYPES)[number];
 
 export const MAX_CALENDAR_WIDGETS = 6;
 
@@ -93,6 +101,7 @@ export type CalendarPreviewState = Record<
 >;
 
 export type MonthSummary = {
+  activeDays: number;
   totalProfit: number;
   totalTrades: number;
   winDays: number;
@@ -102,6 +111,14 @@ export type MonthSummary = {
   avgPerActiveDay: number;
   bestDay: DayRow | null;
   worstDay: DayRow | null;
+  weeklyBreakdown: Array<{
+    label: string;
+    startLabel: string;
+    endLabel: string;
+    totalProfit: number;
+    totalTrades: number;
+    activeDays: number;
+  }>;
   startLabel: string;
   endLabel: string;
 };

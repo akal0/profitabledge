@@ -30,6 +30,7 @@
   - `apps/server/src/routers/proof.ts`
   - `apps/server/src/routers/proof/...`
   - `apps/server/src/lib/public-proof/...`
+  - `apps/server/src/lib/public-proof/page-data.ts` owns public proof overview/stat/trust shaping so router queries can stay focused on fetch + authorization instead of inlining proof-page aggregation logic
 - health and sync status
   - `apps/server/src/routers/accounts/health.ts`
 

@@ -45,6 +45,11 @@ const CALENDAR_WIDGET_IDS = [
   "largest-loss",
   "hold-time",
   "avg-trade",
+  "weekly-breakdown",
+  "active-days",
+  "avg-active-day",
+  "best-day",
+  "worst-day",
 ] as const;
 
 const CHART_WIDGET_IDS = [
@@ -58,6 +63,7 @@ const CHART_WIDGET_IDS = [
   "r-multiple-distribution",
   "mae-mfe-scatter",
   "entry-exit-time",
+  "hold-time-scatter",
   "monte-carlo",
   "rolling-performance",
   "correlation-matrix",

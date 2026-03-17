@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUploadThing } from "@/utils/uploadthing";
 import { trpcClient } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
+import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 
 export default function AvatarUploader({
   onUploaded,
@@ -96,7 +97,9 @@ export default function AvatarUploader({
         <Button
           type="button"
           onClick={pick}
-          className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 px-3 items-center justify-center w-max"
+          className={getOnboardingButtonClassName({
+            className: "w-max px-3",
+          })}
           disabled={isUploading}
         >
           {file ? "Change profile picture" : "Choose profile picture"}
@@ -105,7 +108,10 @@ export default function AvatarUploader({
         <Button
           type="button"
           onClick={clear}
-          className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-red-700 hover:bg-red-700 cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex py-2 px-3 items-center justify-center w-max"
+          className={getOnboardingButtonClassName({
+            tone: "danger",
+            className: "w-max px-3",
+          })}
           disabled={isUploading}
         >
           Remove profile picture

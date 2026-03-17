@@ -20,12 +20,10 @@ import {
   tradeTrustEvent,
 } from "../../db/schema/trading";
 import { listPublicProofLiveTrades } from "../../lib/public-proof/live-trades";
-import { buildPublicProofPath } from "../../lib/public-proof/share-slug";
+import { buildPublicProofPageData } from "../../lib/public-proof/page-data";
 import {
   getTradeOriginLabel,
-  resolveAccountConnectionTrust,
   resolveTradeOriginType,
-  type TradeOriginType,
 } from "../../lib/public-proof/trust";
 import { protectedProcedure, publicProcedure } from "../../lib/trpc";
 import {
@@ -41,40 +39,15 @@ function parseNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function resolveTradeTimestamp(row: {
-  closeTime?: Date | null;
-  openTime?: Date | null;
-  createdAt: Date;
-}) {
-  return row.closeTime ?? row.openTime ?? row.createdAt;
-}
-
-function downsampleCurve(
-  points: Array<{ x: string; y: number }>,
-  maxPoints = 64
-) {
-  if (points.length <= maxPoints) return points;
-
-  const step = points.length / maxPoints;
-  const sampled: Array<{ x: string; y: number }> = [];
-  for (let index = 0; index < maxPoints; index += 1) {
-    const point = points[Math.min(points.length - 1, Math.floor(index * step))];
-    if (point) sampled.push(point);
+function toSortAtISO(value: unknown) {
+  if (value instanceof Date) {
+    return value.toISOString();
   }
-  return sampled;
-}
 
-function buildVerificationLabel(verificationLevel: string | null | undefined) {
-  switch (verificationLevel) {
-    case "api_verified":
-      return "API verified";
-    case "ea_synced":
-      return "EA verified";
-    case "prop_verified":
-      return "Prop verified";
-    default:
-      return "Self-reported";
-  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime())
+    ? new Date(0).toISOString()
+    : parsed.toISOString();
 }
 
 const publicShareCursorSchema = z
@@ -143,203 +116,88 @@ export const proofQueryProcedures = {
         })
         .where(eq(publicAccountShare.id, share.id));
 
-      const [lastImportedRow, tradeRows, editedSummary, removedSummary] =
-        await Promise.all([
-          db
-            .select({
-              lastImportedAt: max(notification.createdAt),
-            })
-            .from(notification)
-            .where(
-              and(
-                eq(notification.accountId, share.accountId),
-                eq(notification.type, "trade_imported")
-              )
-            ),
-          db
-            .select({
-              id: trade.id,
-              profit: trade.profit,
-              outcome: trade.outcome,
-              plannedRR: trade.plannedRR,
-              realisedRR: trade.realisedRR,
-              openTime: trade.openTime,
-              closeTime: trade.closeTime,
-              createdAt: trade.createdAt,
-              originType: trade.originType,
-              brokerMeta: trade.brokerMeta,
-              ticket: trade.ticket,
-              useBrokerData: trade.useBrokerData,
-            })
-            .from(trade)
-            .where(eq(trade.accountId, share.accountId))
-            .orderBy(desc(trade.createdAt)),
-          db
-            .select({
-              count: sql<number>`COUNT(DISTINCT ${tradeTrustEvent.tradeId})`,
-            })
-            .from(tradeTrustEvent)
-            .where(
-              and(
-                eq(tradeTrustEvent.accountId, share.accountId),
-                eq(tradeTrustEvent.eventType, "update"),
-                sql`${tradeTrustEvent.createdAt} >= ${share.createdAt}`
-              )
-            ),
-          db
-            .select({
-              count: sql<number>`COUNT(DISTINCT ${tradeTrustEvent.tradeId})`,
-            })
-            .from(tradeTrustEvent)
-            .where(
-              and(
-                eq(tradeTrustEvent.accountId, share.accountId),
-                eq(tradeTrustEvent.eventType, "delete"),
-                inArray(tradeTrustEvent.originType, [
-                  "broker_sync",
-                  "csv_import",
-                ]),
-                sql`${tradeTrustEvent.createdAt} >= ${share.createdAt}`
-              )
-            ),
-        ]);
-
-      const closedTradeRows = tradeRows.filter(
-        (row) => row.closeTime != null || row.outcome != null
-      );
-      const pnls = tradeRows.map((row) => parseNumber(row.profit));
-      const totalTrades = tradeRows.length;
-      const totalPnl = pnls.reduce((sum, pnl) => sum + pnl, 0);
-      const wins = closedTradeRows.filter((row) => {
-        if (row.outcome) {
-          return row.outcome === "Win" || row.outcome === "PW";
-        }
-        return parseNumber(row.profit) > 0;
-      }).length;
-      const closedLosses = closedTradeRows.filter((row) => {
-        if (row.outcome) {
-          return row.outcome === "Loss";
-        }
-        return parseNumber(row.profit) < 0;
-      }).length;
-      const winRate =
-        closedTradeRows.length > 0
-          ? Number(((wins / closedTradeRows.length) * 100).toFixed(1))
-          : 0;
-      const grossProfit = pnls
-        .filter((value) => value > 0)
-        .reduce((sum, value) => sum + value, 0);
-      const grossLoss = Math.abs(
-        pnls.filter((value) => value < 0).reduce((sum, value) => sum + value, 0)
-      );
-      const profitFactor =
-        grossLoss > 0
-          ? Number((grossProfit / grossLoss).toFixed(2))
-          : grossProfit > 0
-          ? 999
-          : 0;
-
-      const rrValues = closedTradeRows
-        .map((row) =>
-          parseNumber(row.realisedRR != null ? row.realisedRR : row.plannedRR)
-        )
-        .filter((value) => Number.isFinite(value) && value > 0);
-      const averageRR =
-        rrValues.length > 0
-          ? Number(
-              (
-                rrValues.reduce((sum, value) => sum + value, 0) /
-                rrValues.length
-              ).toFixed(2)
+      const [
+        lastImportedRow,
+        tradeRows,
+        liveTradeRows,
+        editedSummary,
+        removedSummary,
+      ] = await Promise.all([
+        db
+          .select({
+            lastImportedAt: max(notification.createdAt),
+          })
+          .from(notification)
+          .where(
+            and(
+              eq(notification.accountId, share.accountId),
+              eq(notification.type, "trade_imported")
             )
-          : 0;
-
-      const sortedForCurve = [...closedTradeRows].sort(
-        (left, right) =>
-          resolveTradeTimestamp(left).getTime() -
-          resolveTradeTimestamp(right).getTime()
-      );
-
-      let equity = 0;
-      let peak = 0;
-      let maxDrawdown = 0;
-      const curvePoints = sortedForCurve.map((row) => {
-        equity += parseNumber(row.profit);
-        peak = Math.max(peak, equity);
-        maxDrawdown = Math.max(maxDrawdown, peak - equity);
-        return {
-          x: resolveTradeTimestamp(row).toISOString(),
-          y: Number(equity.toFixed(2)),
-        };
-      });
-
-      const sourceCounts = {
-        brokerSync: 0,
-        csvImport: 0,
-        manualEntry: 0,
-      };
-
-      for (const row of tradeRows) {
-        const originType = resolveTradeOriginType({
-          originType: row.originType,
-          brokerMeta: row.brokerMeta as Record<string, unknown> | null,
-          ticket: row.ticket,
-          useBrokerData: row.useBrokerData,
-          accountVerificationLevel: share.verificationLevel,
-          accountIsVerified: share.isVerified,
-        });
-
-        if (originType === "broker_sync") sourceCounts.brokerSync += 1;
-        if (originType === "csv_import") sourceCounts.csvImport += 1;
-        if (originType === "manual_entry") sourceCounts.manualEntry += 1;
-      }
-
-      const legacyAuditGap = tradeRows.some(
-        (row) => row.createdAt.getTime() < share.createdAt.getTime()
-      );
-      const connectionTrust = resolveAccountConnectionTrust({
-        verificationLevel: share.verificationLevel,
-        isVerified: share.isVerified,
-        brokerType: share.brokerType,
-        brokerServer: share.brokerServer,
+          ),
+        db
+          .select({
+            id: trade.id,
+            symbol: trade.symbol,
+            profit: trade.profit,
+            outcome: trade.outcome,
+            plannedRR: trade.plannedRR,
+            realisedRR: trade.realisedRR,
+            openTime: trade.openTime,
+            closeTime: trade.closeTime,
+            createdAt: trade.createdAt,
+            originType: trade.originType,
+            brokerMeta: trade.brokerMeta,
+            ticket: trade.ticket,
+            useBrokerData: trade.useBrokerData,
+          })
+          .from(trade)
+          .where(eq(trade.accountId, share.accountId))
+          .orderBy(desc(trade.createdAt)),
+        listPublicProofLiveTrades({
+          accountId: share.accountId,
+        }),
+        db
+          .select({
+            count: sql<number>`COUNT(DISTINCT ${tradeTrustEvent.tradeId})`,
+          })
+          .from(tradeTrustEvent)
+          .where(
+            and(
+              eq(tradeTrustEvent.accountId, share.accountId),
+              eq(tradeTrustEvent.eventType, "update"),
+              sql`${tradeTrustEvent.createdAt} >= ${share.createdAt}`
+            )
+          ),
+        db
+          .select({
+            count: sql<number>`COUNT(DISTINCT ${tradeTrustEvent.tradeId})`,
+          })
+          .from(tradeTrustEvent)
+          .where(
+            and(
+              eq(tradeTrustEvent.accountId, share.accountId),
+              eq(tradeTrustEvent.eventType, "delete"),
+              inArray(tradeTrustEvent.originType, [
+                "broker_sync",
+                "csv_import",
+              ]),
+              sql`${tradeTrustEvent.createdAt} >= ${share.createdAt}`
+            )
+          ),
+      ]);
+      return buildPublicProofPageData({
+        share,
+        username: input.username,
+        publicAccountSlug: input.publicAccountSlug,
         lastImportedAt: lastImportedRow[0]?.lastImportedAt ?? null,
+        storedTradeRows: tradeRows.map((row) => ({
+          ...row,
+          brokerMeta: row.brokerMeta as Record<string, unknown> | null,
+        })),
+        liveTradeRows,
+        editedTradesCount: Number(editedSummary[0]?.count ?? 0),
+        removedTradesCount: Number(removedSummary[0]?.count ?? 0),
       });
-
-      return {
-        path: buildPublicProofPath(input.username, input.publicAccountSlug),
-        trader: {
-          username: input.username,
-          name: share.traderName,
-        },
-        account: {
-          name: share.accountName,
-          broker: share.broker,
-        },
-        proof: {
-          connectionKind: connectionTrust.kind,
-          connectionLabel: connectionTrust.label,
-          verificationLevel: share.verificationLevel ?? "unverified",
-          verificationLabel: buildVerificationLabel(share.verificationLevel),
-          auditCoverageStartsAt: share.createdAt,
-          legacyAuditGap,
-        },
-        summary: {
-          totalTrades,
-          wins,
-          losses: closedLosses,
-          winRate,
-          totalPnl: Number(totalPnl.toFixed(2)),
-          profitFactor,
-          averageRR,
-          maxDrawdown: Number(maxDrawdown.toFixed(2)),
-          curve: downsampleCurve(curvePoints),
-        },
-        trust: {
-          editedTradesCount: Number(editedSummary[0]?.count ?? 0),
-          removedTradesCount: Number(removedSummary[0]?.count ?? 0),
-          sourceCounts,
-        },
-      };
     }),
 
   listPublicTradesInfinite: publicProcedure
@@ -565,7 +423,7 @@ export const proofQueryProcedures = {
         ],
         nextCursor: hasMore
           ? {
-              sortAtISO: pageRows[pageRows.length - 1]!.sortAt.toISOString(),
+              sortAtISO: toSortAtISO(pageRows[pageRows.length - 1]!.sortAt),
               id: pageRows[pageRows.length - 1]!.id,
             }
           : undefined,

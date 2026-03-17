@@ -7,24 +7,17 @@ import {
   ArchiveRestore,
   Building2,
   ChevronRight,
-  ShieldCheck,
   Trophy,
 } from "lucide-react";
-import { toast } from "sonner";
 
-import { AccountTagsDialog } from "@/features/accounts/components/account-tags-dialog";
-import { AccountPublicProofDialog } from "@/features/accounts/components/account-public-proof-dialog";
+import { AccountCardActionsMenu } from "@/features/accounts/components/account-card-actions-menu";
 import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
 import { getAccountSourceBadge } from "@/features/accounts/lib/account-metadata";
 import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { WIDGET_CONTENT_SEPARATOR_CLASS } from "@/features/dashboard/widgets/lib/widget-shared";
-import {
-  FUNDED_PROP_STATUS_APPEARANCE,
-  PropAccountStatusBadges,
-  getPropStatusAppearance,
-} from "@/components/prop-account-status-badges";
+import { PropAccountStatusBadges } from "@/components/prop-account-status-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -34,7 +27,6 @@ import {
   AccountWidgetFrame,
   BrokerAccountAvatar,
   HEADER_BADGE_CLASS,
-  HEADER_ICON_BUTTON_CLASS,
   PropFirmAvatar,
   formatUsd,
   getAccountBalance,
@@ -139,25 +131,6 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
     String(account.propDetectedFirmId || "").toLowerCase() === "ftmo"
       ? "FTMO"
       : "a prop firm";
-  const archiveMutation = useMutation({
-    mutationFn: (input: { accountId: string; archive: boolean }) =>
-      trpcClient.accounts.toggleArchive.mutate(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-    },
-  });
-  const trackRecordMutation = useMutation({
-    mutationFn: (input: { accountId: string }) =>
-      trpcClient.accounts.generateTrackRecord.mutate(input),
-    onSuccess: (data: any) => {
-      const url = `${window.location.origin}/verified/${data.shareId}`;
-      navigator.clipboard.writeText(url);
-      toast.success("Track record generated. Link copied to clipboard.");
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Failed to generate track record");
-    },
-  });
 
   return (
     <AccountWidgetFrame
@@ -166,40 +139,13 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
       headerRight={
         <div className="flex items-center gap-1.5">
           <ManualPropAccountDialog account={account} />
-          <AccountTagsDialog account={account} />
-          <AccountPublicProofDialog account={account} />
           <Badge
             variant="outline"
             className={cn(HEADER_BADGE_CLASS, sourceBadge.className)}
           >
             {sourceBadge.label}
           </Badge>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(HEADER_ICON_BUTTON_CLASS, "hover:text-emerald-400")}
-            onClick={() =>
-              trackRecordMutation.mutate({ accountId: account.id })
-            }
-            disabled={trackRecordMutation.isPending}
-            title="Generate verified track record"
-          >
-            <ShieldCheck className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(HEADER_ICON_BUTTON_CLASS, "hover:text-white")}
-            onClick={() =>
-              archiveMutation.mutate({ accountId: account.id, archive: true })
-            }
-            disabled={archiveMutation.isPending}
-            title="Archive account"
-          >
-            <Archive className="h-3.5 w-3.5" />
-          </Button>
-          <DeleteAccountButton account={account} />
+          <AccountCardActionsMenu account={account} />
         </div>
       }
       contentClassName="justify-between"
@@ -308,8 +254,6 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
       title={propFirm.displayName || "Prop firm"}
       headerRight={
         <div className="flex items-center gap-1.5">
-          <AccountTagsDialog account={account} />
-          <AccountPublicProofDialog account={account} />
           <PropAccountStatusBadges
             account={account}
             dashboard={dashboard}
@@ -319,7 +263,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             accountId={account.id}
             accountName={account.name}
           />
-          <DeleteAccountButton account={account} />
+          <AccountCardActionsMenu account={account} />
         </div>
       }
       contentClassName="justify-between"

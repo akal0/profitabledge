@@ -153,7 +153,7 @@ export function EconomicCalendarControls({
             title="Economic calendar"
             successMessage="Economic calendar PNG downloaded"
             errorMessage="Failed to export economic calendar PNG"
-            buttonLabel="Download PNG"
+            buttonLabel="Share"
             className="h-9 w-max gap-2 rounded-none border border-white/5 bg-sidebar px-4 text-xs text-white/70 hover:bg-sidebar-accent hover:text-white"
           />
         ) : null}

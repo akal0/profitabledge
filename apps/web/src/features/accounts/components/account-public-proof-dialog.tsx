@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Copy,
@@ -35,16 +35,24 @@ function toAbsoluteUrl(path: string | null | undefined) {
 
 export function AccountPublicProofDialog({
   account,
+  open,
+  onOpenChange,
+  trigger,
 }: {
   account: AccountRecord;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  trigger?: ReactNode | null;
 }) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const resolvedOpen = open ?? internalOpen;
+  const setResolvedOpen = onOpenChange ?? setInternalOpen;
 
   const statusQuery = useQuery({
     ...trpcOptions.proof.getOwnedShareStatus.queryOptions({
       accountId: account.id,
     }),
-    enabled: open,
+    enabled: resolvedOpen,
   });
 
   const shareStatus = statusQuery.data;
@@ -100,17 +108,21 @@ export function AccountPublicProofDialog({
   const isBusy = createOrRotate.isPending || revoke.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 rounded-sm ring-white/10 bg-sidebar px-2 text-xs text-white/35 hover:bg-sidebar hover:text-teal-300"
-          title="Manage public proof page"
-        >
-          <Globe2 className="h-3.5 w-3.5" />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={resolvedOpen} onOpenChange={setResolvedOpen}>
+      {trigger === null ? null : (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 rounded-sm ring-white/10 bg-sidebar px-2 text-xs text-white/35 hover:bg-sidebar hover:text-teal-300"
+              title="Manage public proof page"
+            >
+              <Globe2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="max-h-[80vh] overflow-hidden rounded-md border border-white/5 bg-sidebar p-0 gap-0 sm:max-w-3xl flex flex-col">
         <div className="px-6 py-5">
           <DialogHeader className="p-0">

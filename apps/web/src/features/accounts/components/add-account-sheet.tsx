@@ -339,16 +339,9 @@ export function AddAccountSheet({
 
       await refreshAccounts();
 
-      const resetCount =
-        typeof result.resetCount === "number" ? result.resetCount : 0;
-
       toast.success(
         demoAccounts.length > 0
-          ? `Demo workspace regenerated. Replaced ${resetCount} seeded demo account${
-              resetCount === 1 ? "" : "s"
-            } with ${result.tradeCount} trades and ${
-              result.openTradeCount
-            } live positions.`
+          ? `Demo workspace regenerated with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
           : `Demo account created with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
       );
 

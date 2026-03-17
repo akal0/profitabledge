@@ -470,6 +470,16 @@ export function DashboardTradeFiltersProvider({
     }
 
     const totalProfit = Number(filteredStats.totalProfit ?? 0);
+    const contributionDenominator =
+      Math.abs(totalProfit) > 0
+        ? Math.abs(totalProfit)
+        : Math.max(
+            1,
+            Array.from(byAccount.values()).reduce(
+              (sum, value) => sum + Math.abs(value.totalProfit),
+              0
+            )
+          );
 
     return Array.from(byAccount.entries())
       .map(([id, value]) => ({
@@ -479,8 +489,7 @@ export function DashboardTradeFiltersProvider({
         totalTrades: value.trades,
         winRate: value.trades > 0 ? (value.wins / value.trades) * 100 : 0,
         totalProfit: value.totalProfit,
-        contribution:
-          totalProfit !== 0 ? (value.totalProfit / totalProfit) * 100 : 0,
+        contribution: (value.totalProfit / contributionDenominator) * 100,
       }))
       .sort((left, right) => right.totalProfit - left.totalProfit);
   }, [accounts, filteredStats, filteredTrades]);

@@ -9,15 +9,21 @@ export function isAllAccountsScope(accountId?: string | null): boolean {
 
 type AccountState = {
   selectedAccountId?: string;
+  allAccountsPreferredCurrencyCode?: string;
   setSelectedAccountId: (id?: string) => void;
+  setAllAccountsPreferredCurrencyCode: (currencyCode?: string) => void;
 };
 
 export const useAccountStore = create<AccountState>()(
   persist(
     (set) => ({
       selectedAccountId: undefined,
+      allAccountsPreferredCurrencyCode: undefined,
       setSelectedAccountId: (id?: string) => {
         set({ selectedAccountId: id });
+      },
+      setAllAccountsPreferredCurrencyCode: (currencyCode?: string) => {
+        set({ allAccountsPreferredCurrencyCode: currencyCode });
       },
     }),
     {

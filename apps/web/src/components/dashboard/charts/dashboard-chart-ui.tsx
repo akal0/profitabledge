@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
 import { Separator } from "@/components/ui/separator";
 import { APP_TOOLTIP_SURFACE_CLASS } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -85,12 +86,15 @@ export function DashboardChartTooltipRow({
   );
 }
 
-export function formatSignedCurrency(value: number, digits = 0) {
-  const sign = value < 0 ? "-$" : "$";
-  return `${sign}${Math.abs(value).toLocaleString(undefined, {
+export function formatSignedCurrency(
+  value: number,
+  digits = 0,
+  currencyCode?: string | null
+) {
+  return formatSignedCurrencyValue(value, currencyCode, {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  })}`;
+  });
 }
 
 export function formatSignedPercent(value: number, digits = 2) {

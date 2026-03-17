@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   ComposedChart,
@@ -13,7 +12,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { BarChart3, CalendarDays, Clock3, Tags, Target } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  Clock3,
+  Tags,
+  Target,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 
 import {
   DashboardTradeFiltersBar,
@@ -21,21 +28,33 @@ import {
   useDashboardTradeFilters,
 } from "@/features/dashboard/filters/dashboard-trade-filters";
 import {
+  getAvailableDashboardCurrencyCodes,
+  resolveDashboardCurrencyCode,
+} from "@/features/dashboard/home/lib/dashboard-currency";
+import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
 } from "@/components/dashboard/charts/dashboard-chart-ui";
+import { DailyNetBarChart } from "@/components/dashboard/charts/daily-net";
+import { PerformingAssetsBarChart } from "@/components/dashboard/charts/performing-assets";
 import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
+import { ChartWidgetFrame } from "@/features/dashboard/charts/components/chart-card-shell";
 import {
   ChartContainer,
   ChartTooltip,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
 import {
   createSymbolGroupDisplayMap,
   getSymbolGroupKey,
 } from "@/lib/symbol-grouping";
-import { useAccountStore } from "@/stores/account";
+import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
 
 type TradeLike = {
@@ -91,11 +110,6 @@ function formatRR(value: number | null | undefined) {
   return value != null && Number.isFinite(value) ? `${value.toFixed(2)}R` : "—";
 }
 
-function formatSignedNumber(value: number, digits = 2) {
-  if (!Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : value < 0 ? "-" : ""}${Math.abs(value).toFixed(digits)}`;
-}
-
 function getValueTone(value: number) {
   if (value > 0) return "positive" as const;
   if (value < 0) return "negative" as const;
@@ -110,17 +124,24 @@ function getTooltipRow(
   payload: RechartsTooltipProps["payload"]
 ): MetricRow | DistributionRow | null {
   const row = payload?.[0]?.payload;
-  return row && typeof row === "object" ? (row as MetricRow | DistributionRow) : null;
+  return row && typeof row === "object"
+    ? (row as MetricRow | DistributionRow)
+    : null;
 }
 
 function getDistributionTooltipRow(
   payload: RechartsTooltipProps["payload"]
 ): DistributionRow | null {
   const row = getTooltipRow(payload);
-  return row && "share" in row && "fill" in row ? (row as DistributionRow) : null;
+  return row && "share" in row && "fill" in row
+    ? (row as DistributionRow)
+    : null;
 }
 
-function buildDistributionRows(rows: MetricRow[], limit = 5): DistributionRow[] {
+function buildDistributionRows(
+  rows: MetricRow[],
+  limit = 5
+): DistributionRow[] {
   const filtered = rows
     .filter((row) => row.trades > 0)
     .sort((left, right) => right.trades - left.trades);
@@ -187,9 +208,17 @@ function groupByHour(trades: TradeLike[]) {
 }
 
 function groupByWeekday(trades: TradeLike[]) {
-  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdays = [
+    { label: "Mon", dayIndex: 1 },
+    { label: "Tue", dayIndex: 2 },
+    { label: "Wed", dayIndex: 3 },
+    { label: "Thu", dayIndex: 4 },
+    { label: "Fri", dayIndex: 5 },
+    { label: "Sat", dayIndex: 6 },
+    { label: "Sun", dayIndex: 0 },
+  ];
 
-  return labels.map((label, dayIndex) => {
+  return weekdays.map(({ label, dayIndex }) => {
     const matchingTrades = trades.filter((trade) => {
       if (!trade.open) return false;
       return new Date(trade.open).getDay() === dayIndex;
@@ -315,6 +344,37 @@ function ReportCard({
   );
 }
 
+function ReportsStatCard({
+  icon: Icon,
+  label,
+  value,
+  iconClassName,
+  valueClassName,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: React.ReactNode;
+  iconClassName?: string;
+  valueClassName?: string;
+}) {
+  return (
+    <GoalSurface>
+      <div className="p-3.5">
+        <div className="flex items-center gap-2">
+          <Icon className={cn("h-4 w-4 text-white/50", iconClassName)} />
+          <span className="text-xs text-white/50">{label}</span>
+        </div>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        <div
+          className={cn("text-2xl font-semibold text-white", valueClassName)}
+        >
+          {value}
+        </div>
+      </div>
+    </GoalSurface>
+  );
+}
+
 function EmptyChartState({ message }: { message: string }) {
   return (
     <div className="flex h-full min-h-[16rem] items-center justify-center rounded-sm border border-dashed border-white/8 bg-black/10">
@@ -329,12 +389,14 @@ function TrendChart({
   metricKey,
   metricColor,
   metricFormatter,
+  currencyCode,
 }: {
   rows: MetricRow[];
   metricLabel: string;
   metricKey: "winRate" | "avgRR";
   metricColor: string;
   metricFormatter: (value: number | null | undefined) => string;
+  currencyCode?: string | null;
 }) {
   const config: ChartConfig = {
     trades: {
@@ -363,7 +425,10 @@ function TrendChart({
 
   return (
     <div className="flex h-full min-h-0 items-center">
-      <ChartContainer config={config} className="h-full w-full overflow-visible">
+      <ChartContainer
+        config={config}
+        className="h-full w-full overflow-visible"
+      >
         <ComposedChart
           data={data}
           margin={{ top: 12, right: 28, left: 36, bottom: 2 }}
@@ -428,7 +493,7 @@ function TrendChart({
                   />
                   <DashboardChartTooltipRow
                     label="Net P&L"
-                    value={formatSignedCurrencyValue(row.pnl)}
+                    value={formatSignedCurrencyValue(row.pnl, currencyCode)}
                     tone={getValueTone(row.pnl)}
                   />
                 </DashboardChartTooltipFrame>
@@ -458,177 +523,16 @@ function TrendChart({
   );
 }
 
-function WeekdayPnlChart({ rows }: { rows: MetricRow[] }) {
-  const config: ChartConfig = {
-    pnl: {
-      label: "Profit and loss",
-      color: POSITIVE_COLOR,
-    },
-  };
-
-  if (!hasMetricData(rows)) {
-    return <EmptyChartState message="No trades in the current filter." />;
-  }
-
-  return (
-    <div className="flex h-full min-h-0 items-center">
-      <ChartContainer config={config} className="h-full w-full overflow-visible">
-        <BarChart
-          data={rows}
-          margin={{ top: 12, right: 16, left: 42, bottom: 2 }}
-        >
-          <CartesianGrid vertical={false} strokeDasharray="3 3" />
-          <XAxis
-            dataKey="label"
-            axisLine={false}
-            tickLine={false}
-            tickMargin={10}
-            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-          />
-          <YAxis
-            axisLine={false}
-            tickLine={false}
-            tickMargin={8}
-            width={30}
-            tickFormatter={(value: number) => formatSignedNumber(value, 0)}
-            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-          />
-          <ChartTooltip
-            cursor={{ fill: "rgba(255,255,255,0.03)" }}
-            content={({ active, payload, label }: RechartsTooltipProps) => {
-              const row = getTooltipRow(payload);
-              if (!row) return null;
-              if (!active) return null;
-
-              return (
-                <DashboardChartTooltipFrame
-                  title={
-                    typeof label === "string" || typeof label === "number"
-                      ? label
-                      : row.label
-                  }
-                >
-                  <DashboardChartTooltipRow
-                    label="Net P&L"
-                    value={formatSignedCurrencyValue(row.pnl)}
-                    tone={getValueTone(row.pnl)}
-                  />
-                  <DashboardChartTooltipRow label="Trades" value={row.trades} />
-                  <DashboardChartTooltipRow
-                    label="Win rate"
-                    value={formatPercent(row.winRate)}
-                  />
-                </DashboardChartTooltipFrame>
-              );
-            }}
-          />
-          <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-            {rows.map((row) => (
-              <Cell
-                key={row.label}
-                fill={row.pnl >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ChartContainer>
-    </div>
-  );
-}
-
-function RankingBarChart({
-  rows,
-  metricLabel,
-}: {
-  rows: MetricRow[];
-  metricLabel: string;
-}) {
-  const config: ChartConfig = {
-    pnl: {
-      label: metricLabel,
-      color: POSITIVE_COLOR,
-    },
-  };
-
-  if (!hasMetricData(rows)) {
-    return <EmptyChartState message="No trades in the current filter." />;
-  }
-
-  return (
-    <div className="flex h-full min-h-0 items-center">
-      <ChartContainer config={config} className="h-full w-full overflow-visible">
-        <BarChart
-          data={rows}
-          layout="vertical"
-          margin={{ top: 4, right: 24, left: 12, bottom: 8 }}
-        >
-          <CartesianGrid horizontal={false} strokeDasharray="3 3" />
-          <XAxis
-            type="number"
-            axisLine={false}
-            tickLine={false}
-            tickMargin={8}
-            tickFormatter={(value: number) => formatSignedNumber(value, 0)}
-            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-          />
-          <YAxis
-            type="category"
-            dataKey="label"
-            width={108}
-            axisLine={false}
-            tickLine={false}
-            tickMargin={10}
-            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.55)" }}
-          />
-          <ChartTooltip
-            cursor={{ fill: "rgba(255,255,255,0.03)" }}
-            content={({ active, payload, label }: RechartsTooltipProps) => {
-              const row = getTooltipRow(payload);
-              if (!row) return null;
-              if (!active) return null;
-
-              return (
-                <DashboardChartTooltipFrame
-                  title={
-                    typeof label === "string" || typeof label === "number"
-                      ? label
-                      : row.label
-                  }
-                >
-                  <DashboardChartTooltipRow
-                    label={metricLabel}
-                    value={formatSignedCurrencyValue(row.pnl)}
-                    tone={getValueTone(row.pnl)}
-                  />
-                  <DashboardChartTooltipRow label="Trades" value={row.trades} />
-                  <DashboardChartTooltipRow
-                    label="Win rate"
-                    value={formatPercent(row.winRate)}
-                  />
-                </DashboardChartTooltipFrame>
-              );
-            }}
-          />
-          <Bar dataKey="pnl" radius={[0, 4, 4, 0]} maxBarSize={22}>
-            {rows.map((row) => (
-              <Cell
-                key={row.label}
-                fill={row.pnl >= 0 ? POSITIVE_COLOR : NEGATIVE_COLOR}
-              />
-            ))}
-          </Bar>
-        </BarChart>
-      </ChartContainer>
-    </div>
-  );
-}
-
 function DistributionDonutChart({
   rows,
   emptyMessage,
+  currencyCode,
+  className,
 }: {
   rows: MetricRow[];
   emptyMessage: string;
+  currencyCode?: string | null;
+  className?: string;
 }) {
   const data = buildDistributionRows(rows);
   const totalTrades = data.reduce((sum, row) => sum + row.trades, 0);
@@ -644,7 +548,7 @@ function DistributionDonutChart({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
+    <div className={cn("flex h-full min-h-0 flex-col gap-4", className)}>
       <ChartContainer
         config={config}
         className="mx-auto h-56 w-full max-w-[22rem] overflow-visible"
@@ -684,7 +588,7 @@ function DistributionDonutChart({
                   />
                   <DashboardChartTooltipRow
                     label="Net P&L"
-                    value={formatSignedCurrencyValue(row.pnl)}
+                    value={formatSignedCurrencyValue(row.pnl, currencyCode)}
                     tone={getValueTone(row.pnl)}
                   />
                   <DashboardChartTooltipRow
@@ -698,35 +602,39 @@ function DistributionDonutChart({
         </PieChart>
       </ChartContainer>
 
-      <div className="grid gap-2 sm:grid-cols-2">
-        {data.map((row) => (
-          <div
-            key={row.label}
-            className="rounded-sm border border-white/5 bg-black/10 px-3 py-2"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className="size-2.5 shrink-0 rounded-[2px]"
-                  style={{ backgroundColor: row.fill }}
-                />
-                <span className="truncate text-xs text-white/75">{row.label}</span>
+      <div className="mt-auto flex min-h-0 flex-col gap-4">
+        <div className="grid gap-2 sm:grid-cols-2">
+          {data.map((row) => (
+            <div
+              key={row.label}
+              className="rounded-sm border border-white/5 bg-black/10 px-3 py-2"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className="size-2.5 shrink-0 rounded-[2px]"
+                    style={{ backgroundColor: row.fill }}
+                  />
+                  <span className="truncate text-xs text-white/75">
+                    {row.label}
+                  </span>
+                </div>
+                <span className="text-xs font-medium text-white">
+                  {formatPercent(row.share, 1)}
+                </span>
               </div>
-              <span className="text-xs font-medium text-white">
-                {formatPercent(row.share, 1)}
-              </span>
+              <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-white/40">
+                <span>{row.trades} trades</span>
+                <span>{formatSignedCurrencyValue(row.pnl, currencyCode)}</span>
+              </div>
             </div>
-            <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-white/40">
-              <span>{row.trades} trades</span>
-              <span>{formatSignedCurrencyValue(row.pnl)}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
 
-      <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-2 text-center">
-        <p className="text-[11px] text-white/35">Total trades</p>
-        <p className="mt-1 text-lg font-semibold text-white">{totalTrades}</p>
+        <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-2 text-center">
+          <p className="text-[11px] text-white/35">Total trades</p>
+          <p className="mt-1 text-lg font-semibold text-white">{totalTrades}</p>
+        </div>
       </div>
     </div>
   );
@@ -734,13 +642,43 @@ function DistributionDonutChart({
 
 function ReportsContent() {
   const dashboardTradeFilters = useDashboardTradeFilters();
+  const accountId = useAccountStore((state) => state.selectedAccountId);
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
+  const { accounts } = useAccountCatalog({
+    enabled: Boolean(accountId),
+  });
 
   const trades = dashboardTradeFilters?.filteredTrades ?? [];
   const stats = dashboardTradeFilters?.filteredStats;
+  const selectedAccount = accounts.find((account) => account.id === accountId);
+  const availableCurrencyCodes = useMemo(
+    () => getAvailableDashboardCurrencyCodes(accounts),
+    [accounts]
+  );
+  const currencyCode = resolveDashboardCurrencyCode({
+    isAllAccounts: isAllAccountsScope(accountId),
+    preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+    availableCurrencyCodes,
+    selectedAccountCurrency: selectedAccount?.initialCurrency,
+  });
 
   const hourlyRows = useMemo(() => groupByHour(trades), [trades]);
   const weekdayRows = useMemo(() => groupByWeekday(trades), [trades]);
   const symbolRows = useMemo(() => groupBySymbol(trades), [trades]);
+  const weekdayPnlRows = useMemo(
+    () => weekdayRows.map((row) => ({ label: row.label, value: row.pnl })),
+    [weekdayRows]
+  );
+  const symbolPnlRows = useMemo(
+    () => symbolRows.map((row) => ({ label: row.label, value: row.pnl })),
+    [symbolRows]
+  );
+  const weekdayNet = useMemo(
+    () => weekdayRows.reduce((sum, row) => sum + row.pnl, 0),
+    [weekdayRows]
+  );
   const sessionRows = useMemo(
     () => groupByLabel(trades, (trade) => [trade.sessionTag || "Unassigned"]),
     [trades]
@@ -763,60 +701,69 @@ function ReportsContent() {
         className="!h-auto rounded-lg p-1"
         contentClassName="flex h-auto flex-col rounded-sm px-4 py-4 md:px-5 md:py-5"
       >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
-                Reports
-              </p>
-              <h1 className="mt-1 text-2xl font-semibold text-white">
-                Detailed trade breakdowns
-              </h1>
-              <p className="mt-1 max-w-2xl text-sm text-white/45">
-                Review how performance changes by hour, weekday, symbol, and
-                tag. The same filters here can be used to inspect grouped
-                account portfolios or a narrow slice of setups.
-              </p>
-            </div>
-
-            <div className="grid min-w-[16rem] gap-2 sm:grid-cols-2">
-              <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-2">
-                <p className="text-[11px] text-white/35">Trades</p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {trades.length}
-                </p>
-              </div>
-              <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-2">
-                <p className="text-[11px] text-white/35">Net P&amp;L</p>
-                <p
-                  className={cn(
-                    "mt-1 text-lg font-semibold",
-                    Number(stats?.totalProfit ?? 0) >= 0
-                      ? "text-teal-400"
-                      : "text-rose-400"
-                  )}
-                >
-                  {formatSignedCurrencyValue(Number(stats?.totalProfit ?? 0))}
-                </p>
-              </div>
-              <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-2">
-                <p className="text-[11px] text-white/35">Win rate</p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {Number(stats?.winrate ?? 0).toFixed(1)}%
-                </p>
-              </div>
-              <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-2">
-                <p className="text-[11px] text-white/35">Average RR</p>
-                <p className="mt-1 text-lg font-semibold text-white">
-                  {stats?.averageRMultiple != null
-                    ? `${Number(stats.averageRMultiple).toFixed(2)}R`
-                    : "—"}
-                </p>
-              </div>
-            </div>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
+              Reports
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold text-white">
+              Detailed trade breakdowns
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm text-white/45">
+              Review how performance changes by hour, weekday, symbol, and tag.
+              The same filters here can be used to inspect grouped account
+              portfolios or a narrow slice of setups.
+            </p>
           </div>
+
+          <div className="flex items-center">
+            <DashboardTradeFiltersBar mode="button" />
+          </div>
+        </div>
       </WidgetWrapper>
 
-      <DashboardTradeFiltersBar />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <ReportsStatCard
+          icon={BarChart3}
+          label="Trades"
+          value={trades.length}
+          iconClassName="text-white/55"
+        />
+        <ReportsStatCard
+          icon={TrendingUp}
+          label="Net P&L"
+          value={formatSignedCurrencyValue(
+            Number(stats?.totalProfit ?? 0),
+            currencyCode
+          )}
+          iconClassName={
+            Number(stats?.totalProfit ?? 0) >= 0
+              ? "text-teal-400"
+              : "text-rose-400"
+          }
+          valueClassName={
+            Number(stats?.totalProfit ?? 0) >= 0
+              ? "text-teal-400"
+              : "text-rose-400"
+          }
+        />
+        <ReportsStatCard
+          icon={Target}
+          label="Win rate"
+          value={`${Number(stats?.winrate ?? 0).toFixed(1)}%`}
+          iconClassName="text-white/55"
+        />
+        <ReportsStatCard
+          icon={Activity}
+          label="Average RR"
+          value={
+            stats?.averageRMultiple != null
+              ? `${Number(stats.averageRMultiple).toFixed(2)}R`
+              : "—"
+          }
+          iconClassName="text-white/55"
+        />
+      </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ReportCard title="Win rate by hour" icon={Clock3}>
@@ -826,6 +773,7 @@ function ReportsContent() {
             metricKey="winRate"
             metricColor={POSITIVE_COLOR}
             metricFormatter={(value) => formatPercent(Number(value ?? 0))}
+            currencyCode={currencyCode}
           />
         </ReportCard>
 
@@ -836,25 +784,68 @@ function ReportsContent() {
             metricKey="avgRR"
             metricColor={ACCENT_COLOR}
             metricFormatter={(value) => formatRR(value)}
+            currencyCode={currencyCode}
           />
         </ReportCard>
 
-        <ReportCard title="Profit and loss by weekday" icon={CalendarDays}>
-          <WeekdayPnlChart rows={weekdayRows} />
-        </ReportCard>
+        <ChartWidgetFrame
+          title="Profit and loss by weekday"
+          className="h-[30rem]"
+          showShareButton={false}
+        >
+          <div className="flex h-full min-h-0 flex-col p-0 px-3.5">
+            <DailyNetBarChart
+              rows={weekdayPnlRows}
+              currencyCode={currencyCode}
+              primarySeriesLabel="Weekday net P&L"
+              xAxisTickFormatter={(value) => value}
+              chartMargin={{ left: 24 }}
+              headline={
+                <p className="text-sm font-normal tracking-wide text-white/40">
+                  Across the selected filter, cumulative weekday net P&amp;L is{" "}
+                  <span
+                    className={cn(
+                      "font-medium tracking-normal",
+                      weekdayNet >= 0 ? "text-teal-400" : "text-rose-400"
+                    )}
+                  >
+                    {formatSignedCurrencyValue(weekdayNet, currencyCode, {
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    })}
+                  </span>
+                  .
+                </p>
+              }
+            />
+          </div>
+        </ChartWidgetFrame>
 
-        <ReportCard title="Symbol breakdown" icon={BarChart3}>
-          <RankingBarChart rows={symbolRows} metricLabel="Net P&L" />
-        </ReportCard>
+        <ChartWidgetFrame
+          title="Symbol breakdown"
+          className="h-[30rem]"
+          showShareButton={false}
+        >
+          <div className="flex h-full min-h-0 flex-col p-0 px-3.5">
+            <PerformingAssetsBarChart
+              rows={symbolPnlRows}
+              currencyCode={currencyCode}
+              chartMargin={{ left: 28, top: 20 }}
+              contentClassName=""
+              titleClassName="mt-2!"
+            />
+          </div>
+        </ChartWidgetFrame>
 
         <ReportCard
           title="Session breakdown"
           icon={Clock3}
-          className="h-[30rem]"
+          className="h-[30rem] xl:col-span-2"
         >
           <DistributionDonutChart
             rows={sessionRows}
             emptyMessage="No session-tagged trades in the current filter."
+            currencyCode={currencyCode}
           />
         </ReportCard>
 
@@ -864,18 +855,22 @@ function ReportsContent() {
           className="!h-auto min-h-[38rem] xl:col-span-2"
         >
           <div className="grid h-full min-h-0 gap-4 lg:grid-cols-2">
-            <div className="flex min-h-0 flex-col gap-3">
+            <div className="flex h-full min-h-0 flex-col gap-3">
               <h3 className="text-sm font-medium text-white/75">Model tags</h3>
               <DistributionDonutChart
                 rows={modelRows}
                 emptyMessage="No model-tagged trades in the current filter."
+                currencyCode={currencyCode}
+                className="flex-1"
               />
             </div>
-            <div className="flex min-h-0 flex-col gap-3">
+            <div className="flex h-full min-h-0 flex-col gap-3">
               <h3 className="text-sm font-medium text-white/75">Trade tags</h3>
               <DistributionDonutChart
                 rows={customTagRows}
                 emptyMessage="No custom-tagged trades in the current filter."
+                currencyCode={currencyCode}
+                className="flex-1"
               />
             </div>
           </div>

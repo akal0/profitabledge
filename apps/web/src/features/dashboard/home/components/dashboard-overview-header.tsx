@@ -1,5 +1,7 @@
 "use client";
 
+import type { RefObject } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import DashboardActionButtons from "@/components/dashboard/dashboard-action-buttons";
 import { InsightPanel } from "@/components/dashboard/insight-panel";
@@ -18,8 +20,11 @@ export function DashboardOverviewHeader({
   isEditing,
   valueMode,
   currencyLabel,
+  currencyOptions,
+  onCurrencyCodeChange,
   accountAction,
   leadingActions,
+  widgetsExportTargetRef,
   widgets,
   widgetSpans,
   onValueModeChange,
@@ -30,8 +35,11 @@ export function DashboardOverviewHeader({
   isEditing: boolean;
   valueMode: WidgetValueMode;
   currencyLabel?: string;
+  currencyOptions?: string[];
+  onCurrencyCodeChange?: (currencyCode: string) => void;
   accountAction?: DashboardAccountAction | null;
   leadingActions?: React.ReactNode;
+  widgetsExportTargetRef?: RefObject<HTMLElement | null>;
   widgets: WidgetType[];
   widgetSpans: Partial<Record<WidgetType, number>>;
   onValueModeChange: (value: WidgetValueMode) => void;
@@ -75,8 +83,11 @@ export function DashboardOverviewHeader({
           isEditing={isEditing}
           valueMode={valueMode}
           currencyLabel={currencyLabel}
+          currencyOptions={currencyOptions}
+          onCurrencyCodeChange={onCurrencyCodeChange}
           accountAction={accountAction}
           leadingActions={leadingActions}
+          widgetsExportTargetRef={widgetsExportTargetRef}
           onValueModeChange={onValueModeChange}
           onToggleEdit={onToggleEdit}
           widgets={widgets}

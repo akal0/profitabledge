@@ -1,16 +1,22 @@
 "use client";
 
 import type { RefObject } from "react";
-import { ArrowUpRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import PickerComponent from "@/components/dashboard/calendar/picker";
 import { cn } from "@/lib/utils";
 import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
+import { CalendarWidgetPresets } from "./calendar-widget-presets";
 
 import { fromDateISO } from "../lib/calendar-utils";
-import type { CalendarRange, DayRow, ViewMode } from "../lib/calendar-types";
+import type {
+  CalendarRange,
+  CalendarWidgetType,
+  DayRow,
+  ViewMode,
+} from "../lib/calendar-types";
 
 const SEGMENTED_CONTROL_CLASS =
   "flex h-max w-max items-center gap-1 rounded-lg bg-white p-[3px] dark:bg-muted/25 ring ring-white/5";
@@ -49,15 +55,18 @@ type CalendarControlsProps = {
   canNavigateNext: boolean;
   heatmapEnabled: boolean;
   goalOverlay: boolean;
-  isEditing: boolean;
   exportTargetRef?: RefObject<HTMLElement | null>;
+  summaryWidgets: CalendarWidgetType[];
+  summaryWidgetSpans: Partial<Record<CalendarWidgetType, number>>;
   onRangeChange: (start: Date, end: Date, nextViewMode?: ViewMode) => void;
   onPeriodStep: (direction: -1 | 1) => void;
   onViewChange: (mode: ViewMode) => void;
   onToggleHeatmap: () => void;
   onToggleGoalOverlay: () => void;
-  onToggleEdit: () => void;
-  onViewAccountStats: () => void;
+  onApplyPreset: (
+    widgets: CalendarWidgetType[],
+    spans: Partial<Record<CalendarWidgetType, number>>
+  ) => void | Promise<void>;
 };
 
 export function CalendarControls({
@@ -71,15 +80,15 @@ export function CalendarControls({
   canNavigateNext,
   heatmapEnabled,
   goalOverlay,
-  isEditing,
   exportTargetRef,
+  summaryWidgets,
+  summaryWidgetSpans,
   onRangeChange,
   onPeriodStep,
   onViewChange,
   onToggleHeatmap,
   onToggleGoalOverlay,
-  onToggleEdit,
-  onViewAccountStats,
+  onApplyPreset,
 }: CalendarControlsProps) {
   return (
     <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
@@ -89,10 +98,7 @@ export function CalendarControls({
         </span>{" "}
         most recent trades
       </h2>
-      <div
-        className="flex flex-wrap items-center gap-2 xl:justify-end"
-        data-widget-share-ignore="true"
-      >
+      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
         {days && days.length > 0 && bounds ? (
           (() => {
             const isMonth = viewMode === "month";
@@ -170,21 +176,19 @@ export function CalendarControls({
             Goals
           </Button>
         </div>
-        <Button
+        <CalendarWidgetPresets
+          currentWidgets={summaryWidgets}
+          currentSpans={summaryWidgetSpans}
+          onApplyPreset={onApplyPreset}
           className={ACTION_BUTTON_CLASS}
-          data-widget-share-ignore="true"
-          onClick={onViewAccountStats}
-        >
-          View account stats
-          <ArrowUpRight className="size-3" />
-        </Button>
-        {!isEditing && exportTargetRef ? (
+        />
+        {exportTargetRef ? (
           <WidgetShareButton
             targetRef={exportTargetRef}
             title="Trading calendar"
             successMessage="Calendar PNG downloaded"
             errorMessage="Failed to export calendar PNG"
-            buttonLabel="Download PNG"
+            buttonLabel="Share"
             className={ACTION_BUTTON_CLASS}
           />
         ) : null}

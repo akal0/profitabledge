@@ -216,7 +216,10 @@ export const liveMetricsProcedure = protectedProcedure
       .orderBy(desc(openTrade.openTime));
 
     const totalFloatingPL = openTrades.reduce(
-      (sum, openPosition) => sum + Number(openPosition.profit || 0),
+      (sum, openPosition) =>
+        sum +
+        Number(openPosition.profit || 0) +
+        Number(openPosition.swap || 0),
       0
     );
 

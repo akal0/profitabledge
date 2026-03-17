@@ -1,8 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useMemo, useRef } from "react";
 
-import { AllAccountsOverview } from "@/components/dashboard/all-accounts-overview";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import Calendar from "@/features/dashboard/calendar/components/dashboard-calendar";
 import { ChartWidgets } from "@/components/dashboard/chart-widgets";
 import { Widgets } from "@/components/dashboard/widgets";
@@ -16,10 +17,13 @@ import {
 import { DashboardOverviewHeader } from "@/features/dashboard/home/components/dashboard-overview-header";
 import { useDashboardHomeLayout } from "@/features/dashboard/home/hooks/use-dashboard-home-layout";
 import {
+  getAvailableDashboardCurrencyCodes,
+  resolveDashboardCurrencyCode,
+} from "@/features/dashboard/home/lib/dashboard-currency";
+import {
   DashboardTradeFiltersBar,
   DashboardTradeFiltersProvider,
 } from "@/features/dashboard/filters/dashboard-trade-filters";
-import { normalizeCurrencyCode } from "@/features/dashboard/widgets/lib/widget-shared";
 import {
   accountIsEaSynced,
   accountSupportsLiveSync,
@@ -28,6 +32,8 @@ import {
   pickPreferredAccountConnection,
   type ConnectionRow as DashboardConnectionRow,
 } from "@/features/dashboard-shell/lib/connection-status";
+import { useDashboardWorkspaceReady } from "@/features/dashboard/home/hooks/use-dashboard-workspace-ready";
+import { AllAccountsBreakdownWidget } from "@/features/dashboard/widgets/components/all-accounts-breakdown-widget";
 
 type DashboardPageConnection = DashboardConnectionRow & {
   id: string;
@@ -35,8 +41,15 @@ type DashboardPageConnection = DashboardConnectionRow & {
   lastSyncSuccessAt?: string | Date | null;
 };
 
-export default function Page() {
+function DashboardPageContent() {
+  const widgetsExportRef = useRef<HTMLDivElement | null>(null);
   const accountId = useAccountStore((state) => state.selectedAccountId);
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
+  const setAllAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.setAllAccountsPreferredCurrencyCode
+  );
   const { data: me } = useQuery(trpcOptions.users.me.queryOptions());
   const { data: accounts } = useQuery(trpcOptions.accounts.list.queryOptions());
   const { data: rawConnections } = useQuery(
@@ -50,7 +63,6 @@ export default function Page() {
     calendarWidgets,
     calendarWidgetSpans,
     isWidgetsEditing,
-    isCalendarEditing,
     isChartWidgetsEditing,
     valueMode,
     setValueMode,
@@ -59,17 +71,13 @@ export default function Page() {
     reorderWidgets,
     toggleChartWidget,
     reorderChartWidgets,
-    toggleCalendarWidget,
-    resizeCalendarWidget,
-    reorderCalendarWidgets,
     enterWidgetsEdit,
     toggleWidgetsEdit,
-    enterCalendarEdit,
-    toggleCalendarEdit,
     enterChartWidgetsEdit,
     toggleChartWidgetsEdit,
     applyPreset,
     applyChartPreset,
+    applyCalendarPreset,
   } = useDashboardHomeLayout(me);
 
   const selectedAccount = accounts?.find(
@@ -95,9 +103,19 @@ export default function Page() {
           accountId
         ) as DashboardPageConnection | null)
       : null;
-  const currencyCode = isAllAccountsScope(accountId)
-    ? undefined
-    : normalizeCurrencyCode(selectedAccount?.initialCurrency);
+  const availableCurrencyCodes = useMemo(
+    () =>
+      getAvailableDashboardCurrencyCodes(
+        accounts as Array<{ initialCurrency?: string | null }> | undefined
+      ),
+    [accounts]
+  );
+  const currencyCode = resolveDashboardCurrencyCode({
+    isAllAccounts: isAllAccountsScope(accountId),
+    preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+    availableCurrencyCodes,
+    selectedAccountCurrency: selectedAccount?.initialCurrency,
+  });
   const currencyLabel = currencyCode ?? "Currency";
   const supportsLiveWidgets =
     isAllAccountsScope(accountId) || accountSupportsLiveSync(selectedAccount);
@@ -137,8 +155,15 @@ export default function Page() {
           isEditing={isWidgetsEditing}
           valueMode={valueMode}
           currencyLabel={currencyLabel}
+          currencyOptions={isAllAccountsScope(accountId) ? availableCurrencyCodes : []}
+          onCurrencyCodeChange={
+            isAllAccountsScope(accountId)
+              ? setAllAccountsPreferredCurrencyCode
+              : undefined
+          }
           accountAction={accountAction}
           leadingActions={<DashboardTradeFiltersBar mode="button" />}
+          widgetsExportTargetRef={widgetsExportRef}
           widgets={widgets}
           widgetSpans={widgetSpans}
           onValueModeChange={setValueMode}
@@ -147,32 +172,36 @@ export default function Page() {
         />
 
         <div className="flex flex-1 flex-col gap-8">
-          {accountId === ALL_ACCOUNTS_ID ? <AllAccountsOverview /> : null}
-
-          <Widgets
-            enabledWidgets={widgets}
-            accountId={accountId}
-            isEditing={isWidgetsEditing}
-            valueMode={valueMode}
-            currencyCode={currencyCode}
-            supportsLiveWidgets={supportsLiveWidgets}
-            onToggleWidget={toggleWidget}
-            onReorder={reorderWidgets}
-            onEnterEdit={enterWidgetsEdit}
-            widgetSpans={widgetSpans}
-            onResizeWidget={resizeWidget}
-          />
+          <div ref={widgetsExportRef} className="space-y-1.5">
+            {accountId === ALL_ACCOUNTS_ID ? (
+              <div className="grid auto-rows-[18rem] gap-1.5 md:grid-cols-4 2xl:grid-cols-4 3xl:grid-cols-5">
+                <AllAccountsBreakdownWidget
+                  accountId={accountId}
+                  currencyCode={currencyCode}
+                  className="h-[18rem] md:col-span-2 2xl:col-span-2 3xl:col-span-2"
+                />
+              </div>
+            ) : null}
+            <Widgets
+              enabledWidgets={widgets}
+              accountId={accountId}
+              isEditing={isWidgetsEditing}
+              valueMode={valueMode}
+              currencyCode={currencyCode}
+              supportsLiveWidgets={supportsLiveWidgets}
+              onToggleWidget={toggleWidget}
+              onReorder={reorderWidgets}
+              onEnterEdit={enterWidgetsEdit}
+              widgetSpans={widgetSpans}
+              onResizeWidget={resizeWidget}
+            />
+          </div>
 
           <Calendar
             accountId={accountId}
-            isEditing={isCalendarEditing}
             summaryWidgets={calendarWidgets}
             summaryWidgetSpans={calendarWidgetSpans}
-            onToggleSummaryWidget={toggleCalendarWidget}
-            onReorderSummaryWidget={reorderCalendarWidgets}
-            onResizeSummaryWidget={resizeCalendarWidget}
-            onEnterEdit={enterCalendarEdit}
-            onToggleEdit={toggleCalendarEdit}
+            onApplyPreset={applyCalendarPreset}
           />
 
           <ChartWidgets
@@ -189,4 +218,21 @@ export default function Page() {
       </main>
     </DashboardTradeFiltersProvider>
   );
+}
+
+export default function Page() {
+  const isDashboardWorkspaceReady = useDashboardWorkspaceReady();
+
+  if (!isDashboardWorkspaceReady) {
+    return (
+      <main className="flex min-h-full flex-1">
+        <RouteLoadingFallback
+          route="dashboard"
+          className="min-h-[calc(100vh-10rem)]"
+        />
+      </main>
+    );
+  }
+
+  return <DashboardPageContent />;
 }

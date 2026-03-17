@@ -126,6 +126,7 @@ export async function loadPublicShareBySlug(publicAccountSlug: string) {
       brokerServer: tradingAccount.brokerServer,
       verificationLevel: tradingAccount.verificationLevel,
       isVerified: tradingAccount.isVerified,
+      lastSyncedAt: tradingAccount.lastSyncedAt,
     })
     .from(publicAccountShare)
     .innerJoin(userTable, eq(userTable.id, publicAccountShare.userId))

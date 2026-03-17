@@ -32,6 +32,7 @@ import {
   isAllAccountsScope,
   useAccountStore,
 } from "@/stores/account";
+import { useAccountTransitionStore } from "@/stores/account-transition";
 import { useEffect } from "react";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
@@ -60,6 +61,9 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   const [items, setItems] = React.useState<Account[]>(accounts);
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
   const setSelectedAccountId = useAccountStore((s) => s.setSelectedAccountId);
+  const beginAccountTransition = useAccountTransitionStore(
+    (s) => s.beginAccountTransition
+  );
   const pendingSelectRef = React.useRef<string | undefined>(undefined);
   const hasInitialized = React.useRef(false);
 
@@ -182,9 +186,12 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
         );
         const nextIdx =
           currentIdx >= 0 ? (currentIdx + 1) % selectorItems.length : 0;
-        useAccountStore
+        const nextAccountId = selectorItems[nextIdx]?.id;
+        if (!nextAccountId) return;
+        useAccountTransitionStore
           .getState()
-          .setSelectedAccountId(selectorItems[nextIdx].id);
+          .beginAccountTransition(nextAccountId);
+        useAccountStore.getState().setSelectedAccountId(nextAccountId);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -192,7 +199,13 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   }, [selectorItems]);
 
   function handleSelect(idx: number) {
-    setSelectedAccountId(selectorItems[idx]?.id);
+    const nextAccountId = selectorItems[idx]?.id;
+    if (!nextAccountId || nextAccountId === selectedAccountId) {
+      return;
+    }
+
+    beginAccountTransition(nextAccountId);
+    setSelectedAccountId(nextAccountId);
   }
 
   function handleAccountCreated(account: NewAccount) {

@@ -3,6 +3,7 @@
 import { useSelectedLayoutSegment } from "next/navigation";
 import { Suspense } from "react";
 
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
 import { BillingSettingsTabs } from "@/features/settings/billing/components/billing-settings-tabs";
 
@@ -14,7 +15,7 @@ export default function BillingLayout({
   const segment = useSelectedLayoutSegment();
 
   return (
-    <Suspense fallback={<div> Loading billing...</div>}>
+    <Suspense fallback={<RouteLoadingFallback route="settingsBilling" />}>
       <div className="flex w-full flex-col">
         <BillingSettingsTabs
           activeTab={

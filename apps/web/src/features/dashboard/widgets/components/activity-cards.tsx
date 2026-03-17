@@ -823,6 +823,13 @@ export function OpenTradesWidget({
     return `${profit >= 0 ? "+" : "-"}${formatted}`;
   };
 
+  const formatSwapValue = (swap: number) =>
+    formatSignedCurrencyValue(swap, currencyCode, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      showPositiveSign: true,
+    });
+
   const renderDirectionPill = (direction: OpenTrade["tradeType"]) => (
     <span
       className={cn(
@@ -883,7 +890,8 @@ export function OpenTradesWidget({
         ) : (
           <div className="flex flex-1 flex-col">
             {pageSlots.map((trade, index) => {
-              const isProfit = trade ? trade.profit >= 0 : false;
+              const netProfit = trade ? trade.profit + trade.swap : 0;
+              const isProfit = trade ? netProfit >= 0 : false;
               const hasVisibleTradeBefore = pageSlots
                 .slice(0, index)
                 .some((slot) => slot != null);
@@ -906,14 +914,67 @@ export function OpenTradesWidget({
                             {trade.symbol}
                           </span>
                         </div>
-                        <span
-                          className={cn(
-                            "shrink-0 text-xs font-semibold",
-                            isProfit ? "text-teal-300" : "text-rose-300"
-                          )}
-                        >
-                          {formatProfit(trade.profit)}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "text-xs font-semibold",
+                              isProfit ? "text-teal-300" : "text-rose-300"
+                            )}
+                          >
+                            {formatProfit(netProfit)}
+                          </span>
+                          {Math.abs(trade.swap) > 0.000001 ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  className="flex h-5 min-h-5 items-center justify-center rounded-sm ring ring-white/5 bg-white/[0.03] px-1.5 text-[10px] font-medium text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white/70"
+                                  aria-label={`Swap ${formatSwapValue(trade.swap)}`}
+                                >
+                                  Sw
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="top"
+                                sideOffset={8}
+                                className="px-0 py-2"
+                              >
+                                <div className="flex min-w-[148px] flex-col gap-1.5 px-3">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span className="text-[11px] text-white/60">
+                                      Open P&amp;L
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "text-[11px] font-medium",
+                                        trade.profit >= 0
+                                          ? "text-teal-400"
+                                          : "text-rose-400"
+                                      )}
+                                    >
+                                      {formatProfit(trade.profit)}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span className="text-[11px] text-white/60">
+                                      Swap
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        "text-[11px] font-medium",
+                                        trade.swap >= 0
+                                          ? "text-teal-400"
+                                          : "text-[#FCA070]"
+                                      )}
+                                    >
+                                      {formatSwapValue(trade.swap)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : null}
+                        </div>
                         {renderDirectionPill(trade.tradeType)}
                       </>
                     ) : null}

@@ -59,10 +59,13 @@ export const BROKER_OPTIONS: BrokerOption[] = [
   },
 ];
 
-const DEMO_ACCOUNT_NAME = "Demo account";
-const DEMO_BROKER = "Profitabledge";
-const DEMO_BROKER_SERVER = "Profitabledge-Demo01";
-const DEMO_ACCOUNT_PREFIX = "DEMO-";
+const DEMO_ACCOUNT_NAMES = new Set(["Profitabledge Demo", "Demo account"]);
+const DEMO_BROKERS = new Set(["Demo Broker", "Profitabledge"]);
+const DEMO_BROKER_SERVERS = new Set([
+  "Profitabledge-Demo",
+  "Profitabledge-Demo01",
+]);
+const DEMO_ACCOUNT_PREFIXES = ["PE", "DEMO-"];
 
 export function getBrokerImage(broker?: string | null): string {
   switch (broker?.toLowerCase()) {
@@ -229,10 +232,12 @@ export function getAccountSourceBadge(
 export function isDemoWorkspaceAccount(
   account: DemoWorkspaceAccountLike
 ): boolean {
+  const accountNumber = String(account.accountNumber || "");
+
   return (
-    account.name === DEMO_ACCOUNT_NAME &&
-    account.broker === DEMO_BROKER &&
-    account.brokerServer === DEMO_BROKER_SERVER &&
-    String(account.accountNumber || "").startsWith(DEMO_ACCOUNT_PREFIX)
+    DEMO_ACCOUNT_NAMES.has(String(account.name ?? "")) &&
+    DEMO_BROKERS.has(String(account.broker ?? "")) &&
+    DEMO_BROKER_SERVERS.has(String(account.brokerServer ?? "")) &&
+    DEMO_ACCOUNT_PREFIXES.some((prefix) => accountNumber.startsWith(prefix))
   );
 }

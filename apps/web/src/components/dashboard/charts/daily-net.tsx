@@ -23,7 +23,7 @@ import {
   useComparisonStore,
   type WidgetComparisonMode,
 } from "@/stores/comparison";
-import { trpcClient } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 import {
   countRangeDays,
   formatRangeLabel,
@@ -52,10 +52,31 @@ export function DailyNetBarChart({
   accountId,
   ownerId = "daily-net",
   comparisonMode,
+  rows,
+  comparisonRows,
+  currencyCode,
+  headline,
+  xAxisTickFormatter,
+  primarySeriesLabel,
+  comparisonSeriesLabel,
+  chartMargin,
 }: {
   accountId?: string;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
+  rows?: Point[];
+  comparisonRows?: Point[] | null;
+  currencyCode?: string | null;
+  headline?: React.ReactNode;
+  xAxisTickFormatter?: (value: string) => string;
+  primarySeriesLabel?: string;
+  comparisonSeriesLabel?: string;
+  chartMargin?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
 }) {
   const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
@@ -99,18 +120,24 @@ export function DailyNetBarChart({
     let cancelled = false;
 
     (async () => {
-      if (!accountId || !resolvedRange) return;
+      if (rows || !accountId || !resolvedRange) return;
 
-      const primaryPromise = trpcClient.accounts.recentByDay.query({
-        accountId,
-        startISO: resolvedRange.start.toISOString(),
-        endISO: resolvedRange.end.toISOString(),
+      const primaryPromise = queryClient.fetchQuery({
+        ...trpcOptions.accounts.recentByDay.queryOptions({
+          accountId,
+          startISO: resolvedRange.start.toISOString(),
+          endISO: resolvedRange.end.toISOString(),
+        }),
+        staleTime: 30_000,
       });
       const comparisonPromise = comparisonRange
-        ? trpcClient.accounts.recentByDay.query({
-            accountId,
-            startISO: comparisonRange.start.toISOString(),
-            endISO: comparisonRange.end.toISOString(),
+        ? queryClient.fetchQuery({
+            ...trpcOptions.accounts.recentByDay.queryOptions({
+              accountId,
+              startISO: comparisonRange.start.toISOString(),
+              endISO: comparisonRange.end.toISOString(),
+            }),
+            staleTime: 30_000,
           })
         : Promise.resolve(null);
 
@@ -147,7 +174,7 @@ export function DailyNetBarChart({
     return () => {
       cancelled = true;
     };
-  }, [accountId, comparisonRange, resolvedRange]);
+  }, [accountId, comparisonRange, resolvedRange, rows]);
 
   const [activeIndex, setActiveIndex] = React.useState<number | undefined>(
     undefined
@@ -156,16 +183,19 @@ export function DailyNetBarChart({
     "profit" | "compare" | undefined
   >(undefined);
 
+  const primarySeries = rows ?? series;
+  const secondarySeries = comparisonRows ?? comparisonSeries;
+
   const dataForChart = React.useMemo(
-    () => series.map((p) => ({ month: p.label, profit: p.value })),
-    [series]
+    () => primarySeries.map((p) => ({ month: p.label, profit: p.value })),
+    [primarySeries]
   );
   const comparisonDataForChart = React.useMemo(
     () =>
-      comparisonSeries
-        ? comparisonSeries.map((p) => ({ month: p.label, compare: p.value }))
+      secondarySeries
+        ? secondarySeries.map((p) => ({ month: p.label, compare: p.value }))
         : [],
-    [comparisonSeries]
+    [secondarySeries]
   );
 
   const mergedData = React.useMemo(() => {
@@ -256,91 +286,107 @@ export function DailyNetBarChart({
   }, [comparisonDataForChart, dataForChart]);
 
   const currencyTick = (v: number) => {
-    const abs = Math.abs(Math.round(v));
-    const prefix = v < 0 ? "-$" : "$";
-    return `${prefix}${abs.toLocaleString()}`;
+    return formatSignedCurrency(v, 0, currencyCode);
   };
 
   const weekNet = React.useMemo(
-    () => Math.round(series.reduce((sum, p) => sum + (p.value || 0), 0)),
-    [series]
+    () => Math.round(primarySeries.reduce((sum, p) => sum + (p.value || 0), 0)),
+    [primarySeries]
   );
 
   const daysSelected = React.useMemo(() => {
+    if (rows) return null;
     if (!resolvedRange) return null;
     return countRangeDays(resolvedRange);
-  }, [resolvedRange]);
+  }, [resolvedRange, rows]);
 
   const primaryLabel = React.useMemo(() => {
+    if (primarySeriesLabel) return primarySeriesLabel;
+    if (rows) return "Selected range";
     if (!daysSelected) return "Selected days";
     return daysSelected === 7 ? "Selected week" : `Selected ${daysSelected} days`;
-  }, [daysSelected]);
+  }, [daysSelected, primarySeriesLabel, rows]);
 
   const comparisonLabel = React.useMemo(() => {
-    if (!comparisonSeries) return undefined;
+    if (comparisonSeriesLabel) return comparisonSeriesLabel;
+    if (!secondarySeries) return undefined;
+    if (rows) return "Comparison";
     if (myMode === "thisWeek") return "This week";
     if (myMode === "lastWeek") return "Last week";
     if (!daysSelected) return undefined;
     if (daysSelected === 1) return "Previous day";
     return `Previous ${daysSelected} days`;
-  }, [comparisonSeries, daysSelected, myMode]);
+  }, [comparisonSeriesLabel, daysSelected, myMode, rows, secondarySeries]);
 
   const selectedRangeStr = React.useMemo(() => {
+    if (rows) return undefined;
     if (!resolvedRange) return undefined;
     return formatRangeLabel(resolvedRange);
-  }, [resolvedRange]);
+  }, [resolvedRange, rows]);
 
   const comparisonRangeStr = React.useMemo(() => {
+    if (rows) return undefined;
     if (!comparisonRange) return undefined;
     return formatRangeLabel(comparisonRange);
-  }, [comparisonRange]);
+  }, [comparisonRange, rows]);
 
   const positiveWeekNet = weekNet >= 0;
+  const defaultHeadline = rows ? (
+    <p className="text-sm font-normal tracking-wide text-white/40">
+      Across the selected filter, net P&amp;L totals{" "}
+      <span
+        className={cn(
+          "font-medium tracking-normal",
+          positiveWeekNet ? "text-teal-400" : "text-rose-400"
+        )}
+      >
+        {formatSignedCurrency(weekNet, 0, currencyCode)}
+      </span>
+      .
+    </p>
+  ) : daysSelected === 7 ? (
+    positiveWeekNet ? (
+      <p className="font-normal text-white/40 text-sm tracking-wide">
+        Nice work. Your selected week closed at{" "}
+        <span
+          className={cn("font-semibold tracking-normal", "text-teal-400")}
+        >
+          {formatSignedCurrency(weekNet, 0, currencyCode)}
+        </span>
+        .
+      </p>
+    ) : (
+      <p className="font-normal text-white/40 text-sm tracking-wide">
+        Your selected week finished at{" "}
+        <span
+          className={cn("font-medium tracking-normal", "text-rose-400")}
+        >
+          {formatSignedCurrency(weekNet, 0, currencyCode)}
+        </span>
+        .
+      </p>
+    )
+  ) : (
+    <p className="font-normal text-white/40 text-sm tracking-wide">
+      In the selected {daysSelected ?? "?"} days, you{" "}
+      {positiveWeekNet ? "made" : "lost"}{" "}
+      <span
+        className={cn(
+          "font-medium tracking-normal",
+          positiveWeekNet ? "text-teal-400" : "text-rose-400"
+        )}
+      >
+        {formatSignedCurrency(weekNet, 0, currencyCode)}
+      </span>
+      .
+    </p>
+  );
 
   return (
     <Card className="w-full h-full rounded-none bg-transparent border-none shadow-none">
       <CardHeader className="p-0">
         <CardTitle className="flex items-center -mt-3">
-          {daysSelected === 7 ? (
-            positiveWeekNet ? (
-              <p className="font-normal text-white/40 text-sm tracking-wide">
-                Nice work. Your selected week closed at{" "}
-                <span
-                  className={cn(
-                    "font-semibold tracking-normal",
-                    "text-teal-400"
-                  )}
-                >
-                  {formatSignedCurrency(weekNet, 0)}
-                </span>
-                .
-              </p>
-            ) : (
-              <p className="font-normal text-white/40 text-sm tracking-wide">
-                Your selected week finished at{" "}
-                <span
-                  className={cn("font-medium tracking-normal", "text-rose-400")}
-                >
-                  {formatSignedCurrency(weekNet, 0)}
-                </span>
-                .
-              </p>
-            )
-          ) : (
-            <p className="font-normal text-white/40 text-sm tracking-wide">
-              In the selected {daysSelected ?? "?"} days, you{" "}
-              {positiveWeekNet ? "made" : "lost"}{" "}
-              <span
-                className={cn(
-                  "font-medium tracking-normal",
-                  positiveWeekNet ? "text-teal-400" : "text-rose-400"
-                )}
-              >
-                {formatSignedCurrency(weekNet, 0)}
-              </span>
-              .
-            </p>
-          )}
+          {headline ?? defaultHeadline}
         </CardTitle>
       </CardHeader>
 
@@ -352,17 +398,17 @@ export function DailyNetBarChart({
               data={mergedData}
               onMouseLeave={() => {}}
               margin={{
-                left: 36,
-                right: 0,
-                top: 12,
-                bottom: -4,
+                left: chartMargin?.left ?? 36,
+                right: chartMargin?.right ?? 0,
+                top: chartMargin?.top ?? 12,
+                bottom: chartMargin?.bottom ?? -4,
               }}
             >
               <YAxis
                 domain={[niceScale.min, niceScale.max]}
                 tickLine={false}
                 axisLine={false}
-                width={20}
+                width={64}
                 tickMargin={6}
                 tickFormatter={currencyTick}
                 ticks={niceScale.ticks}
@@ -373,7 +419,9 @@ export function DailyNetBarChart({
                 tickLine={false}
                 tickMargin={10}
                 axisLine={false}
-                tickFormatter={(value) => value.slice(0, 6)}
+                tickFormatter={(value) =>
+                  xAxisTickFormatter ? xAxisTickFormatter(String(value)) : String(value).slice(0, 6)
+                }
               />
               <Bar
                 dataKey="profit"
@@ -457,7 +505,7 @@ export function DailyNetBarChart({
                               item.name ??
                               (key === "profit" ? "Selected" : "Comparison")
                             }
-                            value={formatSignedCurrency(v, 0)}
+                            value={formatSignedCurrency(v, 0, currencyCode)}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
                             indicatorColor={

@@ -7,6 +7,7 @@ import {
   getPlanFeatureLines,
   type BillingPlanCopySource,
 } from "@/features/settings/billing/lib/plan-copy";
+import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 import CircleCheck from "@/public/icons/circle-check.svg";
 import Image from "next/image";
 import { useState } from "react";
@@ -117,20 +118,14 @@ const Plans = ({
             : isInstitutional
             ? "fill-emerald-400"
             : "fill-white/40";
-          const ctaButtonCn = isProfessional
-            ? "!ring !ring-blue-600/90 !bg-blue-600/72 !text-blue-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(37,99,235,0.075)] hover:!bg-blue-500/80 hover:!text-white"
-            : isInstitutional
-            ? "!ring !ring-emerald-600/90 !bg-emerald-600/72 !text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(0,0,0,0.075)] hover:!bg-emerald-500/80 hover:!text-white"
-            : "!ring !ring-white/10 !bg-white/[0.04] !text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] hover:!bg-white/[0.08] hover:!text-white";
-          const currentPlanCn = isProfessional
-            ? "ring ring-blue-400/10 bg-blue-500/8 text-blue-100/55"
-            : isInstitutional
-            ? "ring ring-white/10 bg-white/[0.04] text-white/45"
-            : "ring ring-white/5 bg-white/[0.02] text-white/25";
-          const inactivePlanCn =
-            "ring ring-white/5 bg-white/[0.02] text-white/25";
-          const selectedFreePlanCn =
-            "ring ring-white/10 bg-white/[0.04] text-white/55";
+          const buttonTone =
+            !plan.isConfigured || (isSelected && plan.isFree)
+              ? "neutral"
+              : isProfessional
+              ? "teal"
+              : isInstitutional
+              ? "gold"
+              : "neutral";
 
           return (
             <div
@@ -237,16 +232,14 @@ const Plans = ({
                     <Button
                       disabled={isButtonDisabled}
                       onClick={() => onSelectPlan(plan.key)}
-                      className={cn(
-                        "h-max w-full cursor-pointer rounded-sm text-xs font-medium transition-all duration-250 active:scale-95 disabled:cursor-not-allowed disabled:opacity-100",
-                        isButtonDisabled
-                          ? isLockedCurrentPlan
-                            ? currentPlanCn
-                            : isSelected && plan.isFree
-                            ? selectedFreePlanCn
-                            : inactivePlanCn
-                          : ctaButtonCn
-                      )}
+                      className={getOnboardingButtonClassName({
+                        tone: buttonTone,
+                        className: cn(
+                          "w-full",
+                          isLockedCurrentPlan && "disabled:opacity-60",
+                          isSelected && plan.isFree && "disabled:opacity-55"
+                        ),
+                      })}
                     >
                       {buttonLabel}
                     </Button>

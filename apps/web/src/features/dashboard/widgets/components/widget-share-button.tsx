@@ -19,7 +19,7 @@ export function WidgetShareButton({
   className,
   successMessage = "Widget PNG downloaded",
   errorMessage = "Failed to export widget PNG",
-  tooltipLabel = "Download PNG",
+  tooltipLabel = "Share",
   buttonLabel,
 }: {
   targetRef: RefObject<HTMLElement | null>;

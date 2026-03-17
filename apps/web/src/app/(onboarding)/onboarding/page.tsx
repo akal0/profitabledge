@@ -34,8 +34,6 @@ import {
 } from "@/components/ui/select";
 import CsvUpload from "@/components/upload/CsvUpload";
 import {
-  TRADE_ACTION_BUTTON_CLASS,
-  TRADE_ACTION_BUTTON_PRIMARY_CLASS,
   TRADE_IDENTIFIER_PILL_CLASS,
   TRADE_IDENTIFIER_TONES,
   TRADE_SURFACE_CARD_CLASS,
@@ -48,6 +46,7 @@ import {
 } from "@/features/accounts/lib/account-metadata";
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 import { useAccountStore } from "@/stores/account";
 
 type OnboardingStep = 1 | 2 | 3;
@@ -565,7 +564,9 @@ function OnboardingPageContent() {
 
           <Button
             onClick={handleLogout}
-            className="ring ring-white/10 rounded-md gap-2.5 h-max transition-all active:scale-95 bg-sidebar dark:hover:bg-sidebar text-white w-max text-xs hover:!brightness-110 duration-250 flex py-2 items-center justify-center cursor-pointer self-start xl:self-auto"
+            className={getOnboardingButtonClassName({
+              className: "w-max self-start xl:self-auto",
+            })}
           >
             Log out
           </Button>
@@ -677,7 +678,10 @@ function OnboardingPageContent() {
                       <Button
                         onClick={handleRedeemAccess}
                         disabled={completeGrowthAccess.isPending}
-                        className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-amber-600 hover:bg-amber-600 cursor-pointer text-white text-xs hover:!brightness-105 duration-250 flex py-2 items-center justify-center sm:min-w-40"
+                        className={getOnboardingButtonClassName({
+                          tone: "gold",
+                          className: "sm:min-w-40",
+                        })}
                       >
                         {completeGrowthAccess.isPending
                           ? "Activating..."
@@ -1227,10 +1231,10 @@ function AddAccountStep() {
                   </div>
                 </div>
                 <Button
-                  className={cn(
-                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                    "h-9 w-full ring-1 ring-amber-400/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
-                  )}
+                  className={getOnboardingButtonClassName({
+                    tone: "gold",
+                    className: "w-full",
+                  })}
                   onClick={handleDemoWorkspace}
                   disabled={isSubmitting || !isSessionReady}
                 >
@@ -1430,10 +1434,10 @@ function AddAccountStep() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      className={cn(
-                        TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                        "h-8 px-3"
-                      )}
+                      className={getOnboardingButtonClassName({
+                        tone: "teal",
+                        size: "sm",
+                      })}
                       disabled={isSubmitting}
                       onClick={() =>
                         handleSubmitCSV({
@@ -1447,7 +1451,9 @@ function AddAccountStep() {
                     </Button>
                     <Button
                       type="button"
-                      className={cn(TRADE_ACTION_BUTTON_CLASS, "h-8 px-3")}
+                      className={getOnboardingButtonClassName({
+                        size: "sm",
+                      })}
                       disabled={isSubmitting}
                       onClick={() =>
                         handleSubmitCSV({
@@ -1464,18 +1470,19 @@ function AddAccountStep() {
               ) : null}
               <div className="flex w-full gap-2">
                 <Button
-                  className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
+                  className={getOnboardingButtonClassName({
+                    className: "flex-1",
+                  })}
                   onClick={resetAccountForm}
                 >
                   Back
                 </Button>
 
                 <Button
-                  className={cn(
-                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                    "h-9 flex-1",
-                    !canSubmitCsv && "opacity-60"
-                  )}
+                  className={getOnboardingButtonClassName({
+                    tone: "teal",
+                    className: "flex-1",
+                  })}
                   disabled={!canSubmitCsv || isSubmitting || !isSessionReady}
                   onClick={() => handleSubmitCSV()}
                 >
@@ -1665,18 +1672,19 @@ function AddAccountStep() {
             <div className="px-6 py-5">
               <div className="flex w-full gap-2">
                 <Button
-                  className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 flex-1")}
+                  className={getOnboardingButtonClassName({
+                    className: "flex-1",
+                  })}
                   onClick={resetAccountForm}
                 >
                   Back
                 </Button>
 
                 <Button
-                  className={cn(
-                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                    "h-9 flex-1",
-                    !canSubmitManual && "opacity-60"
-                  )}
+                  className={getOnboardingButtonClassName({
+                    tone: "teal",
+                    className: "flex-1",
+                  })}
                   disabled={!canSubmitManual || isSubmitting || !isSessionReady}
                   onClick={handleManualAccountCreate}
                 >
@@ -1727,10 +1735,10 @@ function AddAccountStep() {
 
                 <Button
                   asChild
-                  className={cn(
-                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                    "h-9 w-full"
-                  )}
+                  className={getOnboardingButtonClassName({
+                    tone: "teal",
+                    className: "w-full",
+                  })}
                 >
                   <Link href="/dashboard/settings/connections">
                     <ExternalLink className="size-3.5" />
@@ -1765,7 +1773,9 @@ function AddAccountStep() {
             <Separator />
             <div className="px-6 py-5">
               <Button
-                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                className={getOnboardingButtonClassName({
+                  className: "w-full",
+                })}
                 onClick={resetAccountForm}
               >
                 Back
@@ -1809,10 +1819,10 @@ function AddAccountStep() {
 
                 <Button
                   asChild
-                  className={cn(
-                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                    "h-9 w-full"
-                  )}
+                  className={getOnboardingButtonClassName({
+                    tone: "teal",
+                    className: "w-full",
+                  })}
                 >
                   <Link href="/dashboard/settings/ea-setup">
                     <ExternalLink className="size-3.5" />
@@ -1847,7 +1857,9 @@ function AddAccountStep() {
             <Separator />
             <div className="px-6 py-5">
               <Button
-                className={cn(TRADE_ACTION_BUTTON_CLASS, "h-9 w-full")}
+                className={getOnboardingButtonClassName({
+                  className: "w-full",
+                })}
                 onClick={resetAccountForm}
               >
                 Back
@@ -1862,13 +1874,10 @@ function AddAccountStep() {
         <Button
           onClick={handleComplete}
           disabled={!canContinueToDashboard || isSubmitting || !isSessionReady}
-          className={cn(
-            TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-            "h-9 w-full",
-            canContinueToDashboard
-              ? "!ring-emerald-600/90 !bg-emerald-600/72 !text-white hover:!bg-emerald-500/80"
-              : "opacity-50"
-          )}
+          className={getOnboardingButtonClassName({
+            tone: canContinueToDashboard ? "teal" : "amber",
+            className: "w-full",
+          })}
         >
           {!isSessionReady
             ? "Finalizing sign-in..."

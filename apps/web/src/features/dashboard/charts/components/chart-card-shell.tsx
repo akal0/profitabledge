@@ -38,6 +38,7 @@ export function ChartWidgetFrame({
   title,
   headerRight,
   isEditing = false,
+  showShareButton = true,
   className,
   contentClassName,
   children,
@@ -45,6 +46,7 @@ export function ChartWidgetFrame({
   title: string;
   headerRight?: ReactNode;
   isEditing?: boolean;
+  showShareButton?: boolean;
   className?: string;
   contentClassName?: string;
   children: ReactNode;
@@ -72,7 +74,7 @@ export function ChartWidgetFrame({
               onClick={stopHeaderInteraction}
             >
               <div className="-m-1 flex items-center justify-end gap-2 overflow-visible p-1">
-                {!isEditing ? (
+                {!isEditing && showShareButton ? (
                   <WidgetShareButton targetRef={widgetRef} title={title} />
                 ) : null}
                 {headerRight}

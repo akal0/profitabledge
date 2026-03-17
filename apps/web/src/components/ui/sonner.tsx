@@ -1,10 +1,25 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, type ToasterProps } from "sonner";
+import {
+  DASHBOARD_TOAST_CLASSNAMES,
+  shouldUseDashboardToastTheme,
+} from "@/lib/dashboard-toast";
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
+  const pathname = usePathname();
+  const resolvedToastOptions = shouldUseDashboardToastTheme(pathname)
+    ? {
+        ...toastOptions,
+        classNames: {
+          ...DASHBOARD_TOAST_CLASSNAMES,
+          ...toastOptions?.classNames,
+        },
+      }
+    : toastOptions;
 
   return (
     <Sonner
@@ -17,6 +32,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-border": "var(--border)",
         } as React.CSSProperties
       }
+      toastOptions={resolvedToastOptions}
       {...props}
     />
   );

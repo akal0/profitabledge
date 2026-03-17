@@ -1,3 +1,5 @@
+import { and, eq } from "drizzle-orm";
+
 import { db } from "../../db";
 import { equitySnapshot } from "../../db/schema/connections";
 import {
@@ -21,16 +23,28 @@ import {
   seedDemoAiHistory,
 } from "./demo-workspace";
 
-export async function seedSampleAccount(userId: string) {
-  const accountId = crypto.randomUUID();
+type SeedSampleAccountOptions = {
+  accountId?: string;
+  accountNumber?: string | null;
+  resetExistingAccount?: boolean;
+};
+
+export async function seedSampleAccount(
+  userId: string,
+  options: SeedSampleAccountOptions = {}
+) {
+  const accountId = options.accountId ?? crypto.randomUUID();
   const now = Date.now();
   const nowDate = new Date(now);
   const initialBalance = 100_000;
   const tradeCount = 120;
   const openTradeCount = 5 + Math.floor(Math.random() * 9);
-  const accountNumber = `${DEMO_ACCOUNT_PREFIX}${Math.floor(
-    10_000_000 + Math.random() * 90_000_000
-  )}`;
+  const accountNumber =
+    options.accountNumber && options.accountNumber.trim().length > 0
+      ? options.accountNumber
+      : `${DEMO_ACCOUNT_PREFIX}${Math.floor(
+          10_000_000 + Math.random() * 90_000_000
+        )}`;
 
   const symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "XAUUSD"] as const;
   const sessions = ["London", "New York", "Asian"] as const;
@@ -1021,6 +1035,12 @@ export async function seedSampleAccount(userId: string) {
       updatedAt: new Date(date.getTime() + 18 * 60 * 60 * 1000),
     });
     rollingBalance = endingBalance;
+  }
+
+  if (options.resetExistingAccount) {
+    await db.delete(tradingAccount).where(
+      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+    );
   }
 
   const [account] = await db

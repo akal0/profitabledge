@@ -1,23 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-
-import {
-  DndContext,
-  PointerSensor,
-  type DragEndEvent,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { GripVertical } from "lucide-react";
-
-import { cn } from "@/lib/utils";
-
 import { SummaryCard } from "./summary-card";
-import { SortableSummaryWidget } from "./sortable-summary-widget";
 import {
-  DEFAULT_CALENDAR_WIDGETS,
   MAX_CALENDAR_WIDGETS,
   type CalendarWidgetType,
   type MonthSummary,
@@ -27,20 +11,24 @@ import {
   formatDuration,
   formatMoney,
   formatPercent,
+  formatShortDate,
+  fromDateISO,
 } from "../lib/calendar-utils";
 
 type CalendarSummarySidebarProps = {
-  isEditing: boolean;
   summaryWidgets: CalendarWidgetType[];
   summaryWidgetSpans: Partial<Record<CalendarWidgetType, number>>;
   monthSummary: MonthSummary | null;
   rangeSummary: RangeSummary | null;
   summaryLoading: boolean;
   rangeLabel: string;
-  onToggleSummaryWidget?: (type: CalendarWidgetType) => void;
-  onReorderSummaryWidget?: (fromIndex: number, toIndex: number) => void;
-  onResizeSummaryWidget?: (type: CalendarWidgetType, span: number) => void;
-  onEnterEdit?: () => void;
+};
+
+type ExpandedSummaryWidget = {
+  key: string;
+  type: CalendarWidgetType;
+  span: number;
+  weekIndex?: number;
 };
 
 function getSummarySpan(
@@ -51,12 +39,67 @@ function getSummarySpan(
   return Math.max(1, Math.min(2, Math.round(Number.isFinite(raw) ? raw : 1)));
 }
 
+function getProfitTone(value: number) {
+  return value >= 0 ? "text-teal-400" : "text-rose-400";
+}
+
+function formatWeekSubtext(week: MonthSummary["weeklyBreakdown"][number]) {
+  const range = `${week.startLabel} - ${week.endLabel}`;
+  if (week.totalTrades <= 0) {
+    return `${range} · No trades`;
+  }
+
+  return `${range} · ${week.totalTrades} trade${week.totalTrades === 1 ? "" : "s"}`;
+}
+
+function expandSummaryWidgets(
+  summaryWidgets: CalendarWidgetType[],
+  summaryWidgetSpans: Partial<Record<CalendarWidgetType, number>>,
+  monthSummary: MonthSummary | null
+) {
+  const expanded: ExpandedSummaryWidget[] = [];
+
+  for (const [index, widgetType] of summaryWidgets.entries()) {
+    if (widgetType === "weekly-breakdown") {
+      const weeks = monthSummary?.weeklyBreakdown ?? [];
+
+      if (weeks.length > 0) {
+        for (const [weekIndex, week] of weeks.entries()) {
+          expanded.push({
+            key: `weekly-breakdown-${week.label}-${week.startLabel}-${weekIndex}`,
+            type: widgetType,
+            span: 1,
+            weekIndex,
+          });
+        }
+      } else {
+        expanded.push({
+          key: `weekly-breakdown-${index}`,
+          type: widgetType,
+          span: 1,
+        });
+      }
+
+      continue;
+    }
+
+    expanded.push({
+      key: `${widgetType}-${index}`,
+      type: widgetType,
+      span: getSummarySpan(summaryWidgetSpans, widgetType),
+    });
+  }
+
+  return expanded.slice(0, MAX_CALENDAR_WIDGETS);
+}
+
 function renderSummaryWidget(
   type: CalendarWidgetType,
   monthSummary: MonthSummary | null,
   rangeSummary: RangeSummary | null,
   summaryLoading: boolean,
-  rangeLabel: string
+  rangeLabel: string,
+  weekIndex?: number
 ) {
   switch (type) {
     case "net-pl": {
@@ -67,6 +110,95 @@ function renderSummaryWidget(
           value={monthSummary ? formatMoney(total) : "—"}
           subtext={rangeLabel}
           accentClass={total >= 0 ? "text-teal-400" : "text-rose-400"}
+          loading={!monthSummary}
+        />
+      );
+    }
+    case "weekly-breakdown": {
+      if (!monthSummary) {
+        return <SummaryCard title="Week 1" value="—" loading />;
+      }
+      const week = monthSummary.weeklyBreakdown[weekIndex ?? 0] ?? null;
+
+      if (!week) {
+        return (
+          <SummaryCard
+            title={`Week ${(weekIndex ?? 0) + 1}`}
+            value="—"
+            subtext="Not in this range"
+          />
+        );
+      }
+
+      return (
+        <SummaryCard
+          title={week.label}
+          value={formatMoney(week.totalProfit)}
+          subtext={formatWeekSubtext(week)}
+          accentClass={getProfitTone(week.totalProfit)}
+        />
+      );
+    }
+    case "active-days":
+      return (
+        <SummaryCard
+          title="Active days"
+          value={monthSummary?.activeDays ?? "—"}
+          subtext={
+            monthSummary
+              ? `${monthSummary.winDays} green · ${monthSummary.lossDays} red`
+              : "—"
+          }
+          loading={!monthSummary}
+        />
+      );
+    case "avg-active-day": {
+      const value =
+        monthSummary && monthSummary.activeDays > 0
+          ? formatMoney(monthSummary.avgPerActiveDay)
+          : "—";
+      return (
+        <SummaryCard
+          title="Avg active day"
+          value={value}
+          subtext={
+            monthSummary?.activeDays
+              ? `${monthSummary.activeDays} active day${monthSummary.activeDays === 1 ? "" : "s"}`
+              : "—"
+          }
+          accentClass={
+            monthSummary && monthSummary.avgPerActiveDay < 0
+              ? "text-rose-400"
+              : "text-teal-400"
+          }
+          loading={!monthSummary}
+        />
+      );
+    }
+    case "best-day": {
+      const bestDay = monthSummary?.bestDay ?? null;
+      return (
+        <SummaryCard
+          title="Best day"
+          value={bestDay ? formatMoney(bestDay.totalProfit) : "—"}
+          subtext={
+            bestDay ? formatShortDate(fromDateISO(bestDay.dateISO)) : "—"
+          }
+          accentClass="text-teal-400"
+          loading={!monthSummary}
+        />
+      );
+    }
+    case "worst-day": {
+      const worstDay = monthSummary?.worstDay ?? null;
+      return (
+        <SummaryCard
+          title="Worst day"
+          value={worstDay ? formatMoney(worstDay.totalProfit) : "—"}
+          subtext={
+            worstDay ? formatShortDate(fromDateISO(worstDay.dateISO)) : "—"
+          }
+          accentClass="text-rose-400"
           loading={!monthSummary}
         />
       );
@@ -108,7 +240,11 @@ function renderSummaryWidget(
         <SummaryCard
           title="Largest loss"
           value={value}
-          subtext={rangeSummary?.losses != null ? `${rangeSummary.losses} losing trades` : "—"}
+          subtext={
+            rangeSummary?.losses != null
+              ? `${rangeSummary.losses} losing trades`
+              : "—"
+          }
           accentClass="text-rose-400"
           loading={summaryLoading || !rangeSummary}
         />
@@ -134,7 +270,9 @@ function renderSummaryWidget(
         <SummaryCard
           title="Avg per trade"
           value={avgValue}
-          subtext={monthSummary?.totalTrades ? `${monthSummary.totalTrades} trades` : "—"}
+          subtext={
+            monthSummary?.totalTrades ? `${monthSummary.totalTrades} trades` : "—"
+          }
           accentClass={
             hasTrades && (monthSummary?.avgPerTrade ?? 0) >= 0
               ? "text-teal-400"
@@ -150,155 +288,39 @@ function renderSummaryWidget(
 }
 
 export function CalendarSummarySidebar({
-  isEditing,
   summaryWidgets,
   summaryWidgetSpans,
   monthSummary,
   rangeSummary,
   summaryLoading,
   rangeLabel,
-  onToggleSummaryWidget,
-  onReorderSummaryWidget,
-  onResizeSummaryWidget,
-  onEnterEdit,
 }: CalendarSummarySidebarProps) {
-  const summaryWidgetList = summaryWidgets.slice(0, MAX_CALENDAR_WIDGETS);
-  const availableSummaryWidgets = useMemo(
-    () =>
-      DEFAULT_CALENDAR_WIDGETS.filter(
-        (widget) => !summaryWidgetList.includes(widget)
-      ),
-    [summaryWidgetList]
+  const summaryWidgetList = expandSummaryWidgets(
+    summaryWidgets,
+    summaryWidgetSpans,
+    monthSummary
   );
-
-  const summarySensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  );
-
-  const handleSummaryDragEnd = (event: DragEndEvent) => {
-    if (!isEditing) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = summaryWidgetList.indexOf(active.id as CalendarWidgetType);
-    const newIndex = summaryWidgetList.indexOf(over.id as CalendarWidgetType);
-    if (oldIndex === -1 || newIndex === -1) return;
-    onReorderSummaryWidget?.(oldIndex, newIndex);
-  };
-
-  const handleSummaryDoubleClick = () => {
-    if (isEditing) return;
-    onEnterEdit?.();
-  };
 
   return (
-    <DndContext sensors={summarySensors} onDragEnd={handleSummaryDragEnd}>
-      <SortableContext items={summaryWidgetList} strategy={verticalListSortingStrategy}>
-        <div className="grid h-full grid-cols-1 grid-rows-6 gap-2">
-          {summaryWidgetList.map((widgetType, index) => {
-            const span = getSummarySpan(summaryWidgetSpans, widgetType);
-            return (
-              <SortableSummaryWidget
-                key={`${widgetType}-${index}`}
-                id={widgetType}
-                disabled={!isEditing}
-                style={{ gridRow: `span ${span} / span ${span}` }}
-              >
-                <div
-                  className={cn(
-                    "relative h-full cursor-pointer",
-                    isEditing ? "animate-tilt-subtle hover:animate-none" : ""
-                  )}
-                  onDoubleClick={handleSummaryDoubleClick}
-                  onClick={() => isEditing && onToggleSummaryWidget?.(widgetType)}
-                >
-                  {isEditing ? (
-                    <div className="absolute left-2 top-2 z-10 flex items-center gap-2">
-                      <div
-                        className="flex items-center gap-1 border border-white/5 bg-sidebar/90"
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          className="px-2 py-1 text-[10px] text-white/60 hover:text-white/90 disabled:opacity-40"
-                          disabled={span <= 1}
-                          onClick={() => onResizeSummaryWidget?.(widgetType, span - 1)}
-                        >
-                          -
-                        </button>
-                        <span className="px-1 text-[10px] text-white/50">{span}x</span>
-                        <button
-                          type="button"
-                          className="px-2 py-1 text-[10px] text-white/60 hover:text-white/90 disabled:opacity-40"
-                          disabled={span >= 2}
-                          onClick={() => onResizeSummaryWidget?.(widgetType, span + 1)}
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                  {isEditing ? (
-                    <div className="absolute right-2 top-2 z-10 flex items-center gap-2">
-                      <div className="flex size-4 items-center justify-center border border-white/5">
-                        <svg viewBox="0 0 24 24" className="size-3 fill-white">
-                          <path d="M20.285 6.708a1 1 0 0 1 0 1.414l-9 9a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L10.5 14.5l8.293-8.293a1 1 0 0 1 1.492.5z" />
-                        </svg>
-                      </div>
-                      <GripVertical className="size-3 text-white/40" />
-                    </div>
-                  ) : null}
-                  {renderSummaryWidget(
-                    widgetType,
-                    monthSummary,
-                    rangeSummary,
-                    summaryLoading,
-                    rangeLabel
-                  )}
-                  {isEditing ? (
-                    <>
-                      <div
-                        className="absolute left-0 top-0 h-3 w-full cursor-ns-resize"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                      <div
-                        className="absolute bottom-0 left-0 h-3 w-full cursor-ns-resize"
-                        onPointerDown={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                        }}
-                        onClick={(event) => event.stopPropagation()}
-                      />
-                    </>
-                  ) : null}
-                </div>
-              </SortableSummaryWidget>
-            );
-          })}
-
-          {isEditing
-            ? availableSummaryWidgets.map((widgetType) => (
-                <div
-                  key={`available-${widgetType}`}
-                  className="h-full opacity-50 transition-all duration-150 hover:opacity-100"
-                  onClick={() => onToggleSummaryWidget?.(widgetType)}
-                >
-                  {renderSummaryWidget(
-                    widgetType,
-                    monthSummary,
-                    rangeSummary,
-                    summaryLoading,
-                    rangeLabel
-                  )}
-                </div>
-              ))
-            : null}
-        </div>
-      </SortableContext>
-    </DndContext>
+    <div className="grid h-full grid-cols-1 grid-rows-6 gap-2">
+      {summaryWidgetList.map((widget) => {
+        return (
+          <div
+            key={widget.key}
+            className="h-full"
+            style={{ gridRow: `span ${widget.span} / span ${widget.span}` }}
+          >
+            {renderSummaryWidget(
+              widget.type,
+              monthSummary,
+              rangeSummary,
+              summaryLoading,
+              rangeLabel,
+              widget.weekIndex
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { VerticalSeparator } from "@/components/ui/separator";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { trpcOptions } from "@/utils/trpc";
@@ -17,11 +18,16 @@ import { useAccountStore, ALL_ACCOUNTS_ID } from "@/stores/account";
 import { useFloatingAssistant } from "@/stores/floating-assistant";
 import { AIInsightToast } from "@/components/ai-insight-toast";
 import { useCommandPalette } from "@/components/command-palette";
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery } from "@tanstack/react-query";
 import { useGoalDialog } from "@/stores/goal-dialog";
 import { DashboardShellBootstrap } from "@/features/dashboard-shell/components/dashboard-shell-bootstrap";
 import { DashboardShellSidebar } from "@/features/dashboard-shell/components/dashboard-shell-sidebar";
 import { DashboardShellHeader } from "@/features/dashboard-shell/components/dashboard-shell-header";
+import {
+  isAccountScopedRoute,
+  queryKeyIncludesAccountId,
+  resolveRouteLoadingVariant,
+} from "@/features/dashboard-shell/lib/route-loading";
 import { useSettingsAccountScopeGuard } from "@/features/dashboard-shell/hooks/use-settings-account-scope-guard";
 import { useAssistantShortcut } from "@/features/dashboard-shell/hooks/use-assistant-shortcut";
 import { useAlphaPageTracking } from "@/features/platform/alpha/hooks/use-alpha-page-tracking";
@@ -35,6 +41,7 @@ import {
 } from "@/features/navigation/config/nav-sections";
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
+import { useAccountTransitionStore } from "@/stores/account-transition";
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
@@ -88,12 +95,35 @@ export default function DashboardLayoutClient({
   );
   const { open: openFloatingAssistant } = useFloatingAssistant();
   const { open: openCommandPalette } = useCommandPalette();
+  const pendingAccountId = useAccountTransitionStore(
+    (state) => state.pendingAccountId
+  );
+  const transitionStartedAt = useAccountTransitionStore(
+    (state) => state.startedAt
+  );
+  const completeAccountTransition = useAccountTransitionStore(
+    (state) => state.completeAccountTransition
+  );
   const isJournalRoute = pathname?.startsWith("/dashboard/journal");
   const isAccountsRoute = pathname === "/dashboard/accounts";
   const isGoalsRoute = pathname?.startsWith("/dashboard/goals");
   const isPropTrackerRoute = pathname === "/dashboard/prop-tracker";
   const isTradesRoute = pathname?.startsWith("/dashboard/trades");
   const { setOpen: setGoalDialogOpen } = useGoalDialog();
+  const observedPendingFetchRef = useRef<string | null>(null);
+  const routeLoadingVariant = useMemo(
+    () => resolveRouteLoadingVariant(safePathname),
+    [safePathname]
+  );
+  const routeIsAccountScoped = useMemo(
+    () => isAccountScopedRoute(safePathname),
+    [safePathname]
+  );
+  const pendingAccountFetchCount = useIsFetching({
+    predicate: (query) =>
+      routeIsAccountScoped &&
+      queryKeyIncludesAccountId(query.queryKey, pendingAccountId),
+  });
 
   const billingStateQuery = useQuery({
     ...trpcOptions.billing.getState.queryOptions(),
@@ -231,6 +261,55 @@ export default function DashboardLayoutClient({
     router,
   ]);
 
+  useEffect(() => {
+    if (!pendingAccountId) {
+      observedPendingFetchRef.current = null;
+      return;
+    }
+
+    if (!routeIsAccountScoped) {
+      completeAccountTransition();
+      return;
+    }
+
+    if (pendingAccountFetchCount > 0) {
+      observedPendingFetchRef.current = pendingAccountId;
+      return;
+    }
+
+    if (accountId !== pendingAccountId) {
+      return;
+    }
+
+    if (observedPendingFetchRef.current === pendingAccountId) {
+      completeAccountTransition();
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      const { pendingAccountId: activePendingAccountId } =
+        useAccountTransitionStore.getState();
+
+      if (activePendingAccountId === pendingAccountId) {
+        useAccountTransitionStore.getState().completeAccountTransition();
+      }
+    }, Math.max(180 - (Date.now() - (transitionStartedAt ?? Date.now())), 0));
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [
+    accountId,
+    completeAccountTransition,
+    pendingAccountFetchCount,
+    pendingAccountId,
+    routeIsAccountScoped,
+    transitionStartedAt,
+  ]);
+
+  const showAccountTransitionFallback =
+    routeIsAccountScoped && Boolean(pendingAccountId);
+
   if (
     isSessionPending ||
     isRecoveringSession ||
@@ -275,11 +354,27 @@ export default function DashboardLayoutClient({
 
         <div
           className={cn(
-            "flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
+            "relative flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
             isJournalRoute ? "overflow-hidden" : "overflow-y-auto gap-4 pb-12"
           )}
         >
-          {shouldHoldAccountScopedContent ? null : children}
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col",
+              showAccountTransitionFallback && "pointer-events-none opacity-0"
+            )}
+          >
+            {shouldHoldAccountScopedContent ? null : children}
+          </div>
+
+          {showAccountTransitionFallback ? (
+            <div className="absolute inset-0 z-10 flex">
+              <RouteLoadingFallback
+                route={routeLoadingVariant}
+                className="min-h-0 bg-background dark:bg-sidebar"
+              />
+            </div>
+          ) : null}
         </div>
       </SidebarInset>
     </SidebarProvider>

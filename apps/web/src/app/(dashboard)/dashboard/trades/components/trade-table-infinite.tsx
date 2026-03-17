@@ -6,8 +6,10 @@ import { useMutation } from "@tanstack/react-query";
 import { useInView } from "react-intersection-observer";
 import { toast } from "sonner";
 import { DataTable } from "@/components/data-table/index";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { useDataTable } from "@/hooks/use-data-table";
 import { useAccountStore } from "@/stores/account";
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 import TradesToolbar from "@/features/trades/table-toolbar/components/trades-toolbar";
 import { useQueryState } from "nuqs";
 import { ViewManagementDialog } from "@/components/view-management-dialog";
@@ -47,7 +49,9 @@ import type {
 
 export default function TradeTableInfinite() {
   const accountId = useAccountStore((s) => s.selectedAccountId) ?? null;
+  const { accounts, isFetched: hasFetchedAccounts } = useAccountCatalog();
   const { ref, inView } = useInView({ rootMargin: "200px" });
+  const hasHydratedInitialWorkspaceRef = React.useRef(false);
 
   // View management state
   const [manageViewsOpen, setManageViewsOpen] = React.useState(false);
@@ -158,6 +162,7 @@ export default function TradeTableInfinite() {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isWorkspaceLoading,
     maxBound,
     minBound,
     sampleGateStatus,
@@ -574,9 +579,39 @@ export default function TradeTableInfinite() {
     lastHandledIdsParamRef.current = idsParam;
   }, [displayRows, ids, idsParam, table]);
 
+  const hasAccounts = accounts.length > 0;
+  const isWaitingForAccountSelection =
+    !hasFetchedAccounts || (hasAccounts && !accountId);
+  const shouldShowWorkspaceFallback =
+    !hasHydratedInitialWorkspaceRef.current &&
+    (isWaitingForAccountSelection || (Boolean(accountId) && isWorkspaceLoading));
+
+  React.useEffect(() => {
+    if (!shouldShowWorkspaceFallback) {
+      hasHydratedInitialWorkspaceRef.current = true;
+    }
+  }, [shouldShowWorkspaceFallback]);
+
+  if (shouldShowWorkspaceFallback) {
+    return (
+      <RouteLoadingFallback
+        route="trades"
+        className="min-h-[calc(100vh-10rem)]"
+      />
+    );
+  }
+
   return (
     <div className="w-full overflow-hidden">
-      <Suspense fallback={<div> Loading toolbar... </div>}>
+      <Suspense
+        fallback={
+          <RouteLoadingFallback
+            route="tradesToolbar"
+            className="min-h-32 px-4 py-8"
+            textClassName="text-sm sm:text-base"
+          />
+        }
+      >
         <TradesToolbar
           q={q}
           table={table}

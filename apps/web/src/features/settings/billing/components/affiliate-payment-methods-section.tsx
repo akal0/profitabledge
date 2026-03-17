@@ -12,6 +12,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  GoalContentSeparator,
+  GoalPanel,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,7 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { trpcOptions } from "@/utils/trpc";
 
 const AFFILIATE_PAYMENT_METHOD_TYPES = [
@@ -132,24 +136,28 @@ function formatPaymentMethodType(methodType?: string | null) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function CardShell({
-  className,
-  children,
+function SummaryCard({
+  label,
+  value,
+  description,
 }: {
-  className?: string;
-  children: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+  description: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "group flex flex-col rounded-sm ring ring-white/5 bg-sidebar p-1.5",
-        className
-      )}
-    >
-      <div className="flex flex-1 flex-col rounded-sm bg-sidebar-accent transition-all duration-250">
-        {children}
+    <GoalSurface>
+      <div className="p-3.5">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">
+          {label}
+        </p>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        <p className="text-2xl font-semibold tracking-[-0.05em] text-white">
+          {value}
+        </p>
+        <p className="mt-2 text-xs text-white/35">{description}</p>
       </div>
-    </div>
+    </GoalSurface>
   );
 }
 
@@ -255,27 +263,23 @@ export function AffiliatePaymentMethodsSection() {
             ))}
           </div>
         ) : !isAffiliate ? (
-          <CardShell>
-            <div className="p-5">
-              <div className="flex items-center gap-2">
-                <Shield className="size-3.5 text-blue-300" />
-                <p className="text-xs font-medium text-white">
-                  Affiliate access required
-                </p>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-white/45">
-                Payment methods unlock after your affiliate application is
-                approved, so payout instructions only appear on active affiliate
-                accounts
-              </p>
-              <Button
-                asChild
-                className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar-accent px-4 text-xs text-white hover:bg-sidebar-accent/80"
-              >
-                <Link href="/dashboard/referrals">Open referrals</Link>
-              </Button>
-            </div>
-          </CardShell>
+          <GoalPanel
+            icon={Shield}
+            title="Affiliate access required"
+            bodyClassName="p-5"
+          >
+            <p className="mt-3 text-sm leading-6 text-white/45">
+              Payment methods unlock after your affiliate application is
+              approved, so payout instructions only appear on active affiliate
+              accounts
+            </p>
+            <Button
+              asChild
+              className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar-accent px-4 text-xs text-white hover:bg-sidebar-accent/80"
+            >
+              <Link href="/dashboard/referrals">Open referrals</Link>
+            </Button>
+          </GoalPanel>
         ) : affiliatePayoutSettingsQuery.isLoading ? (
           <div className="grid gap-3 sm:grid-cols-3">
             {[0, 1, 2].map((index) => (
@@ -288,71 +292,44 @@ export function AffiliatePaymentMethodsSection() {
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
-              <CardShell>
-                <div className="p-4">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">
-                    Available
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-white">
-                    {formatCurrency(affiliatePayoutSettings?.summary.availableAmount)}
-                  </p>
-                  <p className="mt-2 text-xs text-white/35">
-                    {affiliatePayoutSettings?.summary.availableEventCount ?? 0}{" "}
-                    unpaid commission event
-                    {(affiliatePayoutSettings?.summary.availableEventCount ?? 0) ===
-                    1
+              <SummaryCard
+                label="Available"
+                value={formatCurrency(affiliatePayoutSettings?.summary.availableAmount)}
+                description={
+                  <>
+                    {affiliatePayoutSettings?.summary.availableEventCount ?? 0} unpaid
+                    commission event
+                    {(affiliatePayoutSettings?.summary.availableEventCount ?? 0) === 1
                       ? ""
                       : "s"}
-                  </p>
-                </div>
-              </CardShell>
+                  </>
+                }
+              />
 
-              <CardShell>
-                <div className="p-4">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">
-                    Paid out
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-white">
-                    {formatCurrency(affiliatePayoutSettings?.summary.paidAmount)}
-                  </p>
-                  <p className="mt-2 text-xs text-white/35">
-                    Recorded manual payouts sent by admins
-                  </p>
-                </div>
-              </CardShell>
+              <SummaryCard
+                label="Paid out"
+                value={formatCurrency(affiliatePayoutSettings?.summary.paidAmount)}
+                description="Recorded manual payouts sent by admins"
+              />
 
-              <CardShell>
-                <div className="p-4">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-white/35">
-                    Payouts
-                  </p>
-                  <p className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-white">
-                    {affiliatePayoutSettings?.summary.payoutCount ?? 0}
-                  </p>
-                  <p className="mt-2 text-xs text-white/35">
-                    Historical payout records kept on your affiliate account
-                  </p>
-                </div>
-              </CardShell>
+              <SummaryCard
+                label="Payouts"
+                value={affiliatePayoutSettings?.summary.payoutCount ?? 0}
+                description="Historical payout records kept on your affiliate account"
+              />
             </div>
 
             <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-              <CardShell>
-                <div className="p-4">
-                  <div className="mb-4 flex items-center gap-2">
-                    <CreditCard className="size-3.5 text-emerald-300" />
-                    <p className="text-xs font-medium text-white">
-                      Saved payment methods
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    {affiliatePayoutSettings?.paymentMethods?.length ? (
-                      affiliatePayoutSettings.paymentMethods.map((method) => (
-                        <div
-                          key={method.id}
-                          className="rounded-sm ring ring-white/5 bg-sidebar p-3"
-                        >
+              <GoalPanel
+                icon={CreditCard}
+                title="Saved payment methods"
+                bodyClassName="p-3.5"
+              >
+                <div className="space-y-2">
+                  {affiliatePayoutSettings?.paymentMethods?.length ? (
+                    affiliatePayoutSettings.paymentMethods.map((method) => (
+                      <GoalSurface key={method.id}>
+                        <div className="p-3">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
@@ -411,185 +388,176 @@ export function AffiliatePaymentMethodsSection() {
                             </div>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <div className="rounded-sm ring ring-dashed ring-white/10 p-4 text-xs text-white/30">
+                      </GoalSurface>
+                    ))
+                  ) : (
+                    <GoalSurface>
+                      <div className="p-4 text-xs text-white/30">
                         No payout method saved yet. Add one so admins know where
                         to send commission
                       </div>
-                    )}
-                  </div>
+                    </GoalSurface>
+                  )}
                 </div>
-              </CardShell>
+              </GoalPanel>
 
-              <CardShell>
-                <div className="p-4">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Banknote className="size-3.5 text-amber-300" />
-                    <p className="text-xs font-medium text-white">
-                      Add payment method
-                    </p>
-                  </div>
-
-                  {isLocalhostPayoutTestingEnabled ? (
-                    <div className="mb-4 rounded-sm ring ring-blue-500/15 bg-blue-950/20 p-3">
-                      <div className="flex items-center gap-2">
-                        <Banknote className="size-3.5 text-blue-300" />
-                        <p className="text-[11px] font-medium text-blue-100">
-                          Localhost test presets
-                        </p>
-                      </div>
-                      <p className="mt-2 text-[11px] leading-5 text-blue-100/60">
-                        These fill the form with production-shaped payout
-                        details so you can test locally without introducing a
-                        fake localhost-only method type
+              <GoalPanel
+                icon={Banknote}
+                title="Add payment method"
+                bodyClassName="p-3.5"
+              >
+                {isLocalhostPayoutTestingEnabled ? (
+                  <div className="mb-4 rounded-sm ring ring-blue-500/15 bg-blue-950/20 p-3">
+                    <div className="flex items-center gap-2">
+                      <Banknote className="size-3.5 text-blue-300" />
+                      <p className="text-[11px] font-medium text-blue-100">
+                        Localhost test presets
                       </p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {LOCALHOST_PAYOUT_METHOD_PRESETS.map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => setPaymentMethodForm(preset.value)}
-                            className="rounded-sm ring ring-white/8 bg-sidebar px-3 py-2 text-left transition-all duration-200 hover:bg-sidebar-accent"
-                          >
-                            <p className="text-[11px] font-medium text-white">
-                              {preset.title}
-                            </p>
-                            <p className="mt-1 text-[10px] text-white/40">
-                              {preset.description}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
                     </div>
-                  ) : null}
-
-                  <div className="grid gap-3">
-                    <div>
-                      <Label className="text-[10px] text-white/40">
-                        Method type
-                      </Label>
-                      <Select
-                        value={paymentMethodForm.methodType}
-                        onValueChange={(value) =>
-                          setPaymentMethodForm((state) => ({
-                            ...state,
-                            methodType: value as AffiliatePaymentMethodType,
-                          }))
-                        }
-                      >
-                        <SelectTrigger className="mt-1.5 w-full ring-white/5 bg-sidebar text-xs">
-                          <SelectValue placeholder="Choose a method" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {AFFILIATE_PAYMENT_METHOD_TYPES.map((methodType) => (
-                            <SelectItem key={methodType} value={methodType}>
-                              {formatPaymentMethodType(methodType)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div>
-                      <Label className="text-[10px] text-white/40">Label</Label>
-                      <Input
-                        value={paymentMethodForm.label}
-                        onChange={(event) =>
-                          setPaymentMethodForm((state) => ({
-                            ...state,
-                            label: event.target.value,
-                          }))
-                        }
-                        placeholder="Primary PayPal"
-                        className="mt-1.5 ring-white/5 bg-sidebar text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <Label className="text-[10px] text-white/40">
-                        Recipient name
-                      </Label>
-                      <Input
-                        value={paymentMethodForm.recipientName}
-                        onChange={(event) =>
-                          setPaymentMethodForm((state) => ({
-                            ...state,
-                            recipientName: event.target.value,
-                          }))
-                        }
-                        placeholder="Kal Cryptev"
-                        className="mt-1.5 ring-white/5 bg-sidebar text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <Label className="text-[10px] text-white/40">
-                        Payment details
-                      </Label>
-                      <Textarea
-                        value={paymentMethodForm.details}
-                        onChange={(event) =>
-                          setPaymentMethodForm((state) => ({
-                            ...state,
-                            details: event.target.value,
-                          }))
-                        }
-                        placeholder="PayPal email, Wise handle, wallet address, or transfer instructions"
-                        className="mt-1.5 min-h-28 ring-white/5 bg-sidebar text-xs"
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white/70">
-                      <Checkbox
-                        checked={paymentMethodForm.isDefault}
-                        onCheckedChange={(checked) =>
-                          setPaymentMethodForm((state) => ({
-                            ...state,
-                            isDefault: checked === true,
-                          }))
-                        }
-                        className="rounded-sm"
-                      />
-                      Save as default payout method
-                    </label>
-
-                    <p className="text-[11px] leading-5 text-white/35">
-                      Payouts are still recorded manually by admins. Saving a
-                      method here stores the payout instructions that work the
-                      same way on localhost and in production
+                    <p className="mt-2 text-[11px] leading-5 text-blue-100/60">
+                      These fill the form with production-shaped payout details
+                      so you can test locally without introducing a fake
+                      localhost-only method type
                     </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {LOCALHOST_PAYOUT_METHOD_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => setPaymentMethodForm(preset.value)}
+                          className="rounded-sm ring ring-white/8 bg-sidebar px-3 py-2 text-left transition-all duration-200 hover:bg-sidebar-accent"
+                        >
+                          <p className="text-[11px] font-medium text-white">
+                            {preset.title}
+                          </p>
+                          <p className="mt-1 text-[10px] text-white/40">
+                            {preset.description}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-3">
+                  <div>
+                    <Label className="text-[10px] text-white/40">
+                      Method type
+                    </Label>
+                    <Select
+                      value={paymentMethodForm.methodType}
+                      onValueChange={(value) =>
+                        setPaymentMethodForm((state) => ({
+                          ...state,
+                          methodType: value as AffiliatePaymentMethodType,
+                        }))
+                      }
+                    >
+                      <SelectTrigger className="mt-1.5 w-full ring-white/5 bg-sidebar text-xs">
+                        <SelectValue placeholder="Choose a method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AFFILIATE_PAYMENT_METHOD_TYPES.map((methodType) => (
+                          <SelectItem key={methodType} value={methodType}>
+                            {formatPaymentMethodType(methodType)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
-                  <Button
-                    onClick={handleSavePaymentMethod}
-                    disabled={saveAffiliatePaymentMethod.isPending}
-                    className="mt-4 h-9 rounded-sm bg-emerald-600 px-4 text-xs text-white hover:brightness-110"
-                  >
-                    {saveAffiliatePaymentMethod.isPending
-                      ? "Saving..."
-                      : "Save payment method"}
-                  </Button>
-                </div>
-              </CardShell>
-            </div>
+                  <div>
+                    <Label className="text-[10px] text-white/40">Label</Label>
+                    <Input
+                      value={paymentMethodForm.label}
+                      onChange={(event) =>
+                        setPaymentMethodForm((state) => ({
+                          ...state,
+                          label: event.target.value,
+                        }))
+                      }
+                      placeholder="Primary PayPal"
+                      className="mt-1.5 ring-white/5 bg-sidebar text-xs"
+                    />
+                  </div>
 
-            <CardShell>
-              <div className="p-4">
-                <div className="mb-4 flex items-center gap-2">
-                  <Banknote className="size-3.5 text-blue-300" />
-                  <p className="text-xs font-medium text-white">
-                    Payout history
+                  <div>
+                    <Label className="text-[10px] text-white/40">
+                      Recipient name
+                    </Label>
+                    <Input
+                      value={paymentMethodForm.recipientName}
+                      onChange={(event) =>
+                        setPaymentMethodForm((state) => ({
+                          ...state,
+                          recipientName: event.target.value,
+                        }))
+                      }
+                      placeholder="Kal Cryptev"
+                      className="mt-1.5 ring-white/5 bg-sidebar text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-[10px] text-white/40">
+                      Payment details
+                    </Label>
+                    <Textarea
+                      value={paymentMethodForm.details}
+                      onChange={(event) =>
+                        setPaymentMethodForm((state) => ({
+                          ...state,
+                          details: event.target.value,
+                        }))
+                      }
+                      placeholder="PayPal email, Wise handle, wallet address, or transfer instructions"
+                      className="mt-1.5 min-h-28 ring-white/5 bg-sidebar text-xs"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white/70">
+                    <Checkbox
+                      checked={paymentMethodForm.isDefault}
+                      onCheckedChange={(checked) =>
+                        setPaymentMethodForm((state) => ({
+                          ...state,
+                          isDefault: checked === true,
+                        }))
+                      }
+                      className="rounded-sm"
+                    />
+                    Save as default payout method
+                  </label>
+
+                  <p className="text-[11px] leading-5 text-white/35">
+                    Payouts are still recorded manually by admins. Saving a
+                    method here stores the payout instructions that work the
+                    same way on localhost and in production
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  {affiliatePayoutSettings?.payouts?.length ? (
-                    affiliatePayoutSettings.payouts.slice(0, 8).map((payout) => (
-                      <div
-                        key={payout.id}
-                        className="rounded-sm ring ring-white/5 bg-sidebar p-3"
-                      >
+                <Button
+                  onClick={handleSavePaymentMethod}
+                  disabled={saveAffiliatePaymentMethod.isPending}
+                  className="mt-4 h-9 rounded-sm bg-emerald-600 px-4 text-xs text-white hover:brightness-110"
+                >
+                  {saveAffiliatePaymentMethod.isPending
+                    ? "Saving..."
+                    : "Save payment method"}
+                </Button>
+              </GoalPanel>
+            </div>
+
+            <GoalPanel
+              icon={Banknote}
+              title="Payout history"
+              bodyClassName="p-3.5"
+            >
+              <div className="space-y-2">
+                {affiliatePayoutSettings?.payouts?.length ? (
+                  affiliatePayoutSettings.payouts.slice(0, 8).map((payout) => (
+                    <GoalSurface key={payout.id}>
+                      <div className="p-3">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
                             <p className="text-xs font-medium text-white">
@@ -622,15 +590,17 @@ export function AffiliatePaymentMethodsSection() {
                           </p>
                         ) : null}
                       </div>
-                    ))
-                  ) : (
-                    <div className="rounded-sm ring ring-dashed ring-white/10 p-4 text-xs text-white/30">
+                    </GoalSurface>
+                  ))
+                ) : (
+                  <GoalSurface>
+                    <div className="p-4 text-xs text-white/30">
                       No payouts have been recorded yet
                     </div>
-                  )}
-                </div>
+                  </GoalSurface>
+                )}
               </div>
-            </CardShell>
+            </GoalPanel>
           </>
         )}
       </div>

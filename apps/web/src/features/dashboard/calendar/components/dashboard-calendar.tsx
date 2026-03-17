@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useAccountStore } from "@/stores/account";
+import { useAccountTransitionStore } from "@/stores/account-transition";
 import { useDateRangeStore } from "@/stores/date-range";
-import { trpcClient } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { CalendarControls } from "./calendar-controls";
@@ -84,8 +85,11 @@ function mapLiveTradePreviews(input: {
 }
 
 async function loadLiveTrades(accountId: string) {
-  const liveMetrics = await trpcClient.accounts.liveMetrics.query({
-    accountId,
+  const liveMetrics = await queryClient.fetchQuery({
+    ...trpcOptions.accounts.liveMetrics.queryOptions({
+      accountId,
+    }),
+    staleTime: 4_000,
   });
 
   return mapLiveTradePreviews(
@@ -95,26 +99,19 @@ async function loadLiveTrades(accountId: string) {
 
 type DashboardCalendarProps = {
   accountId?: string;
-  isEditing?: boolean;
   summaryWidgets?: CalendarWidgetType[];
   summaryWidgetSpans?: Partial<Record<CalendarWidgetType, number>>;
-  onToggleSummaryWidget?: (type: CalendarWidgetType) => void;
-  onReorderSummaryWidget?: (fromIndex: number, toIndex: number) => void;
-  onResizeSummaryWidget?: (type: CalendarWidgetType, span: number) => void;
-  onEnterEdit?: () => void;
-  onToggleEdit?: () => void;
+  onApplyPreset?: (
+    widgets: CalendarWidgetType[],
+    spans: Partial<Record<CalendarWidgetType, number>>
+  ) => void | Promise<void>;
 };
 
 export default function DashboardCalendar({
   accountId,
-  isEditing = false,
   summaryWidgets = DEFAULT_CALENDAR_WIDGETS,
   summaryWidgetSpans = DEFAULT_CALENDAR_WIDGET_SPANS,
-  onToggleSummaryWidget,
-  onReorderSummaryWidget,
-  onResizeSummaryWidget,
-  onEnterEdit,
-  onToggleEdit,
+  onApplyPreset,
 }: DashboardCalendarProps) {
   const exportRef = useRef<HTMLDivElement | null>(null);
   const [days, setDays] = useState<DayRow[] | null>(null);
@@ -133,9 +130,11 @@ export default function DashboardCalendar({
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [previews, setPreviews] = useState<CalendarPreviewState>({});
   const [liveTrades, setLiveTrades] = useState<TradePreview[]>([]);
-
   const router = useRouter();
   const setSelectedAccountId = useAccountStore((state) => state.setSelectedAccountId);
+  const beginAccountTransition = useAccountTransitionStore(
+    (state) => state.beginAccountTransition
+  );
 
   const calendarDays = useMemo(
     () => mergeDayRowsWithLiveTrades(days, liveTrades),
@@ -301,10 +300,13 @@ export default function DashboardCalendar({
 
     void (async () => {
       try {
-        const data = await trpcClient.accounts.rangeSummary.query({
-          accountId,
-          startISO: range.start.toISOString(),
-          endISO: range.end.toISOString(),
+        const data = await queryClient.fetchQuery({
+          ...trpcOptions.accounts.rangeSummary.queryOptions({
+            accountId,
+            startISO: range.start.toISOString(),
+            endISO: range.end.toISOString(),
+          }),
+          staleTime: 30_000,
         });
 
         if (mounted) {
@@ -341,8 +343,14 @@ export default function DashboardCalendar({
 
       try {
         const [accounts, nextBounds, nextLiveTrades] = await Promise.all([
-          trpcClient.accounts.list.query(),
-          trpcClient.accounts.opensBounds.query({ accountId }),
+          queryClient.fetchQuery({
+            ...trpcOptions.accounts.list.queryOptions(),
+            staleTime: 30_000,
+          }),
+          queryClient.fetchQuery({
+            ...trpcOptions.accounts.opensBounds.queryOptions({ accountId }),
+            staleTime: 30_000,
+          }),
           loadLiveTrades(accountId).catch(() => []),
         ]);
 
@@ -382,10 +390,13 @@ export default function DashboardCalendar({
           useDateRangeStore.getState().setBounds(minDate, maxDate);
         }
 
-        const recentByDay = await trpcClient.accounts.recentByDay.query({
-          accountId,
-          startISO: fetchRange.start.toISOString(),
-          endISO: fetchRange.end.toISOString(),
+        const recentByDay = await queryClient.fetchQuery({
+          ...trpcOptions.accounts.recentByDay.queryOptions({
+            accountId,
+            startISO: fetchRange.start.toISOString(),
+            endISO: fetchRange.end.toISOString(),
+          }),
+          staleTime: 30_000,
         });
 
         if (mounted) {
@@ -439,8 +450,11 @@ export default function DashboardCalendar({
 
     void (async () => {
       try {
-        const data = await trpcClient.goals.list.query({
-          accountId: accountId || undefined,
+        const data = await queryClient.fetchQuery({
+          ...trpcOptions.goals.list.queryOptions({
+            accountId: accountId || undefined,
+          }),
+          staleTime: 60_000,
         });
         if (mounted) {
           setGoals(data as CalendarGoal[]);
@@ -468,12 +482,15 @@ export default function DashboardCalendar({
     }));
 
     try {
-      const result = await trpcClient.trades.listInfinite.query({
-        accountId,
-        limit: 200,
-        startISO: `${dateISO}T00:00:00.000Z`,
-        endISO: `${dateISO}T23:59:59.999Z`,
-      } as never);
+      const result = await queryClient.fetchQuery({
+        ...trpcOptions.trades.listInfinite.queryOptions({
+          accountId,
+          limit: 200,
+          startISO: `${dateISO}T00:00:00.000Z`,
+          endISO: `${dateISO}T23:59:59.999Z`,
+        } as never),
+        staleTime: 60_000,
+      });
 
       const items =
         result && typeof result === "object" && "items" in result
@@ -529,10 +546,13 @@ export default function DashboardCalendar({
     setLoading(true);
 
     try {
-      const data = await trpcClient.accounts.recentByDay.query({
-        accountId,
-        startISO: fetchStart.toISOString(),
-        endISO: fetchEnd.toISOString(),
+      const data = await queryClient.fetchQuery({
+        ...trpcOptions.accounts.recentByDay.queryOptions({
+          accountId,
+          startISO: fetchStart.toISOString(),
+          endISO: fetchEnd.toISOString(),
+        }),
+        staleTime: 30_000,
       });
 
       setDays(normalizeRecentDayRows(data as DayRow[]));
@@ -582,7 +602,10 @@ export default function DashboardCalendar({
     const start = startOfDay(day);
     const end = endOfDay(day);
     useDateRangeStore.getState().setRange(start, end);
-    if (accountId) setSelectedAccountId(accountId);
+    if (accountId) {
+      beginAccountTransition(accountId);
+      setSelectedAccountId(accountId);
+    }
     router.push(`/dashboard/trades?oStart=${toYMD(start)}&oEnd=${toYMD(end)}`);
   };
 
@@ -614,16 +637,6 @@ export default function DashboardCalendar({
     void handleRangeChange(nextRange.start, nextRange.end);
   };
 
-  const handleViewAccountStats = () => {
-    if (accountId) setSelectedAccountId(accountId);
-    if (!range) {
-      router.push("/dashboard/trades");
-      return;
-    }
-
-    router.push(`/dashboard/trades?oStart=${toYMD(range.start)}&oEnd=${toYMD(range.end)}`);
-  };
-
   const handleHoverDay = (
     dateISO: string,
     closedCount: number,
@@ -653,21 +666,15 @@ export default function DashboardCalendar({
         canNavigateNext={canNavigateNext}
         heatmapEnabled={heatmapEnabled}
         goalOverlay={goalOverlay}
-        isEditing={isEditing}
         exportTargetRef={exportRef}
+        summaryWidgets={summaryWidgets}
+        summaryWidgetSpans={summaryWidgetSpans}
         onRangeChange={handleRangeChange}
         onPeriodStep={handlePeriodStep}
         onViewChange={handleViewChange}
         onToggleHeatmap={() => setHeatmapEnabled((value) => !value)}
         onToggleGoalOverlay={() => setGoalOverlay((value) => !value)}
-        onToggleEdit={() => {
-          if (onToggleEdit) {
-            onToggleEdit();
-          } else if (!isEditing) {
-            onEnterEdit?.();
-          }
-        }}
-        onViewAccountStats={handleViewAccountStats}
+        onApplyPreset={onApplyPreset || (() => undefined)}
       />
 
       {loading || !days ? (
@@ -708,17 +715,12 @@ export default function DashboardCalendar({
             onLeaveDay={handleLeaveDay}
           />
           <CalendarSummarySidebar
-            isEditing={isEditing}
             summaryWidgets={summaryWidgets}
             summaryWidgetSpans={summaryWidgetSpans}
             monthSummary={monthSummary}
             rangeSummary={rangeSummary}
             summaryLoading={summaryLoading}
             rangeLabel={rangeLabel}
-            onToggleSummaryWidget={onToggleSummaryWidget}
-            onReorderSummaryWidget={onReorderSummaryWidget}
-            onResizeSummaryWidget={onResizeSummaryWidget}
-            onEnterEdit={onEnterEdit}
           />
         </div>
       ) : (

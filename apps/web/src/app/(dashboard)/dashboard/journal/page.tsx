@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
 import { useAccountStore } from "@/stores/account";
 import type { JournalBlock } from "@/components/journal/types";
@@ -344,10 +345,8 @@ function JournalPageContent() {
 
   if (shouldHoldInsightsTab) {
     return (
-      <main className="flex min-h-0 flex-1 items-center justify-center">
-        <div className="text-sm text-muted-foreground">
-          Loading journal workspace...
-        </div>
+      <main className="flex min-h-0 flex-1">
+        <RouteLoadingFallback route="journal" className="min-h-0" />
       </main>
     );
   }
@@ -542,13 +541,7 @@ function JournalPageContent() {
 export default function JournalPage() {
   return (
     <React.Suspense
-      fallback={
-        <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
-          <div className="text-sm text-muted-foreground">
-            Loading journal workspace...
-          </div>
-        </main>
-      }
+      fallback={<RouteLoadingFallback route="journal" className="min-h-screen bg-background dark:bg-sidebar" />}
     >
       <JournalPageContent />
     </React.Suspense>

@@ -20,7 +20,7 @@ import {
   useComparisonStore,
   type WidgetComparisonMode,
 } from "@/stores/comparison";
-import { trpcClient } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { useSpring, useMotionValueEvent } from "motion/react";
 import {
@@ -241,10 +241,13 @@ export function PerformanceWeekdayChart({
   React.useEffect(() => {
     (async () => {
       if (!accountId || !resolvedRange) return;
-      const data = (await trpcClient.accounts.recentByDay.query({
-        accountId,
-        startISO: resolvedRange.start.toISOString(),
-        endISO: resolvedRange.end.toISOString(),
+      const data = (await queryClient.fetchQuery({
+        ...trpcOptions.accounts.recentByDay.queryOptions({
+          accountId,
+          startISO: resolvedRange.start.toISOString(),
+          endISO: resolvedRange.end.toISOString(),
+        }),
+        staleTime: 30_000,
       })) as DayPoint[];
 
       const agg: Record<WeekdayKey, number> = {
@@ -267,11 +270,14 @@ export function PerformanceWeekdayChart({
         return;
       }
 
-      const comparisonData = (await trpcClient.accounts.recentByDay.query({
+      const comparisonData = (await queryClient.fetchQuery({
+        ...trpcOptions.accounts.recentByDay.queryOptions({
           accountId,
           startISO: comparisonRange.start.toISOString(),
           endISO: comparisonRange.end.toISOString(),
-        })) as DayPoint[];
+        }),
+        staleTime: 30_000,
+      })) as DayPoint[];
       const nextCompareAgg: Record<WeekdayKey, number> = {
         Mon: 0,
         Tue: 0,

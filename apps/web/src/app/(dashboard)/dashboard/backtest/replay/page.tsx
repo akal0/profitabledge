@@ -14,6 +14,7 @@ import { ReplayHeader } from "@/features/backtest/replay/components/replay-heade
 import { ReplayMainChartPane } from "@/features/backtest/replay/components/replay-main-chart-pane";
 import { NewSessionDialog } from "@/features/backtest/replay/components/new-session-dialog";
 import { ReplayOrderPanel } from "@/features/backtest/replay/components/replay-order-panel";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { useReplayChartArtifacts } from "@/features/backtest/replay/hooks/use-replay-chart-artifacts";
 import { useReplayCandleLoader } from "@/features/backtest/replay/hooks/use-replay-candle-loader";
 import { useReplayContextPanels } from "@/features/backtest/replay/hooks/use-replay-context-panels";
@@ -1242,11 +1243,10 @@ export default function BacktestReplayPage() {
   return (
     <React.Suspense
       fallback={
-        <main className="flex min-h-screen items-center justify-center bg-background dark:bg-sidebar">
-          <div className="text-sm text-muted-foreground">
-            Loading replay workspace...
-          </div>
-        </main>
+        <RouteLoadingFallback
+          route="backtestReplay"
+          className="min-h-screen bg-background dark:bg-sidebar"
+        />
       }
     >
       <BacktestReplayPageContent />

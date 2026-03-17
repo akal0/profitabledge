@@ -17,6 +17,7 @@ import {
 } from "@/components/dashboard/widgets";
 import type { CalendarWidgetType } from "@/features/dashboard/calendar/lib/calendar-types";
 import {
+  ALL_CALENDAR_WIDGET_TYPES,
   DEFAULT_CALENDAR_WIDGETS,
   DEFAULT_CALENDAR_WIDGET_SPANS,
 } from "@/features/dashboard/calendar/lib/calendar-types";
@@ -26,7 +27,7 @@ import type { Me } from "@/types/user";
 import { trpcClient } from "@/utils/trpc";
 
 const MAX_CALENDAR_WIDGETS = 6;
-type EditingSection = "widgets" | "calendar" | "charts" | null;
+type EditingSection = "widgets" | "charts" | null;
 
 function clampCalendarSpan(span: number) {
   return Math.max(1, Math.min(2, Math.round(span)));
@@ -74,7 +75,7 @@ function normalizeCalendarWidgets(rawWidgets: unknown): CalendarWidgetType[] {
   }
 
   const normalized = rawWidgets.filter((widget): widget is CalendarWidgetType =>
-    DEFAULT_CALENDAR_WIDGETS.includes(widget as CalendarWidgetType)
+    ALL_CALENDAR_WIDGET_TYPES.includes(widget as CalendarWidgetType)
   );
   const unique = Array.from(new Set(normalized)).slice(0, MAX_CALENDAR_WIDGETS);
   return unique.length > 0 ? unique : DEFAULT_CALENDAR_WIDGETS;
@@ -119,34 +120,78 @@ function enforceCalendarLimit(
   };
 }
 
+function resolveDashboardHomeLayoutState(user: Me | null | undefined) {
+  const rawWidgetPrefs = (user as any)?.widgetPreferences ?? {};
+  const rawChartPrefs = (user as any)?.chartWidgetPreferences ?? {};
+  const rawCalendarPrefs = rawWidgetPrefs?.calendar ?? {};
+
+  const nextWidgets = Array.isArray(rawWidgetPrefs.widgets)
+    ? rawWidgetPrefs.widgets
+        .filter((widget: unknown): widget is WidgetType =>
+          ALL_WIDGET_TYPES.includes(widget as WidgetType)
+        )
+        .slice(0, MAX_DASHBOARD_WIDGETS)
+    : [];
+  const safeWidgets = nextWidgets.length > 0 ? nextWidgets : DEFAULT_WIDGETS;
+  const nextWidgetSpans = normalizeWidgetSpans(rawWidgetPrefs.spans);
+  const nextChartWidgets = normalizeChartWidgets(rawChartPrefs.widgets);
+  const nextCalendarWidgets = normalizeCalendarWidgets(rawCalendarPrefs.widgets);
+  const nextCalendarSpans = normalizeCalendarSpans(
+    nextCalendarWidgets,
+    Object.fromEntries(
+      nextCalendarWidgets.map((widget) => [
+        widget,
+        clampCalendarSpan(Number(rawCalendarPrefs?.spans?.[widget] ?? 1)),
+      ])
+    ) as Partial<Record<CalendarWidgetType, number>>
+  );
+
+  return {
+    widgets: safeWidgets,
+    widgetSpans: nextWidgetSpans,
+    chartWidgets: nextChartWidgets,
+    calendarWidgets: nextCalendarWidgets,
+    calendarWidgetSpans: nextCalendarSpans,
+  };
+}
+
 export function useDashboardHomeLayout(user: Me | null | undefined) {
   const setVisibleWidgets = useDashboardAssistantContextStore(
     (state) => state.setVisibleWidgets
   );
+  const initialLayoutStateRef = useRef(resolveDashboardHomeLayoutState(user));
   const hydratedUserIdRef = useRef<string | null>(null);
   const editingSectionRef = useRef<EditingSection>(null);
   const previousEditingSectionRef = useRef<EditingSection>(null);
-  const widgetsRef = useRef<WidgetType[]>(DEFAULT_WIDGETS);
+  const widgetsRef = useRef<WidgetType[]>(initialLayoutStateRef.current.widgets);
   const widgetSpansRef = useRef<Partial<Record<WidgetType, number>>>(
-    DEFAULT_WIDGET_SPANS
+    initialLayoutStateRef.current.widgetSpans
   );
-  const chartWidgetsRef = useRef<ChartWidgetType[]>(DEFAULT_CHART_WIDGETS);
-  const calendarWidgetsRef = useRef<CalendarWidgetType[]>(DEFAULT_CALENDAR_WIDGETS);
+  const chartWidgetsRef = useRef<ChartWidgetType[]>(
+    initialLayoutStateRef.current.chartWidgets
+  );
+  const calendarWidgetsRef = useRef<CalendarWidgetType[]>(
+    initialLayoutStateRef.current.calendarWidgets
+  );
   const calendarWidgetSpansRef = useRef<
     Partial<Record<CalendarWidgetType, number>>
-  >(DEFAULT_CALENDAR_WIDGET_SPANS);
+  >(initialLayoutStateRef.current.calendarWidgetSpans);
 
-  const [widgets, setWidgets] = useState<WidgetType[]>(DEFAULT_WIDGETS);
+  const [widgets, setWidgets] = useState<WidgetType[]>(
+    initialLayoutStateRef.current.widgets
+  );
   const [widgetSpans, setWidgetSpans] = useState<
     Partial<Record<WidgetType, number>>
-  >(DEFAULT_WIDGET_SPANS);
-  const [chartWidgets, setChartWidgets] =
-    useState<ChartWidgetType[]>(DEFAULT_CHART_WIDGETS);
-  const [calendarWidgets, setCalendarWidgets] =
-    useState<CalendarWidgetType[]>(DEFAULT_CALENDAR_WIDGETS);
+  >(initialLayoutStateRef.current.widgetSpans);
+  const [chartWidgets, setChartWidgets] = useState<ChartWidgetType[]>(
+    initialLayoutStateRef.current.chartWidgets
+  );
+  const [calendarWidgets, setCalendarWidgets] = useState<CalendarWidgetType[]>(
+    initialLayoutStateRef.current.calendarWidgets
+  );
   const [calendarWidgetSpans, setCalendarWidgetSpans] = useState<
     Partial<Record<CalendarWidgetType, number>>
-  >(DEFAULT_CALENDAR_WIDGET_SPANS);
+  >(initialLayoutStateRef.current.calendarWidgetSpans);
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [valueMode, setValueMode] = useState<WidgetValueMode>("usd");
 
@@ -182,43 +227,19 @@ export function useDashboardHomeLayout(user: Me | null | undefined) {
     if (!user?.id || hydratedUserIdRef.current === user.id) return;
     hydratedUserIdRef.current = user.id;
 
-    const rawWidgetPrefs = (user as any)?.widgetPreferences ?? {};
-    const rawChartPrefs = (user as any)?.chartWidgetPreferences ?? {};
-    const rawCalendarPrefs = rawWidgetPrefs?.calendar ?? {};
+    const nextLayoutState = resolveDashboardHomeLayoutState(user);
 
-    const nextWidgets = Array.isArray(rawWidgetPrefs.widgets)
-      ? rawWidgetPrefs.widgets
-          .filter((widget: unknown): widget is WidgetType =>
-            ALL_WIDGET_TYPES.includes(widget as WidgetType)
-          )
-          .slice(0, MAX_DASHBOARD_WIDGETS)
-      : [];
-    const safeWidgets = nextWidgets.length > 0 ? nextWidgets : DEFAULT_WIDGETS;
+    widgetsRef.current = nextLayoutState.widgets;
+    widgetSpansRef.current = nextLayoutState.widgetSpans;
+    chartWidgetsRef.current = nextLayoutState.chartWidgets;
+    calendarWidgetsRef.current = nextLayoutState.calendarWidgets;
+    calendarWidgetSpansRef.current = nextLayoutState.calendarWidgetSpans;
 
-    const nextWidgetSpans = normalizeWidgetSpans(rawWidgetPrefs.spans);
-    const nextChartWidgets = normalizeChartWidgets(rawChartPrefs.widgets);
-    const nextCalendarWidgets = normalizeCalendarWidgets(rawCalendarPrefs.widgets);
-    const nextCalendarSpans = normalizeCalendarSpans(
-      nextCalendarWidgets,
-      Object.fromEntries(
-        nextCalendarWidgets.map((widget) => [
-          widget,
-          clampCalendarSpan(Number(rawCalendarPrefs?.spans?.[widget] ?? 1)),
-        ])
-      ) as Partial<Record<CalendarWidgetType, number>>
-    );
-
-    widgetsRef.current = safeWidgets;
-    widgetSpansRef.current = nextWidgetSpans;
-    chartWidgetsRef.current = nextChartWidgets;
-    calendarWidgetsRef.current = nextCalendarWidgets;
-    calendarWidgetSpansRef.current = nextCalendarSpans;
-
-    setWidgets(safeWidgets);
-    setWidgetSpans(nextWidgetSpans);
-    setChartWidgets(nextChartWidgets);
-    setCalendarWidgets(nextCalendarWidgets);
-    setCalendarWidgetSpans(nextCalendarSpans);
+    setWidgets(nextLayoutState.widgets);
+    setWidgetSpans(nextLayoutState.widgetSpans);
+    setChartWidgets(nextLayoutState.chartWidgets);
+    setCalendarWidgets(nextLayoutState.calendarWidgets);
+    setCalendarWidgetSpans(nextLayoutState.calendarWidgetSpans);
   }, [user]);
 
   const saveWidgets = useCallback(async () => {
@@ -343,84 +364,6 @@ export function useDashboardHomeLayout(user: Me | null | undefined) {
     });
   }, []);
 
-  const applyCalendarConfig = useCallback(
-    (
-      nextWidgets: CalendarWidgetType[],
-      nextSpans: Partial<Record<CalendarWidgetType, number>>,
-      pinned?: CalendarWidgetType
-    ) => {
-      const enforced = enforceCalendarLimit(nextWidgets, nextSpans, pinned);
-      calendarWidgetsRef.current = enforced.widgets;
-      calendarWidgetSpansRef.current = enforced.spans;
-      setCalendarWidgets(enforced.widgets);
-      setCalendarWidgetSpans(enforced.spans);
-    },
-    []
-  );
-
-  const toggleCalendarWidget = useCallback(
-    (type: CalendarWidgetType) => {
-      const current = calendarWidgetsRef.current;
-      const exists = current.includes(type);
-      const nextWidgets = exists
-        ? current.filter((widget) => widget !== type)
-        : [...current, type];
-
-      const nextSpans: Partial<Record<CalendarWidgetType, number>> = {
-        ...calendarWidgetSpansRef.current,
-      };
-
-      if (exists) {
-        delete nextSpans[type];
-        applyCalendarConfig(nextWidgets, nextSpans, type);
-        return;
-      }
-
-      const normalizedSpans = normalizeCalendarSpans(nextWidgets, nextSpans);
-      const totalSlots = nextWidgets.reduce(
-        (sum, widget) => sum + (normalizedSpans[widget] ?? 1),
-        0
-      );
-      if (totalSlots > MAX_CALENDAR_WIDGETS) {
-        return;
-      }
-
-      applyCalendarConfig(nextWidgets, normalizedSpans, type);
-    },
-    [applyCalendarConfig]
-  );
-
-  const resizeCalendarWidget = useCallback(
-    (type: CalendarWidgetType, span: number) => {
-      const nextSpans: Partial<Record<CalendarWidgetType, number>> = {
-        ...calendarWidgetSpansRef.current,
-        [type]: clampCalendarSpan(span),
-      };
-      applyCalendarConfig(calendarWidgetsRef.current, nextSpans, type);
-    },
-    [applyCalendarConfig]
-  );
-
-  const reorderCalendarWidgets = useCallback(
-    (fromIndex: number, toIndex: number) => {
-      const current = calendarWidgetsRef.current;
-      if (
-        fromIndex < 0 ||
-        toIndex < 0 ||
-        fromIndex >= current.length ||
-        toIndex >= current.length
-      ) {
-        return;
-      }
-
-      const next = [...current];
-      const [moved] = next.splice(fromIndex, 1);
-      next.splice(toIndex, 0, moved);
-      applyCalendarConfig(next, calendarWidgetSpansRef.current);
-    },
-    [applyCalendarConfig]
-  );
-
   const toggleWidgetsEdit = useCallback(() => {
     setEditingSection((previous) =>
       previous === "widgets" ? null : "widgets"
@@ -429,16 +372,6 @@ export function useDashboardHomeLayout(user: Me | null | undefined) {
 
   const enterWidgetsEdit = useCallback(() => {
     setEditingSection("widgets");
-  }, []);
-
-  const toggleCalendarEdit = useCallback(() => {
-    setEditingSection((previous) =>
-      previous === "calendar" ? null : "calendar"
-    );
-  }, []);
-
-  const enterCalendarEdit = useCallback(() => {
-    setEditingSection("calendar");
   }, []);
 
   const toggleChartWidgetsEdit = useCallback(() => {
@@ -493,6 +426,25 @@ export function useDashboardHomeLayout(user: Me | null | undefined) {
     [saveWidgets]
   );
 
+  const applyCalendarPreset = useCallback(
+    async (
+      presetWidgets: CalendarWidgetType[],
+      presetSpans: Partial<Record<CalendarWidgetType, number>>
+    ) => {
+      const nextWidgets = normalizeCalendarWidgets(presetWidgets);
+      const nextSpans = normalizeCalendarSpans(nextWidgets, presetSpans);
+      const enforced = enforceCalendarLimit(nextWidgets, nextSpans);
+
+      setCalendarWidgets(enforced.widgets);
+      setCalendarWidgetSpans(enforced.spans);
+      calendarWidgetsRef.current = enforced.widgets;
+      calendarWidgetSpansRef.current = enforced.spans;
+
+      await saveWidgets();
+    },
+    [saveWidgets]
+  );
+
   return {
     widgets,
     widgetSpans,
@@ -500,7 +452,6 @@ export function useDashboardHomeLayout(user: Me | null | undefined) {
     calendarWidgets,
     calendarWidgetSpans,
     isWidgetsEditing: editingSection === "widgets",
-    isCalendarEditing: editingSection === "calendar",
     isChartWidgetsEditing: editingSection === "charts",
     valueMode,
     setValueMode,
@@ -509,16 +460,12 @@ export function useDashboardHomeLayout(user: Me | null | undefined) {
     reorderWidgets,
     toggleChartWidget,
     reorderChartWidgets,
-    toggleCalendarWidget,
-    resizeCalendarWidget,
-    reorderCalendarWidgets,
     enterWidgetsEdit,
     toggleWidgetsEdit,
-    enterCalendarEdit,
-    toggleCalendarEdit,
     enterChartWidgetsEdit,
     toggleChartWidgetsEdit,
     applyPreset,
     applyChartPreset,
+    applyCalendarPreset,
   };
 }

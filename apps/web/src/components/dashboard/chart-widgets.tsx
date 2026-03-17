@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentType, Fragment, useMemo } from "react";
+import { type ComponentType, Fragment, useMemo, useRef } from "react";
 import {
   DndContext,
   type DragEndEvent,
@@ -22,6 +22,7 @@ import { ChartWidgetPresets } from "@/components/dashboard/chart-widget-presets"
 import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 import { countRangeDays } from "@/components/dashboard/chart-comparison-utils";
 import { useDashboardAssistantContextStore } from "@/stores/dashboard-assistant-context";
 import { useDateRangeStore } from "@/stores/date-range";
@@ -163,6 +164,7 @@ export function ChartWidgets({
   onToggleEdit,
   onApplyPreset,
 }: ChartWidgetsProps) {
+  const exportRef = useRef<HTMLDivElement | null>(null);
   const setFocusedWidgetId = useDashboardAssistantContextStore(
     (state) => state.setFocusedWidgetId
   );
@@ -323,7 +325,7 @@ export function ChartWidgets({
   };
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3" ref={exportRef}>
       <div className="flex flex-wrap items-center gap-2 xl:justify-end">
         {showDatePicker && bounds && resolvedRange ? (
           <div className="min-w-[13rem]">
@@ -381,158 +383,176 @@ export function ChartWidgets({
           </div>
         ) : null}
 
-        <ChartWidgetPresets
-          currentWidgets={enabledWidgets}
-          onApplyPreset={onApplyPreset || (() => undefined)}
-        />
-        <Button className={ACTION_BUTTON_CLASS} onClick={onToggleEdit}>
+        <div data-widget-share-ignore="true">
+          <ChartWidgetPresets
+            currentWidgets={enabledWidgets}
+            onApplyPreset={onApplyPreset || (() => undefined)}
+          />
+        </div>
+        {!isEditing ? (
+          <WidgetShareButton
+            targetRef={exportRef}
+            title="chart-widgets"
+            successMessage="Chart widgets PNG downloaded"
+            errorMessage="Failed to export chart widgets PNG"
+            buttonLabel="Share"
+            className={ACTION_BUTTON_CLASS}
+          />
+        ) : null}
+        <Button
+          className={ACTION_BUTTON_CLASS}
+          data-widget-share-ignore="true"
+          onClick={onToggleEdit}
+        >
           <EditWidgets className="size-3.5 fill-white/75" />
           <span>{isEditing ? "Save" : "Customize widgets"}</span>
         </Button>
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <SortableContext items={displayWidgets} strategy={rectSortingStrategy}>
-          <div className="grid auto-rows-min gap-1.5 md:grid-cols-4 2xl:grid-cols-3">
-            {accountId ? (
-              displayWidgets.map((widgetType, index) => {
-                const resolvedKey =
-                  CHART_WIDGET_KEY_ALIASES[widgetType] ?? widgetType;
-                const CardComponent = chartCardComponents[resolvedKey] as
-                  | ComponentType<ChartWidgetCardProps>
-                  | undefined;
-                if (!CardComponent) return null;
+      <div>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <SortableContext items={displayWidgets} strategy={rectSortingStrategy}>
+            <div className="grid auto-rows-min gap-1.5 md:grid-cols-4 2xl:grid-cols-3">
+              {accountId ? (
+                displayWidgets.map((widgetType, index) => {
+                  const resolvedKey =
+                    CHART_WIDGET_KEY_ALIASES[widgetType] ?? widgetType;
+                  const CardComponent = chartCardComponents[resolvedKey] as
+                    | ComponentType<ChartWidgetCardProps>
+                    | undefined;
+                  if (!CardComponent) return null;
 
-                return (
-                  <SortableWidget
-                    key={`${widgetType}-${index}`}
-                    id={widgetType}
-                    disabled={!isEditing}
-                  >
-                    <div
-                      className="relative h-124 w-full cursor-pointer"
-                      onPointerEnter={() => setFocusedWidgetId(widgetType)}
-                      onFocusCapture={() => setFocusedWidgetId(widgetType)}
-                      onDoubleClick={handleDoubleClick}
-                      onClick={() => {
-                        if (isEditing) onToggleWidget?.(widgetType);
-                      }}
+                  return (
+                    <SortableWidget
+                      key={`${widgetType}-${index}`}
+                      id={widgetType}
+                      disabled={!isEditing}
                     >
-                      {isEditing ? (
-                        <div className="absolute right-5 top-5 z-10 flex items-center gap-2">
-                          <div className="flex size-6 items-center justify-center ring ring-white/5">
-                            <svg
-                              viewBox="0 0 24 24"
-                              className="size-3 fill-white"
-                            >
-                              <path d="M20.285 6.708a1 1 0 0 1 0 1.414l-9 9a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L10.5 14.5l8.293-8.293a1 1 0 0 1 1.492.5z" />
-                            </svg>
+                      <div
+                        className="relative h-124 w-full cursor-pointer"
+                        onPointerEnter={() => setFocusedWidgetId(widgetType)}
+                        onFocusCapture={() => setFocusedWidgetId(widgetType)}
+                        onDoubleClick={handleDoubleClick}
+                        onClick={() => {
+                          if (isEditing) onToggleWidget?.(widgetType);
+                        }}
+                      >
+                        {isEditing ? (
+                          <div className="absolute right-5 top-5 z-10 flex items-center gap-2">
+                            <div className="flex size-6 items-center justify-center ring ring-white/5">
+                              <svg
+                                viewBox="0 0 24 24"
+                                className="size-3 fill-white"
+                              >
+                                <path d="M20.285 6.708a1 1 0 0 1 0 1.414l-9 9a1 1 0 0 1-1.414 0l-4-4a1 1 0 0 1 1.414-1.414L10.5 14.5l8.293-8.293a1 1 0 0 1 1.492.5z" />
+                              </svg>
+                            </div>
+
+                            <GripVertical className="size-4 text-white/30" />
                           </div>
+                        ) : null}
 
-                          <GripVertical className="size-4 text-white/30" />
-                        </div>
-                      ) : null}
+                        <CardComponent
+                          accountId={accountId}
+                          isEditing={isEditing}
+                          className="h-full w-full"
+                        />
 
-                      <CardComponent
-                        accountId={accountId}
-                        isEditing={isEditing}
-                        className="h-full w-full"
-                      />
-
-                      {isEditing ? (
-                        <>
-                          <div
-                            className="absolute left-0 top-0 h-3 w-full cursor-ns-resize"
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                          <div
-                            className="absolute bottom-0 left-0 h-3 w-full cursor-ns-resize"
-                            onPointerDown={(event) => {
-                              event.preventDefault();
-                              event.stopPropagation();
-                            }}
-                            onClick={(event) => event.stopPropagation()}
-                          />
-                        </>
-                      ) : null}
-                    </div>
-                  </SortableWidget>
-                );
-              })
-            ) : (
-              <Fragment>
-                {Array.from({ length: 3 }).map((_, index) => (
-                  <WidgetWrapper
-                    key={`empty-${index}`}
-                    className="h-max w-full p-1"
-                    header={
-                      <div className="widget-header flex w-full items-center justify-between p-3.5">
-                        <Skeleton className="h-5 w-24 rounded-none bg-sidebar-accent" />
-                        <Skeleton className="h-5 w-16 rounded-none bg-sidebar-accent" />
-                      </div>
-                    }
-                  >
-                    <div className="flex h-full flex-col items-start justify-between gap-6 p-3.5">
-                      <div className="flex gap-2">
-                        <Skeleton className="h-4 w-16 rounded-none bg-sidebar" />
-                        <Skeleton className="h-4 w-24 rounded-none bg-sidebar" />
-                        <Skeleton className="h-4 w-32 rounded-none bg-sidebar" />
-                      </div>
-
-                      <div className="flex h-max w-full gap-4">
-                        <div className="flex h-full w-16 flex-col gap-4 pb-8">
-                          {Array.from({ length: 8 }).map((_, rowIndex) => (
-                            <Skeleton
-                              key={rowIndex}
-                              className="h-4 w-full rounded-none bg-sidebar"
+                        {isEditing ? (
+                          <>
+                            <div
+                              className="absolute left-0 top-0 h-3 w-full cursor-ns-resize"
+                              onPointerDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                              onClick={(event) => event.stopPropagation()}
                             />
-                          ))}
+                            <div
+                              className="absolute bottom-0 left-0 h-3 w-full cursor-ns-resize"
+                              onPointerDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                            />
+                          </>
+                        ) : null}
+                      </div>
+                    </SortableWidget>
+                  );
+                })
+              ) : (
+                <Fragment>
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <WidgetWrapper
+                      key={`empty-${index}`}
+                      className="h-max w-full p-1"
+                      header={
+                        <div className="widget-header flex w-full items-center justify-between p-3.5">
+                          <Skeleton className="h-5 w-24 rounded-none bg-sidebar-accent" />
+                          <Skeleton className="h-5 w-16 rounded-none bg-sidebar-accent" />
+                        </div>
+                      }
+                    >
+                      <div className="flex h-full flex-col items-start justify-between gap-6 p-3.5">
+                        <div className="flex gap-2">
+                          <Skeleton className="h-4 w-16 rounded-none bg-sidebar" />
+                          <Skeleton className="h-4 w-24 rounded-none bg-sidebar" />
+                          <Skeleton className="h-4 w-32 rounded-none bg-sidebar" />
                         </div>
 
-                        <div className="flex w-full flex-col gap-4">
-                          <Skeleton className="h-full w-full rounded-none bg-sidebar" />
-
-                          <div className="flex h-max w-full gap-4">
-                            {Array.from({ length: 7 }).map((_, rowIndex) => (
+                        <div className="flex h-max w-full gap-4">
+                          <div className="flex h-full w-16 flex-col gap-4 pb-8">
+                            {Array.from({ length: 8 }).map((_, rowIndex) => (
                               <Skeleton
                                 key={rowIndex}
                                 className="h-4 w-full rounded-none bg-sidebar"
                               />
                             ))}
                           </div>
+
+                          <div className="flex w-full flex-col gap-4">
+                            <Skeleton className="h-full w-full rounded-none bg-sidebar" />
+
+                            <div className="flex h-max w-full gap-4">
+                              {Array.from({ length: 7 }).map((_, rowIndex) => (
+                                <Skeleton
+                                  key={rowIndex}
+                                  className="h-4 w-full rounded-none bg-sidebar"
+                                />
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </WidgetWrapper>
-                ))}
-              </Fragment>
-            )}
+                    </WidgetWrapper>
+                  ))}
+                </Fragment>
+              )}
 
-            {isEditing
-              ? availableWidgets.map((widgetType, index) => {
-                  const CardComponent = chartCardComponents[widgetType];
-                  return (
-                    <div
-                      key={`available-${widgetType}-${index}`}
-                      className="h-124 opacity-50 transition-all duration-150 hover:opacity-100"
-                      onClick={() => onToggleWidget?.(widgetType)}
-                    >
-                      <CardComponent
-                        accountId={accountId}
-                        isEditing={true}
-                        className="h-full w-full"
-                      />
-                    </div>
-                  );
-                })
-              : null}
-          </div>
-        </SortableContext>
-      </DndContext>
+              {isEditing
+                ? availableWidgets.map((widgetType, index) => {
+                    const CardComponent = chartCardComponents[widgetType];
+                    return (
+                      <div
+                        key={`available-${widgetType}-${index}`}
+                        className="h-124 opacity-50 transition-all duration-150 hover:opacity-100"
+                        onClick={() => onToggleWidget?.(widgetType)}
+                      >
+                        <CardComponent
+                          accountId={accountId}
+                          isEditing={true}
+                          className="h-full w-full"
+                        />
+                      </div>
+                    );
+                  })
+                : null}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
     </div>
   );
 }

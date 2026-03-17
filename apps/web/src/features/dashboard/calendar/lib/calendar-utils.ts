@@ -238,8 +238,43 @@ export function buildMonthSummary(
           current.totalProfit < worst.totalProfit ? current : worst
         )
       : null;
+  const totalDaysInRange =
+    Math.floor(
+      (startOfDay(range.end).getTime() - startOfDay(range.start).getTime()) /
+        86400000
+    ) + 1;
+  const weekCount = Math.max(1, Math.ceil(totalDaysInRange / 7));
+  const weeklyBreakdown = Array.from({ length: weekCount }, (_, index) => {
+    const weekStart = addDays(startOfDay(range.start), index * 7);
+    const daysRemaining = Math.max(
+      0,
+      Math.floor(
+        (startOfDay(range.end).getTime() - startOfDay(weekStart).getTime()) /
+          86400000
+      )
+    );
+    const weekEnd = endOfDay(addDays(weekStart, Math.min(6, daysRemaining)));
+    const weekStartISO = toYMD(weekStart);
+    const weekEndISO = toYMD(weekEnd);
+    const weekDays = days.filter(
+      (day) => day.dateISO >= weekStartISO && day.dateISO <= weekEndISO
+    );
+
+    return {
+      label: `Week ${index + 1}`,
+      startLabel: formatShortDate(weekStart),
+      endLabel: formatShortDate(weekEnd),
+      totalProfit: weekDays.reduce(
+        (sum, day) => sum + Number(day.totalProfit || 0),
+        0
+      ),
+      totalTrades: weekDays.reduce((sum, day) => sum + Number(day.count || 0), 0),
+      activeDays: weekDays.filter((day) => day.count > 0).length,
+    };
+  });
 
   return {
+    activeDays,
     totalProfit,
     totalTrades,
     winDays,
@@ -249,6 +284,7 @@ export function buildMonthSummary(
     avgPerActiveDay,
     bestDay,
     worstDay,
+    weeklyBreakdown,
     startLabel: formatShortDate(range.start),
     endLabel: formatShortDate(range.end),
   };

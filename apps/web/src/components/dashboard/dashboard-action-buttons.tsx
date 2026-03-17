@@ -1,10 +1,23 @@
 "use client";
 
+import type { RefObject } from "react";
+import { ChevronDown } from "lucide-react";
+
 import EditWidgets from "@/public/icons/edit-widgets.svg";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { WidgetPresets } from "./widget-presets";
 import { exportWidgetsAsJson, exportWidgetsAsCsv } from "./widget-export";
+import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 import type { WidgetType } from "./widgets";
 import type { WidgetValueMode } from "@/features/dashboard/widgets/lib/widget-shared";
 
@@ -20,9 +33,12 @@ type Props = {
   valueMode?: WidgetValueMode;
   onValueModeChange?: (mode: WidgetValueMode) => void;
   currencyLabel?: string;
+  currencyOptions?: string[];
+  onCurrencyCodeChange?: (currencyCode: string) => void;
   accountAction?: DashboardAccountAction | null;
   widgets?: WidgetType[];
   widgetSpans?: Partial<Record<WidgetType, number>>;
+  widgetsExportTargetRef?: RefObject<HTMLElement | null>;
   leadingActions?: React.ReactNode;
   onApplyPreset?: (
     widgets: WidgetType[],
@@ -35,9 +51,12 @@ const DashboardActionButtons: React.FC<Props> = ({
   valueMode = "usd",
   onValueModeChange,
   currencyLabel = "Currency",
+  currencyOptions = [],
+  onCurrencyCodeChange,
   accountAction = null,
   widgets = [],
   widgetSpans = {},
+  widgetsExportTargetRef,
   leadingActions,
   onApplyPreset,
 }) => {
@@ -67,42 +86,87 @@ const DashboardActionButtons: React.FC<Props> = ({
       exportWidgetsAsCsv(widgets, widgetSpans, fileName);
     }
   };
+  const hasCurrencySelector = currencyOptions.length > 1 && !!onCurrencyCodeChange;
+  const modeButtonClassName = (isActive: boolean) =>
+    cn(
+      "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
+      isActive
+        ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
+        : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
+    );
 
   return (
     <div className="flex gap-2 items-center">
       <div className="bg-white w-max h-max flex items-center gap-1 p-[3px] dark:bg-muted/15 rounded-md ring ring-white/5">
-        <Button
-          onClick={() => onValueModeChange?.("usd")}
-          className={cn(
-            "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
-            valueMode === "usd"
-              ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
-          )}
-        >
-          <span className="px-2">{currencyLabel}</span>
-        </Button>
+        {hasCurrencySelector ? (
+          <div className="flex items-center gap-px">
+            <Button
+              onClick={() => onValueModeChange?.("usd")}
+              className={cn(modeButtonClassName(valueMode === "usd"), "rounded-r-none pr-2")}
+            >
+              <span className="px-2">{currencyLabel}</span>
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  onClick={() => onValueModeChange?.("usd")}
+                  className={cn(
+                    modeButtonClassName(valueMode === "usd"),
+                    "min-w-0 rounded-l-none px-2"
+                  )}
+                  aria-label="Choose preferred currency"
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                className="w-44 rounded-md border border-white/5 bg-sidebar p-1 text-white"
+              >
+                <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-white/40">
+                  Preferred currency
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-white/5" />
+                <DropdownMenuRadioGroup
+                  value={currencyLabel}
+                  onValueChange={(value) => {
+                    onCurrencyCodeChange?.(value);
+                    onValueModeChange?.("usd");
+                  }}
+                >
+                  {currencyOptions.map((currencyCode) => (
+                    <DropdownMenuRadioItem
+                      key={currencyCode}
+                      value={currencyCode}
+                      className="rounded-sm px-3 py-2 text-xs text-white/80 focus:bg-sidebar-accent focus:text-white"
+                    >
+                      {currencyCode}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <Button
+            onClick={() => onValueModeChange?.("usd")}
+            className={modeButtonClassName(valueMode === "usd")}
+          >
+            <span className="px-2">{currencyLabel}</span>
+          </Button>
+        )}
 
         <Button
           onClick={() => onValueModeChange?.("percent")}
-          className={cn(
-            "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
-            valueMode === "percent"
-              ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
-          )}
+          className={modeButtonClassName(valueMode === "percent")}
         >
           <span className="px-0">Return (%)</span>
         </Button>
 
         <Button
           onClick={() => onValueModeChange?.("rr")}
-          className={cn(
-            "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
-            valueMode === "rr"
-              ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-              : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
-          )}
+          className={modeButtonClassName(valueMode === "rr")}
         >
           <span className="px-2">RR</span>
         </Button>
@@ -126,6 +190,16 @@ const DashboardActionButtons: React.FC<Props> = ({
         onApplyPreset={onApplyPreset || (() => {})}
         onExport={handleExport}
       />
+      {!isEditing && widgetsExportTargetRef ? (
+        <WidgetShareButton
+          targetRef={widgetsExportTargetRef}
+          title="dashboard-widgets"
+          successMessage="Widgets PNG downloaded"
+          errorMessage="Failed to export widgets PNG"
+          buttonLabel="Share"
+          className="h-[38px] rounded-md px-3"
+        />
+      ) : null}
       <Button
         onClick={onToggleEdit}
         className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-md hover:bg-sidebar-accent px-3"

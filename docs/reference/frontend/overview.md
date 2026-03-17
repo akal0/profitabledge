@@ -218,6 +218,8 @@ At runtime, browser-side server origin resolution is intentionally stricter than
 - the server proxy strips upstream compression and transfer headers before returning proxied auth/tRPC responses, so browsers do not attempt to decode already-decoded bodies on split deployments
 - the assistant surface lives at `/assistant`, and the legacy `/ai` path is kept as a redirect so stale bundles or old navigation links do not 404 in production
 - unfinished community discovery surfaces are intentionally hidden from the sidebar, command palette, settings navigation, notification deep-links, and public-profile routing until feed, leaderboard, and public-profile paths are ready to ship
+- dashboard workspace warmup should only gate on the first account-critical data needed to paint the shell; slower queries like goals and asset-profitability breakdowns should warm in the background so `/dashboard` becomes interactive sooner
+- the trades table reference-data hook should treat symbols, tag catalogs, sample-gate metadata, and account bounds as warm cache rather than always-fresh data, and live open-trade refreshes should stay account-scoped instead of invalidating every trades query across the app
 
 ## When working on a new section
 

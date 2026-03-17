@@ -210,9 +210,6 @@ export function hasPrefetchedDashboardWorkspace(targetPath: string) {
       : trpcOptions.accounts.liveMetrics.queryOptions({
           accountId: selectedAccountId,
         }).queryKey,
-    trpcOptions.goals.list.queryOptions({
-      accountId: selectedAccountId || undefined,
-    }).queryKey,
   ];
 
   if (rangeState?.visibleRange) {
@@ -223,11 +220,6 @@ export function hasPrefetchedDashboardWorkspace(targetPath: string) {
         endISO: rangeState.visibleRange.end.toISOString(),
       }).queryKey,
       trpcOptions.accounts.rangeSummary.queryOptions({
-        accountId: selectedAccountId,
-        startISO: rangeState.visibleRange.start.toISOString(),
-        endISO: rangeState.visibleRange.end.toISOString(),
-      }).queryKey,
-      trpcOptions.accounts.profitByAssetRange.queryOptions({
         accountId: selectedAccountId,
         startISO: rangeState.visibleRange.start.toISOString(),
         endISO: rangeState.visibleRange.end.toISOString(),
@@ -268,10 +260,6 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
     queryClient.fetchQuery({
       ...trpcOptions.accounts.list.queryOptions(),
       staleTime: 30_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.connections.list.queryOptions(),
-      staleTime: 15_000,
     }),
   ]);
 
@@ -320,12 +308,6 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
           }),
           staleTime: 4_000,
         }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.goals.list.queryOptions({
-        accountId: selectedAccountId || undefined,
-      }),
-      staleTime: 60_000,
-    }),
   ];
 
   if (visibleRange) {
@@ -340,14 +322,6 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
       }),
       queryClient.prefetchQuery({
         ...trpcOptions.accounts.rangeSummary.queryOptions({
-          accountId: selectedAccountId,
-          startISO: visibleRange.start.toISOString(),
-          endISO: visibleRange.end.toISOString(),
-        }),
-        staleTime: 30_000,
-      }),
-      queryClient.prefetchQuery({
-        ...trpcOptions.accounts.profitByAssetRange.queryOptions({
           accountId: selectedAccountId,
           startISO: visibleRange.start.toISOString(),
           endISO: visibleRange.end.toISOString(),
@@ -426,8 +400,18 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
       staleTime: 60_000,
     }),
     queryClient.prefetchQuery({
+      ...trpcOptions.connections.list.queryOptions(),
+      staleTime: 15_000,
+    }),
+    queryClient.prefetchQuery({
       ...trpcOptions.accounts.lossesByAssetRange.queryOptions({
         accountId: selectedAccountId,
+      }),
+      staleTime: 60_000,
+    }),
+    queryClient.prefetchQuery({
+      ...trpcOptions.goals.list.queryOptions({
+        accountId: selectedAccountId || undefined,
       }),
       staleTime: 60_000,
     }),
@@ -441,6 +425,14 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
 
   if (visibleRange) {
     backgroundWarmups.push(
+      queryClient.prefetchQuery({
+        ...trpcOptions.accounts.profitByAssetRange.queryOptions({
+          accountId: selectedAccountId,
+          startISO: visibleRange.start.toISOString(),
+          endISO: visibleRange.end.toISOString(),
+        }),
+        staleTime: 30_000,
+      }),
       prefetchDashboardChartTrades({
         accountId: selectedAccountId,
         startISO: visibleRange.start.toISOString(),

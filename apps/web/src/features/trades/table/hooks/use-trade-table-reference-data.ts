@@ -47,6 +47,52 @@ type UseTradeTableReferenceDataArgs = {
   filters: ServerFilterArgs;
 };
 
+const TRADE_REFERENCE_STALE_TIME = 60_000;
+const TRADE_LIVE_REFRESH_INTERVAL = 10_000;
+
+function queryKeyIncludesAccountId(
+  value: unknown,
+  accountId: string | null
+): boolean {
+  if (!accountId) {
+    return false;
+  }
+
+  if (value === accountId) {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => queryKeyIncludesAccountId(item, accountId));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value).some((item) =>
+      queryKeyIncludesAccountId(item, accountId)
+    );
+  }
+
+  return false;
+}
+
+function queryKeyIncludesSegment(value: unknown, segment: string): boolean {
+  if (value === segment) {
+    return true;
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((item) => queryKeyIncludesSegment(item, segment));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value).some((item) =>
+      queryKeyIncludesSegment(item, segment)
+    );
+  }
+
+  return false;
+}
+
 export function useTradeTableReferenceData({
   accountId,
   filters,
@@ -55,8 +101,8 @@ export function useTradeTableReferenceData({
     trpcOptions.users.getAdvancedMetricsPreferences.queryOptions();
   const { data: advancedPrefsRaw, isLoading: isLoadingAdvancedPrefs } = useQuery({
     ...advancedPrefsQuery,
-    staleTime: 0,
-    refetchOnMount: true,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
   });
   const advancedPrefs = advancedPrefsRaw as
     | AdvancedMetricsPreferences
@@ -74,6 +120,7 @@ export function useTradeTableReferenceData({
   const { data: boundsRaw, isLoading: isLoadingBounds } = useQuery({
     ...boundsOpts,
     enabled: Boolean(accountId),
+    staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const bounds = boundsRaw as AccountOpenBounds | undefined;
   const minBound = bounds?.minISO ? new Date(bounds.minISO) : undefined;
@@ -85,6 +132,7 @@ export function useTradeTableReferenceData({
   const { data: allSymbolsRaw, isLoading: isLoadingSymbols } = useQuery({
     ...symbolsOpts,
     enabled: Boolean(accountId),
+    staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allSymbols = React.useMemo(
     () => (allSymbolsRaw as string[] | undefined) ?? [],
@@ -97,6 +145,7 @@ export function useTradeTableReferenceData({
   const { data: allKillzonesRaw, isLoading: isLoadingKillzones } = useQuery({
     ...killzonesOpts,
     enabled: Boolean(accountId),
+    staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allKillzones = React.useMemo(
     () => (allKillzonesRaw as NamedColorTag[] | undefined) ?? [],
@@ -109,6 +158,7 @@ export function useTradeTableReferenceData({
   const { data: allSessionTagsRaw, isLoading: isLoadingSessionTags } = useQuery({
     ...sessionTagsOpts,
     enabled: Boolean(accountId),
+    staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allSessionTags = React.useMemo(
     () => (allSessionTagsRaw as NamedColorTag[] | undefined) ?? [],
@@ -121,6 +171,7 @@ export function useTradeTableReferenceData({
   const { data: allModelTagsRaw, isLoading: isLoadingModelTags } = useQuery({
     ...modelTagsOpts,
     enabled: Boolean(accountId),
+    staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allModelTags = React.useMemo(
     () => (allModelTagsRaw as NamedColorTag[] | undefined) ?? [],
@@ -133,6 +184,7 @@ export function useTradeTableReferenceData({
   const { data: acctStatsRaw, isLoading: isLoadingStats } = useQuery({
     ...statsOpts,
     enabled: Boolean(accountId),
+    staleTime: 30_000,
   });
   const acctStats = acctStatsRaw as AccountStatsSummary | undefined;
 
@@ -142,8 +194,8 @@ export function useTradeTableReferenceData({
   const { data: liveMetrics } = useQuery({
     ...liveMetricsOpts,
     enabled: Boolean(accountId),
-    refetchInterval: 2000,
-    refetchIntervalInBackground: true,
+    staleTime: 5_000,
+    refetchInterval: TRADE_LIVE_REFRESH_INTERVAL,
   });
   const liveOpenTrades = React.useMemo(
     () =>
@@ -209,8 +261,12 @@ export function useTradeTableReferenceData({
       return;
     }
 
-    queryClient.invalidateQueries({ queryKey: [["trades"]] });
-    queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" });
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        queryKeyIncludesSegment(query.queryKey, "trades") &&
+        queryKeyIncludesAccountId(query.queryKey, accountId),
+      refetchType: "active",
+    });
   }, [accountId, liveTradeSignature]);
 
   const sampleGateOpts = trpcOptions.trades.getSampleGateStatus.queryOptions({
@@ -219,6 +275,7 @@ export function useTradeTableReferenceData({
   const { data: sampleGateStatusRaw, isLoading: isLoadingSampleGate } = useQuery({
     ...sampleGateOpts,
     enabled: Boolean(accountId),
+    staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const sampleGateStatus = sampleGateStatusRaw as
     | SampleGateStatusRow[]

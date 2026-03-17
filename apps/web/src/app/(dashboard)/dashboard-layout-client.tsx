@@ -54,7 +54,6 @@ const HELD_BACK_COMMUNITY_ROUTE_PREFIXES = [
   "/dashboard/feed",
   "/dashboard/leaderboard",
   "/dashboard/achievements",
-  "/dashboard/news",
   "/dashboard/settings/social",
 ] as const;
 

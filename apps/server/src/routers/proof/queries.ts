@@ -19,6 +19,7 @@ import {
   trade,
   tradeTrustEvent,
 } from "../../db/schema/trading";
+import { listPublicProofLiveTrades } from "../../lib/public-proof/live-trades";
 import { buildPublicProofPath } from "../../lib/public-proof/share-slug";
 import {
   getTradeOriginLabel,
@@ -78,7 +79,7 @@ function buildVerificationLabel(verificationLevel: string | null | undefined) {
 
 const publicShareCursorSchema = z
   .object({
-    createdAtISO: z.string(),
+    sortAtISO: z.string(),
     id: z.string(),
   })
   .optional();
@@ -203,23 +204,28 @@ export const proofQueryProcedures = {
             ),
         ]);
 
+      const closedTradeRows = tradeRows.filter(
+        (row) => row.closeTime != null || row.outcome != null
+      );
       const pnls = tradeRows.map((row) => parseNumber(row.profit));
       const totalTrades = tradeRows.length;
       const totalPnl = pnls.reduce((sum, pnl) => sum + pnl, 0);
-      const wins = tradeRows.filter((row) => {
+      const wins = closedTradeRows.filter((row) => {
         if (row.outcome) {
           return row.outcome === "Win" || row.outcome === "PW";
         }
         return parseNumber(row.profit) > 0;
       }).length;
-      const closedLosses = tradeRows.filter((row) => {
+      const closedLosses = closedTradeRows.filter((row) => {
         if (row.outcome) {
           return row.outcome === "Loss";
         }
         return parseNumber(row.profit) < 0;
       }).length;
       const winRate =
-        totalTrades > 0 ? Number(((wins / totalTrades) * 100).toFixed(1)) : 0;
+        closedTradeRows.length > 0
+          ? Number(((wins / closedTradeRows.length) * 100).toFixed(1))
+          : 0;
       const grossProfit = pnls
         .filter((value) => value > 0)
         .reduce((sum, value) => sum + value, 0);
@@ -233,7 +239,7 @@ export const proofQueryProcedures = {
           ? 999
           : 0;
 
-      const rrValues = tradeRows
+      const rrValues = closedTradeRows
         .map((row) =>
           parseNumber(row.realisedRR != null ? row.realisedRR : row.plannedRR)
         )
@@ -248,7 +254,7 @@ export const proofQueryProcedures = {
             )
           : 0;
 
-      const sortedForCurve = [...tradeRows].sort(
+      const sortedForCurve = [...closedTradeRows].sort(
         (left, right) =>
           resolveTradeTimestamp(left).getTime() -
           resolveTradeTimestamp(right).getTime()
@@ -350,19 +356,41 @@ export const proofQueryProcedures = {
         originTypes: z
           .array(z.enum(["broker_sync", "csv_import", "manual_entry"]))
           .optional(),
+        statuses: z.array(z.enum(["live", "closed"])).optional(),
         editedOnly: z.boolean().optional(),
       })
     )
     .query(async ({ input }) => {
       const share = await resolveActivePublicShareOrThrow(input);
+      const includeLiveRows = !input.cursor;
+      const liveRows = includeLiveRows
+        ? await listPublicProofLiveTrades({
+            accountId: share.accountId,
+            q: input.q,
+            originTypes: input.originTypes,
+            statuses: input.statuses,
+          })
+        : [];
+
+      if (input.statuses?.length === 1 && input.statuses[0] === "live") {
+        return {
+          items: liveRows.slice(0, input.limit),
+          nextCursor: undefined,
+        };
+      }
+
+      const tradeSortTimestamp = sql<Date>`COALESCE(${trade.closeTime}, ${trade.openTime}, ${trade.createdAt})`;
       const whereClauses: SQL[] = [eq(trade.accountId, share.accountId)];
 
       if (input.cursor) {
-        const cursorDate = new Date(input.cursor.createdAtISO);
+        const cursorDate = new Date(input.cursor.sortAtISO);
         whereClauses.push(
           or(
-            lt(trade.createdAt, cursorDate),
-            and(eq(trade.createdAt, cursorDate), lt(trade.id, input.cursor.id))
+            sql`${tradeSortTimestamp} < ${cursorDate}`,
+            and(
+              sql`${tradeSortTimestamp} = ${cursorDate}`,
+              lt(trade.id, input.cursor.id)
+            )
           )!
         );
       }
@@ -391,6 +419,10 @@ export const proofQueryProcedures = {
         whereClauses.push(inArray(trade.originType, input.originTypes));
       }
 
+      if (input.statuses?.length === 1 && input.statuses[0] === "closed") {
+        whereClauses.push(sql`${trade.closeTime} IS NOT NULL`);
+      }
+
       if (input.editedOnly) {
         whereClauses.push(
           sql`EXISTS (
@@ -412,43 +444,58 @@ export const proofQueryProcedures = {
             OR LOWER(COALESCE(${trade.tradeType}, '')) LIKE ${searchTerm}
             OR LOWER(COALESCE(${trade.outcome}, '')) LIKE ${searchTerm}
             OR LOWER(COALESCE(${trade.originLabel}, '')) LIKE ${searchTerm}
+            OR LOWER(CASE WHEN ${trade.closeTime} IS NULL THEN 'live open' ELSE 'closed' END) LIKE ${searchTerm}
           )`
         );
       }
 
-      const rows = await db
-        .select({
-          id: trade.id,
-          symbol: trade.symbol,
-          tradeType: trade.tradeType,
-          volume: sql<number | null>`CAST(${trade.volume} AS NUMERIC)`,
-          openPrice: sql<number | null>`CAST(${trade.openPrice} AS NUMERIC)`,
-          closePrice: sql<number | null>`CAST(${trade.closePrice} AS NUMERIC)`,
-          profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
-          commissions: sql<
-            number | null
-          >`CAST(${trade.commissions} AS NUMERIC)`,
-          swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
-          realisedRR: sql<number | null>`CAST(${trade.realisedRR} AS NUMERIC)`,
-          plannedRR: sql<number | null>`CAST(${trade.plannedRR} AS NUMERIC)`,
-          openTime: trade.openTime,
-          closeTime: trade.closeTime,
-          createdAt: trade.createdAt,
-          outcome: trade.outcome,
-          tradeDurationSeconds: trade.tradeDurationSeconds,
-          originType: trade.originType,
-          originLabel: trade.originLabel,
-          ticket: trade.ticket,
-          useBrokerData: trade.useBrokerData,
-          brokerMeta: trade.brokerMeta,
-        })
-        .from(trade)
-        .where(and(...whereClauses))
-        .orderBy(desc(trade.createdAt), desc(trade.id))
-        .limit(input.limit + 1);
+      const remainingSlots = Math.max(input.limit - liveRows.length, 0);
+      const closedQueryLimit = remainingSlots > 0 ? remainingSlots + 1 : 0;
+      const rows =
+        closedQueryLimit > 0
+          ? await db
+              .select({
+                id: trade.id,
+                symbol: trade.symbol,
+                tradeType: trade.tradeType,
+                volume: sql<number | null>`CAST(${trade.volume} AS NUMERIC)`,
+                openPrice: sql<
+                  number | null
+                >`CAST(${trade.openPrice} AS NUMERIC)`,
+                closePrice: sql<
+                  number | null
+                >`CAST(${trade.closePrice} AS NUMERIC)`,
+                profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
+                commissions: sql<
+                  number | null
+                >`CAST(${trade.commissions} AS NUMERIC)`,
+                swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
+                realisedRR: sql<
+                  number | null
+                >`CAST(${trade.realisedRR} AS NUMERIC)`,
+                plannedRR: sql<
+                  number | null
+                >`CAST(${trade.plannedRR} AS NUMERIC)`,
+                openTime: trade.openTime,
+                closeTime: trade.closeTime,
+                createdAt: trade.createdAt,
+                sortAt: tradeSortTimestamp,
+                outcome: trade.outcome,
+                tradeDurationSeconds: trade.tradeDurationSeconds,
+                originType: trade.originType,
+                originLabel: trade.originLabel,
+                ticket: trade.ticket,
+                useBrokerData: trade.useBrokerData,
+                brokerMeta: trade.brokerMeta,
+              })
+              .from(trade)
+              .where(and(...whereClauses))
+              .orderBy(desc(tradeSortTimestamp), desc(trade.id))
+              .limit(closedQueryLimit)
+          : [];
 
-      const hasMore = rows.length > input.limit;
-      const pageRows = hasMore ? rows.slice(0, input.limit) : rows;
+      const hasMore = rows.length > remainingSlots;
+      const pageRows = hasMore ? rows.slice(0, remainingSlots) : rows;
       const pageTradeIds = pageRows.map((row) => row.id);
 
       const editedRows =
@@ -475,46 +522,50 @@ export const proofQueryProcedures = {
       );
 
       return {
-        items: pageRows.map((row) => {
-          const originType = resolveTradeOriginType({
-            originType: row.originType,
-            brokerMeta: row.brokerMeta as Record<string, unknown> | null,
-            ticket: row.ticket,
-            useBrokerData: row.useBrokerData,
-            accountVerificationLevel: share.verificationLevel,
-            accountIsVerified: share.isVerified,
-          });
-          return {
-            id: row.id,
-            symbol: row.symbol,
-            tradeType: row.tradeType,
-            volume: row.volume,
-            openPrice: row.openPrice,
-            closePrice: row.closePrice,
-            profit: row.profit,
-            commissions: row.commissions,
-            swap: row.swap,
-            rr:
-              row.realisedRR != null && Number.isFinite(Number(row.realisedRR))
-                ? Number(row.realisedRR)
-                : row.plannedRR != null &&
-                  Number.isFinite(Number(row.plannedRR))
-                ? Number(row.plannedRR)
-                : null,
-            outcome: row.outcome,
-            openTime: row.openTime,
-            closeTime: row.closeTime,
-            createdAt: row.createdAt,
-            durationSeconds: parseNumber(row.tradeDurationSeconds),
-            originType,
-            originLabel: row.originLabel || getTradeOriginLabel(originType),
-            edited: editedTradeIds.has(row.id),
-          };
-        }),
+        items: [
+          ...liveRows,
+          ...pageRows.map((row) => {
+            const originType = resolveTradeOriginType({
+              originType: row.originType,
+              brokerMeta: row.brokerMeta as Record<string, unknown> | null,
+              ticket: row.ticket,
+              useBrokerData: row.useBrokerData,
+              accountVerificationLevel: share.verificationLevel,
+              accountIsVerified: share.isVerified,
+            });
+            return {
+              id: row.id,
+              symbol: row.symbol,
+              tradeType: row.tradeType,
+              volume: row.volume,
+              openPrice: row.openPrice,
+              closePrice: row.closePrice,
+              profit: row.profit,
+              commissions: row.commissions,
+              swap: row.swap,
+              rr:
+                row.realisedRR != null &&
+                Number.isFinite(Number(row.realisedRR))
+                  ? Number(row.realisedRR)
+                  : row.plannedRR != null &&
+                    Number.isFinite(Number(row.plannedRR))
+                  ? Number(row.plannedRR)
+                  : null,
+              outcome: row.outcome,
+              openTime: row.openTime,
+              closeTime: row.closeTime,
+              createdAt: row.createdAt,
+              isLive: row.closeTime == null,
+              durationSeconds: parseNumber(row.tradeDurationSeconds),
+              originType,
+              originLabel: row.originLabel || getTradeOriginLabel(originType),
+              edited: editedTradeIds.has(row.id),
+            };
+          }),
+        ],
         nextCursor: hasMore
           ? {
-              createdAtISO:
-                pageRows[pageRows.length - 1]!.createdAt.toISOString(),
+              sortAtISO: pageRows[pageRows.length - 1]!.sortAt.toISOString(),
               id: pageRows[pageRows.length - 1]!.id,
             }
           : undefined,

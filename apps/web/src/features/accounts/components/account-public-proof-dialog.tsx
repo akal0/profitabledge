@@ -24,11 +24,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
-import { cn } from "@/lib/utils";
-
-const SURFACE_CLASS =
-  "rounded-md border border-white/10 bg-[#141417] p-0 shadow-2xl";
 
 function toAbsoluteUrl(path: string | null | undefined) {
   if (!path) return null;
@@ -114,96 +111,122 @@ export function AccountPublicProofDialog({
           <Globe2 className="h-3.5 w-3.5" />
         </Button>
       </DialogTrigger>
-      <DialogContent
-        className={cn(SURFACE_CLASS, "sm:max-w-lg [&>button]:hidden")}
-      >
-        <DialogHeader className="px-5 pt-5">
-          <DialogTitle className="text-sm font-medium text-white">
-            Public proof page
-          </DialogTitle>
-          <DialogDescription className="text-xs leading-relaxed text-white/45">
-            Share a live, revocable proof page for this account without exposing
-            your internal account ID.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 px-5 py-4">
-          <div className="rounded-md border border-white/8 bg-white/[0.03] p-4">
-            <p className="text-xs font-medium text-white/80">{account.name}</p>
-            <p className="mt-1 text-[11px] text-white/45">
-              {account.broker} · Trades-first public proof page with trust
-              signals
-            </p>
-          </div>
-
-          {!shareStatus?.canCreate ? (
-            <div className="flex gap-3 rounded-md border border-amber-500/20 bg-amber-500/10 p-4">
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
-              <div>
-                <p className="text-xs font-medium text-amber-200">
-                  Set a username first
-                </p>
-                <p className="mt-1 text-[11px] leading-relaxed text-amber-100/75">
-                  Public proof links use your username in the URL. Add a
-                  username in Settings before creating a link.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {shareStatus?.activeShare ? (
-            <div className="space-y-3 rounded-md border border-white/8 bg-white/[0.02] p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-medium text-white/80">
-                    Active link
-                  </p>
-                  <p className="mt-1 break-all text-[11px] text-white/50">
-                    {publicUrl || shareStatus.activeShare.path}
-                  </p>
-                </div>
-                <Badge className="rounded-sm ring-1 ring-teal-500/25 bg-teal-500/15 text-[10px] text-teal-300">
-                  Live
-                </Badge>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-[11px] text-white/45">
-                <span>{shareStatus.activeShare.viewCount} views</span>
-                <span>·</span>
-                <span>
-                  Created{" "}
-                  {new Date(
-                    shareStatus.activeShare.createdAt
-                  ).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-2 rounded-md border border-dashed border-white/10 bg-white/[0.02] p-4">
-              <p className="text-xs font-medium text-white/75">
-                No active public proof link
-              </p>
-              <p className="text-[11px] leading-relaxed text-white/45">
-                Create a revocable URL in the format `/
-                {shareStatus?.username || "username"}/account-slug/trades`.
-              </p>
-            </div>
-          )}
-
-          {shareStatus?.lastShare?.revokedAt ? (
-            <p className="text-[11px] text-white/35">
-              Last revoked{" "}
-              {new Date(shareStatus.lastShare.revokedAt).toLocaleDateString()}
-            </p>
-          ) : null}
+      <DialogContent className="max-h-[80vh] overflow-hidden rounded-md border border-white/5 bg-sidebar p-0 gap-0 sm:max-w-3xl flex flex-col">
+        <div className="px-6 py-5">
+          <DialogHeader className="p-0">
+            <DialogTitle className="text-base font-semibold text-white">
+              Public proof page
+            </DialogTitle>
+            <DialogDescription className="text-xs text-white/40">
+              Share a live, revocable proof page for this account without
+              exposing your internal account ID.
+            </DialogDescription>
+          </DialogHeader>
         </div>
 
-        <DialogFooter className="border-t border-white/5 px-5 py-4 sm:justify-between">
+        <Separator />
+
+        <div className="flex-1 overflow-auto px-6 py-5">
+          <div className="space-y-4">
+            <div className="rounded-sm border border-white/5 bg-sidebar p-4">
+              <p className="text-sm font-medium text-white">{account.name}</p>
+              <p className="mt-1 text-xs text-white/40">
+                {account.broker} · Trades-first public proof page with trust
+                signals
+              </p>
+            </div>
+
+            {!shareStatus?.canCreate ? (
+              <div className="flex gap-3 rounded-sm border border-amber-500/20 bg-amber-500/10 p-4">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                <div>
+                  <p className="text-xs font-medium text-amber-200">
+                    Set a username first
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-amber-100/75">
+                    Public proof links use your username in the URL. Add a
+                    username in Settings before creating a link.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {shareStatus?.activeShare ? (
+              <div className="rounded-sm border border-white/5 bg-sidebar p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-white/80">
+                      Active link
+                    </p>
+                    <p className="mt-1 break-all text-[11px] leading-5 text-white/50">
+                      {publicUrl || shareStatus.activeShare.path}
+                    </p>
+                  </div>
+                  <Badge className="rounded-sm ring-1 ring-teal-500/25 bg-teal-500/15 text-[10px] text-teal-300">
+                    Live
+                  </Badge>
+                </div>
+
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-white/45">
+                  <span>{shareStatus.activeShare.viewCount} views</span>
+                  <span>·</span>
+                  <span>
+                    Created{" "}
+                    {new Date(
+                      shareStatus.activeShare.createdAt
+                    ).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-sm border border-dashed border-white/10 bg-sidebar p-4">
+                <p className="text-xs font-medium text-white/75">
+                  No active public proof link
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-white/45">
+                  Create a revocable URL in the format `/
+                  {shareStatus?.username || "username"}/account-slug/trades`.
+                </p>
+              </div>
+            )}
+
+            <div className="rounded-sm border border-white/5 bg-sidebar p-4">
+              <p className="text-xs font-medium text-white/80">
+                What viewers will see
+              </p>
+              <div className="mt-3 grid gap-2 text-[11px] text-white/45 sm:grid-cols-2">
+                <div className="rounded-sm border border-white/5 bg-sidebar-accent/40 px-3 py-2">
+                  Account identity, broker label, and proof link URL
+                </div>
+                <div className="rounded-sm border border-white/5 bg-sidebar-accent/40 px-3 py-2">
+                  Summary cards, equity curve, and trust counters
+                </div>
+                <div className="rounded-sm border border-white/5 bg-sidebar-accent/40 px-3 py-2">
+                  Read-only trades ledger with source and edited badges
+                </div>
+                <div className="rounded-sm border border-white/5 bg-sidebar-accent/40 px-3 py-2">
+                  No notes, emotions, or internal review metadata
+                </div>
+              </div>
+            </div>
+
+            {shareStatus?.lastShare?.revokedAt ? (
+              <p className="text-[11px] text-white/35">
+                Last revoked{" "}
+                {new Date(shareStatus.lastShare.revokedAt).toLocaleDateString()}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <Separator />
+
+        <DialogFooter className="px-6 py-4 sm:justify-between">
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
-              className="h-9 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+              className="h-9 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
               onClick={() => createOrRotate.mutate({ accountId: account.id })}
               disabled={!shareStatus?.canCreate || isBusy}
             >
@@ -222,7 +245,7 @@ export function AccountPublicProofDialog({
             <Button
               type="button"
               variant="outline"
-              className="h-9 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+              className="h-9 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
               onClick={handleCopy}
               disabled={!shareStatus?.activeShare || isBusy}
             >

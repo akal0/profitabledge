@@ -9,138 +9,129 @@ import {
   BarChart3,
   ChevronRight,
   Copy,
-  Search,
   ShieldCheck,
   TrendingUp,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   getConnectionBadgeClassName,
   getOriginBadgeClassName,
 } from "@/features/public-proof/lib/public-proof-badges";
+import {
+  formatCurrency,
+  formatR,
+} from "@/features/public-proof/lib/public-proof-formatters";
+import { PublicProofEquityCurveCard } from "@/features/public-proof/components/public-proof-equity-curve-card";
+import {
+  PublicProofTradesTable,
+  type PublicProofTradeRow,
+} from "@/features/public-proof/components/public-proof-trades-table";
 import { trpcOptions } from "@/utils/trpc";
 
-function formatCurrency(value: number) {
-  return value.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 
-function formatR(value: number | null) {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}R`;
-}
-
-function formatTimestamp(value?: string | Date | null) {
-  if (!value) return "—";
-  return new Date(value).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatDuration(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "—";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
-}
-
-function Sparkline({ points }: { points: Array<{ x: string; y: number }> }) {
-  if (points.length === 0) {
-    return (
-      <div className="flex h-48 items-center justify-center text-sm text-white/30">
-        No closed trades yet
-      </div>
-    );
-  }
-
-  const values = points.map((point) => point.y);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-
-  const polylinePoints = points
-    .map((point, index) => {
-      const x = (index / Math.max(points.length - 1, 1)) * 100;
-      const y = 100 - ((point.y - min) / range) * 100;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <svg viewBox="0 0 100 100" className="h-48 w-full overflow-visible">
-      <defs>
-        <linearGradient id="proofCurve" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="rgba(45, 212, 191, 0.35)" />
-          <stop offset="100%" stopColor="rgba(45, 212, 191, 0)" />
-        </linearGradient>
-      </defs>
-      <polyline
-        points={`0,100 ${polylinePoints} 100,100`}
-        fill="url(#proofCurve)"
-        stroke="none"
-      />
-      <polyline
-        points={polylinePoints}
-        fill="none"
-        stroke="rgb(45 212 191)"
-        strokeWidth="2"
-        vectorEffect="non-scaling-stroke"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SummaryCard({
+function ProofMetricCard({
   label,
   value,
+  detail,
   icon: Icon,
   tone,
 }: {
   label: string;
   value: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: "positive" | "warning" | "neutral";
+  detail: string;
+  icon: LucideIcon;
+  tone?: "positive" | "warning" | "neutral" | "info";
+}) {
+  const valueClassName =
+    tone === "positive"
+      ? "text-teal-300"
+      : tone === "warning"
+      ? "text-amber-200"
+      : tone === "info"
+      ? "text-sky-300"
+      : "text-white";
+  const iconClassName =
+    tone === "positive"
+      ? "text-teal-300"
+      : tone === "warning"
+      ? "text-amber-300"
+      : tone === "info"
+      ? "text-sky-300"
+      : "text-white/50";
+  const railClassName =
+    tone === "positive"
+      ? "bg-teal-400"
+      : tone === "warning"
+      ? "bg-amber-400"
+      : tone === "info"
+      ? "bg-sky-400"
+      : "bg-white/25";
+
+  return (
+    <GoalSurface className="w-full h-full overflow-hidden">
+      <div className="p-3.5 pb-12">
+        <div className="flex items-center  gap-2">
+          <Icon className={cn("h-3.5 w-3.5", iconClassName)} />
+          <span className="text-xs text-white/50">{label}</span>
+        </div>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        <div className="flex flex-col justify-end h-full">
+          <p
+            className={cn(
+              "text-2xl font-semibold tracking-tight",
+              valueClassName
+            )}
+          >
+            {value}
+          </p>
+          <p className="mt-1 text-xs leading-4 text-white/40">{detail}</p>
+
+          <div className="mt-3 mb-4 h-1.5 rounded-full bg-white/8 relative overflow-hidden">
+            <div className={cn("h-full w-full", railClassName)} />
+          </div>
+        </div>
+      </div>
+    </GoalSurface>
+  );
+}
+
+function TrustMetricCard({
+  label,
+  description,
+  icon: Icon,
+  children,
+}: {
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
-      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-white/35">
-        <Icon className="h-3.5 w-3.5" />
-        <span>{label}</span>
+    <GoalSurface className="w-full">
+      <div className="p-3.5 pb-8">
+        <div className="flex items-center gap-2">
+          <Icon className="h-3.5 w-3.5 text-white/60" />
+          <span className="text-xs text-white/50">{label}</span>
+        </div>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        <div className="space-y-3 h-full place-content-end">
+          {children}
+          <p className="min-h-[40px] text-xs leading-4 text-white/40">
+            {description}
+          </p>
+        </div>
       </div>
-      <p
-        className={cn(
-          "mt-3 text-2xl font-semibold tracking-tight text-white",
-          tone === "positive" && "text-teal-300",
-          tone === "warning" && "text-amber-200"
-        )}
-      >
-        {value}
-      </p>
-    </div>
+    </GoalSurface>
   );
 }
 
@@ -154,6 +145,7 @@ export function PublicProofPage({
   const [query, setQuery] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [editFilter, setEditFilter] = useState("all");
 
   const pageQuery = useQuery(
@@ -178,6 +170,10 @@ export function PublicProofPage({
           sourceFilter === "all"
             ? undefined
             : [sourceFilter as "broker_sync" | "csv_import" | "manual_entry"],
+        statuses:
+          statusFilter === "all"
+            ? undefined
+            : [statusFilter as "live" | "closed"],
         editedOnly: editFilter === "edited",
       },
       {
@@ -188,9 +184,11 @@ export function PublicProofPage({
   const tradesQuery = useInfiniteQuery({
     ...tradeQueryOptions,
     enabled: pageQuery.status === "success",
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
   });
 
-  const rows = useMemo(() => {
+  const rows = useMemo<PublicProofTradeRow[]>(() => {
     const pages = tradesQuery.data?.pages as
       | Array<{ items: any[] }>
       | undefined;
@@ -204,13 +202,17 @@ export function PublicProofPage({
 
   if (pageQuery.isLoading) {
     return (
-      <div className="min-h-screen bg-[#090c0f] px-4 py-20 text-white">
-        <div className="mx-auto max-w-6xl animate-pulse space-y-4">
-          <div className="h-8 w-48 rounded bg-white/5" />
-          <div className="h-20 rounded-2xl bg-white/5" />
-          <div className="grid gap-4 md:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-28 rounded-2xl bg-white/5" />
+      <div className="min-h-screen w-full bg-sidebar px-4 py-20 text-white md:px-6 lg:px-8">
+        <div className="w-full animate-pulse space-y-6">
+          <div className="h-8 w-48 rounded-sm bg-white/5" />
+          <div className="h-32 w-full rounded-lg bg-sidebar p-1">
+            <div className="h-full w-full rounded-sm bg-white/5" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="h-48 rounded-lg bg-sidebar p-1">
+                <div className="h-full w-full rounded-sm bg-white/5" />
+              </div>
             ))}
           </div>
         </div>
@@ -220,24 +222,28 @@ export function PublicProofPage({
 
   if (pageQuery.error || !pageQuery.data) {
     return (
-      <div className="min-h-screen bg-[#090c0f] px-4 py-24 text-white">
-        <div className="mx-auto max-w-2xl rounded-3xl border border-white/8 bg-white/[0.03] p-8 text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-white/35">
-            Public proof
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold">
-            Proof page unavailable
-          </h1>
-          <p className="mt-4 text-sm leading-6 text-white/55">
-            {pageQuery.error?.message ||
-              "This public proof link is invalid, revoked, or no longer active."}
-          </p>
-          <Button
-            className="mt-6 rounded-sm bg-teal-500 text-black hover:bg-teal-400"
-            asChild
-          >
-            <Link href="/sign-up">Create your own proof page</Link>
-          </Button>
+      <div className="min-h-screen h-full w-full bg-sidebar px-4 py-24 text-white md:px-6 lg:px-8">
+        <div className="w-full">
+          <GoalSurface className="mx-auto w-full max-w-3xl">
+            <div className="px-8 py-10 text-center">
+              <p className="text-xs uppercase tracking-[0.2em] text-white/35">
+                Public proof
+              </p>
+              <h1 className="mt-4 text-3xl font-semibold">
+                Proof page unavailable
+              </h1>
+              <p className="mt-4 text-sm leading-6 text-white/55">
+                {pageQuery.error?.message ||
+                  "This public proof link is invalid, revoked, or no longer active."}
+              </p>
+              <Button
+                className="mt-6 rounded-sm bg-teal-500 text-black hover:bg-teal-400"
+                asChild
+              >
+                <Link href="/sign-up">Create your own proof page</Link>
+              </Button>
+            </div>
+          </GoalSurface>
         </div>
       </div>
     );
@@ -247,357 +253,251 @@ export function PublicProofPage({
   const trustStartedAt = new Date(
     page.proof.auditCoverageStartsAt
   ).toLocaleDateString();
+  const totalSourceTrades =
+    page.trust.sourceCounts.brokerSync +
+    page.trust.sourceCounts.csvImport +
+    page.trust.sourceCounts.manualEntry;
+  const sourceSegments = [
+    {
+      key: "broker_sync",
+      count: page.trust.sourceCounts.brokerSync,
+      className: "bg-teal-400",
+      label: "Broker",
+    },
+    {
+      key: "csv_import",
+      count: page.trust.sourceCounts.csvImport,
+      className: "bg-amber-400",
+      label: "CSV",
+    },
+    {
+      key: "manual_entry",
+      count: page.trust.sourceCounts.manualEntry,
+      className: "bg-white/35",
+      label: "Manual",
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(20,184,166,0.18),transparent_30%),linear-gradient(180deg,#090c0f_0%,#0e1217_100%)] px-4 py-10 text-white">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex flex-col gap-4 rounded-[28px] border border-white/8 bg-black/25 p-6 backdrop-blur-xl lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-3">
-            <p className="text-[11px] uppercase tracking-[0.24em] text-teal-300/80">
-              Public proof page
-            </p>
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-                {page.account.name}
-              </h1>
-              <p className="mt-2 text-sm text-white/55">
-                @{page.trader.username}
-                {page.account.broker ? ` · ${page.account.broker}` : ""}
-              </p>
+    <div className="min-h-screen h-full w-full bg-sidebar px-4 py-10 text-white md:px-6 lg:px-8">
+      <div className="w-full space-y-6 bg-sidebar">
+        <GoalSurface className="w-full">
+          <div className="flex w-full flex-col gap-5 px-5 py-6 md:px-6 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0 space-y-4">
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-[0.24em] text-teal-300/80">
+                  Public proof page
+                </p>
+                <div>
+                  <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+                    {page.account.name}
+                  </h1>
+                  <p className="mt-2 text-sm text-white/55">
+                    @{page.trader.username}
+                    {page.account.broker ? ` · ${page.account.broker}` : ""}
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  className={cn(
+                    "rounded-sm ring-1 text-[10px] uppercase tracking-[0.14em]",
+                    getConnectionBadgeClassName(page.proof.connectionKind)
+                  )}
+                >
+                  {page.proof.connectionLabel}
+                </Badge>
+                <Badge className="rounded-sm ring-1 ring-white/10 bg-white/5 text-[10px] uppercase tracking-[0.14em] text-white/70">
+                  {page.proof.verificationLabel}
+                </Badge>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                className="rounded-sm ring-white/8! text-white/75 bg-transparent! h-8! text-xs!"
+                onClick={copyLink}
+              >
+                <Copy className="size-3" />
+                Copy link
+              </Button>
+
+              <Link
+                href="/sign-up"
                 className={cn(
-                  "rounded-sm ring-1 text-[10px] uppercase tracking-[0.14em]",
-                  getConnectionBadgeClassName(page.proof.connectionKind)
+                  buttonVariants({}),
+                  getPropAssignActionButtonClassName({
+                    tone: "teal",
+                    size: "sm",
+                    className: "w-max! gap-0.5",
+                  })
                 )}
               >
-                {page.proof.connectionLabel}
-              </Badge>
-              <Badge className="rounded-sm ring-1 ring-white/10 bg-white/5 text-[10px] uppercase tracking-[0.14em] text-white/70">
-                {page.proof.verificationLabel}
-              </Badge>
+                Build your own
+                <ChevronRight className="size-3" />
+              </Link>
             </div>
           </div>
+        </GoalSurface>
 
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              className="rounded-sm border-white/10 bg-white/5 text-white/75 hover:bg-white/10"
-              onClick={copyLink}
-            >
-              <Copy className="mr-2 h-3.5 w-3.5" />
-              Copy link
-            </Button>
-            <Button
-              className="rounded-sm bg-teal-500 text-black hover:bg-teal-400"
-              asChild
-            >
-              <Link href="/sign-up">
-                Build your own
-                <ChevronRight className="ml-1.5 h-3.5 w-3.5" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <SummaryCard
+        <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <ProofMetricCard
             label="Total trades"
             value={page.summary.totalTrades.toLocaleString()}
+            detail="All imported, synced, and manual rows included in this public ledger."
             icon={Activity}
           />
-          <SummaryCard
+          <ProofMetricCard
             label="Win rate"
             value={`${page.summary.winRate.toFixed(1)}%`}
+            detail="Closed winning outcomes relative to closed losing and breakeven history."
             icon={ShieldCheck}
             tone="positive"
           />
-          <SummaryCard
+          <ProofMetricCard
             label="Average R"
             value={formatR(page.summary.averageRR)}
+            detail="Average realized or planned R across the closed trade history."
             icon={BarChart3}
+            tone="info"
           />
-          <SummaryCard
+          <ProofMetricCard
             label="Total P&L"
             value={formatCurrency(page.summary.totalPnl)}
+            detail="Current public account P&L across the trade ledger shown on this page."
             icon={TrendingUp}
             tone={page.summary.totalPnl >= 0 ? "positive" : "warning"}
           />
-          <SummaryCard
+          <ProofMetricCard
             label="Max drawdown"
             value={formatCurrency(page.summary.maxDrawdown)}
+            detail="Worst peak-to-trough drawdown from the closed-equity curve."
             icon={AlertTriangle}
             tone="warning"
           />
         </div>
 
-        <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-          <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-white/85">
-                  Equity curve
-                </p>
-                <p className="mt-1 text-xs text-white/40">
-                  Live public proof snapshot from closed trade history
-                </p>
-              </div>
-              <p className="text-xs text-white/35">
-                {page.summary.totalTrades} trades
-              </p>
-            </div>
-            <div className="mt-5">
-              <Sparkline points={page.summary.curve} />
-            </div>
-          </div>
+        <div className="w-full">
+          <PublicProofEquityCurveCard points={page.summary.curve} />
+        </div>
 
-          <div className="space-y-4 rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
-            <div>
-              <p className="text-sm font-medium text-white/85">Trust summary</p>
-              <p className="mt-1 text-xs text-white/40">
-                Public-proof signals that help viewers separate synced history
-                from imported or manual rows.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-              <div className="rounded-xl border border-white/8 bg-black/20 p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
-                  Source mix
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
+        <div className="w-full space-y-3 bg-sidebar">
+          <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <TrustMetricCard
+              label="Source mix"
+              description="Viewers can immediately see how much of the account is broker synced, CSV imported, or self-entered."
+              icon={Activity}
+            >
+              <div className="flex flex-wrap gap-2">
+                {sourceSegments.map((segment) => (
                   <Badge
+                    key={segment.key}
                     className={cn(
                       "rounded-sm ring-1 text-[10px]",
-                      getOriginBadgeClassName("broker_sync")
+                      getOriginBadgeClassName(segment.key)
                     )}
                   >
-                    Broker {page.trust.sourceCounts.brokerSync}
+                    {segment.label} {segment.count}
                   </Badge>
-                  <Badge
-                    className={cn(
-                      "rounded-sm ring-1 text-[10px]",
-                      getOriginBadgeClassName("csv_import")
-                    )}
-                  >
-                    CSV {page.trust.sourceCounts.csvImport}
-                  </Badge>
-                  <Badge
-                    className={cn(
-                      "rounded-sm ring-1 text-[10px]",
-                      getOriginBadgeClassName("manual_entry")
-                    )}
-                  >
-                    Manual {page.trust.sourceCounts.manualEntry}
-                  </Badge>
-                </div>
+                ))}
               </div>
+              <div className="flex h-1.5 overflow-hidden rounded-full bg-white/8">
+                {sourceSegments.map((segment) => (
+                  <div
+                    key={segment.key}
+                    className={segment.className}
+                    style={{
+                      width:
+                        totalSourceTrades > 0
+                          ? `${(segment.count / totalSourceTrades) * 100}%`
+                          : 0,
+                    }}
+                  />
+                ))}
+              </div>
+            </TrustMetricCard>
 
-              <div className="rounded-xl border border-white/8 bg-black/20 p-4">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
-                  Edits and removals
+            <TrustMetricCard
+              label="Verification"
+              description="Account-level trust mode and verification state for this public proof link."
+              icon={ShieldCheck}
+            >
+              <div className="space-y-2">
+                <p className="text-xl font-semibold text-white">
+                  {page.proof.connectionLabel}
                 </p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-2xl font-semibold text-white">
-                      {page.trust.editedTradesCount}
-                    </p>
-                    <p className="text-[11px] text-white/40">Edited rows</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold text-white">
-                      {page.trust.removedTradesCount}
-                    </p>
-                    <p className="text-[11px] text-white/40">
-                      Removed imported/synced trades
-                    </p>
-                  </div>
-                </div>
               </div>
-            </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div className="h-full w-full bg-sky-400" />
+              </div>
+            </TrustMetricCard>
 
-            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-[11px] leading-5 text-amber-100/80">
-              <p className="font-medium text-amber-100">Audit coverage</p>
-              <p className="mt-1">
-                Edit and deletion proof is tracked from {trustStartedAt}.
-                {page.proof.legacyAuditGap
-                  ? " Older trades may predate this audit window."
-                  : " This account currently has full coverage for the visible history."}
+            <TrustMetricCard
+              label="Edited trades"
+              description="Rows changed after import or sync so viewers can spot manual adjustments quickly."
+              icon={BarChart3}
+            >
+              <p className="text-2xl font-semibold text-white">
+                {page.trust.editedTradesCount}
               </p>
-            </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div
+                  className="h-full bg-amber-400"
+                  style={{
+                    width: `${Math.max(
+                      8,
+                      Math.min(
+                        100,
+                        (page.trust.editedTradesCount /
+                          Math.max(page.summary.totalTrades, 1)) *
+                          100
+                      )
+                    )}%`,
+                  }}
+                />
+              </div>
+            </TrustMetricCard>
+
+            <TrustMetricCard
+              label="Audit coverage"
+              description={`Edits and removed imported or synced trades are tracked from ${trustStartedAt}.`}
+              icon={AlertTriangle}
+            >
+              <p className="text-xl font-semibold text-white">
+                {page.proof.legacyAuditGap ? "Legacy gap" : "Full coverage"}
+              </p>
+
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div
+                  className={cn(
+                    "h-full w-full",
+                    page.proof.legacyAuditGap ? "bg-amber-400" : "bg-teal-400"
+                  )}
+                />
+              </div>
+            </TrustMetricCard>
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-white/8 bg-white/[0.03] p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-sm font-medium text-white/85">Trade history</p>
-              <p className="mt-1 text-xs text-white/40">
-                Read-only trade ledger for this public proof link
-              </p>
-            </div>
-            <div className="flex flex-col gap-2 md:flex-row">
-              <div className="relative min-w-[220px]">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
-                <Input
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search symbol, source, outcome"
-                  className="border-white/10 bg-black/20 pl-9 text-white placeholder:text-white/25"
-                />
-              </div>
-              <Select value={outcomeFilter} onValueChange={setOutcomeFilter}>
-                <SelectTrigger className="w-[150px] border-white/10 bg-black/20 text-white">
-                  <SelectValue placeholder="Outcome" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All outcomes</SelectItem>
-                  <SelectItem value="Win">Win</SelectItem>
-                  <SelectItem value="Loss">Loss</SelectItem>
-                  <SelectItem value="BE">Breakeven</SelectItem>
-                  <SelectItem value="PW">Partial win</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={sourceFilter} onValueChange={setSourceFilter}>
-                <SelectTrigger className="w-[150px] border-white/10 bg-black/20 text-white">
-                  <SelectValue placeholder="Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All sources</SelectItem>
-                  <SelectItem value="broker_sync">Broker sync</SelectItem>
-                  <SelectItem value="csv_import">CSV import</SelectItem>
-                  <SelectItem value="manual_entry">Manual entry</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={editFilter} onValueChange={setEditFilter}>
-                <SelectTrigger className="w-[150px] border-white/10 bg-black/20 text-white">
-                  <SelectValue placeholder="Edit filter" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All rows</SelectItem>
-                  <SelectItem value="edited">Edited only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="mt-5 overflow-hidden rounded-2xl border border-white/8">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
-                <thead className="bg-white/[0.04] text-[11px] uppercase tracking-[0.18em] text-white/35">
-                  <tr>
-                    <th className="px-4 py-3">Time</th>
-                    <th className="px-4 py-3">Symbol</th>
-                    <th className="px-4 py-3">Side</th>
-                    <th className="px-4 py-3">Size</th>
-                    <th className="px-4 py-3">Entry</th>
-                    <th className="px-4 py-3">Exit</th>
-                    <th className="px-4 py-3">P&amp;L</th>
-                    <th className="px-4 py-3">R</th>
-                    <th className="px-4 py-3">Source</th>
-                    <th className="px-4 py-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="border-t border-white/6 text-white/78"
-                    >
-                      <td className="px-4 py-3">
-                        <div className="text-xs text-white/70">
-                          {formatTimestamp(
-                            row.closeTime || row.openTime || row.createdAt
-                          )}
-                        </div>
-                        <div className="mt-1 text-[11px] text-white/35">
-                          {formatDuration(row.durationSeconds)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-white">
-                        {row.symbol || "—"}
-                      </td>
-                      <td className="px-4 py-3 capitalize">
-                        {row.tradeType || "—"}
-                      </td>
-                      <td className="px-4 py-3">{row.volume ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        {row.openPrice != null
-                          ? row.openPrice.toLocaleString()
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.closePrice != null
-                          ? row.closePrice.toLocaleString()
-                          : "—"}
-                      </td>
-                      <td
-                        className={cn(
-                          "px-4 py-3 font-medium",
-                          (row.profit ?? 0) >= 0
-                            ? "text-teal-300"
-                            : "text-rose-300"
-                        )}
-                      >
-                        {row.profit != null ? formatCurrency(row.profit) : "—"}
-                      </td>
-                      <td className="px-4 py-3">{formatR(row.rr)}</td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          className={cn(
-                            "rounded-sm ring-1 text-[10px]",
-                            getOriginBadgeClassName(row.originType)
-                          )}
-                        >
-                          {row.originLabel}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1.5">
-                          {row.outcome ? (
-                            <Badge className="rounded-sm ring-1 ring-white/10 bg-white/5 text-[10px] text-white/70">
-                              {row.outcome}
-                            </Badge>
-                          ) : null}
-                          {row.edited ? (
-                            <Badge className="rounded-sm ring-1 ring-amber-500/25 bg-amber-500/15 text-[10px] text-amber-200">
-                              Edited
-                            </Badge>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && !tradesQuery.isLoading ? (
-                    <tr>
-                      <td
-                        colSpan={10}
-                        className="px-4 py-10 text-center text-sm text-white/40"
-                      >
-                        No trades match the current proof filters.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {tradesQuery.hasNextPage ? (
-            <div className="mt-4 flex justify-center">
-              <Button
-                variant="outline"
-                className="rounded-sm border-white/10 bg-black/20 text-white/75 hover:bg-white/10"
-                onClick={() => tradesQuery.fetchNextPage()}
-                disabled={tradesQuery.isFetchingNextPage}
-              >
-                {tradesQuery.isFetchingNextPage
-                  ? "Loading more…"
-                  : "Load more trades"}
-              </Button>
-            </div>
-          ) : null}
+        <div className="w-full space-y-3 bg-sidebar!">
+          <PublicProofTradesTable
+            rows={rows}
+            searchValue={query}
+            onSearchChange={setQuery}
+            outcomeFilter={outcomeFilter}
+            onOutcomeFilterChange={setOutcomeFilter}
+            sourceFilter={sourceFilter}
+            onSourceFilterChange={setSourceFilter}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            editFilter={editFilter}
+            onEditFilterChange={setEditFilter}
+            isLoading={tradesQuery.isLoading}
+            hasNextPage={tradesQuery.hasNextPage}
+            isFetchingNextPage={tradesQuery.isFetchingNextPage}
+            onLoadMore={() => tradesQuery.fetchNextPage()}
+          />
         </div>
       </div>
     </div>

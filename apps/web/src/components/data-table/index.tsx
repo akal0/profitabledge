@@ -19,6 +19,7 @@ export function DataTable<TData>({
   className,
   getRowGroupKey,
   renderRowGroupHeader,
+  fitColumnsToContent,
 }: {
   table: Table<TData>;
   children?: React.ReactNode;
@@ -37,6 +38,7 @@ export function DataTable<TData>({
     isCollapsed: boolean;
     onToggleCollapsed: () => void;
   }) => React.ReactNode;
+  fitColumnsToContent?: boolean;
 }) {
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const resizeGuideRef = React.useRef<HTMLDivElement | null>(null);
@@ -239,10 +241,12 @@ export function DataTable<TData>({
 
       commitColumnWidth(
         columnId,
-        Math.max(defaultWidth, configuredMinWidth, measuredMinWidth)
+        fitColumnsToContent
+          ? measuredMinWidth || Math.max(defaultWidth, configuredMinWidth)
+          : Math.max(defaultWidth, configuredMinWidth, measuredMinWidth)
       );
     },
-    [commitColumnWidth, table]
+    [commitColumnWidth, fitColumnsToContent, table]
   );
 
   const syncMeasuredColumnWidths = React.useCallback(() => {
@@ -251,48 +255,66 @@ export function DataTable<TData>({
     if (!root || !sandbox) return;
 
     const nextMinWidths: Record<string, number> = {};
-    root.querySelectorAll<HTMLElement>("[data-column-content]").forEach((contentEl) => {
-      const cellEl = contentEl.parentElement as HTMLElement | null;
-      const columnId = cellEl?.dataset.columnId;
-      if (!columnId) return;
+    root
+      .querySelectorAll<HTMLElement>("[data-column-content]")
+      .forEach((contentEl) => {
+        const cellEl = contentEl.parentElement as HTMLElement | null;
+        const columnId = cellEl?.dataset.columnId;
+        if (!columnId) return;
 
-      const styles = window.getComputedStyle(cellEl);
-      const paddingX =
-        parseFloat(styles.paddingLeft || "0") +
-        parseFloat(styles.paddingRight || "0");
-      const intrinsicWidth =
-        measureIntrinsicContentWidth(contentEl) +
-        paddingX +
-        AUTO_COLUMN_CONTENT_BUFFER_PX;
+        const styles = window.getComputedStyle(cellEl);
+        const paddingX =
+          parseFloat(styles.paddingLeft || "0") +
+          parseFloat(styles.paddingRight || "0");
+        const intrinsicWidth =
+          measureIntrinsicContentWidth(contentEl) +
+          paddingX +
+          AUTO_COLUMN_CONTENT_BUFFER_PX;
 
-      nextMinWidths[columnId] = Math.max(
-        nextMinWidths[columnId] || 0,
-        Math.ceil(intrinsicWidth)
-      );
-    });
+        nextMinWidths[columnId] = Math.max(
+          nextMinWidths[columnId] || 0,
+          Math.ceil(intrinsicWidth)
+        );
+      });
 
     measuredColumnMinWidthsRef.current = nextMinWidths;
 
-    const clampedSizing: Record<string, number> = {};
-    let hasClampUpdate = false;
+    const nextSizing: Record<string, number> = {};
+    let hasSizingUpdate = false;
 
     table.getVisibleLeafColumns().forEach((column) => {
-      const minWidth = nextMinWidths[column.id];
-      if (!minWidth) return;
+      const measuredWidth = nextMinWidths[column.id];
+      if (!measuredWidth) return;
       const currentWidth = column.getSize();
-      if (currentWidth < minWidth) {
-        clampedSizing[column.id] = minWidth;
-        hasClampUpdate = true;
+      const configuredMinWidth =
+        typeof column.columnDef.minSize === "number"
+          ? column.columnDef.minSize
+          : 0;
+      const configuredMaxWidth =
+        typeof column.columnDef.maxSize === "number"
+          ? column.columnDef.maxSize
+          : Number.POSITIVE_INFINITY;
+      const targetWidth = Math.min(
+        configuredMaxWidth,
+        Math.max(measuredWidth, fitColumnsToContent ? 0 : configuredMinWidth)
+      );
+
+      if (
+        (fitColumnsToContent && Math.abs(currentWidth - targetWidth) > 1) ||
+        (!fitColumnsToContent && currentWidth < targetWidth)
+      ) {
+        nextSizing[column.id] = targetWidth;
+        hasSizingUpdate = true;
       }
     });
 
-    if (hasClampUpdate) {
+    if (hasSizingUpdate) {
       table.setColumnSizing((current) => ({
         ...current,
-        ...clampedSizing,
+        ...nextSizing,
       }));
     }
-  }, [measureIntrinsicContentWidth, table]);
+  }, [fitColumnsToContent, measureIntrinsicContentWidth, table]);
 
   const scheduleMeasuredColumnWidths = React.useCallback(() => {
     if (measurementFrameRef.current != null) {

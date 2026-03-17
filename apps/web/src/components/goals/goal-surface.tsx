@@ -29,13 +29,17 @@ export function GoalSurface({
 }) {
   return (
     <div className={cn(GOAL_SURFACE_OUTER_CLASS, className)}>
-      <div className={cn(GOAL_SURFACE_INNER_CLASS, innerClassName)}>{children}</div>
+      <div className={cn(GOAL_SURFACE_INNER_CLASS, innerClassName)}>
+        {children}
+      </div>
     </div>
   );
 }
 
 export function GoalContentSeparator({ className }: { className?: string }) {
-  return <Separator className={cn(WIDGET_CONTENT_SEPARATOR_CLASS, className)} />;
+  return (
+    <Separator className={cn(WIDGET_CONTENT_SEPARATOR_CLASS, className)} />
+  );
 }
 
 export function GoalPanel({
@@ -54,16 +58,16 @@ export function GoalPanel({
   children: ReactNode;
 }) {
   return (
-    <GoalSurface innerClassName="h-full">
+    <GoalSurface innerClassName="h-full overflow-hidden">
       <div className={cn(GOAL_PANEL_HEADER_CLASS, "justify-between")}>
-        <div className="flex min-w-0 flex-1 items-start gap-1.5">
-          {Icon ? (
-            <Icon className={GOAL_PANEL_ICON_CLASS} />
-          ) : null}
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          {Icon ? <Icon className={GOAL_PANEL_ICON_CLASS} /> : null}
           <div className="min-w-0">
             <h2 className={GOAL_PANEL_TITLE_CLASS}>{title}</h2>
             {description ? (
-              <p className="mt-1 text-xs leading-5 text-white/40">{description}</p>
+              <p className="mt-1 text-xs leading-5 text-white/40">
+                {description}
+              </p>
             ) : null}
           </div>
         </div>

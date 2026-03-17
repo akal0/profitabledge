@@ -3,9 +3,9 @@ import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { tradingAccount } from "../../db/schema/trading";
 
-export const DEMO_ACCOUNT_NAME = "Profitabledge Demo";
+export const DEMO_ACCOUNT_NAME = "Profitabledge demo";
 export const DEMO_ACCOUNT_PREFIX = "PE";
-export const DEMO_BROKER = "Demo Broker";
+export const DEMO_BROKER = "Demo broker";
 export const DEMO_BROKER_SERVER = "Profitabledge-Demo";
 
 const LEGACY_DEMO_ACCOUNT_NAMES = new Set(["Demo account"]);
@@ -74,14 +74,12 @@ export async function resetDemoWorkspaceForUser(
   const [primaryDemoAccount, ...duplicateDemoAccounts] = demoAccounts;
 
   if (duplicateDemoAccounts.length > 0) {
-    await db
-      .delete(tradingAccount)
-      .where(
-        inArray(
-          tradingAccount.id,
-          duplicateDemoAccounts.map((account) => account.id)
-        )
-      );
+    await db.delete(tradingAccount).where(
+      inArray(
+        tradingAccount.id,
+        duplicateDemoAccounts.map((account) => account.id)
+      )
+    );
   }
 
   const result = (await seedSampleAccount(userId, {

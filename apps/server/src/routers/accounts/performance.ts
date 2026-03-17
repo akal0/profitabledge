@@ -217,9 +217,7 @@ export const liveMetricsProcedure = protectedProcedure
 
     const totalFloatingPL = openTrades.reduce(
       (sum, openPosition) =>
-        sum +
-        Number(openPosition.profit || 0) +
-        Number(openPosition.swap || 0),
+        sum + Number(openPosition.profit || 0) + Number(openPosition.swap || 0),
       0
     );
 
@@ -315,7 +313,7 @@ export const liveMetricsProcedure = protectedProcedure
     const result = {
       accountId: input.accountId,
       accountName: isAllAccountsScope(input.accountId)
-        ? "All Accounts"
+        ? "All accounts"
         : accounts[0]?.name,
       broker: accounts.length === 1 ? accounts[0]?.broker : "Multiple brokers",
       brokerType: accounts.length === 1 ? accounts[0]?.brokerType : null,

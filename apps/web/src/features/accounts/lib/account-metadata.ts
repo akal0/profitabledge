@@ -59,8 +59,8 @@ export const BROKER_OPTIONS: BrokerOption[] = [
   },
 ];
 
-const DEMO_ACCOUNT_NAMES = new Set(["Profitabledge Demo", "Demo account"]);
-const DEMO_BROKERS = new Set(["Demo Broker", "Profitabledge"]);
+const DEMO_ACCOUNT_NAMES = new Set(["Profitabledge demo", "Demo account"]);
+const DEMO_BROKERS = new Set(["Demo broker", "Profitabledge"]);
 const DEMO_BROKER_SERVERS = new Set([
   "Profitabledge-Demo",
   "Profitabledge-Demo01",

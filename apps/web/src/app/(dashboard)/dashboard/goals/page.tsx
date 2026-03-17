@@ -74,11 +74,16 @@ export default function GoalsPage() {
       ? selectedAccountId
       : undefined;
   const queryClient = useQueryClient();
-  const { open: createDialogOpen, setOpen: setCreateDialogOpen } = useGoalDialog();
+  const { open: createDialogOpen, setOpen: setCreateDialogOpen } =
+    useGoalDialog();
   const [celebrationData, setCelebrationData] = useState<{
     show: boolean;
     milestone: {
-      type: "goal_completed" | "streak_record" | "profit_milestone" | "consistency";
+      type:
+        | "goal_completed"
+        | "streak_record"
+        | "profit_milestone"
+        | "consistency";
       title: string;
       description?: string;
       value?: number;
@@ -135,7 +140,8 @@ export default function GoalsPage() {
   const outcomeGoals = useMemo(
     () =>
       activeGoals.filter(
-        (goal) => !processGoals.some((processGoal) => processGoal.id === goal.id)
+        (goal) =>
+          !processGoals.some((processGoal) => processGoal.id === goal.id)
       ),
     [activeGoals, processGoals]
   );
@@ -162,7 +168,9 @@ export default function GoalsPage() {
         .filter((goal) => goal.isCustom)
         .forEach((goal) => {
           refreshes.push(
-            trpcClient.goals.refreshCustomGoalProgress.mutate({ goalId: goal.id })
+            trpcClient.goals.refreshCustomGoalProgress.mutate({
+              goalId: goal.id,
+            })
           );
         });
 
@@ -254,7 +262,9 @@ export default function GoalsPage() {
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
           <Target className="mx-auto mb-4 h-12 w-12 text-white/20" />
-          <p className="text-white/40">Select an account or use All Accounts to track goals.</p>
+          <p className="text-white/40">
+            Select an account or use All accounts to track goals.
+          </p>
         </div>
       </div>
     );
@@ -362,14 +372,17 @@ export default function GoalsPage() {
         ) : (
           <GoalSurface>
             <div className="p-5 text-sm text-white/55">
-              Process scorecard will appear once you have closed trades in this scope.
+              Process scorecard will appear once you have closed trades in this
+              scope.
             </div>
           </GoalSurface>
         )}
 
         <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
           <section>
-            <h2 className="mb-4 text-xl font-semibold text-white">Outcome goals</h2>
+            <h2 className="mb-4 text-xl font-semibold text-white">
+              Outcome goals
+            </h2>
             {isLoadingGoals ? (
               <div className="flex items-center justify-center py-12">
                 <p className="text-sm text-white/40">Loading goals...</p>
@@ -385,7 +398,9 @@ export default function GoalsPage() {
           </section>
 
           <section>
-            <h2 className="mb-4 text-xl font-semibold text-white">Process goals</h2>
+            <h2 className="mb-4 text-xl font-semibold text-white">
+              Process goals
+            </h2>
             {isLoadingGoals ? (
               <div className="flex items-center justify-center py-12">
                 <p className="text-sm text-white/40">Loading goals...</p>
@@ -411,7 +426,9 @@ export default function GoalsPage() {
       <MilestoneCelebration
         show={celebrationData.show}
         milestone={celebrationData.milestone}
-        onClose={() => setCelebrationData((previous) => ({ ...previous, show: false }))}
+        onClose={() =>
+          setCelebrationData((previous) => ({ ...previous, show: false }))
+        }
       />
     </>
   );

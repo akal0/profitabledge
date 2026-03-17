@@ -70,7 +70,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   const allAccountsItem = React.useMemo<Account>(
     () => ({
       id: ALL_ACCOUNTS_ID,
-      name: "All Accounts",
+      name: "All accounts",
       image: "/brokers/FTMO.png",
     }),
     []

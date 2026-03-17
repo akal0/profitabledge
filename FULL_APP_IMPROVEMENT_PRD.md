@@ -1071,7 +1071,7 @@ Reason: these six items close the loop between "find the edge", "trade the edge"
 
 **Problem**: Dashboard and all metrics are per-account only. Traders with multiple accounts can't see the big picture.
 
-**Solution**: "All Accounts" option in account selector that shows:
+**Solution**: "All accounts" option in account selector that shows:
 
 - Combined equity curve across all accounts
 - Total P&L aggregated

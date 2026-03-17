@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAccountStore } from "@/stores/account";
 
@@ -55,6 +55,32 @@ function formatMetricValue(metric: CorrelationMetric, value: number) {
   if (metric === "winRate") return `${value.toFixed(1)}%`;
   if (metric === "avgRR") return `${value.toFixed(2)}R`;
   return `${Math.round(value).toLocaleString()} trades`;
+}
+
+function getMatrixLayout(rows: string[], cols: string[]) {
+  const density = Math.max(rows.length, cols.length, 1);
+  const longestRowLabel = rows.reduce(
+    (max, value) => Math.max(max, value.length),
+    0
+  );
+
+  const labelColumnWidth =
+    density >= 7
+      ? Math.min(124, Math.max(88, longestRowLabel * 6))
+      : density >= 5
+      ? Math.min(136, Math.max(96, longestRowLabel * 6.5))
+      : Math.min(156, Math.max(104, longestRowLabel * 7));
+
+  const headerRowHeight = density >= 7 ? 52 : density >= 5 ? 56 : 60;
+  const labelFontSize = density >= 7 ? 9 : density >= 5 ? 10 : 11;
+  const valueFontSize = density >= 7 ? 10 : density >= 5 ? 11 : 12;
+
+  return {
+    labelColumnWidth,
+    headerRowHeight,
+    labelFontSize,
+    valueFontSize,
+  };
 }
 
 export function CorrelationMatrix({
@@ -181,6 +207,18 @@ export function CorrelationMatrix({
     };
   }, [colAxis, metric, rowAxis, trades]);
 
+  const { labelColumnWidth, headerRowHeight, labelFontSize, valueFontSize } =
+    useMemo(() => getMatrixLayout(rows, cols), [rows, cols]);
+
+  const gridTemplateColumns = `${labelColumnWidth}px repeat(${Math.max(
+    cols.length,
+    1
+  )}, minmax(0, 1fr))`;
+  const gridTemplateRows = `${headerRowHeight}px repeat(${Math.max(
+    rows.length,
+    1
+  )}, minmax(0, 1fr))`;
+
   if (isLoading) {
     return <Skeleton className="h-full w-full" />;
   }
@@ -204,81 +242,90 @@ export function CorrelationMatrix({
 
   return (
     <div className="flex h-full w-full flex-col">
-      <div className="relative min-h-0 flex-1 overflow-x-auto overflow-y-visible">
-        <div className="grid min-h-full min-w-full">
-          <div className="my-auto">
-            <table className="mx-auto h-auto w-max border-collapse">
-              <thead>
-                <tr>
-                  <th className="sticky left-0 top-0 z-20 bg-sidebar-accent" />
-                  {cols.map((colValue) => (
-                    <th
-                      key={colValue}
-                      className="sticky top-0 z-10 min-w-[10rem] whitespace-nowrap bg-sidebar-accent px-3 pb-2 text-center text-[10px] font-medium uppercase tracking-wider text-white/35"
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className="grid h-full w-full gap-[3px]"
+          style={{
+            gridTemplateColumns,
+            gridTemplateRows,
+          }}
+        >
+          <div className="rounded bg-sidebar-accent" />
+          {cols.map((colValue) => (
+            <div
+              key={colValue}
+              className="flex min-w-0 items-center justify-center rounded bg-sidebar-accent px-2 text-center font-medium uppercase tracking-wider text-white/35"
+              style={{ fontSize: `${labelFontSize}px` }}
+            >
+              <span className="break-words leading-tight">
+                {colValue}
+              </span>
+            </div>
+          ))}
+          {rows.map((rowValue) => (
+            <Fragment key={rowValue}>
+              <div
+                className="flex min-w-0 items-center justify-end rounded bg-sidebar-accent px-3 text-right font-medium text-white/50"
+                style={{ fontSize: `${labelFontSize}px` }}
+              >
+                <span className="break-words leading-tight">
+                  {rowValue}
+                </span>
+              </div>
+              {cols.map((colValue) => {
+                const value = matrix[rowValue]?.[colValue];
+                const isEmpty = Number.isNaN(value);
+                const hoverKey = `${rowValue}:${colValue}`;
+                const isHovered = hoveredCell?.key === hoverKey;
+                return (
+                  <div
+                    key={hoverKey}
+                    className="min-w-0 min-h-0"
+                    onMouseEnter={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setHoveredCell({
+                        key: hoverKey,
+                        rect: {
+                          top: rect.top,
+                          left: rect.left,
+                          width: rect.width,
+                        },
+                      });
+                    }}
+                    onMouseLeave={() => setHoveredCell(null)}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-full w-full items-center justify-center rounded px-2 py-2 text-center transition-all",
+                        isEmpty
+                          ? "bg-white/[0.02]"
+                          : heatColor(value, minVal, maxVal),
+                        isHovered &&
+                          !isEmpty &&
+                          "ring-1 ring-white/20 brightness-125"
+                      )}
                     >
-                      {colValue}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((rowValue) => (
-                  <tr key={rowValue}>
-                    <td className="sticky left-0 z-10 whitespace-nowrap bg-sidebar-accent pr-4 text-right text-[10px] font-medium text-white/50">
-                      {rowValue}
-                    </td>
-                    {cols.map((colValue) => {
-                      const value = matrix[rowValue]?.[colValue];
-                      const isEmpty = Number.isNaN(value);
-                      const hoverKey = `${rowValue}:${colValue}`;
-                      const isHovered = hoveredCell?.key === hoverKey;
-                      return (
-                        <td
-                          key={colValue}
-                          className="p-[3px]"
-                          onMouseEnter={(e) => {
-                            const rect =
-                              e.currentTarget.getBoundingClientRect();
-                            setHoveredCell({
-                              key: hoverKey,
-                              rect: {
-                                top: rect.top,
-                                left: rect.left,
-                                width: rect.width,
-                              },
-                            });
-                          }}
-                          onMouseLeave={() => setHoveredCell(null)}
+                      {isEmpty ? (
+                        <span
+                          className="text-white/8"
+                          style={{ fontSize: `${labelFontSize}px` }}
                         >
-                          <div
-                            className={cn(
-                              "flex min-h-[6rem] min-w-[10rem] items-center justify-center rounded px-2 py-2 transition-all",
-                              isEmpty
-                                ? "bg-white/[0.02]"
-                                : heatColor(value, minVal, maxVal),
-                              isHovered &&
-                                !isEmpty &&
-                                "ring-1 ring-white/20 brightness-125"
-                            )}
-                          >
-                            {isEmpty ? (
-                              <span className="text-[10px] text-white/8">
-                                —
-                              </span>
-                            ) : (
-                              <span className="text-[11px] font-semibold leading-tight tabular-nums text-white/90">
-                                {formatMetricValue(metric, value)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                          —
+                        </span>
+                      ) : (
+                        <span
+                          className="font-semibold leading-tight tabular-nums text-white/90"
+                          style={{ fontSize: `${valueFontSize}px` }}
+                        >
+                          {formatMetricValue(metric, value)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </Fragment>
+          ))}
         </div>
       </div>
 

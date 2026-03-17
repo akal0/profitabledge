@@ -63,7 +63,10 @@ export function EconomicCalendarControls({
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div
+        className="flex flex-wrap items-center gap-2"
+        data-widget-share-ignore="true"
+      >
         {range ? (
           <PickerComponent
             defaultStart={range.start}

@@ -89,7 +89,10 @@ export function CalendarControls({
         </span>{" "}
         most recent trades
       </h2>
-      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+      <div
+        className="flex flex-wrap items-center gap-2 xl:justify-end"
+        data-widget-share-ignore="true"
+      >
         {days && days.length > 0 && bounds ? (
           (() => {
             const isMonth = viewMode === "month";

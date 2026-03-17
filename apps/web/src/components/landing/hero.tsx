@@ -100,7 +100,7 @@ export function Hero({ heroOpacity }: HeroProps) {
         </div>
       </motion.nav>
 
-      <div className="flex w-full flex-col gap-6 md:flex-row md:items-end md:justify-between">
+      <div className="flex w-full flex-col gap-6 md:flex-row md:items-end md:justify-between h-[7.5rem] pb-2 mt-12">
         {/* Heading */}
         <motion.div
           className="will-change-transform"
@@ -113,7 +113,7 @@ export function Hero({ heroOpacity }: HeroProps) {
           }}
         >
           <h1
-            className="text-3xl font-semibold leading-[1.05] tracking-[-0.04em] bg-clip-text text-transparent sm:text-4xl md:text-5xl lg:text-6xl xl:text-6xl! 2xl:text-5xl! 3xl:text-7xl!"
+            className="text-3xl font-semibold leading-[1.1] tracking-[-0.04em] bg-clip-text text-transparent sm:text-4xl md:text-5xl lg:text-6xl xl:text-6xl! 2xl:text-5xl! 3xl:text-7xl!"
             style={{
               backgroundImage:
                 "radial-gradient(ellipse at top left, #fff 0%, rgba(255,255,255,0.75) 59%, rgba(255,255,255,0.20) 100%)",

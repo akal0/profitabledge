@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { AccountTagsDialog } from "@/features/accounts/components/account-tags-dialog";
+import { AccountPublicProofDialog } from "@/features/accounts/components/account-public-proof-dialog";
 import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
@@ -166,6 +167,7 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
         <div className="flex items-center gap-1.5">
           <ManualPropAccountDialog account={account} />
           <AccountTagsDialog account={account} />
+          <AccountPublicProofDialog account={account} />
           <Badge
             variant="outline"
             className={cn(HEADER_BADGE_CLASS, sourceBadge.className)}
@@ -307,6 +309,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
       headerRight={
         <div className="flex items-center gap-1.5">
           <AccountTagsDialog account={account} />
+          <AccountPublicProofDialog account={account} />
           <PropAccountStatusBadges
             account={account}
             dashboard={dashboard}
@@ -396,7 +399,9 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
           <p className="text-xs text-white/35">Daily DD</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
             {dashboard?.ruleCheck
-              ? `${dashboard.ruleCheck.metrics.dailyDrawdownPercent.toFixed(2)}%`
+              ? `${dashboard.ruleCheck.metrics.dailyDrawdownPercent.toFixed(
+                  2
+                )}%`
               : "—"}
           </p>
         </div>

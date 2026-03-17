@@ -33,7 +33,7 @@ High-level route groups:
 - `(onboarding)`
   - onboarding wizard, plan selection, and private-beta access redemption
 - `(public)`
-  - alpha-limited public surfaces: share pages, verified pages, and a held-back public-profile placeholder
+  - alpha-limited public surfaces: share pages, verified pages, link-only public proof pages, and a held-back public-profile placeholder
 
 Main dashboard pages currently include:
 
@@ -74,6 +74,8 @@ Use these folders when adding frontend code:
   - referral or affiliate invite intent storage and other cross-route growth access helpers
 - `apps/web/src/features/trades`
   - table, bulk actions, toolbar
+- `apps/web/src/features/public-proof`
+  - link-only public proof pages and supporting trust-signal UI
 - `apps/web/src/features/ai`
   - assistant and prompt input features
 - `apps/web/src/features/backtest`
@@ -150,6 +152,7 @@ Current example:
 - the AI settings page should present Gemini as live for current in-product routing while OpenAI and Anthropic appear as validated connector-ready providers until multi-provider runtime selection is enabled
 - the AI settings page should surface provider-specific key-source links and a usage analytics section with toggles for `Profitabledge`, `Gemini`, `OpenAI`, and `Anthropic`, so members can both connect keys and inspect recent AI activity from the same route
 - the sidebar `NavUser` dropdown should act as quick access into concrete settings destinations such as profile, billing, and notifications, while sign-out routes through the shared Better Auth client and the current-plan / upgrade CTA reflects the live billing plan, showing the target plan's current upgrade offer badge (`10% off` for `Professional`, `15% off` for `Institutional`) and disappearing once the member is already on `Institutional`
+- account cards now expose a dedicated public-proof dialog that creates, rotates, revokes, and copies revocable `/{username}/{publicAccountSlug}/trades` links, while the public page itself lives outside the dashboard shell and stays focused on trust signals plus a curated trade ledger rather than reusing the owner dashboard
 
 ## Shared UI patterns that are heavily reused
 

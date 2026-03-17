@@ -37,6 +37,9 @@ export function normalizeToTradeInsert(
     close: normalized.closeTime?.toISOString() ?? null,
     tradeDurationSeconds: durationSeconds,
     comment: normalized.comment ?? null,
+    originType: "broker_sync",
+    originLabel: "Broker sync",
+    originCapturedAt: new Date(),
 
     // EA-only fields — not available from API providers
     manipulationHigh: null,

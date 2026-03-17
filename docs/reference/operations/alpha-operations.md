@@ -115,7 +115,13 @@ The connections UI only exposes supported alpha providers:
 
 Non-operational provider stubs remain in the repo for future implementation, but they are not shown as connectable alpha options.
 
-Public profiles are intentionally held back during alpha. Public sharing remains limited to share-card and verified-track-record surfaces.
+Public profiles are intentionally held back during alpha. Public sharing remains limited to share-card, verified-track-record, and link-only public proof surfaces.
+
+The public proof surface is intentionally narrower than community discovery:
+
+- URLs are revocable and human-readable: `/{username}/{publicAccountSlug}/trades`
+- proof pages stay link-only and are not surfaced in feeds, leaderboards, or public-profile discovery
+- the page is trades-first and trust-first, exposing connection source, trade provenance, and edit/delete trust signals instead of the owner dashboard
 
 The web shell and backtest shell now emit lightweight `navigation` events into the operations router so alpha usage can be inspected from the support page without a separate analytics vendor.
 

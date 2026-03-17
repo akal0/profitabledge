@@ -122,6 +122,9 @@ async function applyParsedImportToExistingAccount(input: {
       closeTime: trade.closeTime,
       sessionTag: trade.sessionTag,
       sessionTagColor: trade.sessionTagColor,
+      originType: trade.originType,
+      originLabel: trade.originLabel,
+      originCapturedAt: trade.originCapturedAt,
       brokerMeta: trade.brokerMeta,
     })
     .from(trade)
@@ -679,6 +682,9 @@ export const uploadRouter = router({
           closeTime: trade.closeTime,
           sessionTag: trade.sessionTag,
           sessionTagColor: trade.sessionTagColor,
+          originType: trade.originType,
+          originLabel: trade.originLabel,
+          originCapturedAt: trade.originCapturedAt,
           brokerMeta: trade.brokerMeta,
         })
         .from(trade)

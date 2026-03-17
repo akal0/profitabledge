@@ -161,6 +161,9 @@ export function buildImportedTradeInsertRecord(input: {
     pips: numberToStoredString(input.trade.pips),
     beThresholdPips: numberToStoredString(input.breakevenThresholdPips ?? null),
     outcome,
+    originType: "csv_import",
+    originLabel: "CSV import",
+    originCapturedAt: new Date(),
     tradeDurationSeconds: input.trade.tradeDurationSeconds,
     openTime: input.trade.openTime,
     closeTime: input.trade.closeTime,
@@ -175,7 +178,12 @@ export function buildImportedTradeInsertRecord(input: {
 }
 
 export function buildImportedTradeUpdateRecord(input: {
-  existingTrade: { brokerMeta?: Record<string, unknown> | null };
+  existingTrade: {
+    brokerMeta?: Record<string, unknown> | null;
+    originType?: string | null;
+    originLabel?: string | null;
+    originCapturedAt?: Date | null;
+  };
   trade: ParsedImportTrade;
   importMeta: { parserId: string; reportType: string };
   breakevenThresholdPips?: number | null;
@@ -211,6 +219,9 @@ export function buildImportedTradeUpdateRecord(input: {
     pips: numberToStoredString(input.trade.pips),
     beThresholdPips: numberToStoredString(input.breakevenThresholdPips ?? null),
     outcome,
+    originType: input.existingTrade.originType ?? "csv_import",
+    originLabel: input.existingTrade.originLabel ?? "CSV import",
+    originCapturedAt: input.existingTrade.originCapturedAt ?? new Date(),
     tradeDurationSeconds: input.trade.tradeDurationSeconds,
     openTime: input.trade.openTime,
     closeTime: input.trade.closeTime,

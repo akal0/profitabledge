@@ -122,6 +122,9 @@ export const trade = pgTable(
     openTime: timestamp("open_time"), // When the trade was opened
     closeTime: timestamp("close_time"), // When the trade was closed
     useBrokerData: integer("use_broker_data").default(0), // 0 = use public data, 1 = has broker-specific data
+    originType: varchar("origin_type", { length: 24 }), // broker_sync | csv_import | manual_entry
+    originLabel: text("origin_label"), // Human-readable provenance label for public proof pages
+    originCapturedAt: timestamp("origin_captured_at"), // When provenance was first recorded
 
     // Advanced trading metrics - Manipulation structure
     manipulationHigh: numeric("manipulation_high"), // High of manipulation leg (for longs/shorts)
@@ -256,6 +259,75 @@ export const deletedImportedTrade = pgTable(
       table.accountId,
       table.ticket
     ),
+  })
+);
+
+export const publicAccountShare = pgTable(
+  "public_account_share",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => tradingAccount.id, { onDelete: "cascade" }),
+    publicAccountSlug: text("public_account_slug").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    revokedAt: timestamp("revoked_at"),
+    viewCount: integer("view_count").notNull().default(0),
+    lastViewedAt: timestamp("last_viewed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    accountIdx: index("public_account_share_account_idx").on(table.accountId),
+    activeIdx: index("public_account_share_active_idx").on(
+      table.accountId,
+      table.isActive
+    ),
+    slugIdx: uniqueIndex("public_account_share_slug_idx").on(
+      table.publicAccountSlug
+    ),
+  })
+);
+
+export const tradeTrustEvent = pgTable(
+  "trade_trust_event",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => tradingAccount.id, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    tradeId: text("trade_id"),
+    eventType: varchar("event_type", { length: 24 }).notNull(), // update | delete
+    changeSource: varchar("change_source", { length: 24 })
+      .notNull()
+      .default("app"),
+    originType: varchar("origin_type", { length: 24 }),
+    changedFields: jsonb("changed_fields")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
+    beforeData: jsonb("before_data").$type<Record<string, unknown> | null>(),
+    afterData: jsonb("after_data").$type<Record<string, unknown> | null>(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    accountEventIdx: index("trade_trust_event_account_event_idx").on(
+      table.accountId,
+      table.eventType
+    ),
+    accountTradeIdx: index("trade_trust_event_account_trade_idx").on(
+      table.accountId,
+      table.tradeId
+    ),
+    createdIdx: index("trade_trust_event_created_idx").on(table.createdAt),
   })
 );
 
@@ -982,8 +1054,38 @@ export const tradingAccountRelations = relations(
       references: [propChallengeInstance.id],
     }),
     trades: many(trade),
+    publicShares: many(publicAccountShare),
+    tradeTrustEvents: many(tradeTrustEvent),
     openTrades: many(openTrade),
     goals: many(goal),
     propChallengeStages: many(propChallengeStageAccount),
+  })
+);
+
+export const publicAccountShareRelations = relations(
+  publicAccountShare,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [publicAccountShare.userId],
+      references: [user.id],
+    }),
+    account: one(tradingAccount, {
+      fields: [publicAccountShare.accountId],
+      references: [tradingAccount.id],
+    }),
+  })
+);
+
+export const tradeTrustEventRelations = relations(
+  tradeTrustEvent,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [tradeTrustEvent.userId],
+      references: [user.id],
+    }),
+    account: one(tradingAccount, {
+      fields: [tradeTrustEvent.accountId],
+      references: [tradingAccount.id],
+    }),
   })
 );

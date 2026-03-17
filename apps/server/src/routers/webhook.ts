@@ -656,6 +656,9 @@ export const webhookRouter = router({
               pips: null, // Calculate if needed
               tradeDurationSeconds: durationSeconds.toString(),
               useBrokerData: 1, // Mark as broker data
+              originType: "broker_sync",
+              originLabel: "Broker sync",
+              originCapturedAt: new Date(),
               sessionTag: t.sessionTag || null,
               sessionTagColor: t.sessionTagColor || null,
               killzone: t.sessionTag || null,

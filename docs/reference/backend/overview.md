@@ -26,11 +26,21 @@
   - `apps/server/src/lib/trades/trade-outcome.ts`
 - verification and public track records
   - `apps/server/src/routers/accounts/track-record.ts`
+- public proof share and trust-audit APIs
+  - `apps/server/src/routers/proof.ts`
+  - `apps/server/src/routers/proof/...`
+  - `apps/server/src/lib/public-proof/...`
 - health and sync status
   - `apps/server/src/routers/accounts/health.ts`
 
 These files exist to keep `accounts.ts` as the router composition surface rather
 than forcing every account concern back into one file.
+
+Public proof pages are intentionally separate from social/public-profile work:
+
+- the revocable link and signed-out read APIs live under the dedicated proof router
+- trade provenance and edit/delete trust events live in `apps/server/src/db/schema/trading.ts` and the `lib/public-proof` helpers
+- this keeps `/verified` track-record logic, social discovery, and public proof-of-edge pages decoupled
 
 ## Verification commands
 

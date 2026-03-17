@@ -13,6 +13,14 @@ import {
   getPipSizeForSymbol,
   normalizePipValue,
 } from "../../lib/dukascopy";
+import {
+  recordTradeDeleteTrustEvents,
+  recordTradeUpdateTrustEvent,
+} from "../../lib/public-proof/trust-audit";
+import {
+  getTradeOriginLabel,
+  resolveTradeOriginType,
+} from "../../lib/public-proof/trust";
 import { archiveDeletedImportedTrades } from "../../lib/trade-import/deleted-imported-trades";
 import {
   updateAccountManipulation,
@@ -66,6 +74,8 @@ const deletedImportedTradeArchiveColumns = {
   closeTime: trade.closeTime,
   sessionTag: trade.sessionTag,
   sessionTagColor: trade.sessionTagColor,
+  originType: trade.originType,
+  useBrokerData: trade.useBrokerData,
   brokerMeta: trade.brokerMeta,
 };
 
@@ -381,6 +391,17 @@ export const tradeMutationProcedures = {
         tx: db,
         trades: archivedTrades,
       });
+      await recordTradeDeleteTrustEvents({
+        userId: ctx.session.user.id,
+        trades: archivedTrades,
+        resolveOriginType: (tradeRow) =>
+          resolveTradeOriginType({
+            originType: tradeRow.originType,
+            brokerMeta: tradeRow.brokerMeta as Record<string, unknown> | null,
+            ticket: tradeRow.ticket,
+            useBrokerData: Number(tradeRow.useBrokerData ?? 0),
+          }),
+      });
       await db.delete(trade).where(inArray(trade.id, input.tradeIds));
 
       await invalidateTradeScopeCaches(accountIds);
@@ -579,6 +600,9 @@ export const tradeMutationProcedures = {
           tradeDurationSeconds: durationSeconds.toString(),
           beThresholdPips: ownedAccount.breakevenThresholdPips,
           outcome,
+          originType: "manual_entry",
+          originLabel: getTradeOriginLabel("manual_entry"),
+          originCapturedAt: new Date(),
           sessionTag: input.sessionTag || null,
           modelTag: input.modelTag || null,
           customTags: normalizeTradeTags(input.customTags),
@@ -660,14 +684,23 @@ export const tradeMutationProcedures = {
       );
       const [currentTrade] = await db
         .select({
+          id: trade.id,
+          accountId: trade.accountId,
           symbol: trade.symbol,
           tradeType: trade.tradeType,
+          volume: trade.volume,
           openPrice: trade.openPrice,
           closePrice: trade.closePrice,
+          sl: trade.sl,
           tp: trade.tp,
           profit: trade.profit,
           commissions: trade.commissions,
           swap: trade.swap,
+          openTime: trade.openTime,
+          closeTime: trade.closeTime,
+          originType: trade.originType,
+          brokerMeta: trade.brokerMeta,
+          useBrokerData: trade.useBrokerData,
           beThresholdPips: trade.beThresholdPips,
         })
         .from(trade)
@@ -746,6 +779,24 @@ export const tradeMutationProcedures = {
         .set(updates)
         .where(eq(trade.id, input.tradeId))
         .returning();
+
+      if (currentTrade) {
+        const originType = resolveTradeOriginType({
+          originType: currentTrade.originType,
+          brokerMeta: currentTrade.brokerMeta as Record<string, unknown> | null,
+          useBrokerData: currentTrade.useBrokerData,
+        });
+
+        await recordTradeUpdateTrustEvent({
+          userId: ctx.session.user.id,
+          before: currentTrade,
+          after: {
+            ...currentTrade,
+            ...updates,
+          },
+          originType,
+        });
+      }
 
       await invalidateTradeScopeCaches([ownedTrade.accountId]);
       await syncPropAccountState(ownedTrade.accountId, { saveAlerts: true });
@@ -838,6 +889,17 @@ export const tradeMutationProcedures = {
         await archiveDeletedImportedTrades({
           tx: db,
           trades: [archivedTrade],
+        });
+        await recordTradeDeleteTrustEvents({
+          userId: ctx.session.user.id,
+          trades: [archivedTrade],
+          resolveOriginType: (tradeRow) =>
+            resolveTradeOriginType({
+              originType: tradeRow.originType,
+              brokerMeta: tradeRow.brokerMeta as Record<string, unknown> | null,
+              ticket: tradeRow.ticket,
+              useBrokerData: Number(tradeRow.useBrokerData ?? 0),
+            }),
         });
       }
       await db.delete(trade).where(eq(trade.id, input.tradeId));

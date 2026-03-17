@@ -903,6 +903,9 @@ export async function projectClosedTrades(
         await db.insert(trade).values({
           id: tradeId,
           accountId,
+          originType: "broker_sync",
+          originLabel: "Broker sync",
+          originCapturedAt: new Date(),
           manipulationHigh: null,
           manipulationLow: null,
           manipulationPips: null,

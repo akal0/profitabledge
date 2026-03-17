@@ -86,7 +86,8 @@ const DashboardActionButtons: React.FC<Props> = ({
       exportWidgetsAsCsv(widgets, widgetSpans, fileName);
     }
   };
-  const hasCurrencySelector = currencyOptions.length > 1 && !!onCurrencyCodeChange;
+  const hasCurrencySelector =
+    currencyOptions.length > 1 && !!onCurrencyCodeChange;
   const modeButtonClassName = (isActive: boolean) =>
     cn(
       "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
@@ -99,55 +100,43 @@ const DashboardActionButtons: React.FC<Props> = ({
     <div className="flex gap-2 items-center">
       <div className="bg-white w-max h-max flex items-center gap-1 p-[3px] dark:bg-muted/15 rounded-md ring ring-white/5">
         {hasCurrencySelector ? (
-          <div className="flex items-center gap-px">
-            <Button
-              onClick={() => onValueModeChange?.("usd")}
-              className={cn(modeButtonClassName(valueMode === "usd"), "rounded-r-none pr-2")}
-            >
-              <span className="px-2">{currencyLabel}</span>
-            </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  onClick={() => onValueModeChange?.("usd")}
-                  className={cn(
-                    modeButtonClassName(valueMode === "usd"),
-                    "min-w-0 rounded-l-none px-2"
-                  )}
-                  aria-label="Choose preferred currency"
-                >
-                  <ChevronDown className="size-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="w-44 rounded-md border border-white/5 bg-sidebar p-1 text-white"
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                onClick={() => onValueModeChange?.("usd")}
+                className={modeButtonClassName(valueMode === "usd")}
               >
-                <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-white/40">
-                  Preferred currency
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/5" />
-                <DropdownMenuRadioGroup
-                  value={currencyLabel}
-                  onValueChange={(value) => {
-                    onCurrencyCodeChange?.(value);
-                    onValueModeChange?.("usd");
-                  }}
-                >
-                  {currencyOptions.map((currencyCode) => (
-                    <DropdownMenuRadioItem
-                      key={currencyCode}
-                      value={currencyCode}
-                      className="rounded-sm px-3 py-2 text-xs text-white/80 focus:bg-sidebar-accent focus:text-white"
-                    >
-                      {currencyCode}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                <span className="px-2">{currencyLabel}</span>
+                <ChevronDown className="size-3.5 -ml-1" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-44 rounded-md bg-sidebar ring-white/5 p-1 text-white"
+            >
+              <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-white/40">
+                Preferred currency
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-white/5" />
+              <DropdownMenuRadioGroup
+                value={currencyLabel}
+                onValueChange={(value) => {
+                  onCurrencyCodeChange?.(value);
+                  onValueModeChange?.("usd");
+                }}
+              >
+                {currencyOptions.map((currencyCode) => (
+                  <DropdownMenuRadioItem
+                    key={currencyCode}
+                    value={currencyCode}
+                    className="rounded-sm px-3 py-2 text-xs text-white/80 focus:bg-sidebar-accent focus:text-white"
+                  >
+                    {currencyCode}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <Button
             onClick={() => onValueModeChange?.("usd")}
@@ -174,9 +163,7 @@ const DashboardActionButtons: React.FC<Props> = ({
 
       {accountAction ? (
         <div className="flex items-center overflow-hidden ring ring-white/5 bg-sidebar group rounded-md">
-          <Button
-            className="cursor-default rounded-md bg-sidebar px-4 py-2 text-xs text-white/25 hover:bg-sidebar-accent"
-          >
+          <Button className="cursor-default rounded-md bg-sidebar px-4 py-2 text-xs text-white/25 hover:bg-sidebar-accent">
             {accountAction.timestampLabel}: {formattedAccountTimestamp}
           </Button>
         </div>

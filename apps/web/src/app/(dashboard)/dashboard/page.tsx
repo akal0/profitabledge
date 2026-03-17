@@ -174,13 +174,11 @@ function DashboardPageContent() {
         <div className="flex flex-1 flex-col gap-8">
           <div ref={widgetsExportRef} className="space-y-1.5">
             {accountId === ALL_ACCOUNTS_ID ? (
-              <div className="grid auto-rows-[18rem] gap-1.5 md:grid-cols-4 2xl:grid-cols-4 3xl:grid-cols-5">
-                <AllAccountsBreakdownWidget
-                  accountId={accountId}
-                  currencyCode={currencyCode}
-                  className="h-[18rem] md:col-span-2 2xl:col-span-2 3xl:col-span-2"
-                />
-              </div>
+              <AllAccountsBreakdownWidget
+                accountId={accountId}
+                currencyCode={currencyCode}
+                className="h-[18rem]"
+              />
             ) : null}
             <Widgets
               enabledWidgets={widgets}

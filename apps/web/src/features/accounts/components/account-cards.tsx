@@ -106,7 +106,7 @@ export function ArchivedAccountCard({ account }: { account: AccountRecord }) {
       <Button
         variant="outline"
         size="sm"
-        className="h-8 rounded-sm ring-1 ring-white/10 px-3 text-xs text-white/65 hover:bg-sidebar hover:text-white"
+        className="h-8 rounded-sm ring-1 ring-white/8 px-3 text-xs text-white/65 hover:bg-sidebar hover:text-white"
         onClick={() =>
           unarchiveMutation.mutate({
             accountId: account.id,
@@ -155,7 +155,7 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
           <BrokerAccountAvatar className="size-12 shrink-0 rounded-full!" />
           <div>
             <p className="text-sm font-semibold text-white">{brokerLabel}</p>
-            <p className="mt-0.5 text-xs font-medium text-white/50">
+            <p className="mt-0.5 text-xs font-medium text-white/50 truncate max-w-[180px]">
               {account.name}
             </p>
             <AccountTagList account={account} />
@@ -278,7 +278,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             <p className="text-sm font-semibold text-white">
               {propFirm.displayName}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-white/50">
+            <p className="mt-0.5 text-xs font-medium text-white/50 truncate max-w-[180px]">
               {account.name}
             </p>
             <AccountTagList account={account} />

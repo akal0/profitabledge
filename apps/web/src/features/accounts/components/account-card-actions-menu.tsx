@@ -104,12 +104,11 @@ export function AccountCardActionsMenu({
             title="Account actions"
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
-            <span className="text-[10px] font-medium">Actions</span>
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
-          className="w-52 rounded-sm bg-sidebar p-1 ring-1 ring-white/10"
+          className="w-52 rounded-sm bg-sidebar p-1 ring-1 ring-white/10 border-none"
         >
           <DropdownMenuItem
             className={ACCOUNT_ACTION_ITEM_CLASS}

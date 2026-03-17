@@ -60,13 +60,13 @@ export function WidgetWrapper({
       {header ? (
         header
       ) : showHeader && (Icon || title) ? (
-        <div className="flex w-full gap-1.5 items-center p-3.5 widget-header">
+        <div className="flex w-full gap-1.5 items-center p-3.5 widget-header min-w-0">
           {Icon && (
-            <Icon className="size-4 stroke-white/50 group-hover:stroke-white fill-sidebar transition-all duration-250" />
+            <Icon className="size-4 shrink-0 stroke-white/50 group-hover:stroke-white fill-sidebar transition-all duration-250" />
           )}
           {title && (
-            <h2 className="text-xs font-medium flex items-center gap-2 text-white/50 group-hover:text-white transition-all duration-250">
-              <span>{title}</span>
+            <h2 className="text-xs font-medium flex items-center gap-2 text-white/50 group-hover:text-white transition-all duration-250 min-w-0">
+              <span className="truncate">{title}</span>
             </h2>
           )}
           {headerRight ? (

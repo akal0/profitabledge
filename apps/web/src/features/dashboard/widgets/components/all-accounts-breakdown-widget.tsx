@@ -18,7 +18,7 @@ import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
 import { useAccountTransitionStore } from "@/stores/account-transition";
 import { trpcOptions } from "@/utils/trpc";
 
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 3;
 
 type AccountBreakdownRow = {
   id: string;
@@ -141,13 +141,23 @@ export function AllAccountsBreakdownWidget({
                             {account.name}
                           </span>
                           {account.isPropAccount ? (
-                            <span className="rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.16em] text-amber-300">
+                            <span className="rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] text-amber-300">
                               Prop
                             </span>
                           ) : null}
                         </div>
                         <p className="mt-1 text-[11px] text-white/40">
                           {account.totalTrades} trades · {account.winRate.toFixed(1)}% WR
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 text-center">
+                        <p className="text-xs font-medium text-white/70">
+                          {account.contribution >= 0 ? "+" : ""}
+                          {account.contribution.toFixed(1)}%
+                        </p>
+                        <p className="mt-1 text-[11px] text-white/35">
+                          contribution
                         </p>
                       </div>
 
@@ -165,8 +175,7 @@ export function AllAccountsBreakdownWidget({
                           })}
                         </p>
                         <p className="mt-1 text-[11px] text-white/35">
-                          {account.contribution >= 0 ? "+" : ""}
-                          {account.contribution.toFixed(1)}% contribution
+                          P&L
                         </p>
                       </div>
 

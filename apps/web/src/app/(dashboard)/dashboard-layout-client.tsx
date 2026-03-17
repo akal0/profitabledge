@@ -50,6 +50,14 @@ const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/backtest", plan: "professional" },
 ];
 
+const HELD_BACK_COMMUNITY_ROUTE_PREFIXES = [
+  "/dashboard/feed",
+  "/dashboard/leaderboard",
+  "/dashboard/achievements",
+  "/dashboard/news",
+  "/dashboard/settings/social",
+] as const;
+
 export default function DashboardLayoutClient({
   children,
 }: {
@@ -220,6 +228,9 @@ export default function DashboardLayoutClient({
       pathname?.startsWith("/dashboard/growth-admin")) &&
       !hasAdminAccess
   );
+  const hasBlockedCommunityAccess = HELD_BACK_COMMUNITY_ROUTE_PREFIXES.some(
+    (prefix) => safePathname.startsWith(prefix)
+  );
 
   const activePlanKey = (billingState?.billing?.activePlanKey ??
     null) as PlanKey | null;
@@ -245,6 +256,12 @@ export default function DashboardLayoutClient({
   useEffect(() => {
     if (hasIncompleteOnboarding) {
       router.replace(buildOnboardingPath(currentDashboardPath));
+    } else if (hasBlockedCommunityAccess) {
+      router.replace(
+        safePathname.startsWith("/dashboard/settings/")
+          ? "/dashboard/settings/profile"
+          : "/dashboard"
+      );
     } else if (hasBlockedAdminAccess) {
       router.replace("/dashboard/growth");
     } else if (hasBlockedAffiliateAccess) {
@@ -255,10 +272,12 @@ export default function DashboardLayoutClient({
   }, [
     currentDashboardPath,
     hasIncompleteOnboarding,
+    hasBlockedCommunityAccess,
     hasBlockedAdminAccess,
     hasBlockedAffiliateAccess,
     hasBlockedPlanAccess,
     router,
+    safePathname,
   ]);
 
   useEffect(() => {
@@ -316,6 +335,7 @@ export default function DashboardLayoutClient({
     !hasConfirmedSession ||
     (isSessionReady && !hasFetchedBillingState) ||
     hasIncompleteOnboarding ||
+    hasBlockedCommunityAccess ||
     hasBlockedAdminAccess ||
     hasBlockedAffiliateAccess ||
     hasBlockedPlanAccess

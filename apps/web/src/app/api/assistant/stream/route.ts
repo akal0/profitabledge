@@ -17,16 +17,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log("[Assistant Stream Proxy] Request:", {
-      message: body.message?.substring(0, 50),
-      accountId: body.accountId,
-    });
 
     // Get all headers to forward
     const cookie = request.headers.get("Cookie") || "";
     const authorization = request.headers.get("Authorization") || "";
-    
-    console.log("[Assistant Stream Proxy] Forwarding with cookie:", cookie ? "present" : "none");
 
     // Forward request to server
     const forwardHeaders: Record<string, string> = {
@@ -58,11 +52,11 @@ export async function POST(request: NextRequest) {
       credentials: "include",
     });
 
-    console.log("[Assistant Stream Proxy] Backend status:", response.status);
-
     if (!response.ok) {
       const error = await response.text();
-      console.error("[Assistant Stream Proxy] Backend error:", error);
+      console.error("[Assistant Stream Proxy] Backend request failed", {
+        status: response.status,
+      });
       return new Response(error, { 
         status: response.status, 
         headers: { "Content-Type": "application/json" } 

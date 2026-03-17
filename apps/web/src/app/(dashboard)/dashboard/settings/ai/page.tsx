@@ -40,23 +40,24 @@ const PROVIDERS: Array<{
   {
     id: "gemini",
     label: "Google Gemini",
-    helper: "Primary live AI provider for current in-product routing.",
-    note: "Recommended for current assistant and analysis flows.",
+    helper: "Primary live provider for the current in-product assistant runtime.",
+    note: "Recommended today for assistant, analysis, and metered AI flows.",
     keyLink: "https://aistudio.google.com/app/apikey",
   },
   {
     id: "openai",
     label: "OpenAI",
-    helper: "Validated connector-ready key for upcoming multi-provider routing.",
-    note: "Stored and validated now so your account is ready when runtime selection expands.",
+    helper:
+      "Validated and stored now so your account is ready when runtime selection expands.",
+    note: "Future-ready provider key. Current production routing still uses Gemini first.",
     keyLink: "https://platform.openai.com/api-keys",
   },
   {
     id: "anthropic",
     label: "Anthropic",
     helper:
-      "Validated connector-ready key for upcoming multi-provider routing.",
-    note: "Stored and validated now so your account is ready when runtime selection expands.",
+      "Validated and stored now so your account is ready when runtime selection expands.",
+    note: "Future-ready provider key. Current production routing still uses Gemini first.",
     keyLink: "https://console.anthropic.com/settings/keys",
   },
 ];

@@ -5,7 +5,6 @@ import {
   Gift,
   LifeBuoy,
   Settings,
-  Shield,
   TrendingUp,
   Users,
 } from "lucide-react";
@@ -100,7 +99,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
-  const isAdmin = billingState?.admin?.isAdmin === true;
   const settingsActive =
     pathname === "/dashboard/settings" ||
     pathname?.startsWith("/dashboard/settings/");
@@ -128,15 +126,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 title: "Affiliate",
                 url: "/dashboard/affiliate",
                 icon: Users,
-              },
-            ]
-          : []),
-        ...(isAdmin
-          ? [
-              {
-                title: "Growth admin",
-                url: "/dashboard/growth-admin",
-                icon: Shield,
               },
             ]
           : []),
@@ -169,7 +158,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }),
       }));
     },
-    [canViewAffiliateDashboard, isAdmin, pathname]
+    [canViewAffiliateDashboard, pathname]
   );
 
   return (

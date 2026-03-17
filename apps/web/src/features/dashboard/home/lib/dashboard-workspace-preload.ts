@@ -12,7 +12,7 @@ import {
 
 const DASHBOARD_WIDGET_TRADE_LIMIT = 200;
 const CHART_TRADE_PAGE_LIMIT = 200;
-const CHART_TRADE_MAX_PAGES = 100;
+const CHART_TRADE_MAX_PAGES = 40;
 
 type WarmupAccount = {
   id: string;
@@ -231,14 +231,7 @@ export function hasPrefetchedDashboardWorkspace(targetPath: string) {
         accountId: selectedAccountId,
         startISO: rangeState.visibleRange.start.toISOString(),
         endISO: rangeState.visibleRange.end.toISOString(),
-      }).queryKey,
-      [
-        "dashboard-chart-trades",
-        selectedAccountId,
-        rangeState.visibleRange.start.toISOString(),
-        rangeState.visibleRange.end.toISOString(),
-        "default",
-      ]
+      }).queryKey
     );
   }
 
@@ -360,11 +353,6 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
           endISO: visibleRange.end.toISOString(),
         }),
         staleTime: 30_000,
-      }),
-      prefetchDashboardChartTrades({
-        accountId: selectedAccountId,
-        startISO: visibleRange.start.toISOString(),
-        endISO: visibleRange.end.toISOString(),
       })
     );
   }
@@ -384,7 +372,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
 
   await Promise.allSettled(criticalWarmups);
 
-  void Promise.allSettled([
+  const backgroundWarmups = [
     queryClient.prefetchQuery({
       ...trpcOptions.trades.listSymbols.queryOptions({
         accountId: selectedAccountId,
@@ -449,5 +437,17 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
       }),
       staleTime: 60_000,
     }),
-  ]);
+  ];
+
+  if (visibleRange) {
+    backgroundWarmups.push(
+      prefetchDashboardChartTrades({
+        accountId: selectedAccountId,
+        startISO: visibleRange.start.toISOString(),
+        endISO: visibleRange.end.toISOString(),
+      })
+    );
+  }
+
+  void Promise.allSettled(backgroundWarmups);
 }

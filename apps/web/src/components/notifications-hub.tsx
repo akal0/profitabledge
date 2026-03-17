@@ -390,17 +390,8 @@ function buildSettingsUpdatedUrl(metadata?: NotificationMetadata | null) {
   return "/dashboard/settings";
 }
 
-function buildCalendarUrl(metadata?: NotificationMetadata | null) {
-  if (!metadata) return "/dashboard/news";
-  const params = new URLSearchParams();
-  if (metadata.country) params.set("currency", metadata.country);
-  if (metadata.impact) params.set("impact", metadata.impact);
-  if (metadata.date) {
-    params.set("start", metadata.date);
-    params.set("end", metadata.date);
-  }
-  const qs = params.toString();
-  return qs ? `/dashboard/news?${qs}` : "/dashboard/news";
+function buildCalendarUrl(_metadata?: NotificationMetadata | null) {
+  return "/dashboard/settings/notifications";
 }
 
 function buildNotificationUrl(item: NotificationItem) {
@@ -421,7 +412,7 @@ function buildNotificationUrl(item: NotificationItem) {
     case "goal_progress":
       return "/dashboard/goals";
     case "achievement_earned":
-      return "/dashboard/achievements";
+      return "/dashboard";
     case "prop_violation":
     case "prop_journey":
     case "prop_phase_advanced":
@@ -431,7 +422,7 @@ function buildNotificationUrl(item: NotificationItem) {
     case "alert_triggered":
       return "/dashboard/settings/alerts";
     case "leaderboard_update":
-      return "/dashboard/leaderboard";
+      return "/dashboard";
     case "copier_signal":
       return "/dashboard/copier";
     case "api_key":

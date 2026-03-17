@@ -53,12 +53,6 @@ export async function orchestrateQuery(
   userMessage: string,
   context: OrchestratorContext
 ): Promise<OrchestratorResult> {
-  console.log("[Orchestrator] Processing query:", userMessage);
-  console.log("[Orchestrator] Context:", {
-    userId: context.userId,
-    accountId: context.accountId,
-  });
-
   const debug: OrchestratorResult["debug"] = {
     planGenerated: false,
     planValid: false,
@@ -139,7 +133,6 @@ export async function orchestrateQuery(
     }
 
     // Step 1: Generate plan from natural language
-    console.log("[Orchestrator] Step 1: Generating plan...");
     const planResult = await generatePlan(
       userMessage,
       context.conversationHistory,
@@ -192,7 +185,6 @@ export async function orchestrateQuery(
       };
     }
 
-    console.log("[Orchestrator] Step 2: Executing plan...");
     // Step 2: Execute plan
     const executionResult = await executePlan(plan, {
       userId: context.userId,
@@ -211,13 +203,10 @@ export async function orchestrateQuery(
 
     debug.executionSuccessful = true;
 
-    console.log("[Orchestrator] Step 3: Assembling answer...");
     // Step 3: Assemble answer
     const answer = assembleAnswer(executionResult, plan, {
       userMessage,
     });
-
-    console.log("[Orchestrator] Query completed successfully");
     return {
       success: true,
       message: answer.markdown,

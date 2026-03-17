@@ -24,7 +24,6 @@ import {
   ShieldCheck,
   Shield,
   Bell,
-  Users,
   Plug,
   Cpu,
   Clock,
@@ -63,9 +62,6 @@ const settingsNavSections: NavSection[] = [
         icon: CreditCard,
       },
       { title: "Broker", href: "/dashboard/settings/broker", icon: Database },
-      ...(publicAlphaFlags.community
-        ? [{ title: "Social", href: "/dashboard/settings/social", icon: Users }]
-        : []),
       { title: "Timezone", href: "/dashboard/settings/timezone", icon: Globe },
     ],
   },

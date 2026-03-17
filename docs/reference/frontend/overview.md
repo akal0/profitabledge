@@ -5,7 +5,7 @@ The frontend lives in `apps/web` and is a Next.js App Router application using R
 ## Key frontend entrypoints
 
 - `apps/web/src/app/page.tsx`
-  - temporary root private-beta gate and waitlist capture surface
+  - animated marketing and invite-entry landing surface
 - `apps/web/src/app/layout.tsx`
   - root layout
 - `apps/web/src/components/providers.tsx`
@@ -33,7 +33,7 @@ High-level route groups:
 - `(onboarding)`
   - onboarding wizard, plan selection, and private-beta access redemption
 - `(public)`
-  - alpha-limited public surfaces: share pages, verified pages, link-only public proof pages, and a held-back public-profile placeholder
+  - alpha-limited public surfaces: share pages, verified pages, and link-only public proof pages
 
 Main dashboard pages currently include:
 
@@ -48,10 +48,6 @@ Main dashboard pages currently include:
 - `/dashboard/goals`
 - `/dashboard/accounts`
 - `/dashboard/prop-tracker`
-- `/dashboard/feed`
-- `/dashboard/leaderboard`
-- `/dashboard/achievements`
-- `/dashboard/news`
 - `/dashboard/settings`
 - `/dashboard/settings/ai`
 - `/dashboard/settings/support`
@@ -126,7 +122,7 @@ Current example:
 - the main dashboard sidebar footer now exposes a `Request a feature` action above `Settings`; it opens an in-app dialog backed by a shared product catalog covering current analysis, accounts, community, tools, growth, settings, onboarding, and public/share surfaces, and submits the request privately through the operations router instead of sending members to GitHub in the browser
 - app-router pages that depend on `useSearchParams()` are now isolated behind suspense boundaries so the web build can prerender static pages without CSR bailout failures
 - the dashboard and backtest shells now emit lightweight page-view events into the operations router, so alpha usage can be reviewed from the support page without wiring an external analytics SDK first
-- the root route now acts as the temporary private-beta gate, validating beta codes before routing into sign-up/onboarding and exposing a public waitlist form when users do not have access yet
+- the root route is now the primary marketing and invite-entry surface, while beta validation and access redemption live inside the auth/onboarding flow instead of replacing the landing page
 - the sign-up route now forwards the beta code inside the auth request itself, so account creation is blocked server-side when private beta is required and the submitted code is missing or invalid
 - the sign-up route waits for billing public-config resolution before starting email or social auth, so private-beta enforcement cannot be bypassed by clicking a sign-up action before the invite requirements finish loading
 - when private beta is enabled, the social sign-up buttons on the sign-up route no longer trigger email/password validation; they now focus the beta-code field, explain that an invite code is required, and only continue into Google or X OAuth once the code validates
@@ -141,12 +137,12 @@ Current example:
 - the onboarding shell now uses a scrollable responsive layout instead of a fixed-height desktop frame, so long profile/account-import forms remain usable on smaller screens and when CSV/account metadata expands vertically
 - the login page now lands directly on `/dashboard`, and the dashboard shell no longer force-bounces signed-in members back to onboarding just because billing/onboarding state is incomplete
 - the onboarding account step now flips its footer CTA to `Go to dashboard` as soon as CSV import, demo workspace creation, or broker/EA setup intent makes the member ready to continue, instead of waiting on a stale account-list refresh
-- the dashboard sidebar now exposes a `Growth` section with `/dashboard/growth`, `/dashboard/referrals`, `/dashboard/affiliate`, and `/dashboard/growth-admin` for admins, without introducing a second shell
+- the dashboard sidebar now exposes a `Growth` section with `/dashboard/growth`, `/dashboard/referrals`, and `/dashboard/affiliate`, while `/dashboard/growth-admin` remains an admin-only direct route instead of a persistent sidebar item
 - the growth overview and growth-admin routes now live under a shared dashboard route-group layout that mounts a billing-style underlined admin tab strip directly beneath the header, while growth, referrals, affiliate, and growth-admin page bodies reuse the same shadowed settings-card shell language as Billing instead of bespoke route-local framing
 - the growth overview and growth admin surfaces now live on their own dashboard routes, while Billing keeps payout-method management inside Billing for approved affiliates
 - on localhost/non-production builds, the affiliate payment-method form exposes test preset buttons for PayPal, Wise, bank transfer, and crypto, but those presets still save the same production-compatible payout method types and fields
 - allowlisted admins can still open admin-only growth routes such as `/dashboard/growth-admin` while private beta is active, even if that admin account has not redeemed a beta code, and the older `/dashboard/beta-access` path now redirects there
-- the settings sidebar now includes a dedicated billing page for plan management and affiliate payout methods, while the main Growth sidebar section owns the growth overview, referrals, affiliate dashboard, and growth-admin tools
+- the settings sidebar now includes a dedicated billing page for plan management and affiliate payout methods, while the main Growth sidebar section owns the growth overview, referrals, and affiliate dashboard
 - the billing settings area now uses a shared billing route layout that mounts the journal-style subnav directly under the settings shell header, with `/dashboard/settings/billing` focused on plan management and `/dashboard/settings/billing/payment-methods` handling affiliate payout instructions and payout history
 - the current Vercel-safe beta posture should be applied through deployment env flags rather than local defaults: when Backtest, scheduled sync, or MT5 ingestion are disabled in production, the main sidebar still shows Backtest as a disabled `Coming soon!` item, and Connections downgrades MT5/auto-sync copy so the UI matches the workerless beta environment without breaking local development
 - the settings sidebar now also includes a dedicated AI page for personal Gemini, OpenAI, and Anthropic keys, using the same settings shell language as billing/connections while keeping provider-key UI in `apps/web/src/features/settings/ai-keys`
@@ -221,6 +217,7 @@ At runtime, browser-side server origin resolution is intentionally stricter than
 - browser auth and tRPC traffic now terminates on the web app origin first (`/api/auth/...` and `/trpc/...`) and is proxied server-side, so split deployments do not depend on third-party browser cookies between separate `*.vercel.app` project domains
 - the server proxy strips upstream compression and transfer headers before returning proxied auth/tRPC responses, so browsers do not attempt to decode already-decoded bodies on split deployments
 - the assistant surface lives at `/assistant`, and the legacy `/ai` path is kept as a redirect so stale bundles or old navigation links do not 404 in production
+- unfinished community discovery surfaces are intentionally hidden from the sidebar, command palette, settings navigation, notification deep-links, and public-profile routing until feed, leaderboard, and public-profile paths are ready to ship
 
 ## When working on a new section
 

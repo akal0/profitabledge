@@ -362,7 +362,7 @@ export default function EditProfilePage() {
             Display name
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
-            Shown on leaderboards and social.
+            Used across your account and shareable proof surfaces.
           </p>
         </div>
         <Input

@@ -6,10 +6,7 @@ import {
   Target,
   Trophy,
   Building2,
-  Award,
-  Newspaper,
   BarChart3,
-  Rss,
   TrendingUp,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
@@ -79,19 +76,6 @@ export const NAV_SECTIONS: NavSection[] = [
       },
     ] satisfies NavItem[],
   } satisfies NavSection,
-  ...(publicAlphaFlags.community
-    ? [
-        {
-          label: "Community",
-          items: [
-            { title: "Feed", url: "/dashboard/feed", icon: Rss },
-            { title: "Leaderboard", url: "/dashboard/leaderboard", icon: Award },
-            { title: "Achievements", url: "/dashboard/achievements", icon: Trophy },
-            { title: "News", url: "/dashboard/news", icon: Newspaper },
-          ],
-        } satisfies NavSection,
-      ]
-    : []),
   {
     label: "Tools",
     items: [

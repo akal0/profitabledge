@@ -165,8 +165,6 @@ export async function executePlan(
   plan: TradeQueryPlan,
   context: ExecutionContext
 ): Promise<ExecutionResult> {
-  console.log("[Query Executor] Executing plan:", JSON.stringify(plan, null, 2));
-
   try {
     const scopedAccountIds =
       context.scopedAccountIds ??

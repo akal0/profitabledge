@@ -142,8 +142,6 @@ export async function* streamQuery(
   userMessage: string,
   context: StreamingContext
 ): AsyncGenerator<StreamEvent> {
-  console.log("[StreamOrchestrator] Processing:", userMessage);
-
   try {
     // ===== STAGE: THINKING =====
     yield {
@@ -274,7 +272,6 @@ export async function* streamQuery(
     }
 
     const plan = planResult.plan;
-    console.log("[StreamOrchestrator] Plan:", JSON.stringify(plan, null, 2));
 
     // ===== PROFILE SUMMARY SHORT-CIRCUIT =====
     if ((plan as any)._profileSummary && condensed) {

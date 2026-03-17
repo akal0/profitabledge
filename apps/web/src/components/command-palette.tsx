@@ -19,14 +19,11 @@ import {
   Calculator,
   FileText,
   BarChart3,
-  TrendingUp,
   Wallet,
   Shield,
   Zap,
   Clock,
   Star,
-  Newspaper,
-  Rss,
   Copy,
   Sparkles,
   MoreHorizontal,
@@ -52,7 +49,6 @@ type CategoryFilter =
   | "pages"
   | "tools"
   | "actions"
-  | "community"
   | "settings";
 
 const categoryFilters: {
@@ -62,7 +58,6 @@ const categoryFilters: {
 }[] = [
   { label: "Pages", value: "pages", icon: Home },
   { label: "Tools", value: "tools", icon: Calculator },
-  { label: "Community", value: "community", icon: Rss },
   { label: "Actions", value: "actions", icon: Zap },
   { label: "Settings", value: "settings", icon: Settings },
 ];
@@ -150,44 +145,6 @@ const allResults: ResultItem[] = [
     iconColor: "text-yellow-400",
     iconBg: "bg-yellow-500/10",
   },
-  // Community
-  ...(publicAlphaFlags.community
-    ? [
-        {
-          icon: Rss,
-          label: "Feed",
-          subtitle: "Community  ·  Social trading feed",
-          shortcut: "⌘F",
-          href: "/dashboard/feed",
-          key: "f",
-          category: "community" as const,
-          iconColor: "text-orange-400",
-          iconBg: "bg-orange-500/10",
-        },
-        {
-          icon: TrendingUp,
-          label: "Leaderboard",
-          subtitle: "Community  ·  Top traders ranking",
-          shortcut: "⌘L",
-          href: "/dashboard/leaderboard",
-          key: "l",
-          category: "community" as const,
-          iconColor: "text-green-400",
-          iconBg: "bg-green-500/10",
-        },
-        {
-          icon: Newspaper,
-          label: "News",
-          subtitle: "Community  ·  Market news & updates",
-          shortcut: "⌘N",
-          href: "/dashboard/news",
-          key: "n",
-          category: "community" as const,
-          iconColor: "text-slate-400",
-          iconBg: "bg-slate-500/10",
-        },
-      ]
-    : []),
   // Tools
   {
     icon: Copy,

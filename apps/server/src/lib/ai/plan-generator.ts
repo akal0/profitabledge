@@ -65,10 +65,6 @@ export async function generatePlan(
   billingUserId?: string
 ): Promise<PlanGenerationResult> {
   const normalizedMessage = normalizeUserMessage(userMessage);
-  console.log("[Plan Generator] Generating plan for:", userMessage);
-  if (normalizedMessage !== userMessage) {
-    console.log("[Plan Generator] Normalized query:", normalizedMessage);
-  }
 
   try {
     const cacheKey = buildPlanCacheKey(
@@ -78,10 +74,8 @@ export async function generatePlan(
     );
     const cachedPlan = cache.get<TradeQueryPlan>(cacheKey);
     if (cachedPlan) {
-      console.log("[Plan Generator] Cache hit");
       return { success: true, plan: cachedPlan };
     }
-    console.log("[Plan Generator] Cache miss");
 
     // Check for profile-summary queries (short-circuit)
     if (traderProfile && isProfileQuery(normalizedMessage)) {
@@ -575,8 +569,6 @@ async function generatePlanAttempt(
         .generateContent(prompt);
   const responseText = result.response.text();
 
-  console.log("[Plan Generator] AI response:", responseText);
-
   const jsonMatch = responseText.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
     return {
@@ -659,11 +651,6 @@ async function generatePlanAttempt(
     };
   }
 
-  console.log(
-    "[Plan Generator] Plan generated successfully:",
-    JSON.stringify(plan, null, 2)
-  );
-
   return {
     success: true,
     plan,
@@ -680,8 +667,6 @@ async function repairPlan(
   billingUserId?: string,
   accountId?: string
 ): Promise<PlanGenerationResult> {
-  console.log("[Plan Generator] Attempting to repair plan...");
-
   try {
     const normalizedMessage = normalizeUserMessage(userMessage);
 
@@ -756,7 +741,6 @@ Return the CORRECTED plan as valid JSON only, no explanation.`;
       };
     }
 
-    console.log("[Plan Generator] Plan repaired successfully");
     return { success: true, plan: validation.data };
   } catch (error) {
     const normalized = logAIProviderError("Plan repair", error);

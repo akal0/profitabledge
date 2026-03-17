@@ -8,7 +8,6 @@ const SERVER_URL =
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    console.log("[Chat Proxy] Request body:", JSON.stringify(body, null, 2));
 
     // Forward request to server
     const response = await fetch(`${SERVER_URL}/api/chat`, {
@@ -21,12 +20,11 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    console.log("[Chat Proxy] Backend response status:", response.status);
-    console.log("[Chat Proxy] Backend response headers:", Object.fromEntries(response.headers.entries()));
-
     if (!response.ok) {
       const error = await response.text();
-      console.error("[Chat Proxy] Backend error:", error);
+      console.error("[Chat Proxy] Backend request failed", {
+        status: response.status,
+      });
       return new Response(error, { status: response.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
 

@@ -32,10 +32,8 @@ This section maps to the core trading-analysis loop in the product.
 
 - dashboard metrics and related stats
   - `apps/server/src/routers/accounts.ts`
-    <<<<<<< Updated upstream
   - `apps/server/src/routers/accounts/aggregated-stats.ts`
-  - # `apps/server/src/routers/accounts/track-record.ts`
-    > > > > > > > Stashed changes
+  - `apps/server/src/routers/accounts/track-record.ts`
   - `apps/server/src/routers/pnl-cards.ts`
   - `apps/server/src/routers/views.ts`
 - trades
@@ -115,9 +113,7 @@ Current behavior:
 - persisted trade cells in the trades table now edit inline from the cell itself, while the trade detail sheet opens from row double-click or the single-trade floating-bar `View trade details` button; data rows and column headers also keep a pointer affordance so the interactive grid reads as clickable at a glance, and shared table autosizing now measures the rendered intrinsic width of chips/buttons plus padding so columns like `Swap` and `Protocol` expand when larger cell content appears instead of clipping pill styling, per-trade replay/share/export actions live in the floating actions menu when exactly one trade is selected instead of a dedicated row menu column, and live trades stay read-only with an explicit toast if the user tries to edit them
 - the trade-table streak badge is derived from chronological trade order, so it remains directionally correct even when the table is sorted with the latest trades first
 - the `/dashboard/trades` route now treats URL filter parsing, saved-view merging, numeric/date filter normalization, reference query loading, and preview-filter analytics as feature-owned logic under `apps/web/src/features/trades/table`, especially `hooks/use-trade-table-filter-controls.ts`, `hooks/use-trade-table-reference-data.ts`, `hooks/use-trade-table-filtered-data.ts`, `trade-table-filter-state.ts`, `trade-table-query-state.ts`, `trade-table-column-state.ts`, and `trade-table-view-state.ts`, so new trade filters should extend those shared modules instead of growing route-local parsing code
-  <<<<<<< Updated upstream
-- # dashboard-wide portfolio stats and verified-account share cards now depend on the account helper modules under `apps/server/src/routers/accounts`, so cross-account widgets should extend those helpers instead of reintroducing aggregate/track-record logic directly into `accounts.ts`
-  > > > > > > > Stashed changes
+- dashboard-wide portfolio stats and verified-account share cards now depend on the account helper modules under `apps/server/src/routers/accounts`, so cross-account widgets should extend those helpers instead of reintroducing aggregate/track-record logic directly into `accounts.ts`
 
 ### Journal
 

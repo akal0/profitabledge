@@ -1,6 +1,6 @@
 # Community Section Reference
 
-This section covers the trader-facing community surfaces.
+This section covers the trader-facing community surfaces that still exist in the route tree but are intentionally hidden from product discovery during the current alpha.
 
 ## Routes
 
@@ -56,6 +56,7 @@ Supporting UI lives primarily in:
 ## Development notes
 
 - these pages are product/community surfaces, not settings pages
+- discovery for these routes is intentionally disabled in the sidebar, command palette, settings navigation, notification deep-links, and public-profile routing until the community product loop is ready to ship
 - if a notification or badge is tied to social activity, check the notification hub and category mapping too
 - if ranking logic changes, verify the server router and any related database entities before changing only the frontend copy
 

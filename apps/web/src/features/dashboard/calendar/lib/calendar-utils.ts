@@ -258,7 +258,10 @@ export function buildGoalMap(goals: CalendarGoal[], days?: DayRow[] | null) {
   const map = new Map<string, GoalMarker[]>();
   const activeDayKeys = new Set(
     (days || [])
-      .filter((day) => Number(day.count || 0) > 0)
+      .filter(
+        (day) =>
+          Number(day.count || 0) > 0 || Number(day.liveTradeCount || 0) > 0
+      )
       .map((day) => day.dateISO)
   );
 
@@ -359,8 +362,106 @@ export function filterPreviewTradesForDate(items: Array<Record<string, unknown>>
         ),
         profit: Number(trade.profit ?? 0),
         holdSeconds: Number(trade.holdSeconds ?? 0),
+        status: "closed",
+        accountName:
+          typeof trade.accountName === "string" ? trade.accountName : null,
       })
     );
+}
+
+export function buildLiveTradePreviewMap(trades: TradePreview[]) {
+  const previewMap = new Map<string, TradePreview[]>();
+
+  for (const trade of trades) {
+    if (!trade.open) continue;
+
+    const openedAt = new Date(trade.open);
+    if (Number.isNaN(openedAt.getTime())) continue;
+
+    const dayKey = toUTCYMD(openedAt);
+    const bucket = previewMap.get(dayKey) ?? [];
+    bucket.push(trade);
+    bucket.sort(
+      (left, right) =>
+        new Date(left.open).getTime() - new Date(right.open).getTime()
+    );
+    previewMap.set(dayKey, bucket);
+  }
+
+  return previewMap;
+}
+
+export function mergeDayRowsWithLiveTrades(
+  rows: DayRow[] | null,
+  liveTrades: TradePreview[]
+) {
+  const dayMap = new Map<string, DayRow>();
+
+  for (const row of rows ?? []) {
+    dayMap.set(row.dateISO, {
+      ...row,
+      liveTradeCount: row.liveTradeCount ?? 0,
+      liveTradeProfit: row.liveTradeProfit ?? 0,
+    });
+  }
+
+  for (const trade of liveTrades) {
+    if (!trade.open) continue;
+
+    const openedAt = new Date(trade.open);
+    if (Number.isNaN(openedAt.getTime())) continue;
+
+    const dayKey = toUTCYMD(openedAt);
+    const current = dayMap.get(dayKey) ?? {
+      dateISO: dayKey,
+      totalProfit: 0,
+      percent: 0,
+      count: 0,
+      liveTradeCount: 0,
+      liveTradeProfit: 0,
+      dayNumber: Number(dayKey.slice(8, 10)),
+    };
+
+    current.liveTradeCount = (current.liveTradeCount ?? 0) + 1;
+    current.liveTradeProfit =
+      (current.liveTradeProfit ?? 0) + Number(trade.profit || 0);
+    dayMap.set(dayKey, current);
+  }
+
+  return Array.from(dayMap.values()).sort((left, right) =>
+    left.dateISO.localeCompare(right.dateISO)
+  );
+}
+
+export function extendBoundsWithTradePreviews(
+  bounds: { minISO: string; maxISO: string } | null,
+  trades: TradePreview[]
+) {
+  if (!bounds && trades.length === 0) {
+    return null;
+  }
+
+  let minTs = bounds ? new Date(bounds.minISO).getTime() : Number.POSITIVE_INFINITY;
+  let maxTs = bounds ? new Date(bounds.maxISO).getTime() : 0;
+
+  for (const trade of trades) {
+    if (!trade.open) continue;
+
+    const openedAt = new Date(trade.open).getTime();
+    if (!Number.isFinite(openedAt)) continue;
+
+    if (openedAt < minTs) minTs = openedAt;
+    if (openedAt > maxTs) maxTs = openedAt;
+  }
+
+  if (!Number.isFinite(minTs) || maxTs <= 0) {
+    return bounds;
+  }
+
+  return {
+    minISO: new Date(minTs).toISOString(),
+    maxISO: new Date(maxTs).toISOString(),
+  };
 }
 
 export function getHeatmapBg(

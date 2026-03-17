@@ -6,6 +6,7 @@ import { trpcOptions } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+import { useDashboardTradeFilters } from "@/features/dashboard/filters/dashboard-trade-filters";
 
 function formatUsd(value: number) {
   return value.toLocaleString(undefined, {
@@ -18,11 +19,12 @@ function formatUsd(value: number) {
 
 export function AllAccountsOverview({ className }: { className?: string }) {
   const setSelectedAccountId = useAccountStore((state) => state.setSelectedAccountId);
+  const dashboardTradeFilters = useDashboardTradeFilters();
   const { data: rawData, isLoading } = useQuery({
     ...trpcOptions.accounts.aggregatedStats.queryOptions(),
     staleTime: 15_000,
   });
-  const data = rawData as
+  const defaultData = rawData as
     | {
         accounts: Array<{
           id: string;
@@ -42,7 +44,19 @@ export function AllAccountsOverview({ className }: { className?: string }) {
       }
     | undefined;
 
-  if (isLoading) {
+  const data = dashboardTradeFilters?.hasActiveFilters
+    ? {
+        accounts: dashboardTradeFilters.accountBreakdown,
+        totals: {
+          totalBalance: 0,
+          totalProfit: Number(dashboardTradeFilters.filteredStats?.totalProfit ?? 0),
+          overallWinRate: Number(dashboardTradeFilters.filteredStats?.winrate ?? 0),
+          overallExpectancy: Number(dashboardTradeFilters.filteredStats?.expectancy ?? 0),
+        },
+      }
+    : defaultData;
+
+  if (isLoading && !dashboardTradeFilters?.hasActiveFilters) {
     return (
       <section
         className={cn(
@@ -57,32 +71,61 @@ export function AllAccountsOverview({ className }: { className?: string }) {
 
   if (!data) return null;
 
-  const summaryItems = [
-    {
-      label: "Portfolio Balance",
-      value: formatUsd(data.totals.totalBalance),
-      icon: Wallet,
-      tone: "text-teal-400",
-    },
-    {
-      label: "Net Profit",
-      value: formatUsd(data.totals.totalProfit),
-      icon: TrendingUp,
-      tone: data.totals.totalProfit >= 0 ? "text-teal-400" : "text-rose-400",
-    },
-    {
-      label: "Win Rate",
-      value: `${data.totals.overallWinRate.toFixed(1)}%`,
-      icon: Activity,
-      tone: "text-white",
-    },
-    {
-      label: "Accounts",
-      value: String(data.accounts.length),
-      icon: Layers3,
-      tone: "text-white",
-    },
-  ];
+  const summaryItems = dashboardTradeFilters?.hasActiveFilters
+    ? [
+        {
+          label: "Filtered Trades",
+          value: String(dashboardTradeFilters.filteredTrades.length),
+          icon: Wallet,
+          tone: "text-teal-400",
+        },
+        {
+          label: "Net Profit",
+          value: formatUsd(data.totals.totalProfit),
+          icon: TrendingUp,
+          tone:
+            data.totals.totalProfit >= 0 ? "text-teal-400" : "text-rose-400",
+        },
+        {
+          label: "Win Rate",
+          value: `${data.totals.overallWinRate.toFixed(1)}%`,
+          icon: Activity,
+          tone: "text-white",
+        },
+        {
+          label: "Accounts",
+          value: String(data.accounts.length),
+          icon: Layers3,
+          tone: "text-white",
+        },
+      ]
+    : [
+        {
+          label: "Portfolio Balance",
+          value: formatUsd(data.totals.totalBalance),
+          icon: Wallet,
+          tone: "text-teal-400",
+        },
+        {
+          label: "Net Profit",
+          value: formatUsd(data.totals.totalProfit),
+          icon: TrendingUp,
+          tone:
+            data.totals.totalProfit >= 0 ? "text-teal-400" : "text-rose-400",
+        },
+        {
+          label: "Win Rate",
+          value: `${data.totals.overallWinRate.toFixed(1)}%`,
+          icon: Activity,
+          tone: "text-white",
+        },
+        {
+          label: "Accounts",
+          value: String(data.accounts.length),
+          icon: Layers3,
+          tone: "text-white",
+        },
+      ];
 
   const rankedAccounts = [...data.accounts].sort(
     (a, b) => b.totalProfit - a.totalProfit
@@ -99,14 +142,19 @@ export function AllAccountsOverview({ className }: { className?: string }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
-              All Accounts
+              {dashboardTradeFilters?.hasActiveFilters
+                ? "Filtered Portfolio"
+                : "All Accounts"}
             </p>
             <h2 className="mt-1 text-xl font-semibold text-white">
-              Cross-account portfolio view
+              {dashboardTradeFilters?.hasActiveFilters
+                ? "Cross-account filtered view"
+                : "Cross-account portfolio view"}
             </h2>
             <p className="mt-1 text-sm text-white/45">
-              Aggregate P&amp;L, capital, and contribution across every linked
-              account.
+              {dashboardTradeFilters?.hasActiveFilters
+                ? "Aggregate the currently filtered trades across tagged or selected accounts."
+                : "Aggregate P&L, capital, and contribution across every linked account."}
             </p>
           </div>
 

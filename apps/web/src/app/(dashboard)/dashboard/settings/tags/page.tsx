@@ -5,7 +5,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpcClient } from "@/utils/trpc";
 import { useAccountStore, ALL_ACCOUNTS_ID } from "@/stores/account";
-import { Tag, Clock } from "lucide-react";
+import { Tag, Clock, FolderKanban, Layers3 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type NamedTag = { name: string; color: string };
@@ -16,6 +16,8 @@ export default function TagsSettingsPage() {
 
   const [sessionTags, setSessionTags] = useState<NamedTag[]>([]);
   const [modelTags, setModelTags] = useState<NamedTag[]>([]);
+  const [customTradeTags, setCustomTradeTags] = useState<string[]>([]);
+  const [accountTags, setAccountTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -25,11 +27,15 @@ export default function TagsSettingsPage() {
     Promise.all([
       trpcClient.trades.listSessionTags.query({ accountId }),
       trpcClient.trades.listModelTags.query({ accountId }),
+      trpcClient.trades.listCustomTags.query({ accountId }),
+      trpcClient.accounts.listTags.query(),
     ])
-      .then(([sessions, models]) => {
+      .then(([sessions, models, customTags, accountTags]) => {
         if (cancelled) return;
         setSessionTags((sessions ?? []) as NamedTag[]);
         setModelTags((models ?? []) as NamedTag[]);
+        setCustomTradeTags((customTags ?? []) as string[]);
+        setAccountTags((accountTags ?? []) as string[]);
       })
       .catch((err) => {
         console.error("[Tags] fetch error:", err);
@@ -88,6 +94,47 @@ export default function TagsSettingsPage() {
 
       <Separator />
 
+      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+        <div className="max-w-[200px]">
+          <div className="flex items-center gap-2">
+            <FolderKanban className="size-4 text-amber-400" />
+            <Label className="text-sm text-white/80 font-medium">
+              Trade tags
+            </Label>
+          </div>
+          <p className="text-xs text-white/40 mt-0.5">
+            Custom tags applied to one or more trades.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {loading ? (
+            <>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </>
+          ) : customTradeTags.length > 0 ? (
+            customTradeTags.map((tag) => (
+              <div
+                key={tag}
+                className="flex items-center gap-3 p-3 bg-sidebar-accent border border-white/5 rounded-md"
+              >
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-amber-500/15 px-1.5 text-[10px] font-medium text-amber-300">
+                  T
+                </span>
+                <span className="text-white text-sm">{tag}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-white/40 py-4">
+              No custom trade tags yet. Add them when creating or editing
+              trades.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <Separator />
+
       {/* Model Tags */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div className="max-w-[200px]">
@@ -123,6 +170,46 @@ export default function TagsSettingsPage() {
           ) : (
             <p className="text-xs text-white/40 py-4">
               No model tags yet. Assign model tags to trades in the trade table.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+        <div className="max-w-[200px]">
+          <div className="flex items-center gap-2">
+            <Layers3 className="size-4 text-teal-400" />
+            <Label className="text-sm text-white/80 font-medium">
+              Account tags
+            </Label>
+          </div>
+          <p className="text-xs text-white/40 mt-0.5">
+            Used to group portfolios, desks, or asset-class buckets.
+          </p>
+        </div>
+        <div className="space-y-2">
+          {loading ? (
+            <>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </>
+          ) : accountTags.length > 0 ? (
+            accountTags.map((tag) => (
+              <div
+                key={tag}
+                className="flex items-center gap-3 p-3 bg-sidebar-accent border border-white/5 rounded-md"
+              >
+                <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-sm bg-teal-500/15 px-1.5 text-[10px] font-medium text-teal-300">
+                  A
+                </span>
+                <span className="text-white text-sm">{tag}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-white/40 py-4">
+              No account tags yet. Add them from the account cards.
             </p>
           )}
         </div>

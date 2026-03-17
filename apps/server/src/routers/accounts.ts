@@ -22,6 +22,12 @@ import {
   toggleArchiveProcedure,
 } from "./accounts/archive-preferences";
 import {
+  getArchivedAccountIds,
+  getUserWidgetPreferences,
+  setArchivedAccountIds,
+  updateUserWidgetPreferences,
+} from "./accounts/shared";
+import {
   generateTrackRecordProcedure,
   getTrackRecordProcedure,
 } from "./accounts/track-record";
@@ -51,6 +57,19 @@ import {
   opensBoundsProcedure,
 } from "./accounts/history-series";
 
+function normalizeStringTags(tags?: string[] | null) {
+  if (!Array.isArray(tags)) return [];
+
+  return Array.from(
+    new Set(
+      tags
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0)
+        .slice(0, 25)
+    )
+  );
+}
+
 export const accountsRouter = router({
   create: protectedProcedure
     .input(
@@ -58,12 +77,24 @@ export const accountsRouter = router({
         name: z.string().trim().min(1),
         broker: z.string().trim().min(1),
         brokerType: z
-          .enum(["mt4", "mt5", "ctrader", "ib", "oanda", "other"])
+          .enum([
+            "mt4",
+            "mt5",
+            "ctrader",
+            "ib",
+            "oanda",
+            "tradovate",
+            "topstepx",
+            "rithmic",
+            "ninjatrader",
+            "other",
+          ])
           .optional(),
         brokerServer: z.string().trim().min(1).optional(),
         accountNumber: z.string().trim().min(1).optional(),
         initialBalance: z.number().optional(),
         initialCurrency: z.string().optional(),
+        tags: z.array(z.string().trim().min(1)).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -91,6 +122,7 @@ export const accountsRouter = router({
           accountNumber: input.accountNumber || null,
           initialBalance: input.initialBalance?.toString() || null,
           initialCurrency: input.initialCurrency || null,
+          tags: normalizeStringTags(input.tags),
           ...autoPropFields,
         })
         .returning();
@@ -100,6 +132,95 @@ export const accountsRouter = router({
       }
 
       return account;
+    }),
+  updateTags: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        tags: z.array(z.string().trim().min(1)).max(25),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const normalizedTags = normalizeStringTags(input.tags);
+
+      const [account] = await db
+        .update(tradingAccount)
+        .set({
+          tags: normalizedTags,
+        })
+        .where(
+          and(
+            eq(tradingAccount.id, input.accountId),
+            eq(tradingAccount.userId, ctx.session.user.id)
+          )
+        )
+        .returning({
+          id: tradingAccount.id,
+          tags: tradingAccount.tags,
+        });
+
+      if (!account) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Account not found",
+        });
+      }
+
+      return account;
+    }),
+  listTags: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await db
+      .select({ tags: tradingAccount.tags })
+      .from(tradingAccount)
+      .where(eq(tradingAccount.userId, ctx.session.user.id));
+
+    return Array.from(
+      new Set(
+        rows.flatMap((row) =>
+          Array.isArray(row.tags)
+            ? row.tags.filter((tag): tag is string => typeof tag === "string")
+            : []
+        )
+      )
+    ).sort((left, right) => left.localeCompare(right));
+  }),
+  delete: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const [account] = await db
+        .select({ id: tradingAccount.id })
+        .from(tradingAccount)
+        .where(
+          and(
+            eq(tradingAccount.id, input.accountId),
+            eq(tradingAccount.userId, ctx.session.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!account) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Account not found",
+        });
+      }
+
+      const currentPreferences = await getUserWidgetPreferences(
+        ctx.session.user.id
+      );
+      const nextArchivedIds = getArchivedAccountIds(currentPreferences).filter(
+        (accountId) => accountId !== input.accountId
+      );
+
+      await Promise.all([
+        db.delete(tradingAccount).where(eq(tradingAccount.id, input.accountId)),
+        updateUserWidgetPreferences(
+          ctx.session.user.id,
+          setArchivedAccountIds(currentPreferences, nextArchivedIds)
+        ),
+      ]);
+
+      return { success: true };
     }),
   list: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;

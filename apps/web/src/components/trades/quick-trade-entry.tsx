@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { CalendarDate, fromDate, getLocalTimeZone } from "@internationalized/date";
 import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
 
+import { TradeDateTimeField } from "@/components/trades/trade-date-time-field";
 import {
   TRADE_ACTION_BUTTON_CLASS,
   TRADE_ACTION_BUTTON_PRIMARY_CLASS,
@@ -13,16 +12,11 @@ import {
   TRADE_IDENTIFIER_TONES,
   TRADE_SURFACE_CARD_CLASS,
 } from "@/components/trades/trade-identifier-pill";
+import { TagMultiSelect } from "@/components/tags/tag-multi-select";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar-rac";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -39,6 +33,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import {
+  formatSizingNumber,
+  getEstimatedPipSize,
+  mergeManualTradeSizingPreferences,
+  resolveManualTradeSizing,
+  type ManualTradeSizingPreferences,
+} from "@/lib/manual-trade-sizing";
 import { formatCurrencyValue } from "@/lib/trade-formatting";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -89,45 +90,6 @@ function createDefaultTradeWindow() {
   return { openTime, closeTime };
 }
 
-function toCalendarDate(value: Date) {
-  const localDate = fromDate(value, getLocalTimeZone());
-  return new CalendarDate(localDate.year, localDate.month, localDate.day);
-}
-
-function replaceCalendarDate(current: Date, next: CalendarDate) {
-  const selected = next.toDate(getLocalTimeZone());
-  const value = new Date(current);
-  value.setFullYear(
-    selected.getFullYear(),
-    selected.getMonth(),
-    selected.getDate()
-  );
-  value.setSeconds(0, 0);
-  return value;
-}
-
-function replaceTimeValue(current: Date, nextValue: string) {
-  const [hoursRaw, minutesRaw] = nextValue.split(":");
-  const hours = Number(hoursRaw);
-  const minutes = Number(minutesRaw);
-
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
-    return current;
-  }
-
-  const value = new Date(current);
-  value.setHours(hours, minutes, 0, 0);
-  return value;
-}
-
-function formatDateButtonLabel(value: Date) {
-  return format(value, "EEE, MMM d, yyyy");
-}
-
-function formatTimeInputValue(value: Date) {
-  return format(value, "HH:mm");
-}
-
 function parseNumberInput(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
@@ -138,14 +100,6 @@ function parseNumberInput(value: string) {
 function parsePositiveNumberInput(value: string) {
   const parsed = parseNumberInput(value);
   return parsed !== null && parsed > 0 ? parsed : null;
-}
-
-function getEstimatedPipSize(symbol: string) {
-  const upper = symbol.toUpperCase();
-  if (upper.includes("JPY")) return 0.01;
-  if (upper.startsWith("XAU") || upper.startsWith("XAG")) return 0.1;
-  if (upper.startsWith("BTC") || upper.startsWith("ETH")) return 1;
-  return 0.0001;
 }
 
 function formatHoldDuration(openTime: Date, closeTime: Date) {
@@ -205,55 +159,12 @@ function SuggestionChips({
   );
 }
 
-function TradeDateTimeField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: Date;
-  onChange: (nextValue: Date) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label className="text-xs text-white/50">{label}</Label>
-      <div className="grid grid-cols-[1fr_6.75rem] gap-2">
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              className={cn(
-                TRADE_ACTION_BUTTON_CLASS,
-                "h-9 w-full justify-start px-3 text-left text-white/85"
-              )}
-            >
-              {formatDateButtonLabel(value)}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto border-white/8 bg-[#1D1D20] p-3">
-            <Calendar
-              aria-label={`${label} date`}
-              value={toCalendarDate(value)}
-              onChange={(nextValue) =>
-                onChange(replaceCalendarDate(value, nextValue as CalendarDate))
-              }
-              fullWidth
-              className="w-full"
-            />
-          </PopoverContent>
-        </Popover>
+function formatVolumeInputValue(value: number) {
+  return Number.isFinite(value) ? value.toString() : "";
+}
 
-        <Input
-          type="time"
-          step="60"
-          value={formatTimeInputValue(value)}
-          onChange={(event) =>
-            onChange(replaceTimeValue(value, event.target.value))
-          }
-        />
-      </div>
-    </div>
-  );
+function formatAssetClassLabel(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 export function QuickTradeEntry({
@@ -284,7 +195,9 @@ export function QuickTradeEntry({
   const [swap, setSwap] = useState("");
   const [sessionTag, setSessionTag] = useState("");
   const [modelTag, setModelTag] = useState("");
+  const [customTags, setCustomTags] = useState<string[]>([]);
   const [autoCalculateProfit, setAutoCalculateProfit] = useState(true);
+  const previousSizingDefaultRef = useRef<string | null>(null);
 
   const recentSymbolsQuery = useQuery({
     ...trpcOptions.trades.listSymbols.queryOptions({ accountId }),
@@ -301,6 +214,16 @@ export function QuickTradeEntry({
     enabled: open,
     staleTime: 30_000,
   });
+  const customTagsQuery = useQuery({
+    ...trpcOptions.trades.listCustomTags.queryOptions({ accountId }),
+    enabled: open,
+    staleTime: 30_000,
+  });
+  const advancedPrefsQuery = useQuery({
+    ...trpcOptions.users.getAdvancedMetricsPreferences.queryOptions(),
+    enabled: open,
+    staleTime: 30_000,
+  });
 
   const recentSymbols = useMemo(
     () => (recentSymbolsQuery.data as string[] | undefined) ?? [],
@@ -313,6 +236,10 @@ export function QuickTradeEntry({
   const modelTagSuggestions = useMemo(
     () => (modelTagsQuery.data as NamedTradeTag[] | undefined) ?? [],
     [modelTagsQuery.data]
+  );
+  const customTagSuggestions = useMemo(
+    () => (customTagsQuery.data as string[] | undefined) ?? [],
+    [customTagsQuery.data]
   );
 
   const symbolOptions = useMemo(() => {
@@ -332,6 +259,61 @@ export function QuickTradeEntry({
 
   const effectiveSymbol =
     symbol === "custom" ? customSymbol.trim().toUpperCase() : symbol;
+  const manualTradeSizing =
+    (
+      advancedPrefsQuery.data as
+        | { manualTradeSizing?: ManualTradeSizingPreferences }
+        | undefined
+    )?.manualTradeSizing ?? {};
+  const fallbackSizingProfile = useMemo(
+    () => mergeManualTradeSizingPreferences(manualTradeSizing).forex,
+    [manualTradeSizing]
+  );
+  const resolvedSizing = useMemo(
+    () =>
+      effectiveSymbol
+        ? resolveManualTradeSizing(effectiveSymbol, manualTradeSizing)
+        : { assetClass: "forex" as const, profile: fallbackSizingProfile },
+    [effectiveSymbol, fallbackSizingProfile, manualTradeSizing]
+  );
+  const volumeQuickSizes = useMemo(
+    () =>
+      resolvedSizing.profile.quickSizes.map((size) =>
+        formatVolumeInputValue(size)
+      ),
+    [resolvedSizing.profile.quickSizes]
+  );
+
+  useEffect(() => {
+    const nextDefault = formatVolumeInputValue(
+      resolvedSizing.profile.defaultVolume
+    );
+
+    setVolume((current) => {
+      const trimmed = current.trim();
+      if (!trimmed) {
+        return nextDefault;
+      }
+
+      const previousDefault = previousSizingDefaultRef.current;
+      const numericValue = Number(trimmed);
+      const belowMinimum =
+        Number.isFinite(numericValue) &&
+        numericValue < resolvedSizing.profile.minVolume;
+
+      if (trimmed === previousDefault || belowMinimum) {
+        return nextDefault;
+      }
+
+      return current;
+    });
+
+    previousSizingDefaultRef.current = nextDefault;
+  }, [
+    effectiveSymbol,
+    resolvedSizing.profile.defaultVolume,
+    resolvedSizing.profile.minVolume,
+  ]);
 
   const parsedVolume = useMemo(
     () => parsePositiveNumberInput(volume),
@@ -366,15 +348,15 @@ export function QuickTradeEntry({
       tradeType === "long"
         ? parsedClosePrice - parsedOpenPrice
         : parsedOpenPrice - parsedClosePrice;
-    const contractSize = effectiveSymbol.includes("XAU") ? 100 : 100000;
 
-    return priceDiff * parsedVolume * contractSize;
+    return priceDiff * parsedVolume * resolvedSizing.profile.contractSize;
   }, [
     autoCalculateProfit,
     effectiveSymbol,
     parsedClosePrice,
     parsedOpenPrice,
     parsedVolume,
+    resolvedSizing.profile.contractSize,
     tradeType,
   ]);
 
@@ -478,7 +460,11 @@ export function QuickTradeEntry({
     setSymbol("");
     setCustomSymbol("");
     setTradeType("long");
-    setVolume("0.1");
+    setVolume(
+      formatVolumeInputValue(
+        mergeManualTradeSizingPreferences(manualTradeSizing).forex.defaultVolume
+      )
+    );
     setOpenPrice("");
     setClosePrice("");
     setOpenTime(defaults.openTime);
@@ -490,7 +476,9 @@ export function QuickTradeEntry({
     setSwap("");
     setSessionTag("");
     setModelTag("");
+    setCustomTags([]);
     setAutoCalculateProfit(true);
+    previousSizingDefaultRef.current = null;
   }
 
   function handleOpenChange(nextValue: boolean) {
@@ -532,10 +520,25 @@ export function QuickTradeEntry({
         swap: parsedSwap ?? undefined,
         sessionTag: sessionTag.trim() || undefined,
         modelTag: modelTag.trim() || undefined,
+        customTags,
       });
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [["trades"]] }),
+        queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-chart-trades"] }),
+        queryClient.refetchQueries({
+          queryKey: ["dashboard-chart-trades"],
+          type: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey: trpcOptions.accounts.stats.queryOptions({ accountId })
+            .queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: trpcOptions.accounts.aggregatedStats.queryOptions()
+            .queryKey,
+        }),
         queryClient.invalidateQueries({ queryKey: ["accounts"] }),
         queryClient.invalidateQueries({ queryKey: ["propFirms"] }),
       ]);
@@ -677,13 +680,30 @@ export function QuickTradeEntry({
           <div className="space-y-4 px-6 py-5">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Volume (lots)</Label>
+                <Label className="text-xs text-white/50">
+                  Volume ({resolvedSizing.profile.unitLabel})
+                </Label>
                 <Input
                   type="number"
-                  step="0.01"
-                  min="0.01"
+                  step={resolvedSizing.profile.volumeStep}
+                  min={resolvedSizing.profile.minVolume}
                   value={volume}
                   onChange={(event) => setVolume(event.target.value)}
+                />
+                <p className="text-[11px] leading-5 text-white/40">
+                  {formatAssetClassLabel(resolvedSizing.assetClass)} default{" "}
+                  {formatSizingNumber(resolvedSizing.profile.defaultVolume)}{" "}
+                  {resolvedSizing.profile.unitLabel}. Min{" "}
+                  {formatSizingNumber(resolvedSizing.profile.minVolume)} and
+                  step{" "}
+                  {formatSizingNumber(resolvedSizing.profile.volumeStep)}.
+                  Contract size{" "}
+                  {formatSizingNumber(resolvedSizing.profile.contractSize)}.
+                </p>
+                <SuggestionChips
+                  suggestions={volumeQuickSizes}
+                  activeValue={volume}
+                  onSelect={setVolume}
                 />
               </div>
               <div className="space-y-2">
@@ -727,11 +747,19 @@ export function QuickTradeEntry({
                 label="Open time"
                 value={openTime}
                 onChange={setOpenTime}
+                triggerClassName={cn(
+                  TRADE_ACTION_BUTTON_CLASS,
+                  "h-9 w-full justify-start px-3 text-left text-white/85"
+                )}
               />
               <TradeDateTimeField
                 label="Close time"
                 value={closeTime}
                 onChange={setCloseTime}
+                triggerClassName={cn(
+                  TRADE_ACTION_BUTTON_CLASS,
+                  "h-9 w-full justify-start px-3 text-left text-white/85"
+                )}
               />
             </div>
 
@@ -997,6 +1025,21 @@ export function QuickTradeEntry({
                 activeValue={modelTag}
                 onSelect={setModelTag}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-white/50">
+                Trade tags (optional)
+              </Label>
+              <TagMultiSelect
+                value={customTags}
+                suggestions={customTagSuggestions}
+                placeholder="Add one or more trade tags"
+                onChange={setCustomTags}
+              />
+              <p className="text-[11px] text-white/35">
+                Use multiple tags for ideas like A+, news, revenge, or futures.
+              </p>
             </div>
           </div>
 

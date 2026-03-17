@@ -9,6 +9,7 @@ import { useStatsStore, type AccountStats } from "@/stores/stats";
 import { cn } from "@/lib/utils";
 import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import { useDashboardTradeFilters } from "@/features/dashboard/filters/dashboard-trade-filters";
 import { isAllAccountsScope } from "@/stores/account";
 
 export const chartConfig = {
@@ -289,6 +290,7 @@ export function useAccountStats(accountId?: string) {
   const fetchStats = useStatsStore((state) => state.fetchStats);
   const getStats = useStatsStore((state) => state.getStats);
   const { accounts } = useAccountCatalog();
+  const dashboardTradeFilters = useDashboardTradeFilters();
   const hasValidAccountScope = useMemo(() => {
     if (!accountId) return false;
     if (isAllAccountsScope(accountId)) return true;
@@ -303,7 +305,26 @@ export function useAccountStats(accountId?: string) {
   }, [accountId, fetchStats, hasValidAccountScope]);
 
   return {
-    data: hasValidAccountScope ? getStats(accountId) ?? null : null,
+    data: (() => {
+      if (!hasValidAccountScope) {
+        return null;
+      }
+
+      const baseStats = getStats(accountId) ?? null;
+
+      if (
+        dashboardTradeFilters?.hasActiveFilters &&
+        dashboardTradeFilters.accountId === accountId &&
+        dashboardTradeFilters.filteredStats
+      ) {
+        return {
+          ...baseStats,
+          ...dashboardTradeFilters.filteredStats,
+        };
+      }
+
+      return baseStats;
+    })(),
     loading: hasValidAccountScope ? isLoading : false,
   };
 }

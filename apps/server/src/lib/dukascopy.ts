@@ -1,4 +1,5 @@
 import { getHistoricalRates } from "dukascopy-node";
+import { resolveSymbol } from "./symbol-mapping";
 
 // Minimal symbol translation layer from broker/DB symbols to Dukascopy IDs
 
@@ -62,18 +63,56 @@ export function getPipSizeForSymbol(
 ): number {
   const s = String(rawSymbol || "").toLowerCase();
   if (!s) return 0.0001;
+
+  const resolved = resolveSymbol(rawSymbol);
+  const canonical = resolved.canonicalSymbol.toUpperCase();
+
+  switch (resolved.assetClass) {
+    case "forex":
+      return canonical.includes("JPY") ? 0.01 : 0.0001;
+    case "metals":
+      return 0.01;
+    case "indices":
+      return 1;
+    case "crypto":
+      return 1;
+    case "energy":
+      return canonical === "NGAS" ? 0.001 : 0.01;
+    case "rates":
+      return 0.01;
+    case "agriculture":
+      return 0.01;
+    default:
+      break;
+  }
+
   if (s.includes("jpy")) return 0.01;
   if (s.includes("xau")) return 0.01;
   if (s.includes("xag")) return 0.01;
   if (
     s.includes("idx") ||
     s.includes("us100") ||
+    s.includes("nas100") ||
+    s.includes("ustec") ||
     s.includes("us500") ||
+    s.includes("spx500") ||
+    s.includes("sp500") ||
     s.includes("us30") ||
     s.includes("ger30") ||
     s.includes("ger40")
-  )
+  ) {
     return 1;
+  }
+  if (
+    s.includes("btc") ||
+    s.includes("eth") ||
+    s.includes("sol") ||
+    s.includes("xrp") ||
+    s.includes("ada") ||
+    s.includes("doge")
+  ) {
+    return 1;
+  }
   return 0.0001;
 }
 
@@ -134,6 +173,22 @@ export function normalizePipValue(
 ): number {
   const factor = getPipNormalizationFactor(rawSymbol);
   return pipValue / factor;
+}
+
+export function calculateNormalizedPipsFromPriceDelta(
+  priceDelta: number,
+  rawSymbol: string | null | undefined
+): number {
+  if (!Number.isFinite(priceDelta)) {
+    return 0;
+  }
+
+  const pipSize = getPipSizeForSymbol(rawSymbol);
+  if (!(pipSize > 0)) {
+    return 0;
+  }
+
+  return normalizePipValue(priceDelta / pipSize, rawSymbol);
 }
 
 // Dukascopy timeframe mapping

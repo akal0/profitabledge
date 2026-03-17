@@ -72,6 +72,9 @@ export function getBrokerImage(broker?: string | null): string {
     case "mt5":
       return "/brokers/mt5.png";
     case "tradovate":
+    case "topstepx":
+    case "rithmic":
+    case "ninjatrader":
       return "/brokers/tradovate.png";
     default:
       return "/brokers/FTMO.png";
@@ -102,7 +105,14 @@ export function getAccountImage(account?: AccountImageLike | null): string {
 
   // 2. Broker type / connection method
   if (account.brokerType === "mt5") return "/brokers/mt5.png";
-  if (account.brokerType === "tradovate") return "/brokers/tradovate.png";
+  if (
+    account.brokerType === "tradovate" ||
+    account.brokerType === "topstepx" ||
+    account.brokerType === "rithmic" ||
+    account.brokerType === "ninjatrader"
+  ) {
+    return "/brokers/tradovate.png";
+  }
 
   return "/brokers/FTMO.png";
 }

@@ -17,6 +17,7 @@ dist/
 .idea/shelf
 .wrangler
 /.next/
+/.next-dev/
 .vercel
 
 # deps

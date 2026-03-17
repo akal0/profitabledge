@@ -318,6 +318,19 @@ export default function TradeTableInfinite() {
     setOpenSheet(true);
   }, []);
 
+  React.useEffect(() => {
+    if (!selectedTrade) {
+      return;
+    }
+
+    const nextSelectedTrade =
+      displayRows.find((trade) => trade.id === selectedTrade.id) ?? null;
+
+    if (nextSelectedTrade && nextSelectedTrade !== selectedTrade) {
+      setSelectedTrade(nextSelectedTrade);
+    }
+  }, [displayRows, selectedTrade]);
+
   // Apply URL sort to table (guard to avoid loops)
   React.useEffect(() => {
     const desired: { id: string; desc: boolean }[] = (sortParam || "open:desc")

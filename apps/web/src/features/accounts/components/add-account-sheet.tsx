@@ -45,7 +45,15 @@ import {
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 
-type ManualAccountBrokerType = "mt4" | "mt5" | "ctrader" | "other";
+type ManualAccountBrokerType =
+  | "mt4"
+  | "mt5"
+  | "ctrader"
+  | "tradovate"
+  | "topstepx"
+  | "rithmic"
+  | "ninjatrader"
+  | "other";
 
 const MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS: Array<{
   value: ManualAccountBrokerType;
@@ -54,6 +62,10 @@ const MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS: Array<{
   { value: "mt4", label: "MetaTrader 4" },
   { value: "mt5", label: "MetaTrader 5" },
   { value: "ctrader", label: "cTrader" },
+  { value: "tradovate", label: "Tradovate" },
+  { value: "topstepx", label: "TopstepX" },
+  { value: "rithmic", label: "Rithmic" },
+  { value: "ninjatrader", label: "NinjaTrader" },
   { value: "other", label: "Other" },
 ];
 

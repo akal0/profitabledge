@@ -16,7 +16,13 @@ import {
 } from "../../lib/ai/engine";
 import { computeExecutionGrade } from "../../lib/execution-grade";
 import { createNotification } from "../../lib/notifications";
+import {
+  MAX_BREAKEVEN_THRESHOLD_PIPS,
+  normalizeBreakevenThresholdPips,
+  syncAccountTradeOutcomeSettings,
+} from "../../lib/trades/trade-outcome";
 import { protectedProcedure } from "../../lib/trpc";
+import { invalidateTradeScopeCaches } from "../trades/shared";
 
 export const metricsProcedure = protectedProcedure
   .input(z.object({ accountId: z.string().min(1) }))
@@ -35,9 +41,9 @@ export const metricsProcedure = protectedProcedure
 
     const result = await db
       .select({
-        wins: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) > 0 THEN 1 END)`,
-        losses: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN 1 END)`,
-        breakeven: sql<number>`COUNT(CASE WHEN CAST(${trade.profit} AS NUMERIC) = 0 THEN 1 END)`,
+        wins: sql<number>`COUNT(CASE WHEN ${trade.outcome} IN ('Win', 'PW') OR (${trade.outcome} IS NULL AND CAST(${trade.profit} AS NUMERIC) > 0) THEN 1 END)`,
+        losses: sql<number>`COUNT(CASE WHEN ${trade.outcome} = 'Loss' OR (${trade.outcome} IS NULL AND CAST(${trade.profit} AS NUMERIC) < 0) THEN 1 END)`,
+        breakeven: sql<number>`COUNT(CASE WHEN ${trade.outcome} = 'BE' OR (${trade.outcome} IS NULL AND CAST(${trade.profit} AS NUMERIC) = 0) THEN 1 END)`,
       })
       .from(trade)
       .where(buildAccountScopeCondition(trade.accountId, accountIds));
@@ -64,12 +70,20 @@ export const updateBrokerSettingsProcedure = protectedProcedure
         .enum(["dukascopy", "alphavantage", "truefx", "broker"])
         .optional(),
       averageSpreadPips: z.number().min(0).max(100).optional(),
+      breakevenThresholdPips: z
+        .number()
+        .min(0)
+        .max(MAX_BREAKEVEN_THRESHOLD_PIPS)
+        .optional(),
       initialBalance: z.number().min(0).optional(),
     })
   )
   .mutation(async ({ input, ctx }) => {
     const account = await db
-      .select({ userId: tradingAccount.userId })
+      .select({
+        userId: tradingAccount.userId,
+        breakevenThresholdPips: tradingAccount.breakevenThresholdPips,
+      })
       .from(tradingAccount)
       .where(eq(tradingAccount.id, input.accountId))
       .limit(1);
@@ -96,6 +110,11 @@ export const updateBrokerSettingsProcedure = protectedProcedure
     if (input.averageSpreadPips !== undefined) {
       updates.averageSpreadPips = input.averageSpreadPips.toString();
     }
+    if (input.breakevenThresholdPips !== undefined) {
+      updates.breakevenThresholdPips = normalizeBreakevenThresholdPips(
+        input.breakevenThresholdPips
+      ).toString();
+    }
     if (input.initialBalance !== undefined) {
       updates.initialBalance = input.initialBalance.toString();
     }
@@ -105,6 +124,23 @@ export const updateBrokerSettingsProcedure = protectedProcedure
         .update(tradingAccount)
         .set(updates)
         .where(eq(tradingAccount.id, input.accountId));
+
+      if (input.breakevenThresholdPips !== undefined) {
+        const previousThreshold = normalizeBreakevenThresholdPips(
+          account[0].breakevenThresholdPips
+        );
+        const nextThreshold = normalizeBreakevenThresholdPips(
+          input.breakevenThresholdPips
+        );
+
+        if (previousThreshold !== nextThreshold) {
+          await syncAccountTradeOutcomeSettings({
+            accountId: input.accountId,
+            breakevenThresholdPips: nextThreshold,
+          });
+          await invalidateTradeScopeCaches([input.accountId]);
+        }
+      }
 
       await createNotification({
         userId: ctx.session.user.id,
@@ -261,8 +297,8 @@ export const liveMetricsProcedure = protectedProcedure
       lastUpdatedAt: openPosition.lastUpdatedAt.toISOString(),
       accountId: openPosition.accountId,
       accountName:
-        accounts.find((account) => account.id === openPosition.accountId)?.name ??
-        null,
+        accounts.find((account) => account.id === openPosition.accountId)
+          ?.name ?? null,
     }));
 
     const latestSync = accounts.reduce<Date | null>((latest, account) => {
@@ -278,8 +314,7 @@ export const liveMetricsProcedure = protectedProcedure
       accountName: isAllAccountsScope(input.accountId)
         ? "All Accounts"
         : accounts[0]?.name,
-      broker:
-        accounts.length === 1 ? accounts[0]?.broker : "Multiple brokers",
+      broker: accounts.length === 1 ? accounts[0]?.broker : "Multiple brokers",
       brokerType: accounts.length === 1 ? accounts[0]?.brokerType : null,
       isVerified: accounts.some((account) => account.isVerified === 1),
       liveBalance,
@@ -310,7 +345,11 @@ export const insightsProcedure = protectedProcedure
       });
     }
 
-    const insights = await generateBrainInsights(input.accountId, userId, "manual");
+    const insights = await generateBrainInsights(
+      input.accountId,
+      userId,
+      "manual"
+    );
     if (insights.length > 0 && !isAllAccountsScope(input.accountId)) {
       await saveInsights(input.accountId, userId, insights, "manual");
     }
@@ -380,24 +419,29 @@ export const executionStatsProcedure = protectedProcedure
 
     const result = await db
       .select({
-        avgEntrySpread:
-          sql<number | null>`AVG(CAST(${trade.entrySpreadPips} AS NUMERIC))`,
-        avgExitSpread:
-          sql<number | null>`AVG(CAST(${trade.exitSpreadPips} AS NUMERIC))`,
-        avgEntrySlippage:
-          sql<number | null>`AVG(CAST(${trade.entrySlippagePips} AS NUMERIC))`,
-        avgExitSlippage:
-          sql<number | null>`AVG(CAST(${trade.exitSlippagePips} AS NUMERIC))`,
+        avgEntrySpread: sql<
+          number | null
+        >`AVG(CAST(${trade.entrySpreadPips} AS NUMERIC))`,
+        avgExitSpread: sql<
+          number | null
+        >`AVG(CAST(${trade.exitSpreadPips} AS NUMERIC))`,
+        avgEntrySlippage: sql<
+          number | null
+        >`AVG(CAST(${trade.entrySlippagePips} AS NUMERIC))`,
+        avgExitSlippage: sql<
+          number | null
+        >`AVG(CAST(${trade.exitSlippagePips} AS NUMERIC))`,
         totalSlModifications: sql<number | null>`SUM(${trade.slModCount})`,
         totalTpModifications: sql<number | null>`SUM(${trade.tpModCount})`,
         totalPartialCloses: sql<number | null>`SUM(${trade.partialCloseCount})`,
-        avgRrCaptureEfficiency:
-          sql<number | null>`AVG(CAST(${trade.rrCaptureEfficiency} AS NUMERIC))`,
-        avgExitEfficiency:
-          sql<number | null>`AVG(CAST(${trade.exitEfficiency} AS NUMERIC))`,
+        avgRrCaptureEfficiency: sql<
+          number | null
+        >`AVG(CAST(${trade.rrCaptureEfficiency} AS NUMERIC))`,
+        avgExitEfficiency: sql<
+          number | null
+        >`AVG(CAST(${trade.exitEfficiency} AS NUMERIC))`,
         tradeCount: sql<number>`COUNT(*)`,
-        tradesWithExecutionData:
-          sql<number>`COUNT(CASE WHEN ${trade.entrySpreadPips} IS NOT NULL OR ${trade.exitSpreadPips} IS NOT NULL OR ${trade.entrySlippagePips} IS NOT NULL OR ${trade.exitSlippagePips} IS NOT NULL OR ${trade.rrCaptureEfficiency} IS NOT NULL OR ${trade.exitEfficiency} IS NOT NULL THEN 1 END)`,
+        tradesWithExecutionData: sql<number>`COUNT(CASE WHEN ${trade.entrySpreadPips} IS NOT NULL OR ${trade.exitSpreadPips} IS NOT NULL OR ${trade.entrySlippagePips} IS NOT NULL OR ${trade.exitSlippagePips} IS NOT NULL OR ${trade.rrCaptureEfficiency} IS NOT NULL OR ${trade.exitEfficiency} IS NOT NULL THEN 1 END)`,
       })
       .from(trade)
       .where(buildAccountScopeCondition(trade.accountId, accountIds));
@@ -452,10 +496,12 @@ export const moneyLeftOnTableProcedure = protectedProcedure
         tradeType: trade.tradeType,
         openPrice: sql<number | null>`CAST(${trade.openPrice} AS NUMERIC)`,
         closePrice: sql<number | null>`CAST(${trade.closePrice} AS NUMERIC)`,
-        entryPeakPrice:
-          sql<number | null>`CAST(${trade.entryPeakPrice} AS NUMERIC)`,
-        postExitPeakPrice:
-          sql<number | null>`CAST(${trade.postExitPeakPrice} AS NUMERIC)`,
+        entryPeakPrice: sql<
+          number | null
+        >`CAST(${trade.entryPeakPrice} AS NUMERIC)`,
+        postExitPeakPrice: sql<
+          number | null
+        >`CAST(${trade.postExitPeakPrice} AS NUMERIC)`,
         profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
         volume: sql<number | null>`CAST(${trade.volume} AS NUMERIC)`,
         symbol: trade.symbol,
@@ -475,7 +521,8 @@ export const moneyLeftOnTableProcedure = protectedProcedure
     let tradesWithPostExitData = 0;
 
     for (const tradeRow of trades) {
-      const isLong = tradeRow.tradeType === "long" || tradeRow.tradeType === "buy";
+      const isLong =
+        tradeRow.tradeType === "long" || tradeRow.tradeType === "buy";
 
       if (tradeRow.entryPeakPrice != null && tradeRow.closePrice != null) {
         tradesWithPeakData += 1;
@@ -496,8 +543,7 @@ export const moneyLeftOnTableProcedure = protectedProcedure
 
     const profitResult = await db
       .select({
-        totalProfit:
-          sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
+        totalProfit: sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
       })
       .from(trade)
       .where(buildAccountScopeCondition(trade.accountId, accountIds));
@@ -510,8 +556,7 @@ export const moneyLeftOnTableProcedure = protectedProcedure
     return {
       totalMissedDuringTrade: Math.round(totalDuringTrade * 100) / 100,
       totalMissedAfterExit: Math.round(totalAfterExit * 100) / 100,
-      totalMissed:
-        Math.round((totalDuringTrade + totalAfterExit) * 100) / 100,
+      totalMissed: Math.round((totalDuringTrade + totalAfterExit) * 100) / 100,
       actualProfit: Math.round(totalProfit * 100) / 100,
       potentialProfit: Math.round(potentialTotal * 100) / 100,
       captureRatio: Math.round(captureRatio * 10) / 10,

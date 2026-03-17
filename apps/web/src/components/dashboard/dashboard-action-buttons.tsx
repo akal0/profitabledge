@@ -1,32 +1,18 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
-
 import EditWidgets from "@/public/icons/edit-widgets.svg";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isTerminalProvider } from "@/features/settings/connections/lib/connection-status";
-import { trpcOptions } from "@/utils/trpc";
 import { WidgetPresets } from "./widget-presets";
 import { exportWidgetsAsJson, exportWidgetsAsCsv } from "./widget-export";
 import type { WidgetType } from "./widgets";
 import type { WidgetValueMode } from "@/features/dashboard/widgets/lib/widget-shared";
 
-export type DashboardAccountAction =
-  | {
-      type: "sync";
-      label: "Sync account";
-      timestampLabel: "Last synced";
-      timestamp?: string | Date | null;
-      connectionId: string;
-      provider: string;
-    }
-  | {
-      type: "timestamp";
-      timestampLabel: "Last updated";
-      timestamp?: string | Date | null;
-    };
+export type DashboardAccountAction = {
+  type: "timestamp";
+  timestampLabel: "Last updated";
+  timestamp?: string | Date | null;
+};
 
 type Props = {
   isEditing?: boolean;
@@ -37,13 +23,12 @@ type Props = {
   accountAction?: DashboardAccountAction | null;
   widgets?: WidgetType[];
   widgetSpans?: Partial<Record<WidgetType, number>>;
+  leadingActions?: React.ReactNode;
   onApplyPreset?: (
     widgets: WidgetType[],
     spans: Partial<Record<WidgetType, number>>
   ) => void;
 };
-
-import Resync from "@/public/icons/resync.svg";
 const DashboardActionButtons: React.FC<Props> = ({
   isEditing = false,
   onToggleEdit,
@@ -53,13 +38,9 @@ const DashboardActionButtons: React.FC<Props> = ({
   accountAction = null,
   widgets = [],
   widgetSpans = {},
+  leadingActions,
   onApplyPreset,
 }) => {
-  const queryClient = useQueryClient();
-  const syncNow = useMutation(
-    trpcOptions.connections.syncNow.mutationOptions()
-  );
-
   const formatDate = (value: string | Date | null | undefined) => {
     if (!value) return "Never";
     const date = value instanceof Date ? value : new Date(value);
@@ -84,36 +65,6 @@ const DashboardActionButtons: React.FC<Props> = ({
       exportWidgetsAsJson(widgets, widgetSpans, fileName);
     } else {
       exportWidgetsAsCsv(widgets, widgetSpans, fileName);
-    }
-  };
-
-  const handleSyncAccount = async () => {
-    if (!accountAction || accountAction.type !== "sync") return;
-
-    try {
-      const result = await syncNow.mutateAsync({
-        connectionId: accountAction.connectionId,
-      });
-
-      if (result.status === "success") {
-        if (isTerminalProvider(accountAction.provider)) {
-          toast.success("Sync started");
-        } else {
-          toast.success(
-            `Synced ${result.tradesInserted} new trade${
-              result.tradesInserted !== 1 ? "s" : ""
-            }`
-          );
-        }
-      } else if (result.status === "skipped") {
-        toast.info("Sync is paused");
-      } else {
-        toast.error(result.errorMessage || "Sync failed");
-      }
-
-      await queryClient.invalidateQueries();
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Sync failed");
     }
   };
 
@@ -160,35 +111,14 @@ const DashboardActionButtons: React.FC<Props> = ({
       {accountAction ? (
         <div className="flex items-center overflow-hidden ring ring-white/5 bg-sidebar group rounded-md">
           <Button
-            className={cn(
-              "rounded-l-sm! rounded-r-none bg-sidebar hover:bg-sidebar-accent text-white/25 text-xs py-2 px-4 cursor-default",
-              accountAction.type === "timestamp" && "rounded-md"
-            )}
+            className="cursor-default rounded-md bg-sidebar px-4 py-2 text-xs text-white/25 hover:bg-sidebar-accent"
           >
             {accountAction.timestampLabel}: {formattedAccountTimestamp}
           </Button>
-
-          {accountAction.type === "sync" ? (
-            <>
-              <div className="h-9 w-[1px] bg-white/5 mx-0" />
-              <Button
-                className="rounded-none bg-sidebar hover:bg-sidebar-accent text-white text-xs py-2"
-                onClick={() => void handleSyncAccount()}
-                disabled={syncNow.isPending}
-              >
-                <Resync
-                  className={cn(
-                    "size-3.5 fill-white",
-                    syncNow.isPending && "animate-spin"
-                  )}
-                  style={{ animationDuration: "1.5s" }}
-                />
-                {syncNow.isPending ? "Syncing..." : accountAction.label}
-              </Button>
-            </>
-          ) : null}
         </div>
       ) : null}
+
+      {leadingActions}
 
       <WidgetPresets
         currentWidgets={widgets}

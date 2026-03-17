@@ -15,6 +15,10 @@ import {
 } from "@/stores/account";
 import { DashboardOverviewHeader } from "@/features/dashboard/home/components/dashboard-overview-header";
 import { useDashboardHomeLayout } from "@/features/dashboard/home/hooks/use-dashboard-home-layout";
+import {
+  DashboardTradeFiltersBar,
+  DashboardTradeFiltersProvider,
+} from "@/features/dashboard/filters/dashboard-trade-filters";
 import { normalizeCurrencyCode } from "@/features/dashboard/widgets/lib/widget-shared";
 import {
   accountIsEaSynced,
@@ -103,14 +107,7 @@ export default function Page() {
     }
 
     if (selectedConnection) {
-      return {
-        type: "sync",
-        label: "Sync account",
-        timestampLabel: "Last synced",
-        timestamp: selectedConnection.lastSyncSuccessAt ?? null,
-        connectionId: selectedConnection.id,
-        provider: selectedConnection.provider,
-      };
+      return null;
     }
 
     if (accountIsEaSynced(selectedAccount)) {
@@ -133,60 +130,63 @@ export default function Page() {
   })();
 
   return (
-    <main className="space-y-4 p-6 py-4">
-      <DashboardOverviewHeader
-        user={me ?? null}
-        isEditing={isWidgetsEditing}
-        valueMode={valueMode}
-        currencyLabel={currencyLabel}
-        accountAction={accountAction}
-        widgets={widgets}
-        widgetSpans={widgetSpans}
-        onValueModeChange={setValueMode}
-        onToggleEdit={toggleWidgetsEdit}
-        onApplyPreset={applyPreset}
-      />
-
-      <div className="flex flex-1 flex-col gap-8">
-        {accountId === ALL_ACCOUNTS_ID ? <AllAccountsOverview /> : null}
-
-        <Widgets
-          enabledWidgets={widgets}
-          accountId={accountId}
+    <DashboardTradeFiltersProvider accountId={accountId} fetchMode="filtered">
+      <main className="space-y-4 p-6 py-4">
+        <DashboardOverviewHeader
+          user={me ?? null}
           isEditing={isWidgetsEditing}
           valueMode={valueMode}
-          currencyCode={currencyCode}
-          supportsLiveWidgets={supportsLiveWidgets}
-          onToggleWidget={toggleWidget}
-          onReorder={reorderWidgets}
-          onEnterEdit={enterWidgetsEdit}
+          currencyLabel={currencyLabel}
+          accountAction={accountAction}
+          leadingActions={<DashboardTradeFiltersBar mode="button" />}
+          widgets={widgets}
           widgetSpans={widgetSpans}
-          onResizeWidget={resizeWidget}
+          onValueModeChange={setValueMode}
+          onToggleEdit={toggleWidgetsEdit}
+          onApplyPreset={applyPreset}
         />
 
-        <Calendar
-          accountId={accountId}
-          isEditing={isCalendarEditing}
-          summaryWidgets={calendarWidgets}
-          summaryWidgetSpans={calendarWidgetSpans}
-          onToggleSummaryWidget={toggleCalendarWidget}
-          onReorderSummaryWidget={reorderCalendarWidgets}
-          onResizeSummaryWidget={resizeCalendarWidget}
-          onEnterEdit={enterCalendarEdit}
-          onToggleEdit={toggleCalendarEdit}
-        />
+        <div className="flex flex-1 flex-col gap-8">
+          {accountId === ALL_ACCOUNTS_ID ? <AllAccountsOverview /> : null}
 
-        <ChartWidgets
-          accountId={accountId}
-          enabledWidgets={chartWidgets}
-          isEditing={isChartWidgetsEditing}
-          onToggleWidget={toggleChartWidget}
-          onReorder={reorderChartWidgets}
-          onEnterEdit={enterChartWidgetsEdit}
-          onToggleEdit={toggleChartWidgetsEdit}
-          onApplyPreset={applyChartPreset}
-        />
-      </div>
-    </main>
+          <Widgets
+            enabledWidgets={widgets}
+            accountId={accountId}
+            isEditing={isWidgetsEditing}
+            valueMode={valueMode}
+            currencyCode={currencyCode}
+            supportsLiveWidgets={supportsLiveWidgets}
+            onToggleWidget={toggleWidget}
+            onReorder={reorderWidgets}
+            onEnterEdit={enterWidgetsEdit}
+            widgetSpans={widgetSpans}
+            onResizeWidget={resizeWidget}
+          />
+
+          <Calendar
+            accountId={accountId}
+            isEditing={isCalendarEditing}
+            summaryWidgets={calendarWidgets}
+            summaryWidgetSpans={calendarWidgetSpans}
+            onToggleSummaryWidget={toggleCalendarWidget}
+            onReorderSummaryWidget={reorderCalendarWidgets}
+            onResizeSummaryWidget={resizeCalendarWidget}
+            onEnterEdit={enterCalendarEdit}
+            onToggleEdit={toggleCalendarEdit}
+          />
+
+          <ChartWidgets
+            accountId={accountId}
+            enabledWidgets={chartWidgets}
+            isEditing={isChartWidgetsEditing}
+            onToggleWidget={toggleChartWidget}
+            onReorder={reorderChartWidgets}
+            onEnterEdit={enterChartWidgetsEdit}
+            onToggleEdit={toggleChartWidgetsEdit}
+            onApplyPreset={applyChartPreset}
+          />
+        </div>
+      </main>
+    </DashboardTradeFiltersProvider>
   );
 }

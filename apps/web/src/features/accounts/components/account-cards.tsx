@@ -2,9 +2,18 @@
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { Archive, ArchiveRestore, Building2, ChevronRight, ShieldCheck, Trophy } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Building2,
+  ChevronRight,
+  ShieldCheck,
+  Trophy,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { AccountTagsDialog } from "@/features/accounts/components/account-tags-dialog";
+import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
 import { getAccountSourceBadge } from "@/features/accounts/lib/account-metadata";
@@ -37,6 +46,32 @@ export function isCurrentPropStageAccount(account: AccountRecord) {
   return account.isPropAccount && account.propIsCurrentChallengeStage !== false;
 }
 
+function AccountTagList({ account }: { account: AccountRecord }) {
+  const tags = Array.isArray(account.tags) ? account.tags : [];
+
+  if (tags.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5">
+      {tags.slice(0, 6).map((tag: string) => (
+        <span
+          key={tag}
+          className="rounded-sm border border-white/10 bg-sidebar px-2 py-0.5 text-[10px] font-medium text-white/65"
+        >
+          {tag}
+        </span>
+      ))}
+      {tags.length > 6 ? (
+        <span className="rounded-sm border border-white/10 bg-sidebar px-2 py-0.5 text-[10px] font-medium text-white/40">
+          +{tags.length - 6}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function ArchivedAccountCard({ account }: { account: AccountRecord }) {
   const balance = getAccountBalance(account);
   const unarchiveMutation = useMutation({
@@ -54,15 +89,18 @@ export function ArchivedAccountCard({ account }: { account: AccountRecord }) {
       className="ring-1 ring-white/10"
       contentClassName="justify-between"
       headerRight={
-        <Badge
-          variant="outline"
-          className={cn(
-            HEADER_BADGE_CLASS,
-            "ring-1 ring-white/10 text-[10px] text-white/45"
-          )}
-        >
-          Archived
-        </Badge>
+        <div className="flex items-center gap-1.5">
+          <Badge
+            variant="outline"
+            className={cn(
+              HEADER_BADGE_CLASS,
+              "ring-1 ring-white/10 text-[10px] text-white/45"
+            )}
+          >
+            Archived
+          </Badge>
+          <DeleteAccountButton account={account} />
+        </div>
       }
     >
       <div>
@@ -70,6 +108,7 @@ export function ArchivedAccountCard({ account }: { account: AccountRecord }) {
         <p className="mt-2 text-lg font-semibold text-white/75">
           {formatUsd(balance)}
         </p>
+        <AccountTagList account={account} />
       </div>
       <Button
         variant="outline"
@@ -126,6 +165,7 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
       headerRight={
         <div className="flex items-center gap-1.5">
           <ManualPropAccountDialog account={account} />
+          <AccountTagsDialog account={account} />
           <Badge
             variant="outline"
             className={cn(HEADER_BADGE_CLASS, sourceBadge.className)}
@@ -157,6 +197,7 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
           >
             <Archive className="h-3.5 w-3.5" />
           </Button>
+          <DeleteAccountButton account={account} />
         </div>
       }
       contentClassName="justify-between"
@@ -169,6 +210,7 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
             <p className="mt-0.5 text-xs font-medium text-white/50">
               {account.name}
             </p>
+            <AccountTagList account={account} />
           </div>
         </div>
         <div className="text-right">
@@ -264,6 +306,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
       title={propFirm.displayName || "Prop firm"}
       headerRight={
         <div className="flex items-center gap-1.5">
+          <AccountTagsDialog account={account} />
           <PropAccountStatusBadges
             account={account}
             dashboard={dashboard}
@@ -273,6 +316,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             accountId={account.id}
             accountName={account.name}
           />
+          <DeleteAccountButton account={account} />
         </div>
       }
       contentClassName="justify-between"
@@ -290,6 +334,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             <p className="mt-0.5 text-xs font-medium text-white/50">
               {account.name}
             </p>
+            <AccountTagList account={account} />
           </div>
         </div>
         <div className="text-right">

@@ -1,3 +1,4 @@
+import type { ManualTradeSizingPreferences } from "@/lib/manual-trade-sizing";
 import type { TradeRow, TradeStreakMeta } from "./trade-table-types";
 
 export type DirectionType = "all" | "long" | "short";
@@ -17,6 +18,8 @@ export type TradeViewFilters = {
 };
 export type AdvancedMetricsPreferences = {
   disableSampleGating?: boolean;
+  alphaWeightedMpe?: number;
+  manualTradeSizing?: ManualTradeSizingPreferences;
 };
 export type SelectedTradeView = {
   id?: string;

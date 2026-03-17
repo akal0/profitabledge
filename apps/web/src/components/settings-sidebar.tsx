@@ -33,6 +33,7 @@ import {
   LifeBuoy,
   CreditCard,
   Sparkles,
+  Waypoints,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 
@@ -72,6 +73,11 @@ const settingsNavSections: NavSection[] = [
     label: "Trading",
     items: [
       { title: "Tags & labels", href: "/dashboard/settings/tags", icon: Tag },
+      {
+        title: "Symbol mapping",
+        href: "/dashboard/settings/symbol-mapping",
+        icon: Waypoints,
+      },
       { title: "Sessions", href: "/dashboard/settings/sessions", icon: Clock },
       {
         title: "Metrics",

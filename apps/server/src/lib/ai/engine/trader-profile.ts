@@ -15,6 +15,7 @@ import {
   isAllAccountsScope,
   resolveScopedAccountIds,
 } from "../../account-scope";
+import { calculateNormalizedPipsFromPriceDelta } from "../../dukascopy";
 import { findEdges, findLeaks } from "./behavioral-analyzer";
 import type {
   TraderProfileData,
@@ -653,13 +654,17 @@ function computeOpportunityCost(
     const closeP = toNum(t.closePrice);
     const peakP = toNum(t.entryPeakPrice);
     const postPeak = toNum(t.postExitPeakPrice);
+    const symbol = t.symbol;
     if (!openP || !closeP) continue;
 
     const long = isBuy(t);
 
     // MFE: How far price moved in your favor during the trade
     if (peakP > 0) {
-      const mfe = long ? peakP - openP : openP - peakP;
+      const mfe = calculateNormalizedPipsFromPriceDelta(
+        long ? peakP - openP : openP - peakP,
+        symbol
+      );
       if (mfe > 0) mfeValues.push(mfe);
     } else if (toNum(t.mfePips) > 0) {
       mfeValues.push(toNum(t.mfePips));
@@ -672,7 +677,10 @@ function computeOpportunityCost(
 
     // Profit left on table: entry peak vs close price (how much favorable move was NOT captured)
     if (peakP > 0) {
-      const leftOnTable = long ? peakP - closeP : closeP - peakP;
+      const leftOnTable = calculateNormalizedPipsFromPriceDelta(
+        long ? peakP - closeP : closeP - peakP,
+        symbol
+      );
       if (leftOnTable > 0) {
         profitLeftValues.push(leftOnTable);
       }
@@ -684,7 +692,10 @@ function computeOpportunityCost(
     // Post-exit move: did price continue favorably after closing?
     if (postPeak > 0) {
       totalWithPostExit++;
-      const favorableMove = long ? postPeak - closeP : closeP - postPeak;
+      const favorableMove = calculateNormalizedPipsFromPriceDelta(
+        long ? postPeak - closeP : closeP - postPeak,
+        symbol
+      );
       if (favorableMove > 0) {
         postExitMoves.push(favorableMove);
         exitingTooEarlyCount++;

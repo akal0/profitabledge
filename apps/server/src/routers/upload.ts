@@ -26,14 +26,16 @@ import {
 } from "../lib/trade-import/persistence";
 import { protectedProcedure, router } from "../lib/trpc";
 
-const csvFileInputSchema = z.object({
-  fileName: z.string().optional().nullable(),
-  csvBase64: z.string().min(1).optional(),
-  fileBase64: z.string().min(1).optional(),
-}).refine((value) => Boolean(value.fileBase64 || value.csvBase64), {
-  message: "File content is required.",
-  path: ["fileBase64"],
-});
+const csvFileInputSchema = z
+  .object({
+    fileName: z.string().optional().nullable(),
+    csvBase64: z.string().min(1).optional(),
+    fileBase64: z.string().min(1).optional(),
+  })
+  .refine((value) => Boolean(value.fileBase64 || value.csvBase64), {
+    message: "File content is required.",
+    path: ["fileBase64"],
+  });
 
 const importCsvInputSchema = z
   .object({
@@ -92,6 +94,7 @@ async function applyParsedImportToExistingAccount(input: {
     initialBalance?: string | null;
     liveBalance?: string | null;
     liveEquity?: string | null;
+    breakevenThresholdPips?: string | null;
   };
   parsedImport: ReturnType<typeof parseBrokerCsvImportBundle>;
 }) {
@@ -161,67 +164,78 @@ async function applyParsedImportToExistingAccount(input: {
   }> = [];
   let suppressedDeletedTrades = 0;
 
-  parsedImport.trades.forEach((parsedTrade: ParsedImportTrade, index: number) => {
-    const tradeFingerprint = buildImportedTradeIdentityFingerprint(parsedTrade);
-    const tradeCoreFingerprint =
-      buildImportedTradeCoreIdentityFingerprint(parsedTrade);
-    const exactFingerprintMatch =
-      existingTradeByFingerprint.get(tradeFingerprint) ?? null;
-    const ticketMatch =
-      parsedTrade.ticket != null
-        ? existingTradeByTicket.get(parsedTrade.ticket) ?? null
-        : null;
-    const safeTicketMatch =
-      ticketMatch &&
-      buildStoredImportedTradeCoreIdentityFingerprint(ticketMatch) ===
-        tradeCoreFingerprint
-        ? ticketMatch
-        : null;
-    const coreFingerprintMatch =
-      existingTradeByCoreFingerprint.get(tradeCoreFingerprint) ?? null;
-    // Tickets from broker exports are not always globally stable, so only trust
-    // a ticket hit when the rest of the trade identity still lines up.
-    const existingTrade =
-      exactFingerprintMatch ?? safeTicketMatch ?? coreFingerprintMatch;
+  parsedImport.trades.forEach(
+    (parsedTrade: ParsedImportTrade, index: number) => {
+      const tradeFingerprint =
+        buildImportedTradeIdentityFingerprint(parsedTrade);
+      const tradeCoreFingerprint =
+        buildImportedTradeCoreIdentityFingerprint(parsedTrade);
+      const exactFingerprintMatch =
+        existingTradeByFingerprint.get(tradeFingerprint) ?? null;
+      const ticketMatch =
+        parsedTrade.ticket != null
+          ? existingTradeByTicket.get(parsedTrade.ticket) ?? null
+          : null;
+      const safeTicketMatch =
+        ticketMatch &&
+        buildStoredImportedTradeCoreIdentityFingerprint(ticketMatch) ===
+          tradeCoreFingerprint
+          ? ticketMatch
+          : null;
+      const coreFingerprintMatch =
+        existingTradeByCoreFingerprint.get(tradeCoreFingerprint) ?? null;
+      // Tickets from broker exports are not always globally stable, so only trust
+      // a ticket hit when the rest of the trade identity still lines up.
+      const existingTrade =
+        exactFingerprintMatch ?? safeTicketMatch ?? coreFingerprintMatch;
 
-    if (existingTrade) {
-      if (
-        hasImportedTradeChanges({
-          existingTrade,
-          trade: parsedTrade,
-          importMeta: parsedImport,
-        })
-      ) {
-        updates.push({
-          id: existingTrade.id,
-          data: buildImportedTradeUpdateRecord({
+      if (existingTrade) {
+        if (
+          hasImportedTradeChanges({
             existingTrade,
             trade: parsedTrade,
             importMeta: parsedImport,
-          }),
-        });
+          })
+        ) {
+          updates.push({
+            id: existingTrade.id,
+            data: buildImportedTradeUpdateRecord({
+              existingTrade,
+              trade: parsedTrade,
+              importMeta: parsedImport,
+              breakevenThresholdPips:
+                account.breakevenThresholdPips != null
+                  ? Number(account.breakevenThresholdPips)
+                  : null,
+            }),
+          });
+        }
+        return;
       }
-      return;
-    }
 
-    if (
-      (parsedTrade.ticket != null &&
-        deletedTradeMatchers.tickets.has(parsedTrade.ticket)) ||
-      deletedTradeMatchers.fingerprints.has(tradeFingerprint)
-    ) {
-      suppressedDeletedTrades += 1;
-      return;
-    }
+      if (
+        (parsedTrade.ticket != null &&
+          deletedTradeMatchers.tickets.has(parsedTrade.ticket)) ||
+        deletedTradeMatchers.fingerprints.has(tradeFingerprint)
+      ) {
+        suppressedDeletedTrades += 1;
+        return;
+      }
 
-    inserts.push(
-      buildImportedTradeInsertRecord({
-        accountId,
-        trade: parsedTrade,
-        index,
-        importMeta: parsedImport,
-      })
-    );
-  });
+      inserts.push(
+        buildImportedTradeInsertRecord({
+          accountId,
+          trade: parsedTrade,
+          index,
+          importMeta: parsedImport,
+          breakevenThresholdPips:
+            account.breakevenThresholdPips != null
+              ? Number(account.breakevenThresholdPips)
+              : null,
+        })
+      );
+    }
+  );
 
   let accountMetadataUpdated = false;
 
@@ -408,11 +422,11 @@ export const uploadRouter = router({
         input.files && input.files.length > 0
           ? input.files
           : [
-            {
-              fileName: input.fileName ?? null,
-              fileBase64: input.fileBase64 ?? input.csvBase64 ?? "",
-            },
-          ];
+              {
+                fileName: input.fileName ?? null,
+                fileBase64: input.fileBase64 ?? input.csvBase64 ?? "",
+              },
+            ];
 
       const parsedImport = parseBrokerCsvImportBundle({
         broker: input.broker,
@@ -513,13 +527,15 @@ export const uploadRouter = router({
         await ensurePropChallengeLineageForAccount(accountId);
       }
 
-      const inserts = parsedImport.trades.map((parsedTrade: ParsedImportTrade, index: number) =>
-        buildImportedTradeInsertRecord({
-          accountId,
-          trade: parsedTrade,
-          index,
-          importMeta: parsedImport,
-        })
+      const inserts = parsedImport.trades.map(
+        (parsedTrade: ParsedImportTrade, index: number) =>
+          buildImportedTradeInsertRecord({
+            accountId,
+            trade: parsedTrade,
+            index,
+            importMeta: parsedImport,
+            breakevenThresholdPips: null,
+          })
       );
 
       if (inserts.length > 0) {
@@ -544,6 +560,7 @@ export const uploadRouter = router({
           initialBalance: tradingAccount.initialBalance,
           liveBalance: tradingAccount.liveBalance,
           liveEquity: tradingAccount.liveEquity,
+          breakevenThresholdPips: tradingAccount.breakevenThresholdPips,
         })
         .from(tradingAccount)
         .where(eq(tradingAccount.id, accountId))
@@ -614,6 +631,7 @@ export const uploadRouter = router({
           initialBalance: tradingAccount.initialBalance,
           liveBalance: tradingAccount.liveBalance,
           liveEquity: tradingAccount.liveEquity,
+          breakevenThresholdPips: tradingAccount.breakevenThresholdPips,
         })
         .from(tradingAccount)
         .where(

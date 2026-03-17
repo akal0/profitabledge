@@ -18,6 +18,7 @@ import type {
   CalendarPreviewState,
   DayRow,
   GoalMarker,
+  TradePreview,
 } from "../lib/calendar-types";
 import {
   formatAccessibleDate,
@@ -44,9 +45,14 @@ type CalendarMonthViewProps = {
   heatmapEnabled: boolean;
   heatmapMaxAbs: number;
   initialBalance: number | null;
+  livePreviewMap: Map<string, TradePreview[]>;
   previews: CalendarPreviewState;
   onSelectDay: (dateISO: string) => void;
-  onHoverDay: (dateISO: string, count: number) => void;
+  onHoverDay: (
+    dateISO: string,
+    closedCount: number,
+    totalCount: number
+  ) => void;
   onLeaveDay: (dateISO: string) => void;
 };
 
@@ -69,6 +75,7 @@ export function CalendarMonthView({
   heatmapEnabled,
   heatmapMaxAbs,
   initialBalance,
+  livePreviewMap,
   previews,
   onSelectDay,
   onHoverDay,
@@ -85,26 +92,42 @@ export function CalendarMonthView({
           const hasGoals = goalOverlay && dayGoals.length > 0;
           const totalProfit = data?.totalProfit || 0;
           const count = data?.count || 0;
-          const isGain = totalProfit >= 0;
+          const liveCount = data?.liveTradeCount || 0;
+          const liveProfit = data?.liveTradeProfit || 0;
+          const totalCount = count + liveCount;
+          const displayProfit = count > 0 ? totalProfit : liveProfit;
+          const isGain = displayProfit >= 0;
           const pctValue =
             initialBalance && initialBalance > 0
-              ? (Number(totalProfit || 0) / initialBalance) * 100
+              ? (Number(displayProfit || 0) / initialBalance) * 100
               : 0;
           const pctLabel = `${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}%`;
           const heatBg = heatmapEnabled
-            ? getHeatmapBg(totalProfit, count, heatmapMaxAbs)
+            ? getHeatmapBg(displayProfit, totalCount, heatmapMaxAbs)
             : undefined;
           const preview = previews[key];
-          const previewTrades = preview?.trades || [];
+          const previewTrades = [...(livePreviewMap.get(key) || []), ...(preview?.trades || [])]
+            .sort(
+              (left, right) =>
+                new Date(left.open).getTime() - new Date(right.open).getTime()
+            );
           const previewLoading = count > 0 ? preview?.loading ?? true : false;
           const shown = previewTrades.length;
-          const extra = Math.max(0, count - shown);
+          const extra = Math.max(0, totalCount - shown);
+          const countLabel =
+            count > 0 && liveCount > 0
+              ? `${formatTradeCount(count)} closed · ${formatTradeCount(liveCount)} live`
+              : count > 0
+                ? `${formatTradeCount(count)} ${count === 1 ? "trade" : "trades"}`
+                : liveCount > 0
+                  ? `${formatTradeCount(liveCount)} live`
+                  : "0 trades";
 
           const cell = (
             <div
               className={cn(
                 "flex min-h-[120px] cursor-pointer flex-col gap-2 bg-white p-3 transition-colors duration-250 hover:bg-sidebar-accent dark:bg-sidebar",
-                !inMonth && count === 0 && "opacity-40"
+                !inMonth && totalCount === 0 && "opacity-40"
               )}
               role="button"
               tabIndex={0}
@@ -112,7 +135,7 @@ export function CalendarMonthView({
               style={heatBg ? { backgroundColor: heatBg } : undefined}
               onClick={() => onSelectDay(key)}
               onKeyDown={(event) => handleDayKeyDown(event, key, onSelectDay)}
-              onMouseEnter={() => onHoverDay(key, count)}
+              onMouseEnter={() => onHoverDay(key, count, totalCount)}
               onMouseLeave={() => onLeaveDay(key)}
             >
               <div className="flex items-center justify-between">
@@ -121,7 +144,7 @@ export function CalendarMonthView({
                   className={cn(
                     "text-[10px] font-medium",
                     isGain ? "text-teal-400" : "text-rose-400",
-                    totalProfit === 0 ? "text-white/25" : ""
+                    displayProfit === 0 ? "text-white/25" : ""
                   )}
                 >
                   {pctLabel}
@@ -132,13 +155,18 @@ export function CalendarMonthView({
                   className={cn(
                     "text-sm font-medium",
                     isGain ? "text-teal-400" : "text-rose-400",
-                    totalProfit === 0 ? "text-white/50" : ""
+                    displayProfit === 0 ? "text-white/50" : ""
                   )}
                 >
-                  {formatMoney(totalProfit)}
+                  {formatMoney(displayProfit)}
                 </div>
+                {count > 0 && liveCount > 0 ? (
+                  <div className="text-[10px] font-medium text-cyan-200/80">
+                    Live {formatMoney(liveProfit)}
+                  </div>
+                ) : null}
                 <div className="text-[10px] font-medium text-white/25">
-                  {count} {count === 1 ? "trade" : "trades"}
+                  {countLabel}
                 </div>
               </div>
               {goalOverlay && hasGoals ? (
@@ -167,7 +195,7 @@ export function CalendarMonthView({
             </div>
           );
 
-          if (count <= 0 && !hasGoals) {
+          if (totalCount <= 0 && !hasGoals) {
             return <div key={key}>{cell}</div>;
           }
 
@@ -179,17 +207,21 @@ export function CalendarMonthView({
                   <div className="flex items-center justify-between px-3 text-[11px] text-white/60">
                     <span>{formatShortDate(day)}</span>
                     <span>
-                      {formatTradeCount(count)} {count === 1 ? "trade" : "trades"}
+                      {count > 0 && liveCount > 0
+                        ? `${formatTradeCount(count)} closed · ${formatTradeCount(liveCount)} live`
+                        : count > 0
+                          ? `${formatTradeCount(count)} ${count === 1 ? "trade" : "trades"}`
+                          : `${formatTradeCount(liveCount)} live`}
                     </span>
                   </div>
-                  {count > 0 ? <Separator className="mt-2 w-full" /> : null}
-                  {count > 0 && previewLoading ? (
+                  {totalCount > 0 ? <Separator className="mt-2 w-full" /> : null}
+                  {previewLoading && previewTrades.length === 0 ? (
                     <div className="flex flex-col gap-2 px-3 pt-2">
                       <Skeleton className="h-3 w-32 rounded-none bg-sidebar-accent" />
                       <Skeleton className="h-3 w-28 rounded-none bg-sidebar-accent" />
                       <Skeleton className="h-3 w-24 rounded-none bg-sidebar-accent" />
                     </div>
-                  ) : count > 0 && previewTrades.length > 0 ? (
+                  ) : previewTrades.length > 0 ? (
                     <div className="flex flex-col gap-1 px-3 pt-2">
                       {previewTrades.map((trade) => {
                         const opened = trade.open
@@ -204,9 +236,16 @@ export function CalendarMonthView({
                             <span className="w-16 shrink-0 text-left text-[11px] tabular-nums text-white/60">
                               {opened}
                             </span>
-                            <span className="min-w-0 flex-1 truncate text-center text-[11px] text-white/70">
-                              {trade.symbol}
-                            </span>
+                            <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
+                              <span className="min-w-0 truncate text-center text-[11px] text-white/70">
+                                {trade.symbol}
+                              </span>
+                              {trade.status === "live" ? (
+                                <span className="rounded-xs bg-cyan-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-cyan-200 ring-1 ring-cyan-400/20">
+                                  Live
+                                </span>
+                              ) : null}
+                            </div>
                             <span
                               className={cn(
                                 TRADE_IDENTIFIER_PILL_CLASS,
@@ -220,14 +259,19 @@ export function CalendarMonthView({
                         );
                       })}
                     </div>
-                  ) : count > 0 ? (
+                  ) : totalCount > 0 ? (
                     <span className="px-3 pt-2 text-[11px] text-white/40">
                       No trade details available.
                     </span>
                   ) : null}
-                  {count > 0 && !previewLoading && extra > 0 ? (
+                  {previewLoading && count > 0 && previewTrades.length > 0 ? (
                     <span className="px-3 pt-2 text-[10px] text-white/40">
-                      Showing {formatTradeCount(shown)} of {formatTradeCount(count)} trades.
+                      Loading closed trades...
+                    </span>
+                  ) : null}
+                  {totalCount > 0 && !previewLoading && extra > 0 ? (
+                    <span className="px-3 pt-2 text-[10px] text-white/40">
+                      Showing {formatTradeCount(shown)} of {formatTradeCount(totalCount)} trades.
                     </span>
                   ) : null}
                   {hasGoals ? (

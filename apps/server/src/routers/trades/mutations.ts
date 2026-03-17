@@ -8,8 +8,10 @@ import { tradeNote } from "../../db/schema/journal";
 import { trade } from "../../db/schema/trading";
 import { notifyEarnedAchievements } from "../../lib/achievements";
 import {
+  calculateNormalizedPipsFromPriceDelta,
   getContractSizeForSymbol,
   getPipSizeForSymbol,
+  normalizePipValue,
 } from "../../lib/dukascopy";
 import { archiveDeletedImportedTrades } from "../../lib/trade-import/deleted-imported-trades";
 import {
@@ -17,6 +19,7 @@ import {
   updateAccountPostExitPeaks,
 } from "../../lib/manipulation-calculator";
 import { syncPropAccountState } from "../../lib/prop-rule-monitor";
+import { calculateTradeOutcome } from "../../lib/trades/trade-outcome";
 import { upsertPlainTextTradeNotes } from "../../lib/trades/trade-notes";
 import {
   ensureAccountOwnership,
@@ -27,11 +30,17 @@ import {
   nullableHexColorSchema,
 } from "./shared";
 
-function deriveOutcome(profit: number, commissions = 0, swap = 0) {
-  const netProfit = profit - commissions - Math.abs(swap);
-  if (netProfit > 0) return "Win" as const;
-  if (netProfit < -0.01) return "Loss" as const;
-  return "BE" as const;
+function normalizeTradeTags(tags?: string[] | null) {
+  if (!Array.isArray(tags)) return [];
+
+  return Array.from(
+    new Set(
+      tags
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0)
+        .slice(0, 50)
+    )
+  );
 }
 
 const deletedImportedTradeArchiveColumns = {
@@ -491,6 +500,7 @@ export const tradeMutationProcedures = {
         swap: z.number().optional(),
         sessionTag: z.string().optional(),
         modelTag: z.string().optional(),
+        customTags: z.array(z.string().trim().min(1)).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -523,10 +533,28 @@ export const tradeMutationProcedures = {
         input.tradeType === "long"
           ? input.closePrice - input.openPrice
           : input.openPrice - input.closePrice;
-      const pips = priceDiff / pipSize;
+      const pips = calculateNormalizedPipsFromPriceDelta(
+        priceDiff,
+        input.symbol
+      );
       const contractSize = getContractSizeForSymbol(input.symbol);
       const profit = input.profit ?? priceDiff * input.volume * contractSize;
       const tradeId = crypto.randomUUID();
+      const ownedAccount = await ensureAccountOwnership(
+        ctx.session.user.id,
+        input.accountId
+      );
+      const outcome = calculateTradeOutcome({
+        symbol: input.symbol.toUpperCase(),
+        profit,
+        commissions: input.commissions ?? 0,
+        swap: input.swap ?? 0,
+        tp: input.tp ?? null,
+        closePrice: input.closePrice,
+        entryPrice: input.openPrice,
+        tradeDirection: input.tradeType,
+        beThresholdPips: ownedAccount.breakevenThresholdPips,
+      });
 
       const [newTrade] = await db
         .insert(trade)
@@ -549,20 +577,23 @@ export const tradeMutationProcedures = {
           commissions: input.commissions?.toString() || null,
           swap: input.swap?.toString() || null,
           tradeDurationSeconds: durationSeconds.toString(),
-          outcome: deriveOutcome(
-            profit,
-            input.commissions || 0,
-            input.swap || 0
-          ),
+          beThresholdPips: ownedAccount.breakevenThresholdPips,
+          outcome,
           sessionTag: input.sessionTag || null,
           modelTag: input.modelTag || null,
+          customTags: normalizeTradeTags(input.customTags),
         })
         .returning();
 
       if (input.sl && input.tp) {
-        const plannedRiskPips = Math.abs(input.openPrice - input.sl) / pipSize;
-        const plannedTargetPips =
-          Math.abs(input.tp - input.openPrice) / pipSize;
+        const plannedRiskPips = normalizePipValue(
+          Math.abs(input.openPrice - input.sl) / pipSize,
+          input.symbol
+        );
+        const plannedTargetPips = normalizePipValue(
+          Math.abs(input.tp - input.openPrice) / pipSize,
+          input.symbol
+        );
         const plannedRR =
           plannedRiskPips > 0 ? plannedTargetPips / plannedRiskPips : null;
 
@@ -615,6 +646,7 @@ export const tradeMutationProcedures = {
         swap: z.number().optional(),
         sessionTag: z.string().nullable().optional(),
         modelTag: z.string().nullable().optional(),
+        customTags: z.array(z.string().trim().min(1)).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -622,6 +654,25 @@ export const tradeMutationProcedures = {
         ctx.session.user.id,
         input.tradeId
       );
+      const ownedAccount = await ensureAccountOwnership(
+        ctx.session.user.id,
+        ownedTrade.accountId
+      );
+      const [currentTrade] = await db
+        .select({
+          symbol: trade.symbol,
+          tradeType: trade.tradeType,
+          openPrice: trade.openPrice,
+          closePrice: trade.closePrice,
+          tp: trade.tp,
+          profit: trade.profit,
+          commissions: trade.commissions,
+          swap: trade.swap,
+          beThresholdPips: trade.beThresholdPips,
+        })
+        .from(trade)
+        .where(eq(trade.id, input.tradeId))
+        .limit(1);
 
       const updates: Record<string, any> = {};
 
@@ -652,17 +703,42 @@ export const tradeMutationProcedures = {
       if (input.swap !== undefined) updates.swap = input.swap.toString();
       if (input.sessionTag !== undefined) updates.sessionTag = input.sessionTag;
       if (input.modelTag !== undefined) updates.modelTag = input.modelTag;
+      if (input.customTags !== undefined) {
+        updates.customTags = normalizeTradeTags(input.customTags);
+      }
 
       if (
-        input.profit !== undefined ||
-        input.commissions !== undefined ||
-        input.swap !== undefined
+        currentTrade &&
+        (input.profit !== undefined ||
+          input.commissions !== undefined ||
+          input.swap !== undefined ||
+          input.symbol !== undefined ||
+          input.tradeType !== undefined ||
+          input.openPrice !== undefined ||
+          input.closePrice !== undefined ||
+          input.tp !== undefined)
       ) {
-        updates.outcome = deriveOutcome(
-          input.profit ?? 0,
-          input.commissions ?? 0,
-          input.swap ?? 0
-        );
+        updates.outcome = calculateTradeOutcome({
+          symbol: (input.symbol ?? currentTrade.symbol ?? "").toUpperCase(),
+          profit: input.profit ?? currentTrade.profit,
+          commissions: input.commissions ?? currentTrade.commissions,
+          swap: input.swap ?? currentTrade.swap,
+          tp: input.tp !== undefined ? input.tp : currentTrade.tp,
+          closePrice:
+            input.closePrice !== undefined
+              ? input.closePrice
+              : currentTrade.closePrice,
+          entryPrice:
+            input.openPrice !== undefined
+              ? input.openPrice
+              : currentTrade.openPrice,
+          tradeDirection:
+            input.tradeType ??
+            (currentTrade.tradeType as "long" | "short" | null) ??
+            "long",
+          beThresholdPips:
+            currentTrade.beThresholdPips ?? ownedAccount.breakevenThresholdPips,
+        });
       }
 
       const [updated] = await db
@@ -675,6 +751,73 @@ export const tradeMutationProcedures = {
       await syncPropAccountState(ownedTrade.accountId, { saveAlerts: true });
 
       return updated;
+    }),
+  updateCustomTags: protectedProcedure
+    .input(
+      z.object({
+        tradeId: z.string().min(1),
+        customTags: z.array(z.string().trim().min(1)).max(50),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const ownedTrade = await ensureTradeOwnership(
+        ctx.session.user.id,
+        input.tradeId
+      );
+
+      const customTags = normalizeTradeTags(input.customTags);
+
+      await db
+        .update(trade)
+        .set({
+          customTags,
+        })
+        .where(eq(trade.id, input.tradeId));
+
+      await invalidateTradeScopeCaches([ownedTrade.accountId]);
+
+      return { success: true, customTags };
+    }),
+  bulkAddCustomTags: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1),
+        customTags: z.array(z.string().trim().min(1)).min(1).max(50),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { trades, accountIds } = await ensureTradeBatchOwnership(
+        ctx.session.user.id,
+        input.tradeIds
+      );
+
+      const tagsToAdd = normalizeTradeTags(input.customTags);
+
+      for (const currentTrade of trades) {
+        const [existingTrade] = await db
+          .select({
+            customTags: trade.customTags,
+          })
+          .from(trade)
+          .where(eq(trade.id, currentTrade.id))
+          .limit(1);
+
+        const mergedTags = normalizeTradeTags([
+          ...((existingTrade?.customTags as string[] | null | undefined) ?? []),
+          ...tagsToAdd,
+        ]);
+
+        await db
+          .update(trade)
+          .set({
+            customTags: mergedTags,
+          })
+          .where(eq(trade.id, currentTrade.id));
+      }
+
+      await invalidateTradeScopeCaches(accountIds);
+
+      return { success: true, updatedCount: input.tradeIds.length };
     }),
 
   delete: protectedProcedure

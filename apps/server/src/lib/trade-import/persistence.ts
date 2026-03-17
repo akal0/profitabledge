@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { ParsedImportTrade } from "./csv/bundle";
+import { calculateTradeOutcome } from "../trades/trade-outcome";
 
 function normalizeValue(value: unknown) {
   return value == null ? "" : String(value).trim().toLowerCase();
@@ -10,7 +11,9 @@ function numberToStoredString(value: number | null) {
   return value == null ? null : value.toString();
 }
 
-export function buildImportedTradeIdentityFingerprint(trade: ParsedImportTrade) {
+export function buildImportedTradeIdentityFingerprint(
+  trade: ParsedImportTrade
+) {
   return [
     normalizeValue(trade.ticket),
     normalizeValue(trade.symbol),
@@ -122,7 +125,23 @@ export function buildImportedTradeInsertRecord(input: {
   trade: ParsedImportTrade;
   index: number;
   importMeta: { parserId: string; reportType: string };
+  breakevenThresholdPips?: number | null;
 }) {
+  const outcome =
+    input.trade.symbol && input.trade.profit != null
+      ? calculateTradeOutcome({
+          symbol: input.trade.symbol,
+          profit: input.trade.profit,
+          commissions: input.trade.commissions,
+          swap: input.trade.swap,
+          tp: input.trade.tp,
+          closePrice: input.trade.closePrice,
+          entryPrice: input.trade.openPrice,
+          tradeDirection: input.trade.tradeType,
+          beThresholdPips: input.breakevenThresholdPips,
+        })
+      : null;
+
   return {
     id: randomUUID(),
     accountId: input.accountId,
@@ -140,6 +159,8 @@ export function buildImportedTradeInsertRecord(input: {
     commissions: numberToStoredString(input.trade.commissions),
     profit: numberToStoredString(input.trade.profit),
     pips: numberToStoredString(input.trade.pips),
+    beThresholdPips: numberToStoredString(input.breakevenThresholdPips ?? null),
+    outcome,
     tradeDurationSeconds: input.trade.tradeDurationSeconds,
     openTime: input.trade.openTime,
     closeTime: input.trade.closeTime,
@@ -157,7 +178,23 @@ export function buildImportedTradeUpdateRecord(input: {
   existingTrade: { brokerMeta?: Record<string, unknown> | null };
   trade: ParsedImportTrade;
   importMeta: { parserId: string; reportType: string };
+  breakevenThresholdPips?: number | null;
 }) {
+  const outcome =
+    input.trade.symbol && input.trade.profit != null
+      ? calculateTradeOutcome({
+          symbol: input.trade.symbol,
+          profit: input.trade.profit,
+          commissions: input.trade.commissions,
+          swap: input.trade.swap,
+          tp: input.trade.tp,
+          closePrice: input.trade.closePrice,
+          entryPrice: input.trade.openPrice,
+          tradeDirection: input.trade.tradeType,
+          beThresholdPips: input.breakevenThresholdPips,
+        })
+      : null;
+
   return {
     open: input.trade.open ?? input.trade.openTime?.toISOString() ?? null,
     tradeType: input.trade.tradeType,
@@ -172,6 +209,8 @@ export function buildImportedTradeUpdateRecord(input: {
     commissions: numberToStoredString(input.trade.commissions),
     profit: numberToStoredString(input.trade.profit),
     pips: numberToStoredString(input.trade.pips),
+    beThresholdPips: numberToStoredString(input.breakevenThresholdPips ?? null),
+    outcome,
     tradeDurationSeconds: input.trade.tradeDurationSeconds,
     openTime: input.trade.openTime,
     closeTime: input.trade.closeTime,

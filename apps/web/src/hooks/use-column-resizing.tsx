@@ -142,6 +142,7 @@ export const DEFAULT_COLUMN_SIZES: Record<string, number> = {
   maePips: 80,
   sessionTag: 120,
   modelTag: 120,
+  customTags: 180,
   protocolAlignment: 120,
   outcome: 80,
   plannedRR: 90,

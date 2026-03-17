@@ -56,6 +56,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Analysis",
     items: [
       { title: "Dashboard", url: "/dashboard", icon: DashboardIcon },
+      { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
       { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
       { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
       { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },

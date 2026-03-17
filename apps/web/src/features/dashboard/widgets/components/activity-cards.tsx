@@ -32,6 +32,11 @@ import {
   type WidgetCardProps,
   type WidgetValueCardProps,
 } from "../lib/widget-shared";
+import {
+  buildSessionPerformanceFromTrades,
+  buildTradeStreakCalendarFromTrades,
+  useDashboardTradeFilters,
+} from "@/features/dashboard/filters/dashboard-trade-filters";
 import { cn } from "@/lib/utils";
 import { trpcOptions } from "@/utils/trpc";
 import {
@@ -305,6 +310,7 @@ export function SessionPerformanceCard({
   className,
   currencyCode,
 }: WidgetCardProps) {
+  const dashboardTradeFilters = useDashboardTradeFilters();
   const { data, isLoading } = useQuery({
     ...trpcOptions.trades.listInfinite.queryOptions({
       accountId: accountId || "",
@@ -315,6 +321,15 @@ export function SessionPerformanceCard({
   });
 
   const sessionStats = useMemo(() => {
+    if (
+      dashboardTradeFilters?.hasActiveFilters &&
+      dashboardTradeFilters.accountId === accountId
+    ) {
+      return buildSessionPerformanceFromTrades(
+        dashboardTradeFilters.filteredTrades
+      );
+    }
+
     if (!data?.items?.length) return null;
 
     const sessions: Record<
@@ -350,7 +365,7 @@ export function SessionPerformanceCard({
       profit: stats.profit,
       winRate: stats.trades > 0 ? (stats.wins / stats.trades) * 100 : 0,
     }));
-  }, [data]);
+  }, [accountId, dashboardTradeFilters, data]);
 
   const maxTrades = Math.max(
     ...(sessionStats?.map((session) => session.trades) || [1]),
@@ -367,7 +382,7 @@ export function SessionPerformanceCard({
       className={className}
       contentClassName="flex h-full w-full flex-col p-3.5"
     >
-      {isLoading ? (
+      {isLoading && !dashboardTradeFilters?.hasActiveFilters ? (
         <div className="flex flex-col gap-2">
           {Array.from({ length: 3 }).map((_, index) => (
             <Skeleton
@@ -500,6 +515,7 @@ export function TradeStreakCalendarCard({
   className,
   currencyCode,
 }: WidgetCardProps) {
+  const dashboardTradeFilters = useDashboardTradeFilters();
   const { data, isLoading } = useQuery({
     ...trpcOptions.trades.listInfinite.queryOptions({
       accountId: accountId || "",
@@ -510,6 +526,15 @@ export function TradeStreakCalendarCard({
   });
 
   const streakData = useMemo(() => {
+    if (
+      dashboardTradeFilters?.hasActiveFilters &&
+      dashboardTradeFilters.accountId === accountId
+    ) {
+      return buildTradeStreakCalendarFromTrades(
+        dashboardTradeFilters.filteredTrades
+      );
+    }
+
     if (!data?.items?.length) return null;
 
     const tradesByDate: Record<string, { profit: number; count: number }> = {};
@@ -567,7 +592,7 @@ export function TradeStreakCalendarCard({
       totalGreenDays: last30Days.filter((day) => day.profit > 0).length,
       totalRedDays: last30Days.filter((day) => day.profit < 0).length,
     };
-  }, [data]);
+  }, [accountId, dashboardTradeFilters, data]);
 
   return (
     <DashboardWidgetFrame
@@ -579,7 +604,7 @@ export function TradeStreakCalendarCard({
       className={className}
       contentClassName="flex h-full w-full flex-col p-3.5"
     >
-      {isLoading ? (
+      {isLoading && !dashboardTradeFilters?.hasActiveFilters ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-20 w-full rounded-sm bg-sidebar" />
           <Skeleton className="h-8 w-full rounded-sm bg-sidebar" />

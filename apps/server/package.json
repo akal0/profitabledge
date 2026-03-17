@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })\"",
+    "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
     "build": "bun run clean:next && next build",
     "start": "next start",
     "ai:validate:deterministic": "bun run src/scripts/validate-ai-regressions.ts",

@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
       result,
     });
   } catch (error) {
+    console.error("[mt5-worker/sync] request failed", error);
+    if (error instanceof Error && "cause" in error) {
+      console.error("[mt5-worker/sync] cause", error.cause);
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
       {

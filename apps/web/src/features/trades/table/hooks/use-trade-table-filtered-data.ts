@@ -135,8 +135,22 @@ export function useTradeTableFilteredData({
         ) {
           return false;
         }
-        if (!excluded.has("symbols") && symbolSet.size > 0 && !symbolSet.has(row.symbol)) {
-          return false;
+        if (
+          !excluded.has("symbols") &&
+          symbolSet.size > 0 &&
+          row.isLive === true
+        ) {
+          const liveSymbolMatches = [
+            row.rawSymbol,
+            row.symbol,
+            row.symbolGroup,
+          ]
+            .filter((value): value is string => Boolean(value))
+            .some((value) => symbolSet.has(value));
+
+          if (!liveSymbolMatches) {
+            return false;
+          }
         }
         if (killzoneSet.size > 0 && !killzoneSet.has(row.killzone || "")) return false;
         if (sessionTagSet.size > 0 && !sessionTagSet.has(row.sessionTag || "")) return false;

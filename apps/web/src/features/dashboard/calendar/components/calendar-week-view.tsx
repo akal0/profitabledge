@@ -43,9 +43,14 @@ type CalendarWeekViewProps = {
   heatmapMaxAbs: number;
   initialBalance: number | null;
   hoveredISO: string | null;
+  livePreviewMap: Map<string, TradePreview[]>;
   previews: CalendarPreviewState;
   onSelectDay: (dateISO: string) => void;
-  onHoverDay: (dateISO: string, count: number) => void;
+  onHoverDay: (
+    dateISO: string,
+    closedCount: number,
+    totalCount: number
+  ) => void;
   onLeaveDay: (dateISO: string) => void;
 };
 
@@ -95,6 +100,7 @@ export function CalendarWeekView({
   heatmapMaxAbs,
   initialBalance,
   hoveredISO,
+  livePreviewMap,
   previews,
   onSelectDay,
   onHoverDay,
@@ -108,17 +114,37 @@ export function CalendarWeekView({
         const dayDate = fromDateISO(dayRow.dateISO);
         const dayGoals = goalMap.get(dayRow.dateISO) || [];
         const hasGoals = goalOverlay && dayGoals.length > 0;
-        const isGain = dayRow.totalProfit >= 0;
+        const liveCount = dayRow.liveTradeCount || 0;
+        const liveProfit = dayRow.liveTradeProfit || 0;
+        const totalCount = dayRow.count + liveCount;
+        const displayProfit = dayRow.count > 0 ? dayRow.totalProfit : liveProfit;
+        const isGain = displayProfit >= 0;
         const pctValue =
           initialBalance && initialBalance > 0
-            ? (Number(dayRow.totalProfit || 0) / initialBalance) * 100
+            ? (Number(displayProfit || 0) / initialBalance) * 100
             : 0;
         const pctLabel = `${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}%`;
         const heatBg = heatmapEnabled
-          ? getHeatmapBg(dayRow.totalProfit, dayRow.count, heatmapMaxAbs)
+          ? getHeatmapBg(displayProfit, totalCount, heatmapMaxAbs)
           : undefined;
-        const previewRows = previews[dayRow.dateISO]?.trades || [];
+        const previewRows = [
+          ...(livePreviewMap.get(dayRow.dateISO) || []),
+          ...(previews[dayRow.dateISO]?.trades || []),
+        ].sort(
+          (left, right) =>
+            new Date(left.open).getTime() - new Date(right.open).getTime()
+        );
+        const previewLoading =
+          dayRow.count > 0 ? previews[dayRow.dateISO]?.loading ?? true : false;
         const groupedRows = buildGroupedPreviewRows(previewRows);
+        const tradeCountLabel =
+          dayRow.count > 0 && liveCount > 0
+            ? `${formatTradeCount(dayRow.count)} closed · ${formatTradeCount(liveCount)} live`
+            : dayRow.count > 0
+              ? `${formatTradeCount(dayRow.count)} ${dayRow.count === 1 ? "trade" : "trades"}`
+              : liveCount > 0
+                ? `${formatTradeCount(liveCount)} live`
+                : "0 trades";
 
         const cell = (
           <div
@@ -135,7 +161,7 @@ export function CalendarWeekView({
             style={heatBg ? { backgroundColor: heatBg } : undefined}
             onClick={() => onSelectDay(dayRow.dateISO)}
             onKeyDown={(event) => handleDayKeyDown(event, dayRow.dateISO, onSelectDay)}
-            onMouseEnter={() => onHoverDay(dayRow.dateISO, dayRow.count)}
+            onMouseEnter={() => onHoverDay(dayRow.dateISO, dayRow.count, totalCount)}
             onMouseLeave={() => onLeaveDay(dayRow.dateISO)}
           >
             {hoveredISO === dayRow.dateISO ? (
@@ -159,7 +185,7 @@ export function CalendarWeekView({
                   <div className="flex items-center gap-2">
                     {(() => {
                       const shown = previewRows.length;
-                      const extra = Math.max(0, Number(dayRow.count || 0) - shown);
+                      const extra = Math.max(0, Number(totalCount || 0) - shown);
                       return extra > 0 ? (
                         <span className="inline-block rounded-xs bg-neutral-800/25 px-2 py-0.5 text-[10px] font-medium text-white/60">
                           +{formatTradeCount(extra)} trades
@@ -169,7 +195,7 @@ export function CalendarWeekView({
                   </div>
                 </div>
                 <div className="flex h-full flex-col place-content-end gap-1">
-                  {previews[dayRow.dateISO]?.loading ? (
+                  {previewLoading && groupedRows.length === 0 ? (
                     <>
                       <Skeleton className="h-4 w-24 rounded-none bg-sidebar-accent" />
                       <Skeleton className="h-4 w-20 rounded-none bg-sidebar-accent" />
@@ -223,6 +249,11 @@ export function CalendarWeekView({
                                         <span className="w-14 shrink-0 text-[11px] tabular-nums text-white/60">
                                           {opened}
                                         </span>
+                                        {row?.status === "live" ? (
+                                          <span className="rounded-xs bg-cyan-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-cyan-200 ring-1 ring-cyan-400/20">
+                                            Live
+                                          </span>
+                                        ) : null}
                                         <span className="min-w-0 flex-1 truncate text-center text-[11px] tabular-nums text-white/40">
                                           {formatDuration(row?.holdSeconds || 0)}
                                         </span>
@@ -246,8 +277,15 @@ export function CalendarWeekView({
                       </div>
                     ))
                   ) : (
-                    <span className="text-xs text-white/40">No trades</span>
+                    <span className="text-xs text-white/40">
+                      {totalCount > 0 ? "No trade details available." : "No trades"}
+                    </span>
                   )}
+                  {previewLoading && dayRow.count > 0 && groupedRows.length > 0 ? (
+                    <span className="pt-1 text-[10px] text-white/40">
+                      Loading closed trades...
+                    </span>
+                  ) : null}
                 </div>
               </div>
             ) : (
@@ -272,7 +310,7 @@ export function CalendarWeekView({
                     className={cn(
                       "text-xs font-medium",
                       isGain ? "text-teal-400" : "text-rose-400",
-                      dayRow.totalProfit === 0 ? "text-white/25" : ""
+                      displayProfit === 0 ? "text-white/25" : ""
                     )}
                   >
                     {pctLabel}
@@ -283,15 +321,19 @@ export function CalendarWeekView({
                     className={cn(
                       "text-xl font-medium",
                       isGain ? "text-teal-400" : "text-rose-400",
-                      dayRow.totalProfit === 0 ? "text-white/50" : ""
+                      displayProfit === 0 ? "text-white/50" : ""
                     )}
                   >
-                    {formatMoney(dayRow.totalProfit)}
+                    {formatMoney(displayProfit)}
                   </div>
                 </div>
+                {dayRow.count > 0 && liveCount > 0 ? (
+                  <div className="mt-1 text-[11px] font-medium text-cyan-200/80">
+                    Live {formatMoney(liveProfit)}
+                  </div>
+                ) : null}
                 <div className="mt-1 text-xs font-medium text-white/25">
-                  {formatTradeCount(dayRow.count)}{" "}
-                  {dayRow.count === 1 ? "trade" : "trades"}
+                  {tradeCountLabel}
                 </div>
               </div>
             )}

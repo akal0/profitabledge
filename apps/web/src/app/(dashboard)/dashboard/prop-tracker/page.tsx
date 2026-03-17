@@ -174,7 +174,7 @@ function OverviewPanel({
 }) {
   return (
     <div className={GOALS_SURFACE_OUTER_CLASS}>
-      <div className={cn(GOALS_SURFACE_INNER_CLASS, "h-full")}>
+      <div className={cn(GOALS_SURFACE_INNER_CLASS, "h-full overflow-hidden")}>
         <div className="flex items-start justify-between gap-4 px-4 py-4 sm:px-5">
           <div className="flex items-start gap-3">
             <div className="mt-0.5 rounded-sm ring ring-white/5 bg-sidebar p-2">

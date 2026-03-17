@@ -18,6 +18,7 @@ export type InlineTradeUpdateInput = {
   swap?: number;
   sessionTag?: string | null;
   modelTag?: string | null;
+  customTags?: string[];
 };
 
 export type TradeStreakMeta = {
@@ -36,6 +37,7 @@ export type TradeTableMeta = {
 
 export type TradeRow = {
   id: string;
+  accountId?: string;
   ticket?: string | null;
   tp?: number | null;
   sl?: number | null;
@@ -44,6 +46,8 @@ export type TradeRow = {
   openText?: string | null;
   closeText?: string | null;
   symbol: string;
+  rawSymbol?: string | null;
+  symbolGroup?: string | null;
   tradeDirection: "long" | "short";
   volume: number;
   profit: number;
@@ -60,6 +64,7 @@ export type TradeRow = {
   sessionTagColor?: string | null;
   modelTag?: string | null;
   modelTagColor?: string | null;
+  customTags?: string[];
   protocolAlignment?: "aligned" | "against" | "discretionary" | null;
   outcome?: "Win" | "Loss" | "BE" | "PW";
   maxRR?: number | null;

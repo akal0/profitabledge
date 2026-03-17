@@ -19,6 +19,7 @@ import type {
   CalendarWidgetType,
   DayRow,
   RangeSummary,
+  TradePreview,
   ViewMode,
 } from "../lib/calendar-types";
 import {
@@ -27,22 +28,70 @@ import {
 } from "../lib/calendar-types";
 import {
   addDays,
+  buildLiveTradePreviewMap,
   buildGoalMap,
   buildMonthGrid,
   buildMonthSummary,
   clampRange,
   endOfDay,
+  extendBoundsWithTradePreviews,
   endOfMonth,
   endOfWeek,
   filterPreviewTradesForDate,
   formatActivePeriodLabel,
   fromDateISO,
+  mergeDayRowsWithLiveTrades,
   normalizeRecentDayRows,
   startOfDay,
   startOfMonth,
   startOfWeek,
   toYMD,
 } from "../lib/calendar-utils";
+
+type LiveMetricsOpenTrade = {
+  id?: string | null;
+  ticket?: string | null;
+  symbol?: string | null;
+  openTime?: string | null;
+  profit?: number | null;
+  accountName?: string | null;
+};
+
+function mapLiveTradePreviews(input: {
+  openTrades?: LiveMetricsOpenTrade[];
+} | null | undefined): TradePreview[] {
+  return (input?.openTrades ?? [])
+    .map((trade) => {
+      const open = trade.openTime ? String(trade.openTime) : "";
+      const openedAt = open ? new Date(open) : null;
+      const holdSeconds =
+        openedAt && !Number.isNaN(openedAt.getTime())
+          ? Math.max(0, Math.floor((Date.now() - openedAt.getTime()) / 1000))
+          : 0;
+
+      return {
+        id: String(trade.id ?? trade.ticket ?? ""),
+        symbol: String(trade.symbol ?? "Unknown"),
+        open,
+        profit: Number(trade.profit ?? 0),
+        holdSeconds,
+        status: "live" as const,
+        accountName:
+          typeof trade.accountName === "string" ? trade.accountName : null,
+      };
+    })
+    .filter((trade) => Boolean(trade.id && trade.open));
+}
+
+async function loadLiveTrades(accountId: string) {
+  const liveMetrics = await trpcClient.accounts.liveMetrics.query({
+    accountId,
+  });
+
+  return mapLiveTradePreviews(
+    liveMetrics as { openTrades?: LiveMetricsOpenTrade[] } | null | undefined
+  );
+}
 
 type DashboardCalendarProps = {
   accountId?: string;
@@ -83,23 +132,39 @@ export default function DashboardCalendar({
   const [rangeSummary, setRangeSummary] = useState<RangeSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [previews, setPreviews] = useState<CalendarPreviewState>({});
+  const [liveTrades, setLiveTrades] = useState<TradePreview[]>([]);
 
   const router = useRouter();
   const setSelectedAccountId = useAccountStore((state) => state.setSelectedAccountId);
 
+  const calendarDays = useMemo(
+    () => mergeDayRowsWithLiveTrades(days, liveTrades),
+    [days, liveTrades]
+  );
+
+  const livePreviewMap = useMemo(
+    () => buildLiveTradePreviewMap(liveTrades),
+    [liveTrades]
+  );
+
+  const effectiveBounds = useMemo(
+    () => extendBoundsWithTradePreviews(bounds, liveTrades),
+    [bounds, liveTrades]
+  );
+
   const dayMap = useMemo(() => {
     const map = new Map<string, DayRow>();
-    (days || []).forEach((day) => map.set(day.dateISO, day));
+    calendarDays.forEach((day) => map.set(day.dateISO, day));
     return map;
-  }, [days]);
+  }, [calendarDays]);
 
-  const visibleDays = useMemo(() => {
-    if (!days || !range) return days;
+  const visibleClosedDays = useMemo(() => {
+    if (!range) return days ?? [];
 
     const startISO = toYMD(startOfDay(range.start));
     const endISO = toYMD(startOfDay(range.end));
 
-    return days.filter(
+    return (days ?? []).filter(
       (day) => day.dateISO >= startISO && day.dateISO <= endISO
     );
   }, [days, range]);
@@ -113,13 +178,18 @@ export default function DashboardCalendar({
   }, [range, viewMode]);
 
   const heatmapMaxAbs = useMemo(() => {
-    if (!days || days.length === 0) return 1;
-    return Math.max(1, ...days.map((day) => Math.abs(day.totalProfit)));
-  }, [days]);
+    if (calendarDays.length === 0) return 1;
+    return Math.max(
+      1,
+      ...calendarDays.map((day) =>
+        Math.abs(day.count > 0 ? day.totalProfit : Number(day.liveTradeProfit || 0))
+      )
+    );
+  }, [calendarDays]);
 
   const monthSummary = useMemo(
-    () => buildMonthSummary(visibleDays, range),
-    [range, visibleDays]
+    () => buildMonthSummary(visibleClosedDays, range),
+    [range, visibleClosedDays]
   );
 
   const rangeLabel = monthSummary
@@ -132,24 +202,27 @@ export default function DashboardCalendar({
   );
 
   const canNavigatePrevious = useMemo(() => {
-    if (!range || !bounds) return false;
-    const minDate = new Date(bounds.minISO);
+    if (!range || !effectiveBounds) return false;
+    const minDate = new Date(effectiveBounds.minISO);
     if (viewMode === "month") {
       return startOfMonth(range.start).getTime() > startOfMonth(minDate).getTime();
     }
     return startOfWeek(range.start).getTime() > startOfWeek(minDate).getTime();
-  }, [bounds, range, viewMode]);
+  }, [effectiveBounds, range, viewMode]);
 
   const canNavigateNext = useMemo(() => {
-    if (!range || !bounds) return false;
-    const maxDate = new Date(bounds.maxISO);
+    if (!range || !effectiveBounds) return false;
+    const maxDate = new Date(effectiveBounds.maxISO);
     if (viewMode === "month") {
       return startOfMonth(range.start).getTime() < startOfMonth(maxDate).getTime();
     }
     return startOfWeek(range.start).getTime() < startOfWeek(maxDate).getTime();
-  }, [bounds, range, viewMode]);
+  }, [effectiveBounds, range, viewMode]);
 
-  const goalMap = useMemo(() => buildGoalMap(goals, days), [days, goals]);
+  const goalMap = useMemo(
+    () => buildGoalMap(goals, calendarDays),
+    [calendarDays, goals]
+  );
 
   const quickRanges = useMemo(() => {
     if (viewMode === "month") {
@@ -257,14 +330,22 @@ export default function DashboardCalendar({
     let mounted = true;
 
     void (async () => {
-      if (!accountId) return;
+      if (!accountId) {
+        setLiveTrades([]);
+        return;
+      }
 
       setLoading(true);
       setPreviews({});
       setHoveredISO(null);
 
       try {
-        const accounts = await trpcClient.accounts.list.query();
+        const [accounts, nextBounds, nextLiveTrades] = await Promise.all([
+          trpcClient.accounts.list.query(),
+          trpcClient.accounts.opensBounds.query({ accountId }),
+          loadLiveTrades(accountId).catch(() => []),
+        ]);
+
         if (mounted) {
           const account = (accounts as Array<Record<string, unknown>>).find(
             (candidate) => candidate.id === accountId
@@ -272,11 +353,13 @@ export default function DashboardCalendar({
           const balance =
             account?.initialBalance != null ? Number(account.initialBalance) : null;
           setInitialBalance(Number.isFinite(balance) ? Number(balance) : null);
+          setLiveTrades(nextLiveTrades);
         }
 
-        const nextBounds = await trpcClient.accounts.opensBounds.query({ accountId });
-        const minDate = new Date(nextBounds.minISO);
-        const maxDate = new Date(nextBounds.maxISO);
+        const nextEffectiveBounds =
+          extendBoundsWithTradePreviews(nextBounds, nextLiveTrades) ?? nextBounds;
+        const minDate = new Date(nextEffectiveBounds.minISO);
+        const maxDate = new Date(nextEffectiveBounds.maxISO);
         const visibleRange =
           viewMode === "month"
             ? clampRange(startOfMonth(maxDate), endOfMonth(maxDate), minDate, maxDate)
@@ -319,6 +402,31 @@ export default function DashboardCalendar({
       mounted = false;
     };
   }, [accountId, viewMode]);
+
+  useEffect(() => {
+    if (!accountId) {
+      setLiveTrades([]);
+      return;
+    }
+
+    let mounted = true;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+
+      void loadLiveTrades(accountId)
+        .then((nextLiveTrades) => {
+          if (mounted) {
+            setLiveTrades(nextLiveTrades);
+          }
+        })
+        .catch(() => undefined);
+    }, 5000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+    };
+  }, [accountId]);
 
   useEffect(() => {
     if (!accountId) {
@@ -397,12 +505,12 @@ export default function DashboardCalendar({
     let nextStart = new Date(start);
     let nextEnd = new Date(end);
 
-    if (bounds) {
+    if (effectiveBounds) {
       const clampedRange = clampRange(
         nextStart,
         nextEnd,
-        new Date(bounds.minISO),
-        new Date(bounds.maxISO)
+        new Date(effectiveBounds.minISO),
+        new Date(effectiveBounds.maxISO)
       );
       nextStart = clampedRange.start;
       nextEnd = clampedRange.end;
@@ -437,10 +545,10 @@ export default function DashboardCalendar({
     if (mode === viewMode) return;
 
     setViewMode(mode);
-    if (!range || !bounds) return;
+    if (!range || !effectiveBounds) return;
 
-    const minDate = new Date(bounds.minISO);
-    const maxDate = new Date(bounds.maxISO);
+    const minDate = new Date(effectiveBounds.minISO);
+    const maxDate = new Date(effectiveBounds.maxISO);
     const anchor = range.end ?? range.start ?? new Date();
 
     let nextStart: Date;
@@ -479,10 +587,10 @@ export default function DashboardCalendar({
   };
 
   const handlePeriodStep = (direction: -1 | 1) => {
-    if (!range || !bounds) return;
+    if (!range || !effectiveBounds) return;
 
-    const minDate = new Date(bounds.minISO);
-    const maxDate = new Date(bounds.maxISO);
+    const minDate = new Date(effectiveBounds.minISO);
+    const maxDate = new Date(effectiveBounds.maxISO);
 
     if (viewMode === "month") {
       const shiftedMonth = new Date(startOfMonth(range.start));
@@ -516,10 +624,16 @@ export default function DashboardCalendar({
     router.push(`/dashboard/trades?oStart=${toYMD(range.start)}&oEnd=${toYMD(range.end)}`);
   };
 
-  const handleHoverDay = (dateISO: string, count: number) => {
-    if (count <= 0) return;
+  const handleHoverDay = (
+    dateISO: string,
+    closedCount: number,
+    totalCount: number
+  ) => {
+    if (totalCount <= 0) return;
     setHoveredISO(dateISO);
-    void loadPreview(dateISO);
+    if (closedCount > 0) {
+      void loadPreview(dateISO);
+    }
   };
 
   const handleLeaveDay = (dateISO: string) => {
@@ -529,8 +643,8 @@ export default function DashboardCalendar({
   return (
     <div ref={exportRef} className="flex w-full flex-col gap-3">
       <CalendarControls
-        days={days}
-        bounds={bounds}
+        days={calendarDays}
+        bounds={effectiveBounds}
         range={range}
         viewMode={viewMode}
         quickRanges={quickRanges}
@@ -587,6 +701,7 @@ export default function DashboardCalendar({
             heatmapEnabled={heatmapEnabled}
             heatmapMaxAbs={heatmapMaxAbs}
             initialBalance={initialBalance}
+            livePreviewMap={livePreviewMap}
             previews={previews}
             onSelectDay={handleDayClick}
             onHoverDay={handleHoverDay}
@@ -608,13 +723,14 @@ export default function DashboardCalendar({
         </div>
       ) : (
         <CalendarWeekView
-          days={days}
+          days={calendarDays}
           goalMap={goalMap}
           goalOverlay={goalOverlay}
           heatmapEnabled={heatmapEnabled}
           heatmapMaxAbs={heatmapMaxAbs}
           initialBalance={initialBalance}
           hoveredISO={hoveredISO}
+          livePreviewMap={livePreviewMap}
           previews={previews}
           onSelectDay={handleDayClick}
           onHoverDay={handleHoverDay}

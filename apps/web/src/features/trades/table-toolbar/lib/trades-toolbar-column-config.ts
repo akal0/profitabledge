@@ -17,7 +17,14 @@ export const columnGroups: { label: string; ids: string[] }[] = [
   },
   {
     label: "Tags",
-    ids: ["killzone", "sessionTag", "modelTag", "protocolAlignment", "outcome"],
+    ids: [
+      "killzone",
+      "sessionTag",
+      "modelTag",
+      "customTags",
+      "protocolAlignment",
+      "outcome",
+    ],
   },
   {
     label: "Compliance",
@@ -114,6 +121,7 @@ export const columnLabels: Record<string, string> = {
   entryFreeMargin: "Entry free margin",
   entryMarginLevel: "Entry margin level",
   outcome: "Outcome",
+  customTags: "Trade tags",
   complianceStatus: "Compliance status",
 };
 
@@ -130,6 +138,7 @@ export const columnTooltips: Record<string, string> = {
   killzone: "Old name for the session tag.",
   sessionTag: "Shows the time window name for this trade.",
   modelTag: "Shows the setup name you used.",
+  customTags: "Shows the custom trade tags you added to this trade.",
   protocolAlignment: "Shows if you followed your rules.",
   outcome: "Shows if you won, lost, broke even, or won part.",
   complianceStatus: "Shows if the trade passed your rules.",

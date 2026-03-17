@@ -14,6 +14,10 @@ import {
 } from "recharts";
 
 import { Skeleton } from "../../ui/skeleton";
+import {
+  createSymbolGroupDisplayMap,
+  getSymbolGroupKey,
+} from "@/lib/symbol-grouping";
 
 import {
   DashboardChartTooltipFrame,
@@ -75,12 +79,13 @@ export function RadarComparisonChart({
       return { chartData: [] as Record<string, any>[], groups: [] as string[] };
     }
 
+    const symbolDisplayMap = createSymbolGroupDisplayMap(trades);
     const buckets: Record<string, any[]> = {};
     for (const trade of trades) {
       const key =
         groupBy === "session"
           ? trade.sessionTag || "Untagged"
-          : trade.symbol || "Unknown";
+          : symbolDisplayMap.get(getSymbolGroupKey(trade)) || "Unknown";
       if (!buckets[key]) buckets[key] = [];
       buckets[key].push(trade);
     }

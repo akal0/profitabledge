@@ -20,7 +20,17 @@ import {
   enhancedCache,
 } from "../../lib/enhanced-cache";
 import { getSampleGateStatus as getTradeSampleGateStatus } from "../../lib/metric-registry";
+import {
+  createSymbolResolver,
+  expandCanonicalSymbolsToRawSymbols,
+  listUserSymbolMappings,
+  summarizeSymbolGroups,
+} from "../../lib/symbol-mapping";
 import { scoreOpenTrade as scoreOpenTradeService } from "../../lib/trade-scoring";
+import {
+  DEFAULT_BREAKEVEN_THRESHOLD_PIPS,
+  resolveStoredTradeOutcome,
+} from "../../lib/trades/trade-outcome";
 import { buildTradeSearchPredicates } from "../../lib/trades/search";
 import { tradeDrawdownProcedures } from "./drawdown";
 import {
@@ -55,6 +65,7 @@ export const tradeQueryProcedures = {
           outcome: trade.outcome,
           sessionTag: trade.sessionTag,
           modelTag: trade.modelTag,
+          customTags: trade.customTags,
           entryPeakPrice: sql<
             number | null
           >`CAST(${trade.entryPeakPrice} AS NUMERIC)`,
@@ -82,9 +93,16 @@ export const tradeQueryProcedures = {
       }
 
       await ensureAccountOwnership(ctx.session.user.id, result[0].accountId);
+      const userMappings = await listUserSymbolMappings(ctx.session.user.id);
+      const resolvedSymbol = createSymbolResolver(userMappings).resolve(
+        result[0].symbol
+      );
 
       return {
         ...result[0],
+        symbol: result[0].symbol,
+        rawSymbol: result[0].symbol,
+        symbolGroup: resolvedSymbol.canonicalSymbol,
         brokerMeta: result[0].brokerMeta ?? null,
         openText: getMt5BrokerString(result[0].brokerMeta, "openText"),
         closeText: getMt5BrokerString(result[0].brokerMeta, "closeText"),
@@ -116,6 +134,7 @@ export const tradeQueryProcedures = {
         killzones: z.array(z.string()).optional(),
         sessionTags: z.array(z.string()).optional(),
         modelTags: z.array(z.string()).optional(),
+        customTags: z.array(z.string()).optional(),
         protocolAlignment: z
           .array(z.enum(["aligned", "against", "discretionary"]))
           .optional(),
@@ -159,6 +178,9 @@ export const tradeQueryProcedures = {
         } as const;
       }
 
+      const userMappings = await listUserSymbolMappings(ctx.session.user.id);
+      const symbolResolver = createSymbolResolver(userMappings);
+
       const userRows = await db
         .select({ advancedMetricsPreferences: user.advancedMetricsPreferences })
         .from(user)
@@ -195,12 +217,36 @@ export const tradeQueryProcedures = {
         whereClauses.push(inArray(trade.id, input.ids));
       }
       if (input.symbols?.length) {
-        whereClauses.push(
-          sql`(${sql.join(
-            input.symbols.map((symbol) => eq(trade.symbol, symbol)),
-            sql` OR `
-          )})`
+        const symbolScopeClauses: SQL[] = [
+          buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+        ];
+        addTradeDateWindowClauses(
+          symbolScopeClauses,
+          input.startISO,
+          input.endISO
         );
+
+        const rawSymbolRows = await db
+          .selectDistinct({ symbol: trade.symbol })
+          .from(trade)
+          .where(and(...symbolScopeClauses));
+        const matchingRawSymbols = expandCanonicalSymbolsToRawSymbols(
+          rawSymbolRows
+            .map((row) => row.symbol)
+            .filter((value): value is string => Boolean(value)),
+          input.symbols,
+          userMappings
+        );
+
+        if (matchingRawSymbols.length === 0) {
+          return {
+            items: [],
+            nextCursor: undefined,
+            totalTradesCount: 0,
+          } as const;
+        }
+
+        whereClauses.push(inArray(trade.symbol, matchingRawSymbols));
       }
       if (input.killzones?.length) {
         whereClauses.push(
@@ -222,6 +268,17 @@ export const tradeQueryProcedures = {
         whereClauses.push(
           sql`(${sql.join(
             input.modelTags.map((tag) => eq(trade.modelTag, tag)),
+            sql` OR `
+          )})`
+        );
+      }
+      if (input.customTags?.length) {
+        whereClauses.push(
+          sql`(${sql.join(
+            input.customTags.map(
+              (tag) =>
+                sql`${trade.customTags} @> ${JSON.stringify([tag])}::jsonb`
+            ),
             sql` OR `
           )})`
         );
@@ -410,6 +467,7 @@ export const tradeQueryProcedures = {
           sessionTagColor: trade.sessionTagColor,
           modelTag: trade.modelTag,
           modelTagColor: trade.modelTagColor,
+          customTags: trade.customTags,
           protocolAlignment: trade.protocolAlignment,
           beThresholdPips: sql<
             number | null
@@ -439,8 +497,24 @@ export const tradeQueryProcedures = {
         .from(trade)
         .where(buildAccountScopeCondition(trade.accountId, scopedAccountIds))
         .then((result) => result[0]?.count ?? 0);
+      const accountThresholdRows = await db
+        .select({
+          id: tradingAccount.id,
+          breakevenThresholdPips: sql<
+            number | null
+          >`CAST(${tradingAccount.breakevenThresholdPips} AS NUMERIC)`,
+        })
+        .from(tradingAccount)
+        .where(inArray(tradingAccount.id, scopedAccountIds));
+      const breakevenThresholdByAccountId = new Map(
+        accountThresholdRows.map((row) => [
+          row.id,
+          row.breakevenThresholdPips ?? DEFAULT_BREAKEVEN_THRESHOLD_PIPS,
+        ])
+      );
 
       const result = items.map((row) => {
+        const resolvedSymbol = symbolResolver.resolve(row.symbol);
         const direction: "long" | "short" =
           String(row.tradeType || "").toLowerCase() === "short" ||
           String(row.tradeType || "").toLowerCase() === "sell"
@@ -471,7 +545,7 @@ export const tradeQueryProcedures = {
 
         const tradeData: TradeData = {
           id: row.id,
-          symbol: row.symbol || "",
+          symbol: resolvedSymbol.canonicalSymbol,
           tradeDirection: direction,
           entryPrice: Number(row.openPriceNum || 0),
           sl: row.slNum != null ? Number(row.slNum) : null,
@@ -497,7 +571,10 @@ export const tradeQueryProcedures = {
           alphaWeightedMpe:
             row.alphaWeightedMpe != null ? Number(row.alphaWeightedMpe) : 0.3,
           beThresholdPips:
-            row.beThresholdPips != null ? Number(row.beThresholdPips) : 0.5,
+            row.beThresholdPips != null
+              ? Number(row.beThresholdPips)
+              : breakevenThresholdByAccountId.get(row.accountId) ??
+                DEFAULT_BREAKEVEN_THRESHOLD_PIPS,
         };
 
         const advancedMetrics = calculateAllAdvancedMetrics(
@@ -541,10 +618,13 @@ export const tradeQueryProcedures = {
 
         return {
           id: row.id,
+          accountId: row.accountId,
           ticket: row.ticket || null,
           open: openISO,
           close: closeISO,
           symbol: row.symbol || "",
+          rawSymbol: row.symbol || "",
+          symbolGroup: resolvedSymbol.canonicalSymbol,
           tradeDirection: direction,
           volume: Number(row.volume || 0),
           profit: Number(row.profit || 0),
@@ -564,6 +644,7 @@ export const tradeQueryProcedures = {
           sessionTagColor: row.sessionTagColor || null,
           modelTag: row.modelTag || null,
           modelTagColor: row.modelTagColor || null,
+          customTags: Array.isArray(row.customTags) ? row.customTags : [],
           protocolAlignment: row.protocolAlignment || null,
           outcome: advancedMetrics.outcome,
           plannedRR: advancedMetrics.plannedRR,
@@ -664,6 +745,9 @@ export const tradeQueryProcedures = {
         return { trades: [] };
       }
 
+      const userMappings = await listUserSymbolMappings(ctx.session.user.id);
+      const symbolResolver = createSymbolResolver(userMappings);
+
       const whereClauses: SQL[] = [
         buildAccountScopeCondition(trade.accountId, scopedAccountIds),
         sql`${trade.close} IS NOT NULL`,
@@ -674,6 +758,7 @@ export const tradeQueryProcedures = {
       const rows = await db
         .select({
           id: trade.id,
+          accountId: trade.accountId,
           symbol: trade.symbol,
           tradeType: trade.tradeType,
           volume: sql<number>`CAST(${trade.volume} AS NUMERIC)`,
@@ -687,6 +772,7 @@ export const tradeQueryProcedures = {
           closeTime: trade.closeTime,
           sessionTag: trade.sessionTag,
           modelTag: trade.modelTag,
+          customTags: trade.customTags,
           realisedRR: sql<number>`CAST(${trade.realisedRR} AS NUMERIC)`,
           mfePips: sql<number>`CAST(${trade.mfePips} AS NUMERIC)`,
           maePips: sql<number>`CAST(${trade.maePips} AS NUMERIC)`,
@@ -698,8 +784,16 @@ export const tradeQueryProcedures = {
 
       return {
         trades: rows.map((currentTrade) => ({
+          ...(() => {
+            const resolvedSymbol = symbolResolver.resolve(currentTrade.symbol);
+            return {
+              symbol: currentTrade.symbol,
+              rawSymbol: currentTrade.symbol,
+              symbolGroup: resolvedSymbol.canonicalSymbol,
+            };
+          })(),
           id: currentTrade.id,
-          symbol: currentTrade.symbol,
+          accountId: currentTrade.accountId,
           tradeType: currentTrade.tradeType,
           volume: Number(currentTrade.volume || 0),
           openPrice:
@@ -718,6 +812,9 @@ export const tradeQueryProcedures = {
           closeTime: currentTrade.closeTime,
           sessionTag: currentTrade.sessionTag,
           modelTag: currentTrade.modelTag,
+          customTags: Array.isArray(currentTrade.customTags)
+            ? currentTrade.customTags
+            : [],
           realisedRR:
             currentTrade.realisedRR != null
               ? Number(currentTrade.realisedRR)
@@ -742,17 +839,21 @@ export const tradeQueryProcedures = {
         input.accountId
       );
       if (scopedAccountIds.length === 0) return [];
+      const userMappings = await listUserSymbolMappings(ctx.session.user.id);
 
       const rows = await db
         .select({ symbol: trade.symbol })
         .from(trade)
         .where(buildAccountScopeCondition(trade.accountId, scopedAccountIds));
-      const symbols = new Set<string>();
-      for (const row of rows) {
-        if (row.symbol) symbols.add(row.symbol);
-      }
-
-      const result = Array.from(symbols).sort((a, b) => a.localeCompare(b));
+      const groupedSymbols = summarizeSymbolGroups(
+        rows
+          .map((row) => row.symbol)
+          .filter((value): value is string => Boolean(value)),
+        userMappings
+      );
+      const result = groupedSymbols
+        .map((group) => group.displaySymbol)
+        .sort((a, b) => a.localeCompare(b));
       await enhancedCache.set(cacheKey, result, {
         ttl: CacheTTL.MEDIUM,
         tags: [cacheNamespaces.TRADES, `account:${input.accountId}`],
@@ -859,6 +960,43 @@ export const tradeQueryProcedures = {
       });
       return result;
     }),
+  listCustomTags: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const cacheKey = `${cacheNamespaces.TRADES}:customTags:${input.accountId}`;
+      const cached = await enhancedCache.get<string[]>(cacheKey);
+      if (cached) return cached;
+
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        input.accountId
+      );
+      if (scopedAccountIds.length === 0) return [];
+
+      const rows = await db
+        .select({ customTags: trade.customTags })
+        .from(trade)
+        .where(buildAccountScopeCondition(trade.accountId, scopedAccountIds));
+
+      const result = Array.from(
+        new Set(
+          rows.flatMap((row) =>
+            Array.isArray(row.customTags)
+              ? row.customTags.filter(
+                  (tag): tag is string =>
+                    typeof tag === "string" && tag.length > 0
+                )
+              : []
+          )
+        )
+      ).sort((left, right) => left.localeCompare(right));
+
+      await enhancedCache.set(cacheKey, result, {
+        ttl: CacheTTL.MEDIUM,
+        tags: [cacheNamespaces.TRADES, `account:${input.accountId}`],
+      });
+      return result;
+    }),
 
   getSampleGateStatus: protectedProcedure
     .input(z.object({ accountId: z.string() }))
@@ -907,7 +1045,11 @@ export const tradeQueryProcedures = {
 
       const accountIds = [...new Set(trades.map((row) => row.accountId))];
       const accounts = await db
-        .select({ id: tradingAccount.id, userId: tradingAccount.userId })
+        .select({
+          id: tradingAccount.id,
+          userId: tradingAccount.userId,
+          breakevenThresholdPips: tradingAccount.breakevenThresholdPips,
+        })
         .from(tradingAccount)
         .where(inArray(tradingAccount.id, accountIds));
 
@@ -935,10 +1077,39 @@ export const tradeQueryProcedures = {
         (sum, row) => sum + Number(row.volume || 0),
         0
       );
-      const wins = trades.filter((row) => Number(row.profit || 0) > 0).length;
-      const losses = trades.filter((row) => Number(row.profit || 0) < 0).length;
-      const breakeven = trades.filter(
-        (row) => Number(row.profit || 0) === 0
+      const thresholdByAccountId = new Map(
+        accounts.map((account) => [
+          account.id,
+          account.breakevenThresholdPips != null
+            ? Number(account.breakevenThresholdPips)
+            : DEFAULT_BREAKEVEN_THRESHOLD_PIPS,
+        ])
+      );
+      const resolvedOutcomes = trades.map((row) =>
+        resolveStoredTradeOutcome({
+          outcome: row.outcome,
+          symbol: row.symbol,
+          profit: row.profit,
+          commissions: row.commissions,
+          swap: row.swap,
+          tp: row.tp,
+          closePrice: row.closePrice,
+          openPrice: row.openPrice,
+          tradeType: row.tradeType,
+          beThresholdPips:
+            row.beThresholdPips ??
+            thresholdByAccountId.get(row.accountId) ??
+            DEFAULT_BREAKEVEN_THRESHOLD_PIPS,
+        })
+      );
+      const wins = resolvedOutcomes.filter(
+        (outcome) => outcome === "Win" || outcome === "PW"
+      ).length;
+      const losses = resolvedOutcomes.filter(
+        (outcome) => outcome === "Loss"
+      ).length;
+      const breakeven = resolvedOutcomes.filter(
+        (outcome) => outcome === "BE"
       ).length;
       const winRate = trades.length > 0 ? (wins / trades.length) * 100 : 0;
       const tradesWithRR = trades.filter(

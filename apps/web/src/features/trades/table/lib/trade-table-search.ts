@@ -15,6 +15,7 @@ const SEARCHABLE_TRADE_ROW_KEYS: Array<keyof TradeRow> = [
   "tradeDirection",
   "sessionTag",
   "modelTag",
+  "customTags",
   "protocolAlignment",
   "outcome",
   "complianceStatus",

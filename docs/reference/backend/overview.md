@@ -21,6 +21,9 @@
   - `apps/server/src/routers/accounts/archive-preferences.ts`
 - aggregated portfolio stats
   - `apps/server/src/routers/accounts/aggregated-stats.ts`
+- account performance and broker-owned trade interpretation
+  - `apps/server/src/routers/accounts/performance.ts`
+  - `apps/server/src/lib/trades/trade-outcome.ts`
 - verification and public track records
   - `apps/server/src/routers/accounts/track-record.ts`
 - health and sync status

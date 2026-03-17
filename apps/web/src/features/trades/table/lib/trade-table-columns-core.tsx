@@ -11,6 +11,7 @@ import {
 import { ModelTagCell } from "@/components/model-tag-cell";
 import { ProtocolAlignmentCell } from "@/components/protocol-alignment-cell";
 import { SessionTagCell } from "@/components/session-tag-cell";
+import { TradeTagsCell } from "@/components/trade-tags-cell";
 import {
   TRADE_IDENTIFIER_PILL_CLASS,
   TRADE_IDENTIFIER_TONES,
@@ -156,6 +157,21 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         isLive={row.original.isLive}
       />
     ),
+  },
+  {
+    accessorKey: "customTags",
+    header: () => withTradeTableHeaderTooltip("customTags", "Trade tags"),
+    cell: ({ row }) => (
+      <TradeTagsCell
+        tradeId={row.original.id}
+        accountId={row.original.accountId}
+        customTags={row.original.customTags}
+        isLive={row.original.isLive}
+      />
+    ),
+    enableSorting: false,
+    size: 180,
+    minSize: 140,
   },
   {
     accessorKey: "protocolAlignment",

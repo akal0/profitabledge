@@ -16,6 +16,7 @@ import {
   resolveScopedAccountIds,
   isAllAccountsScope,
 } from "../../account-scope";
+import { calculateNormalizedPipsFromPriceDelta } from "../../dukascopy";
 import { getFullProfile } from "./trader-profile";
 import {
   describeConditionPredicate,
@@ -43,6 +44,13 @@ function toNum(val: string | number | null | undefined): number {
 
 function isWin(t: ClosedTrade): boolean {
   return toNum(t.profit) > 0;
+}
+
+function isLongTrade(t: ClosedTrade): boolean {
+  return (
+    t.tradeType?.toLowerCase() === "long" ||
+    t.tradeType?.toLowerCase() === "buy"
+  );
 }
 
 function holdSeconds(t: ClosedTrade): number {
@@ -355,10 +363,29 @@ function generateEfficiencyInsights(
   if (recentWinners.length >= 3) {
     const profitLeftValues: number[] = [];
     for (const t of recentWinners) {
-      const mfe = toNum(t.mfePips);
-      const pips = toNum(t.pips);
+      const openP = toNum(t.openPrice);
+      const closeP = toNum(t.closePrice);
+      const peakP = toNum(t.entryPeakPrice);
+      const long = isLongTrade(t);
+      const mfe =
+        openP > 0 && peakP > 0
+          ? calculateNormalizedPipsFromPriceDelta(
+              long ? peakP - openP : openP - peakP,
+              t.symbol
+            )
+          : toNum(t.mfePips);
+      const pips =
+        openP > 0 && closeP > 0
+          ? calculateNormalizedPipsFromPriceDelta(
+              long ? closeP - openP : openP - closeP,
+              t.symbol
+            )
+          : toNum(t.pips);
       if (mfe > 0 && pips > 0) {
-        profitLeftValues.push(mfe - pips);
+        const left = mfe - pips;
+        if (left > 0) {
+          profitLeftValues.push(left);
+        }
       }
     }
 

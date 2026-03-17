@@ -28,6 +28,7 @@ export const tradingAccount = pgTable("trading_account", {
     "dukascopy"
   ), // 'dukascopy', 'alphavantage', 'truefx', 'broker'
   averageSpreadPips: numeric("average_spread_pips"), // User-reported average spread for calibration
+  breakevenThresholdPips: numeric("breakeven_threshold_pips").default("0.5"), // Account-level BE tolerance used for trade outcome classification
   initialBalance: numeric("initial_balance"),
   initialCurrency: varchar("initial_currency", { length: 8 }),
   // Live account status (updated by EA)
@@ -69,9 +70,31 @@ export const tradingAccount = pgTable("trading_account", {
   socialVisibleSince: timestamp("social_visible_since"), // When account became public
   followerCount: integer("follower_count").default(0),
   feedEventCount: integer("feed_event_count").default(0),
+  tags: jsonb("tags").$type<string[]>().default([]).notNull(),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const symbolMapping = pgTable(
+  "symbol_mapping",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    canonicalSymbol: varchar("canonical_symbol", { length: 64 }).notNull(),
+    aliases: jsonb("aliases").$type<string[]>().default([]).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdx: index("idx_symbol_mapping_user").on(table.userId),
+    userCanonicalIdx: uniqueIndex("idx_symbol_mapping_user_canonical").on(
+      table.userId,
+      table.canonicalSymbol
+    ),
+  })
+);
 
 export const trade = pgTable(
   "trade",
@@ -184,6 +207,7 @@ export const trade = pgTable(
     killzone: text("killzone"), // DEPRECATED: Use sessionTag instead
     killzoneColor: varchar("killzone_color", { length: 7 }), // DEPRECATED: Use sessionTagColor instead
     brokerMeta: jsonb("broker_meta").$type<Record<string, unknown> | null>(), // Connector-specific execution metadata (MT5 reason/source trails, ids, etc.)
+    customTags: jsonb("custom_tags").$type<string[]>().default([]).notNull(),
 
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -218,7 +242,10 @@ export const deletedImportedTrade = pgTable(
     importSource: varchar("import_source", { length: 32 }),
     importParserId: varchar("import_parser_id", { length: 128 }),
     importReportType: varchar("import_report_type", { length: 128 }),
-    tradeSnapshot: jsonb("trade_snapshot").$type<Record<string, unknown> | null>(),
+    tradeSnapshot: jsonb("trade_snapshot").$type<Record<
+      string,
+      unknown
+    > | null>(),
     deletedAt: timestamp("deleted_at").notNull().defaultNow(),
   },
   (table) => ({
@@ -933,6 +960,13 @@ export const tradeRelations = relations(trade, ({ one, many }) => ({
   account: one(tradingAccount, {
     fields: [trade.accountId],
     references: [tradingAccount.id],
+  }),
+}));
+
+export const symbolMappingRelations = relations(symbolMapping, ({ one }) => ({
+  user: one(user, {
+    fields: [symbolMapping.userId],
+    references: [user.id],
   }),
 }));
 

@@ -8,6 +8,7 @@ export type AccountCatalogItem = {
   brokerType?: string | null;
   brokerServer?: string | null;
   accountNumber?: string | null;
+  tags?: string[];
   initialCurrency?: string | null;
   isPropAccount?: boolean;
   isVerified?: number | boolean | null;

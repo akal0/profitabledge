@@ -6,6 +6,10 @@ import { useAccountStore } from "@/stores/account";
 
 import { Skeleton } from "../../ui/skeleton";
 import { cn } from "@/lib/utils";
+import {
+  createSymbolGroupDisplayMap,
+  getSymbolGroupKey,
+} from "@/lib/symbol-grouping";
 
 import {
   DashboardChartTooltipFrame,
@@ -17,12 +21,16 @@ import { useChartTrades } from "./use-chart-trades";
 export type CorrelationAxis = "session" | "symbol" | "direction";
 export type CorrelationMetric = "winRate" | "avgRR" | "pnl" | "count";
 
-function getAxisValue(trade: any, axis: CorrelationAxis): string {
+function getAxisValue(
+  trade: any,
+  axis: CorrelationAxis,
+  symbolDisplayMap: Map<string, string>
+): string {
   switch (axis) {
     case "session":
       return trade.sessionTag || "Untagged";
     case "symbol":
-      return trade.symbol || "Unknown";
+      return symbolDisplayMap.get(getSymbolGroupKey(trade)) || "Unknown";
     case "direction": {
       const direction = String(trade.tradeType || "").toLowerCase();
       if (direction === "buy" || direction === "long") return "Long";
@@ -79,13 +87,14 @@ export function CorrelationMatrix({
       };
     }
 
+    const symbolDisplayMap = createSymbolGroupDisplayMap(trades);
     const groups: Record<string, Record<string, any[]>> = {};
     const rowSet = new Set<string>();
     const colSet = new Set<string>();
 
     for (const trade of trades) {
-      const rowValue = getAxisValue(trade, rowAxis);
-      const colValue = getAxisValue(trade, colAxis);
+      const rowValue = getAxisValue(trade, rowAxis, symbolDisplayMap);
+      const colValue = getAxisValue(trade, colAxis, symbolDisplayMap);
       rowSet.add(rowValue);
       colSet.add(colValue);
       if (!groups[rowValue]) groups[rowValue] = {};

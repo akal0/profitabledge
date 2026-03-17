@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { trpcOptions } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 import { useAccountStore } from "@/stores/account";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -26,13 +26,26 @@ const BROKER_LIST = [
   { value: "other", label: "Other" },
 ];
 
+function readBreakevenThresholdPips(account: unknown) {
+  if (!account || typeof account !== "object") {
+    return 0.5;
+  }
+
+  const rawValue = (account as { breakevenThresholdPips?: unknown })
+    .breakevenThresholdPips;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : 0.5;
+}
+
 export default function BrokerSettingsPage() {
   const { selectedAccountId } = useAccountStore();
 
   const { data: accounts } = useQuery(trpcOptions.accounts.list.queryOptions());
   const currentAccount = accounts?.find((acc) => acc.id === selectedAccountId);
 
-  const updateBrokerSettings = useMutation(trpcOptions.accounts.updateBrokerSettings.mutationOptions());
+  const updateBrokerSettings = useMutation(
+    trpcOptions.accounts.updateBrokerSettings.mutationOptions()
+  );
 
   const [brokerSettings, setBrokerSettings] = useState({
     brokerType: (currentAccount?.brokerType as any) || "mt5",
@@ -41,6 +54,7 @@ export default function BrokerSettingsPage() {
     averageSpreadPips: currentAccount?.averageSpreadPips
       ? Number(currentAccount.averageSpreadPips)
       : undefined,
+    breakevenThresholdPips: readBreakevenThresholdPips(currentAccount),
     initialBalance: currentAccount?.initialBalance
       ? Number(currentAccount.initialBalance)
       : undefined,
@@ -56,6 +70,7 @@ export default function BrokerSettingsPage() {
       averageSpreadPips: currentAccount?.averageSpreadPips
         ? Number(currentAccount.averageSpreadPips)
         : undefined,
+      breakevenThresholdPips: readBreakevenThresholdPips(currentAccount),
       initialBalance: currentAccount?.initialBalance
         ? Number(currentAccount.initialBalance)
         : undefined,
@@ -72,7 +87,11 @@ export default function BrokerSettingsPage() {
       await updateBrokerSettings.mutateAsync({
         accountId: selectedAccountId,
         ...brokerSettings,
-      });
+      } as any);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+        queryClient.invalidateQueries({ queryKey: [["trades"]] }),
+      ]);
       toast.success("Broker settings saved");
     } catch (error: any) {
       toast.error(error.message || "Failed to save settings");
@@ -108,10 +127,10 @@ export default function BrokerSettingsPage() {
       {/* Platform Type */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Platform Type</Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            Your trading platform.
-          </p>
+          <Label className="text-sm text-white/80 font-medium">
+            Platform Type
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">Your trading platform.</p>
         </div>
         <Select
           value={brokerSettings.brokerType}
@@ -139,7 +158,9 @@ export default function BrokerSettingsPage() {
       {/* Data Source */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Data Source</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Data Source
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Price data for drawdown analysis.
           </p>
@@ -170,7 +191,9 @@ export default function BrokerSettingsPage() {
       {/* Average Spread */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Average Spread</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Average Spread
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Improves accuracy for your broker.
           </p>
@@ -195,10 +218,61 @@ export default function BrokerSettingsPage() {
 
       <Separator />
 
+      {/* Breakeven Threshold */}
+      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+        <div>
+          <Label className="text-sm text-white/80 font-medium">
+            Breakeven tolerance
+          </Label>
+          <p className="text-xs text-white/40 mt-0.5">
+            Per-account break-even threshold in pips.
+          </p>
+        </div>
+        <div className="space-y-3">
+          <Input
+            type="number"
+            step="0.1"
+            min="0"
+            max="100"
+            placeholder="e.g., 0.5 pips"
+            value={brokerSettings.breakevenThresholdPips ?? ""}
+            onChange={(e) =>
+              setBrokerSettings({
+                ...brokerSettings,
+                breakevenThresholdPips: e.target.value
+                  ? parseFloat(e.target.value)
+                  : 0,
+              })
+            }
+            className="bg-sidebar-accent border-white/5 text-white"
+          />
+          <div className="space-y-1 text-xs leading-5 text-white/45">
+            <p>
+              Trades that finish inside this pip buffer count as{" "}
+              <span className="text-white/75">breakeven</span> for this account.
+            </p>
+            <p>
+              Start around <span className="text-white/75">0.25-0.5</span> for
+              tight-spread FX, or <span className="text-white/75">0.5-1.5</span>{" "}
+              when spread, commissions, or symbol volatility make scratch exits
+              look like small losses.
+            </p>
+            <p>
+              Saving this refreshes trade outcomes and BE counts for the
+              account.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <Separator />
+
       {/* Initial Balance */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Initial Balance</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Initial Balance
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Baseline for return (%) calculations.
           </p>

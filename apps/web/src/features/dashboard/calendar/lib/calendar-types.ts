@@ -5,6 +5,8 @@ export type DayRow = {
   totalProfit: number;
   percent: number;
   count: number;
+  liveTradeCount?: number;
+  liveTradeProfit?: number;
   dayNumber?: number;
 };
 
@@ -78,6 +80,8 @@ export type TradePreview = {
   open: string;
   profit: number;
   holdSeconds: number;
+  status?: "closed" | "live";
+  accountName?: string | null;
 };
 
 export type CalendarPreviewState = Record<

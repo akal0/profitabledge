@@ -79,6 +79,26 @@ const isCalendarWidgetId = (value: string): value is CalendarWidgetId =>
 const isChartWidgetId = (value: string): value is ChartWidgetId =>
   CHART_WIDGET_IDS.includes(value as ChartWidgetId);
 
+const manualTradeSizingProfileSchema = z.object({
+  defaultVolume: z.number().positive().optional(),
+  minVolume: z.number().positive().optional(),
+  volumeStep: z.number().positive().optional(),
+  contractSize: z.number().positive().optional(),
+});
+
+const manualTradeSizingSchema = z
+  .object({
+    forex: manualTradeSizingProfileSchema.optional(),
+    indices: manualTradeSizingProfileSchema.optional(),
+    metals: manualTradeSizingProfileSchema.optional(),
+    energy: manualTradeSizingProfileSchema.optional(),
+    crypto: manualTradeSizingProfileSchema.optional(),
+    rates: manualTradeSizingProfileSchema.optional(),
+    agriculture: manualTradeSizingProfileSchema.optional(),
+    other: manualTradeSizingProfileSchema.optional(),
+  })
+  .partial();
+
 export const usersRouter = router({
   me: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
@@ -631,6 +651,7 @@ export const usersRouter = router({
     return {
       disableSampleGating: prefs?.disableSampleGating ?? false,
       alphaWeightedMpe: prefs?.alphaWeightedMpe ?? 0.3,
+      manualTradeSizing: prefs?.manualTradeSizing ?? {},
     };
   }),
 
@@ -658,6 +679,7 @@ export const usersRouter = router({
       z.object({
         disableSampleGating: z.boolean().optional(),
         alphaWeightedMpe: z.number().min(0.2).max(0.4).optional(),
+        manualTradeSizing: manualTradeSizingSchema.optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -673,6 +695,22 @@ export const usersRouter = router({
         .limit(1);
 
       const currentPrefs = (rows[0]?.advancedMetricsPreferences as any) || {};
+      const currentManualTradeSizing =
+        (currentPrefs.manualTradeSizing as Record<string, unknown>) || {};
+      const nextManualTradeSizing =
+        input.manualTradeSizing === undefined
+          ? currentManualTradeSizing
+          : Object.fromEntries(
+              Object.entries(input.manualTradeSizing).map(
+                ([assetClass, nextProfile]) => [
+                  assetClass,
+                  {
+                    ...((currentManualTradeSizing[assetClass] as object) || {}),
+                    ...(nextProfile || {}),
+                  },
+                ]
+              )
+            );
 
       // Merge with new values
       const updatedPrefs = {
@@ -682,6 +720,9 @@ export const usersRouter = router({
         }),
         ...(input.alphaWeightedMpe !== undefined && {
           alphaWeightedMpe: input.alphaWeightedMpe,
+        }),
+        ...(input.manualTradeSizing !== undefined && {
+          manualTradeSizing: nextManualTradeSizing,
         }),
       };
 

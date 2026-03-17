@@ -19,6 +19,7 @@ export function DashboardOverviewHeader({
   valueMode,
   currencyLabel,
   accountAction,
+  leadingActions,
   widgets,
   widgetSpans,
   onValueModeChange,
@@ -30,6 +31,7 @@ export function DashboardOverviewHeader({
   valueMode: WidgetValueMode;
   currencyLabel?: string;
   accountAction?: DashboardAccountAction | null;
+  leadingActions?: React.ReactNode;
   widgets: WidgetType[];
   widgetSpans: Partial<Record<WidgetType, number>>;
   onValueModeChange: (value: WidgetValueMode) => void;
@@ -74,6 +76,7 @@ export function DashboardOverviewHeader({
           valueMode={valueMode}
           currencyLabel={currencyLabel}
           accountAction={accountAction}
+          leadingActions={leadingActions}
           onValueModeChange={onValueModeChange}
           onToggleEdit={onToggleEdit}
           widgets={widgets}

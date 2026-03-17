@@ -7,6 +7,11 @@ import {
   buildAccountScopeCondition,
   resolveScopedAccountIds,
 } from "../../lib/account-scope";
+import {
+  createSymbolResolver,
+  listUserSymbolMappings,
+  summarizeSymbolGroups,
+} from "../../lib/symbol-mapping";
 import { protectedProcedure } from "../../lib/trpc";
 import { TRPCError } from "@trpc/server";
 
@@ -337,6 +342,8 @@ export const profitByAssetRangeProcedure = protectedProcedure
       ctx.session.user.id,
       input.accountId
     );
+    const userMappings = await listUserSymbolMappings(ctx.session.user.id);
+    const symbolResolver = createSymbolResolver(userMappings);
 
     const rows = await db
       .select({
@@ -359,7 +366,13 @@ export const profitByAssetRangeProcedure = protectedProcedure
       endDate.setHours(23, 59, 59, 999);
     }
 
-    const bySymbol = new Map<string, number>();
+    const bySymbol = new Map<string, { totalProfit: number; displaySymbol: string }>();
+    const groupDisplay = new Map(
+      summarizeSymbolGroups(
+        rows.map((row) => row.symbol).filter((value): value is string => Boolean(value)),
+        userMappings
+      ).map((group) => [group.canonicalSymbol, group.displaySymbol])
+    );
     for (const row of rows) {
       const openTimeMs = getTradeOpenTimeMs(row);
       if (startDate && endDate) {
@@ -371,13 +384,20 @@ export const profitByAssetRangeProcedure = protectedProcedure
         }
       }
 
-      const key = (row.symbol || "(Unknown)").trim();
-      bySymbol.set(key, (bySymbol.get(key) ?? 0) + Number(row.profit || 0));
+      const key = row.symbol
+        ? symbolResolver.resolve(row.symbol).canonicalSymbol
+        : "(UNKNOWN)";
+      const existing = bySymbol.get(key) ?? {
+        totalProfit: 0,
+        displaySymbol: groupDisplay.get(key) ?? row.symbol ?? "(UNKNOWN)",
+      };
+      existing.totalProfit += Number(row.profit || 0);
+      bySymbol.set(key, existing);
     }
 
-    const result = Array.from(bySymbol.entries()).map(([symbol, total]) => ({
-      symbol,
-      totalProfit: total,
+    const result = Array.from(bySymbol.values()).map((value) => ({
+      symbol: value.displaySymbol,
+      totalProfit: value.totalProfit,
     }));
     result.sort((left, right) => Math.abs(right.totalProfit) - Math.abs(left.totalProfit));
     return result;
@@ -396,6 +416,8 @@ export const lossesByAssetRangeProcedure = protectedProcedure
       ctx.session.user.id,
       input.accountId
     );
+    const userMappings = await listUserSymbolMappings(ctx.session.user.id);
+    const symbolResolver = createSymbolResolver(userMappings);
 
     const rows = await db
       .select({
@@ -420,9 +442,20 @@ export const lossesByAssetRangeProcedure = protectedProcedure
       endDate.setHours(23, 59, 59, 999);
     }
 
+    const groupDisplay = new Map(
+      summarizeSymbolGroups(
+        rows.map((row) => row.symbol).filter((value): value is string => Boolean(value)),
+        userMappings
+      ).map((group) => [group.canonicalSymbol, group.displaySymbol])
+    );
     const bySymbol = new Map<
       string,
-      { profitLoss: number; commissionsLoss: number; swapLoss: number }
+      {
+        displaySymbol: string;
+        profitLoss: number;
+        commissionsLoss: number;
+        swapLoss: number;
+      }
     >();
     for (const row of rows) {
       const openTimeMs = getTradeOpenTimeMs(row);
@@ -435,8 +468,11 @@ export const lossesByAssetRangeProcedure = protectedProcedure
         }
       }
 
-      const key = (row.symbol || "(Unknown)").trim();
+      const key = row.symbol
+        ? symbolResolver.resolve(row.symbol).canonicalSymbol
+        : "(UNKNOWN)";
       const entry = bySymbol.get(key) ?? {
+        displaySymbol: groupDisplay.get(key) ?? row.symbol ?? "(UNKNOWN)",
         profitLoss: 0,
         commissionsLoss: 0,
         swapLoss: 0,
@@ -449,8 +485,8 @@ export const lossesByAssetRangeProcedure = protectedProcedure
     }
 
     return Array.from(bySymbol.entries())
-      .map(([symbol, value]) => ({
-        symbol,
+      .map(([, value]) => ({
+        symbol: value.displaySymbol,
         profitLoss: value.profitLoss,
         commissionsLoss: value.commissionsLoss,
         swapLoss: value.swapLoss,

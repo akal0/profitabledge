@@ -33,6 +33,8 @@ export type ChartTrade = {
   closeTime?: string | null;
   createdAtISO?: string | null;
   symbol?: string | null;
+  rawSymbol?: string | null;
+  symbolGroup?: string | null;
   tradeDirection?: string | null;
   tradeType?: string | null;
   volume?: number | null;

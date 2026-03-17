@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import {
   brokerDealEvent,
@@ -7,11 +7,12 @@ import {
   brokerSyncCheckpoint,
   brokerSymbolSpec,
 } from "../../db/schema/mt5-sync";
-import { trade } from "../../db/schema/trading";
+import { trade, tradingAccount } from "../../db/schema/trading";
 import { notifyEarnedAchievements } from "../achievements";
 import { createNotification } from "../notifications";
 import { deriveSessionTagAt } from "../session-tags";
 import { generateFeedEventForTrade } from "../feed-event-generator";
+import { DEFAULT_BREAKEVEN_THRESHOLD_PIPS } from "../trades/trade-outcome";
 import {
   buildTradeLifecycleMetrics,
   buildTradeStateFallback,
@@ -388,8 +389,8 @@ function deriveProvisionalProjectedTrade(input: {
     input.removedOpenTrade?.openPrice != null
       ? toNumber(input.removedOpenTrade.openPrice)
       : fallbackState?.openPrice ??
-          weightedAveragePrice(entryRows.length > 0 ? entryRows : []) ??
-          null;
+        weightedAveragePrice(entryRows.length > 0 ? entryRows : []) ??
+        null;
 
   if (!symbol || !openTime || openPrice == null) {
     return null;
@@ -488,14 +489,44 @@ export async function projectClosedTrades(
       ticket: true,
     },
   });
+  const accountRow = await db.query.tradingAccount.findFirst({
+    where: eq(tradingAccount.id, accountId),
+    columns: {
+      breakevenThresholdPips: true,
+    },
+  });
+  const breakevenThresholdPips =
+    accountRow?.breakevenThresholdPips != null
+      ? Number(accountRow.breakevenThresholdPips)
+      : DEFAULT_BREAKEVEN_THRESHOLD_PIPS;
   const baseTradeKeys = [...new Set([...tradeKeySet].map(getBaseTradeKey))];
   const latestPositionSnapshots = baseTradeKeys.length
-    ? await db.query.brokerPositionSnapshot.findMany({
-        where: and(
-          eq(brokerPositionSnapshot.accountId, accountId),
-          inArray(brokerPositionSnapshot.remotePositionId, baseTradeKeys)
-        ),
-      })
+    ? await db
+        .selectDistinctOn([brokerPositionSnapshot.remotePositionId], {
+          remotePositionId: brokerPositionSnapshot.remotePositionId,
+          side: brokerPositionSnapshot.side,
+          symbol: brokerPositionSnapshot.symbol,
+          volume: brokerPositionSnapshot.volume,
+          openPrice: brokerPositionSnapshot.openPrice,
+          profit: brokerPositionSnapshot.profit,
+          swap: brokerPositionSnapshot.swap,
+          commission: brokerPositionSnapshot.commission,
+          sl: brokerPositionSnapshot.sl,
+          tp: brokerPositionSnapshot.tp,
+          snapshotTime: brokerPositionSnapshot.snapshotTime,
+        })
+        .from(brokerPositionSnapshot)
+        .where(
+          and(
+            eq(brokerPositionSnapshot.accountId, accountId),
+            inArray(brokerPositionSnapshot.remotePositionId, baseTradeKeys)
+          )
+        )
+        .orderBy(
+          brokerPositionSnapshot.remotePositionId,
+          desc(brokerPositionSnapshot.snapshotTime),
+          desc(brokerPositionSnapshot.createdAt)
+        )
     : [];
   const persistedSymbolSpecs =
     options?.symbolSpecsBySymbol ??
@@ -854,6 +885,7 @@ export async function projectClosedTrades(
         killzoneColor: sessionTagColor,
         brokerMeta,
         useBrokerData: 1,
+        beThresholdPips: breakevenThresholdPips.toString(),
         entrySpreadPips: toDecimal(executionMetrics?.entrySpreadPips),
         exitSpreadPips: toDecimal(executionMetrics?.exitSpreadPips),
         entrySlippagePips: toDecimal(executionMetrics?.entrySlippagePips),
@@ -976,15 +1008,15 @@ export async function updateCheckpoint(
       lastDealTime: input.checkpoint?.lastDealTime
         ? parseDate(input.checkpoint.lastDealTime)
         : lastDeal
-          ? parseDate(lastDeal.eventTime)
-          : null,
+        ? parseDate(lastDeal.eventTime)
+        : null,
       lastDealId:
         input.checkpoint?.lastDealId ?? lastDeal?.remoteDealId ?? null,
       lastOrderTime: input.checkpoint?.lastOrderTime
         ? parseDate(input.checkpoint.lastOrderTime)
         : lastOrder
-          ? parseDate(lastOrder.eventTime)
-          : null,
+        ? parseDate(lastOrder.eventTime)
+        : null,
       lastPositionPollAt: input.checkpoint?.lastPositionPollAt
         ? parseDate(input.checkpoint.lastPositionPollAt)
         : parseDate(input.account.snapshotTime),
@@ -1003,15 +1035,15 @@ export async function updateCheckpoint(
         lastDealTime: input.checkpoint?.lastDealTime
           ? parseDate(input.checkpoint.lastDealTime)
           : lastDeal
-            ? parseDate(lastDeal.eventTime)
-            : null,
+          ? parseDate(lastDeal.eventTime)
+          : null,
         lastDealId:
           input.checkpoint?.lastDealId ?? lastDeal?.remoteDealId ?? null,
         lastOrderTime: input.checkpoint?.lastOrderTime
           ? parseDate(input.checkpoint.lastOrderTime)
           : lastOrder
-            ? parseDate(lastOrder.eventTime)
-            : null,
+          ? parseDate(lastOrder.eventTime)
+          : null,
         lastPositionPollAt: input.checkpoint?.lastPositionPollAt
           ? parseDate(input.checkpoint.lastPositionPollAt)
           : parseDate(input.account.snapshotTime),

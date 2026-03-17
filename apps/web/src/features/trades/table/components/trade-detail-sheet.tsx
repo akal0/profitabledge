@@ -1,6 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { toast } from "sonner";
+import { TagMultiSelect } from "@/components/tags/tag-multi-select";
+import {
+  parseDateTimeInputValue,
+  TradeDateTimeField,
+  toDateTimeInputValue,
+} from "@/components/trades/trade-date-time-field";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -37,6 +49,7 @@ import {
   getTradeSwapTone,
 } from "@/features/trades/table/lib/trade-table-formatting";
 import type { TradeRow } from "@/features/trades/table/lib/trade-table-types";
+import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 
 const formatSheetDate = (iso: string) => {
   const date = new Date(iso);
@@ -56,6 +69,86 @@ const isSameCalendarDate = (leftIso: string, rightIso: string) => {
   );
 };
 
+type TradeEditState = {
+  symbol: string;
+  tradeType: "long" | "short";
+  volume: string;
+  openPrice: string;
+  closePrice: string;
+  openTime: string;
+  closeTime: string;
+  sl: string;
+  tp: string;
+  profit: string;
+  commissions: string;
+  swap: string;
+  sessionTag: string;
+  modelTag: string;
+  customTags: string[];
+};
+
+function createTradeEditState(trade: TradeRow): TradeEditState {
+  return {
+    symbol: trade.rawSymbol ?? trade.symbol ?? "",
+    tradeType: trade.tradeDirection,
+    volume:
+      trade.volume != null && Number.isFinite(Number(trade.volume))
+        ? String(trade.volume)
+        : "",
+    openPrice:
+      trade.openPrice != null && Number.isFinite(Number(trade.openPrice))
+        ? String(trade.openPrice)
+        : "",
+    closePrice:
+      trade.closePrice != null && Number.isFinite(Number(trade.closePrice))
+        ? String(trade.closePrice)
+        : "",
+    openTime: toDateTimeInputValue(new Date(trade.open)),
+    closeTime: toDateTimeInputValue(new Date(trade.close)),
+    sl:
+      trade.sl != null && Number.isFinite(Number(trade.sl))
+        ? String(trade.sl)
+        : "",
+    tp:
+      trade.tp != null && Number.isFinite(Number(trade.tp))
+        ? String(trade.tp)
+        : "",
+    profit:
+      trade.profit != null && Number.isFinite(Number(trade.profit))
+        ? String(trade.profit)
+        : "",
+    commissions:
+      trade.commissions != null && Number.isFinite(Number(trade.commissions))
+        ? String(trade.commissions)
+        : "",
+    swap:
+      trade.swap != null && Number.isFinite(Number(trade.swap))
+        ? String(trade.swap)
+        : "",
+    sessionTag: trade.sessionTag ?? "",
+    modelTag: trade.modelTag ?? "",
+    customTags: Array.isArray(trade.customTags) ? trade.customTags : [],
+  };
+}
+
+function parseRequiredPositiveNumber(value: string) {
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseRequiredNumber(value: string) {
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseOptionalNumber(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function TradeDetailSheet({
   accountId,
   open,
@@ -67,6 +160,135 @@ export function TradeDetailSheet({
   onOpenChange: (open: boolean) => void;
   selectedTrade: TradeRow | null;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editState, setEditState] = useState<TradeEditState | null>(null);
+  const effectiveScopeAccountId =
+    selectedTrade?.accountId ?? accountId ?? undefined;
+  const { data: customTagSuggestions } = useQuery({
+    ...trpcOptions.trades.listCustomTags.queryOptions({
+      accountId: effectiveScopeAccountId || "",
+    }),
+    enabled: open && Boolean(effectiveScopeAccountId),
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (!selectedTrade) {
+      setEditState(null);
+      setIsEditing(false);
+      return;
+    }
+
+    setIsEditing(false);
+    setEditState(createTradeEditState(selectedTrade));
+  }, [selectedTrade?.id]);
+
+  useEffect(() => {
+    if (!selectedTrade) {
+      setEditState(null);
+      return;
+    }
+
+    if (isEditing) {
+      return;
+    }
+
+    setEditState(createTradeEditState(selectedTrade));
+  }, [isEditing, selectedTrade]);
+
+  const updateTradeMutation = useMutation({
+    mutationFn: async (input: TradeEditState) => {
+      if (!selectedTrade) {
+        throw new Error("Trade not found");
+      }
+
+      const symbol = input.symbol.trim().toUpperCase();
+      const volume = parseRequiredPositiveNumber(input.volume);
+      const openPrice = parseRequiredPositiveNumber(input.openPrice);
+      const closePrice = parseRequiredPositiveNumber(input.closePrice);
+      const profit = parseRequiredNumber(input.profit);
+      const commissions = parseRequiredNumber(input.commissions || "0");
+      const swap = parseRequiredNumber(input.swap || "0");
+      const openTime = parseDateTimeInputValue(input.openTime);
+      const closeTime = parseDateTimeInputValue(input.closeTime);
+
+      if (!symbol) {
+        throw new Error("Enter a symbol");
+      }
+
+      if (!volume || !openPrice || !closePrice) {
+        throw new Error("Enter valid size and price values");
+      }
+
+      if (profit === null || commissions === null || swap === null) {
+        throw new Error("Enter valid P&L and cost values");
+      }
+
+      if (!openTime || !closeTime || closeTime <= openTime) {
+        throw new Error("Close time must be after open time");
+      }
+
+      return trpcClient.trades.update.mutate({
+        tradeId: selectedTrade.id,
+        symbol,
+        tradeType: input.tradeType,
+        volume,
+        openPrice,
+        closePrice,
+        openTime: openTime.toISOString(),
+        closeTime: closeTime.toISOString(),
+        sl: parseOptionalNumber(input.sl),
+        tp: parseOptionalNumber(input.tp),
+        profit,
+        commissions,
+        swap,
+        sessionTag: input.sessionTag.trim() || null,
+        modelTag: input.modelTag.trim() || null,
+        customTags: input.customTags,
+      });
+    },
+    onSuccess: async () => {
+      const actualAccountId = selectedTrade?.accountId ?? null;
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [["trades"]] }),
+        queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard-chart-trades"] }),
+        queryClient.refetchQueries({
+          queryKey: ["dashboard-chart-trades"],
+          type: "active",
+        }),
+        queryClient.invalidateQueries({
+          queryKey:
+            trpcOptions.accounts.aggregatedStats.queryOptions().queryKey,
+        }),
+        ...(accountId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: trpcOptions.accounts.stats.queryOptions({ accountId })
+                  .queryKey,
+              }),
+            ]
+          : []),
+        ...(actualAccountId && actualAccountId !== accountId
+          ? [
+              queryClient.invalidateQueries({
+                queryKey: trpcOptions.accounts.stats.queryOptions({
+                  accountId: actualAccountId,
+                }).queryKey,
+              }),
+            ]
+          : []),
+      ]);
+
+      setIsEditing(false);
+      toast.success("Trade updated");
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to update trade");
+    },
+  });
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -76,14 +298,55 @@ export function TradeDetailSheet({
         <div className="px-6 py-5 pb-0">
           <SheetHeader className="p-0">
             {selectedTrade ? (
-              <div className="flex w-full items-end justify-between">
-                <div className="flex flex-col items-start">
+              <div className="flex w-full items-end justify-between gap-4">
+                <div className="flex flex-col items-start gap-2">
                   <SheetTitle className="text-base font-semibold text-white">
                     {selectedTrade.symbol}
                   </SheetTitle>
+
+                  <div className="flex items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-8 rounded-sm ring-white/8! px-3 text-[11px] text-white/70 hover:bg-sidebar-accent"
+                          onClick={() => {
+                            setEditState(createTradeEditState(selectedTrade));
+                            setIsEditing(false);
+                          }}
+                          disabled={updateTradeMutation.isPending}
+                        >
+                          Cancel
+                        </Button>
+
+                        <Button
+                          type="button"
+                          className="h-8 rounded-sm px-3 text-[11px]"
+                          onClick={() =>
+                            editState && updateTradeMutation.mutate(editState)
+                          }
+                          disabled={!editState || updateTradeMutation.isPending}
+                        >
+                          {updateTradeMutation.isPending
+                            ? "Saving..."
+                            : "Save changes"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-8 rounded-sm ring-white/8! bg-transparent! px-3 text-[11px] text-white/70 hover:bg-sidebar-accent"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        Edit trade
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-1 text-xs">
+                <div className="flex flex-col items-end gap-2 text-xs">
                   <div className="flex items-center gap-2 font-medium text-white/40">
                     {isSameCalendarDate(
                       selectedTrade.open,
@@ -157,6 +420,321 @@ export function TradeDetailSheet({
             </div>
 
             <Separator />
+            {selectedTrade && editState && isEditing ? (
+              <>
+                <div className="px-6 py-3">
+                  <h3 className="text-xs font-semibold tracking-wide text-white/70">
+                    Edit trade
+                  </h3>
+                </div>
+                <Separator />
+                <div className="space-y-4 px-6 py-5">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">Symbol</Label>
+                      <Input
+                        value={editState.symbol}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  symbol: event.target.value.toUpperCase(),
+                                }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">Direction</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          className={cn(
+                            TRADE_SURFACE_CARD_CLASS,
+                            "flex cursor-pointer items-center justify-center gap-2 px-4 py-2 text-sm font-semibold capitalize transition-colors",
+                            editState.tradeType === "long"
+                              ? TRADE_IDENTIFIER_TONES.positive
+                              : "text-white/40 opacity-50"
+                          )}
+                          onClick={() =>
+                            setEditState((current) =>
+                              current
+                                ? { ...current, tradeType: "long" }
+                                : current
+                            )
+                          }
+                        >
+                          Long
+                          <ArrowUpRight className="size-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          className={cn(
+                            TRADE_SURFACE_CARD_CLASS,
+                            "flex cursor-pointer items-center justify-center gap-2 px-4 py-2 text-sm font-semibold capitalize transition-colors",
+                            editState.tradeType === "short"
+                              ? TRADE_IDENTIFIER_TONES.negative
+                              : "text-white/40 opacity-50"
+                          )}
+                          onClick={() =>
+                            setEditState((current) =>
+                              current
+                                ? { ...current, tradeType: "short" }
+                                : current
+                            )
+                          }
+                        >
+                          Short
+                          <ArrowDownRight className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">Volume</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        value={editState.volume}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, volume: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">
+                        Open price
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.00001"
+                        value={editState.openPrice}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, openPrice: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">
+                        Close price
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.00001"
+                        value={editState.closePrice}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, closePrice: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <TradeDateTimeField
+                      label="Opened"
+                      value={
+                        parseDateTimeInputValue(editState.openTime) ??
+                        new Date(selectedTrade.open)
+                      }
+                      onChange={(nextValue) =>
+                        setEditState((current) =>
+                          current
+                            ? {
+                                ...current,
+                                openTime: toDateTimeInputValue(nextValue),
+                              }
+                            : current
+                        )
+                      }
+                      triggerClassName={cn(
+                        TRADE_SURFACE_CARD_CLASS,
+                        "h-9 w-full justify-start px-3 text-left text-white/85"
+                      )}
+                    />
+
+                    <TradeDateTimeField
+                      label="Closed"
+                      value={
+                        parseDateTimeInputValue(editState.closeTime) ??
+                        new Date(selectedTrade.close)
+                      }
+                      onChange={(nextValue) =>
+                        setEditState((current) =>
+                          current
+                            ? {
+                                ...current,
+                                closeTime: toDateTimeInputValue(nextValue),
+                              }
+                            : current
+                        )
+                      }
+                      triggerClassName={cn(
+                        TRADE_SURFACE_CARD_CLASS,
+                        "h-9 w-full justify-start px-3 text-left text-white/85"
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">Stop loss</Label>
+                      <Input
+                        type="number"
+                        step="0.00001"
+                        placeholder="Leave blank to clear"
+                        value={editState.sl}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, sl: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">
+                        Take profit
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.00001"
+                        placeholder="Leave blank to clear"
+                        value={editState.tp}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, tp: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">P&amp;L</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editState.profit}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, profit: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">
+                        Commissions
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editState.commissions}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  commissions: event.target.value,
+                                }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">Swap</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={editState.swap}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, swap: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">
+                        Session tag
+                      </Label>
+                      <Input
+                        value={editState.sessionTag}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, sessionTag: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs text-white/50">Model tag</Label>
+                      <Input
+                        value={editState.modelTag}
+                        onChange={(event) =>
+                          setEditState((current) =>
+                            current
+                              ? { ...current, modelTag: event.target.value }
+                              : current
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-white/50">Trade tags</Label>
+                    <TagMultiSelect
+                      value={editState.customTags}
+                      suggestions={
+                        (customTagSuggestions as string[] | undefined) ?? []
+                      }
+                      placeholder="Add one or more trade tags"
+                      onChange={(nextTags) =>
+                        setEditState((current) =>
+                          current
+                            ? { ...current, customTags: nextTags }
+                            : current
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+                <Separator />
+              </>
+            ) : null}
+
             <div className="px-6 py-3">
               <h3 className="text-xs font-semibold tracking-wide text-white/70">
                 Trade details
@@ -646,6 +1224,7 @@ export function TradeDetailSheet({
 
             {selectedTrade.sessionTag ||
             selectedTrade.modelTag ||
+            (selectedTrade.customTags?.length ?? 0) > 0 ||
             selectedTrade.protocolAlignment ? (
               <>
                 <Separator />
@@ -693,6 +1272,17 @@ export function TradeDetailSheet({
                         Model: {selectedTrade.modelTag}
                       </span>
                     ) : null}
+                    {selectedTrade.customTags?.map((tag) => (
+                      <span
+                        key={tag}
+                        className={cn(
+                          TRADE_IDENTIFIER_PILL_CLASS,
+                          TRADE_IDENTIFIER_TONES.neutral
+                        )}
+                      >
+                        Tag: {tag}
+                      </span>
+                    ))}
                     {selectedTrade.protocolAlignment ? (
                       <span
                         className={cn(

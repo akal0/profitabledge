@@ -7,6 +7,7 @@
  */
 
 import { getPipSizeForSymbol, normalizePipValue } from "./dukascopy";
+import { calculateTradeOutcome } from "./trades/trade-outcome";
 
 export interface TradeData {
   id: string;
@@ -64,9 +65,22 @@ export function calculateManipulationPips(
  * Convert pip distance to R using SL size
  */
 export function calculateMPEManipLegR(trade: TradeData): number | null {
-  const { tradeDirection, entryPrice, sl, manipulationHigh, manipulationLow, entryPeakPrice, symbol } = trade;
+  const {
+    tradeDirection,
+    entryPrice,
+    sl,
+    manipulationHigh,
+    manipulationLow,
+    entryPeakPrice,
+    symbol,
+  } = trade;
 
-  if (sl == null || entryPeakPrice == null || manipulationHigh == null || manipulationLow == null) {
+  if (
+    sl == null ||
+    entryPeakPrice == null ||
+    manipulationHigh == null ||
+    manipulationLow == null
+  ) {
     return null;
   }
 
@@ -97,8 +111,15 @@ export function calculateMPEManipLegR(trade: TradeData): number | null {
  * Note: Values are normalized for indices (US100, US30, etc.) for better comparison
  */
 export function calculateMFEPips(trade: TradeData): number | null {
-  const { tradeDirection, entryPrice, manipulationHigh, manipulationLow, symbol } = trade;
-  if (entryPrice == null || manipulationHigh == null || manipulationLow == null) return null;
+  const {
+    tradeDirection,
+    entryPrice,
+    manipulationHigh,
+    manipulationLow,
+    symbol,
+  } = trade;
+  if (entryPrice == null || manipulationHigh == null || manipulationLow == null)
+    return null;
   const pipSize = getPipSizeForSymbol(symbol);
   if (pipSize === 0) return null;
 
@@ -113,8 +134,15 @@ export function calculateMFEPips(trade: TradeData): number | null {
 }
 
 export function calculateMAEPips(trade: TradeData): number | null {
-  const { tradeDirection, entryPrice, manipulationHigh, manipulationLow, symbol } = trade;
-  if (entryPrice == null || manipulationHigh == null || manipulationLow == null) return null;
+  const {
+    tradeDirection,
+    entryPrice,
+    manipulationHigh,
+    manipulationLow,
+    symbol,
+  } = trade;
+  if (entryPrice == null || manipulationHigh == null || manipulationLow == null)
+    return null;
   const pipSize = getPipSizeForSymbol(symbol);
   if (pipSize === 0) return null;
 
@@ -134,9 +162,22 @@ export function calculateMAEPips(trade: TradeData): number | null {
  * Description: Max favorable price movement after trade exit, measured from manipulation reference.
  */
 export function calculateMPEManipPE_R(trade: TradeData): number | null {
-  const { tradeDirection, entryPrice, sl, manipulationHigh, manipulationLow, postExitPeakPrice, symbol } = trade;
+  const {
+    tradeDirection,
+    entryPrice,
+    sl,
+    manipulationHigh,
+    manipulationLow,
+    postExitPeakPrice,
+    symbol,
+  } = trade;
 
-  if (sl == null || postExitPeakPrice == null || manipulationHigh == null || manipulationLow == null) {
+  if (
+    sl == null ||
+    postExitPeakPrice == null ||
+    manipulationHigh == null ||
+    manipulationLow == null
+  ) {
     return null;
   }
 
@@ -238,9 +279,19 @@ export function calculateRRCaptureEfficiency(trade: TradeData): number | null {
  * Notes: Can exceed 100%. Do NOT clamp. Can be negative (bad exits).
  */
 export function calculateManipRREfficiency(trade: TradeData): number | null {
-  const { tradeDirection, closePrice, manipulationHigh, manipulationLow, symbol } = trade;
+  const {
+    tradeDirection,
+    closePrice,
+    manipulationHigh,
+    manipulationLow,
+    symbol,
+  } = trade;
 
-  if (manipulationHigh == null || manipulationLow == null || closePrice == null) {
+  if (
+    manipulationHigh == null ||
+    manipulationLow == null ||
+    closePrice == null
+  ) {
     return null;
   }
 
@@ -335,10 +386,10 @@ export function calculateEstimatedWeightedMPE_R(
 
   if (mpeManipLegR == null || mpeManipPE_R == null) return null;
 
-  const alpha = trade.alphaWeightedMpe ?? 0.30;
+  const alpha = trade.alphaWeightedMpe ?? 0.3;
 
   // Bounds check for alpha
-  const boundedAlpha = Math.max(0.20, Math.min(0.40, alpha));
+  const boundedAlpha = Math.max(0.2, Math.min(0.4, alpha));
 
   return mpeManipLegR + boundedAlpha * mpeManipPE_R;
 }
@@ -354,43 +405,20 @@ export function calculateEstimatedWeightedMPE_R(
  * - Partial TP hit → PW
  * - Else Win / Loss
  */
-export function calculateOutcome(trade: TradeData): "Win" | "Loss" | "BE" | "PW" {
-  const { profit, commissions, swap, tp, closePrice, entryPrice, tradeDirection, beThresholdPips, symbol } = trade;
-
-  const beThreshold = beThresholdPips ?? 0.5;
-  const pipSize = getPipSizeForSymbol(symbol);
-
-  // Calculate net profit before costs
-  const grossProfit = profit - (commissions ?? 0) - (swap ?? 0);
-
-  // If loss is within BE threshold
-  if (Math.abs(profit) <= beThreshold * pipSize) {
-    return "BE";
-  }
-
-  // If profit approximately equals just commissions + swap (break-even exit)
-  const onlyCosts = Math.abs(profit) <= Math.abs((commissions ?? 0) + (swap ?? 0)) * 1.1;
-  if (onlyCosts) {
-    return "BE";
-  }
-
-  // Check for partial win (TP exists and price moved toward it but didn't reach it)
-  if (tp != null && closePrice != null) {
-    const hitTP = tradeDirection === "long"
-      ? closePrice >= tp
-      : closePrice <= tp;
-
-    const movedTowardTP = tradeDirection === "long"
-      ? closePrice > entryPrice && closePrice < tp
-      : closePrice < entryPrice && closePrice > tp;
-
-    if (movedTowardTP && profit > 0) {
-      return "PW"; // Partial Win
-    }
-  }
-
-  // Standard Win/Loss
-  return profit >= 0 ? "Win" : "Loss";
+export function calculateOutcome(
+  trade: TradeData
+): "Win" | "Loss" | "BE" | "PW" {
+  return calculateTradeOutcome({
+    symbol: trade.symbol,
+    profit: trade.profit,
+    commissions: trade.commissions,
+    swap: trade.swap,
+    tp: trade.tp,
+    closePrice: trade.closePrice,
+    entryPrice: trade.entryPrice,
+    tradeDirection: trade.tradeDirection,
+    beThresholdPips: trade.beThresholdPips,
+  });
 }
 
 /**
@@ -450,7 +478,14 @@ export function calculatePlannedTargetPips(trade: TradeData): number | null {
  * <100% = left opportunity on table
  */
 export function calculateExitEfficiency(trade: TradeData): number | null {
-  const { tradeDirection, entryPrice, sl, closePrice, postExitPeakPrice, symbol } = trade;
+  const {
+    tradeDirection,
+    entryPrice,
+    sl,
+    closePrice,
+    postExitPeakPrice,
+    symbol,
+  } = trade;
 
   if (
     sl == null ||
@@ -511,7 +546,12 @@ export function calculateAllAdvancedMetrics(
   const rawSTDV = calculateRawSTDV(trade);
   const rawSTDV_PE = calculateRawSTDV_PE(trade);
   const stdvBucket = calculateSTDVBucket(rawSTDV);
-  const estimatedWeightedMPE_R = calculateEstimatedWeightedMPE_R(trade, totalTradesInAccount, 100, disableSampleGating);
+  const estimatedWeightedMPE_R = calculateEstimatedWeightedMPE_R(
+    trade,
+    totalTradesInAccount,
+    100,
+    disableSampleGating
+  );
 
   // Execution metrics
   const realisedRR = calculateRealisedRR(trade);
@@ -563,9 +603,7 @@ export function validateLongShortSymmetry(
   const shortMetrics = calculateAllAdvancedMetrics(shortTrade);
 
   // Basic symmetry check (extend as needed)
-  return (
-    Math.abs((longMetrics.maxRR ?? 0) - (shortMetrics.maxRR ?? 0)) < 0.01
-  );
+  return Math.abs((longMetrics.maxRR ?? 0) - (shortMetrics.maxRR ?? 0)) < 0.01;
 }
 
 export function validateZeroSLEdgeCase(trade: TradeData): boolean {

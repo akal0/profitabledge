@@ -115,15 +115,14 @@ async function getMinimalUser(userId: string): Promise<MinimalUser> {
 }
 
 export async function getEffectiveBillingState(userId: string) {
-  const [subscription] = await db
+  const subscriptions = await db
     .select()
     .from(billingSubscription)
     .where(eq(billingSubscription.userId, userId))
     .orderBy(
       desc(billingSubscription.currentPeriodEnd),
       desc(billingSubscription.updatedAt)
-    )
-    .limit(1);
+    );
 
   const [customer] = await db
     .select()
@@ -145,10 +144,43 @@ export async function getEffectiveBillingState(userId: string) {
     .orderBy(desc(billingEntitlementOverride.endsAt))
     .limit(1);
 
-  const subscriptionPlanKey =
-    subscription && isActiveSubscriptionStatus(subscription.status)
-      ? (subscription.planKey as BillingPlanKey)
-      : ("student" as BillingPlanKey);
+  const activeSubscriptions = subscriptions.filter((subscription) =>
+    isActiveSubscriptionStatus(subscription.status)
+  );
+
+  const subscription =
+    activeSubscriptions.sort((left, right) => {
+      const leftPlanKey = left.planKey as BillingPlanKey;
+      const rightPlanKey = right.planKey as BillingPlanKey;
+      const rightPrice =
+        getBillingPlanDefinition(rightPlanKey)?.monthlyPriceCents ?? 0;
+      const leftPrice =
+        getBillingPlanDefinition(leftPlanKey)?.monthlyPriceCents ?? 0;
+
+      if (rightPrice !== leftPrice) {
+        return rightPrice - leftPrice;
+      }
+
+      const rightPeriodEnd = right.currentPeriodEnd?.getTime() ?? 0;
+      const leftPeriodEnd = left.currentPeriodEnd?.getTime() ?? 0;
+      if (rightPeriodEnd !== leftPeriodEnd) {
+        return rightPeriodEnd - leftPeriodEnd;
+      }
+
+      return right.updatedAt.getTime() - left.updatedAt.getTime();
+    })[0] ??
+    subscriptions[0] ??
+    null;
+
+  const subscriptionPlanKey = activeSubscriptions.reduce<BillingPlanKey>(
+    (highestPlanKey, currentSubscription) => {
+      const currentPlanKey = currentSubscription.planKey as BillingPlanKey;
+      return getBillingPlanDefinition(currentPlanKey)
+        ? getHigherBillingPlanKey(highestPlanKey, currentPlanKey)
+        : highestPlanKey;
+    },
+    "student"
+  );
 
   const activePlanKey =
     override?.planKey &&

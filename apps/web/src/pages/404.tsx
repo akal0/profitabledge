@@ -1,6 +1,6 @@
 export default function Custom404() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-6 text-foreground">
+    <main className="flex min-h-screen min-w-screen h-full w-full items-center justify-center bg-background px-6 text-foreground">
       <div className="max-w-md text-center">
         <p className="text-sm uppercase tracking-[0.3em] text-muted-foreground">
           404

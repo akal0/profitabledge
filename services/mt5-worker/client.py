@@ -33,15 +33,24 @@ class ControlPlaneClient:
     def _request_error(
         self,
         method: str,
-        path: str,
+        target: str,
         detail: str,
         *,
         retryable: bool,
     ) -> ControlPlaneRequestError:
         return ControlPlaneRequestError(
-            f"{method} {path} failed: {detail}",
+            f"{method} {target} failed: {detail}",
             retryable=retryable,
         )
+
+    def _socket_error_hint(self, error: urllib.error.URLError) -> str:
+        reason = getattr(error, "reason", None)
+        if isinstance(reason, OSError) and getattr(reason, "winerror", None) == 10013:
+            return (
+                " Check PE_SERVER_URL, avoid bind-only addresses such as 0.0.0.0 or ::, "
+                "and verify Windows firewall, antivirus, and proxy rules for Python."
+            )
+        return ""
 
     def _request(self, method: str, path: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         data = None
@@ -54,8 +63,9 @@ class ControlPlaneClient:
         if payload is not None:
             data = json.dumps(payload).encode("utf-8")
 
+        target = f"{self.server_url}{path}"
         request = urllib.request.Request(
-            f"{self.server_url}{path}",
+            target,
             data=data,
             headers=headers,
             method=method,
@@ -74,7 +84,7 @@ class ControlPlaneClient:
                 body = error.read().decode("utf-8")
                 last_error = self._request_error(
                     method,
-                    path,
+                    target,
                     f"{error.code} {body}",
                     retryable=self._should_retry_http_error(error.code),
                 )
@@ -88,8 +98,8 @@ class ControlPlaneClient:
             except urllib.error.URLError as error:
                 last_error = self._request_error(
                     method,
-                    path,
-                    str(error),
+                    target,
+                    f"{error}{self._socket_error_hint(error)}",
                     retryable=True,
                 )
                 if attempt < self.retry_count:

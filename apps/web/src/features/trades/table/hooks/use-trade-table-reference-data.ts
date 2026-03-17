@@ -368,6 +368,8 @@ export function useTradeTableReferenceData({
         id: trade.id ?? "",
         ticket: trade.ticket ?? null,
         symbol: trade.symbol ?? "",
+        rawSymbol: trade.symbol ?? "",
+        symbolGroup: trade.symbol ?? "",
         tradeDirection: trade.tradeType === "short" ? "short" : "long",
         volume: trade.volume ?? 0,
         profit: trade.profit ?? 0,

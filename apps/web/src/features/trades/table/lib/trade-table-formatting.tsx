@@ -15,6 +15,7 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   tradeDirection: "Shows if you bought or sold.",
   sessionTag: "Shows the time window name for this trade.",
   modelTag: "Shows the setup name you used.",
+  customTags: "Shows the custom trade tags you added to this trade.",
   protocolAlignment: "Shows if you followed your rules.",
   outcome: "Shows if a trade is live, won, lost, broke even, or won part.",
   tp: "The price you wanted to take profit.",

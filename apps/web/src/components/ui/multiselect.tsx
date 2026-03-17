@@ -63,6 +63,8 @@ interface MultipleSelectorProps {
   groupBy?: string;
   className?: string;
   badgeClassName?: string;
+  selectedContainerClassName?: string;
+  inputInSelectedFlow?: boolean;
   /**
    * First item selected is a default behavior by cmdk. That is why the default is true.
    * This is a workaround solution by add a dummy item.
@@ -185,6 +187,8 @@ const MultipleSelector = ({
   groupBy,
   className,
   badgeClassName,
+  selectedContainerClassName,
+  inputInSelectedFlow = false,
   selectFirstItem = true,
   creatable = false,
   triggerSearchOnFocus = false,
@@ -444,7 +448,7 @@ const MultipleSelector = ({
           inputRef?.current?.focus();
         }}
       >
-        <div className="flex flex-wrap gap-1">
+        <div className={cn("flex flex-wrap gap-1", selectedContainerClassName)}>
           {selected.map((option) => {
             return (
               <div
@@ -507,11 +511,18 @@ const MultipleSelector = ({
             }
             className={cn(
               "placeholder:text-muted-foreground/70 flex-1 bg-transparent outline-hidden disabled:cursor-not-allowed",
-              {
-                "w-full": hidePlaceholderWhenSelected,
-                "px-3 py-2": selected.length === 0,
-                "ml-1": selected.length !== 0,
-              },
+              selectedContainerClassName
+                ? inputInSelectedFlow
+                  ? {
+                      "ml-0 min-w-[8rem] px-2 py-2": selected.length !== 0,
+                      "ml-0 w-full px-3 py-2": selected.length === 0,
+                    }
+                  : "col-span-6 ml-0 w-full px-3 py-2"
+                : {
+                    "w-full": hidePlaceholderWhenSelected,
+                    "px-3 py-2": selected.length === 0,
+                    "ml-1": selected.length !== 0,
+                  },
               inputProps?.className
             )}
           />

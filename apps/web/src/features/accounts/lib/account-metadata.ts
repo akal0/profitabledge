@@ -97,11 +97,12 @@ type AccountImageLike = {
  * - Everything else → FTMO logo as default
  */
 export function getAccountImage(account?: AccountImageLike | null): string {
-  if (!account) return "/brokers/FTMO.png";
+  if (!account) return "/brokers/pe.svg";
 
   const broker = account.broker?.toLowerCase() ?? "";
 
   // 1. Broker name match
+  if (broker === "demo broker") return "/brokers/pe.svg";
   if (broker.includes("ftmo")) return "/brokers/FTMO.png";
   if (broker.includes("metaquotes")) return "/brokers/mt5.png";
   if (broker.includes("tradovate")) return "/brokers/tradovate.png";
@@ -117,7 +118,7 @@ export function getAccountImage(account?: AccountImageLike | null): string {
     return "/brokers/tradovate.png";
   }
 
-  return "/brokers/FTMO.png";
+  return "/brokers/pe.svg";
 }
 
 export function brokerSupportsMultiCsvImport(broker?: string | null): boolean {

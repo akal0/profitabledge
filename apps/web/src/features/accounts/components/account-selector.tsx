@@ -71,7 +71,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
     () => ({
       id: ALL_ACCOUNTS_ID,
       name: "All accounts",
-      image: "/brokers/FTMO.png",
+      image: "/brokers/pe.svg",
     }),
     []
   );

@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useAccountStore } from "@/stores/account";
 import { queryClient, trpcClient } from "@/utils/trpc";
 import type { AccountRecord } from "./account-section-shell";
 
@@ -40,12 +41,30 @@ export function DeleteAccountButton({
   const deleteMutation = useMutation({
     mutationFn: async () =>
       trpcClient.accounts.delete.mutate({ accountId: account.id }),
-    onSuccess: () => {
-      void Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["accounts"] }),
-        queryClient.invalidateQueries({ queryKey: ["connections"] }),
-        queryClient.invalidateQueries({ queryKey: ["propFirms"] }),
+    onSuccess: async () => {
+      const { selectedAccountId, setSelectedAccountId } =
+        useAccountStore.getState();
+      if (selectedAccountId === account.id) {
+        setSelectedAccountId(undefined);
+      }
+
+      queryClient.removeQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          return (
+            JSON.stringify(key).includes(account.id)
+          );
+        },
+      });
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [["accounts"]] }),
+        queryClient.invalidateQueries({ queryKey: [["connections"]] }),
+        queryClient.invalidateQueries({ queryKey: [["propFirms"]] }),
+        queryClient.invalidateQueries({ queryKey: [["trades"]] }),
+        queryClient.invalidateQueries({ queryKey: [["stats"]] }),
       ]);
+
       toast.success("Account deleted");
       setResolvedOpen(false);
       onDeleted?.();

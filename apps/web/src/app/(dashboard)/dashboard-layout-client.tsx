@@ -42,6 +42,10 @@ import {
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
 import { useAccountTransitionStore } from "@/stores/account-transition";
+import { OnbordaProvider, Onborda } from "onborda";
+import { DashboardTour } from "@/features/onboarding-tour/dashboard-tour";
+import { DASHBOARD_TOURS } from "@/features/onboarding-tour/tour-steps";
+import { TourCard } from "@/features/onboarding-tour/tour-card";
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
@@ -343,7 +347,15 @@ export default function DashboardLayoutClient({
   }
 
   return (
+    <OnbordaProvider>
+      <Onborda
+        steps={DASHBOARD_TOURS}
+        shadowRgb="0,0,0"
+        shadowOpacity="0.6"
+        cardComponent={TourCard}
+      >
     <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
+      <DashboardTour />
       <DashboardShellBootstrap />
       <AIInsightToast />
       <DashboardShellSidebar pathname={safePathname} />
@@ -397,5 +409,7 @@ export default function DashboardLayoutClient({
         </div>
       </SidebarInset>
     </SidebarProvider>
+      </Onborda>
+    </OnbordaProvider>
   );
 }

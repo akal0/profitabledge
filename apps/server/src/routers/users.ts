@@ -124,11 +124,13 @@ export const usersRouter = router({
         location: userTable.location,
         website: userTable.website,
         profileBannerUrl: userTable.profileBannerUrl,
+        profileBannerPosition: userTable.profileBannerPosition,
         widgetPreferences: userTable.widgetPreferences,
         chartWidgetPreferences: userTable.chartWidgetPreferences,
         tablePreferences: userTable.tablePreferences,
         advancedMetricsPreferences: userTable.advancedMetricsPreferences,
         notificationPreferences: userTable.notificationPreferences,
+        hasSeenTour: userTable.hasSeenTour,
         createdAt: userTable.createdAt,
         updatedAt: userTable.updatedAt,
       })
@@ -560,6 +562,7 @@ export const usersRouter = router({
         location: z.string().max(100).optional().nullable(),
         website: z.string().max(200).optional().nullable(),
         profileBannerUrl: z.string().optional().nullable(),
+        profileBannerPosition: z.string().optional().nullable(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -611,6 +614,7 @@ export const usersRouter = router({
         location: string | null;
         website: string | null;
         profileBannerUrl: string | null;
+        profileBannerPosition: string | null;
         updatedAt: Date;
       }> = {
         name: input.fullName,
@@ -627,6 +631,7 @@ export const usersRouter = router({
       if (input.location !== undefined) updates.location = input.location;
       if (input.website !== undefined) updates.website = input.website;
       if (input.profileBannerUrl !== undefined) updates.profileBannerUrl = input.profileBannerUrl;
+      if (input.profileBannerPosition !== undefined) updates.profileBannerPosition = input.profileBannerPosition;
 
       await db.update(userTable).set(updates).where(eq(userTable.id, userId));
 
@@ -1028,4 +1033,13 @@ export const usersRouter = router({
         .where(eq(userTable.id, userId));
       return { ok: true } as const;
     }),
+
+  completeTour: protectedProcedure.mutation(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    await db
+      .update(userTable)
+      .set({ hasSeenTour: true, updatedAt: new Date() })
+      .where(eq(userTable.id, userId));
+    return { ok: true } as const;
+  }),
 });

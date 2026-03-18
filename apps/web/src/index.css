@@ -525,8 +525,6 @@ html.dark body {
   }
 }
 
-
-
 /* Premium AI Assistant - Shimmer Animations */
 @keyframes shimmer {
   0% {
@@ -670,4 +668,16 @@ html.dark body {
 
 .prose-assistant tbody tr:hover {
   background: rgba(255, 255, 255, 0.02);
+}
+
+/* Onborda tour arrow */
+[data-name="onborda-arrow"] {
+  color: var(--sidebar);
+  overflow: visible;
+}
+
+[data-name="onborda-arrow"] path {
+  stroke: rgb(255 255 255 / 0.05);
+  stroke-width: 6;
+  paint-order: stroke fill;
 }

@@ -40,6 +40,7 @@ export const user = pgTable("user", {
   displayName: text("display_name"),
   bio: text("bio"),
   profileBannerUrl: text("profile_banner_url"),
+  profileBannerPosition: text("profile_banner_position"),
   location: text("location"),
   website: text("website"),
   tradingSince: timestamp("trading_since"),
@@ -57,6 +58,8 @@ export const user = pgTable("user", {
   totalVerifiedTrades: integer("total_verified_trades").default(0),
   metricsStable: boolean("metrics_stable").default(false), // 90+ days, 100+ trades
   avgProtocolRate: numeric("avg_protocol_rate"), // Across all accounts
+
+  hasSeenTour: boolean("has_seen_tour").notNull().default(false),
 
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),

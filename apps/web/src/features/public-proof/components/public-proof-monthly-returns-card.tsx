@@ -1,6 +1,14 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  LabelList,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   DashboardChartTooltipFrame,
@@ -30,8 +38,10 @@ type MonthlyReturnRow = {
 
 export function PublicProofMonthlyReturnsCard({
   rows,
+  currencyCode,
 }: {
   rows: MonthlyReturnRow[];
+  currencyCode?: string | null;
 }) {
   return (
     <WidgetWrapper
@@ -58,7 +68,7 @@ export function PublicProofMonthlyReturnsCard({
             >
               <BarChart
                 data={rows}
-                margin={{ top: 12, right: 8, left: 8, bottom: 0 }}
+                margin={{ top: 20, right: 8, left: 8, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="8 8" vertical={false} />
                 <XAxis
@@ -76,7 +86,7 @@ export function PublicProofMonthlyReturnsCard({
                   width={56}
                   tick={{ fill: "rgba(255,255,255,0.4)" }}
                   tickFormatter={(value) =>
-                    formatSignedCurrency(Number(value), 0)
+                    formatSignedCurrency(Number(value), 0, currencyCode)
                   }
                 />
                 <ChartTooltip
@@ -93,7 +103,11 @@ export function PublicProofMonthlyReturnsCard({
                       <DashboardChartTooltipFrame title={point.label}>
                         <DashboardChartTooltipRow
                           label="P&L"
-                          value={formatSignedCurrency(Number(point.pnl), 2)}
+                          value={formatSignedCurrency(
+                            Number(point.pnl),
+                            2,
+                            currencyCode
+                          )}
                           indicatorColor={
                             point.pnl >= 0 ? "#00E0C8" : "#F43F5E"
                           }
@@ -113,6 +127,17 @@ export function PublicProofMonthlyReturnsCard({
                   }}
                 />
                 <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="pnl"
+                    position="top"
+                    formatter={(value: number) =>
+                      formatSignedCurrency(Number(value), 0, currencyCode)
+                    }
+                    style={{
+                      fill: "rgba(255,255,255,0.5)",
+                      fontSize: "12px",
+                    }}
+                  />
                   {rows.map((row) => (
                     <Cell
                       key={row.label}

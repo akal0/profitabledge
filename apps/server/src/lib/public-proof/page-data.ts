@@ -1,5 +1,6 @@
 import {
   analytics,
+  calculateRRValues,
   calculateSymbolStats,
   calculateStreaks,
   type TradeInput,
@@ -20,9 +21,14 @@ type PublicProofShare = {
   brokerServer: string | null;
   createdAt: Date;
   traderName: string | null;
+  traderImage?: string | null;
+  traderBannerUrl?: string | null;
+  traderBannerPosition?: string | null;
   verificationLevel: string | null;
   isVerified: number | boolean | null;
   lastSyncedAt?: Date | null;
+  initialBalance?: string | number | null;
+  initialCurrency?: string | null;
 };
 
 type StoredTradeRow = {
@@ -178,7 +184,7 @@ function buildDailyPerformance(trades: StoredTradeRow[]) {
   };
 }
 
-function buildDrawdownCurve(trades: StoredTradeRow[]) {
+function buildDrawdownCurve(trades: StoredTradeRow[], initialBalance: number) {
   const sortedTrades = [...trades].sort(
     (left, right) =>
       resolveTradeTimestamp(left).getTime() -
@@ -195,7 +201,7 @@ function buildDrawdownCurve(trades: StoredTradeRow[]) {
 
     return {
       x: resolveTradeTimestamp(trade).toISOString(),
-      y: Number((-drawdown).toFixed(2)),
+      y: Number((initialBalance - drawdown).toFixed(2)),
     };
   });
 
@@ -252,6 +258,7 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
   );
   const analyticsTrades = toAnalyticsTradeRows(closedTradeRows);
   const stats = analytics.calculateFullStats(analyticsTrades);
+  const rrValues = calculateRRValues(analyticsTrades);
   const streaks = calculateStreaks(analyticsTrades);
   const symbolStats = calculateSymbolStats(analyticsTrades).slice(0, 5);
   const monthlyReturns = buildMonthlyReturns(closedTradeRows);
@@ -304,6 +311,8 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
         )
       : 0;
 
+  const accountBaseline = parseNumber(input.share.initialBalance);
+
   const curvePoints = downsampleCurve(
     [...closedTradeRows]
       .sort(
@@ -312,7 +321,7 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
           resolveTradeTimestamp(right).getTime()
       )
       .reduce<Array<{ x: string; y: number }>>((points, trade) => {
-        const previousEquity = points[points.length - 1]?.y ?? 0;
+        const previousEquity = points[points.length - 1]?.y ?? accountBaseline;
         points.push({
           x: resolveTradeTimestamp(trade).toISOString(),
           y: Number((previousEquity + parseNumber(trade.profit)).toFixed(2)),
@@ -326,11 +335,15 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
     trader: {
       username: input.username,
       name: input.share.traderName,
+      image: input.share.traderImage ?? null,
+      profileBannerUrl: input.share.traderBannerUrl ?? null,
+      profileBannerPosition: input.share.traderBannerPosition ?? null,
     },
     account: {
       name: input.share.accountName,
       broker: input.share.broker,
       brokerServer: input.share.brokerServer,
+      currency: input.share.initialCurrency ?? null,
     },
     proof: {
       connectionKind: connectionTrust.kind,
@@ -358,12 +371,13 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
         stats.profitFactor === Infinity
           ? 999
           : Number(stats.profitFactor.toFixed(2)),
-      averageRR: Number(stats.avgRR.toFixed(2)),
-      medianRR: Number(stats.medianRR.toFixed(2)),
+      averageRR: rrValues.length > 0 ? Number(stats.avgRR.toFixed(2)) : null,
+      medianRR: rrValues.length > 0 ? Number(stats.medianRR.toFixed(2)) : null,
       maxDrawdown: Number(stats.maxDrawdown.toFixed(2)),
       maxDrawdownPercent: Number(stats.maxDrawdownPercent.toFixed(2)),
+      initialBalance: accountBaseline,
       curve: curvePoints,
-      drawdownCurve: buildDrawdownCurve(closedTradeRows),
+      drawdownCurve: buildDrawdownCurve(closedTradeRows, accountBaseline),
     },
     stats: {
       expectancy: Number(stats.expectancy.toFixed(2)),

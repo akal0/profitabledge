@@ -1,6 +1,6 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import {
   DashboardChartTooltipFrame,
@@ -32,8 +32,12 @@ type PublicProofCurvePoint = {
 
 export function PublicProofDrawdownCard({
   points,
+  baseline = 0,
+  currencyCode,
 }: {
   points: PublicProofCurvePoint[];
+  baseline?: number;
+  currencyCode?: string | null;
 }) {
   const chartData = points.map((point) => ({
     label: formatShortDate(point.x),
@@ -42,9 +46,14 @@ export function PublicProofDrawdownCard({
   }));
 
   const values = chartData.map((point) => point.drawdown);
-  const minDrawdown = values.length > 0 ? Math.min(...values) : 0;
+  const minValue = values.length > 0 ? Math.min(...values) : baseline;
+  // Y-axis top is always the initialBalance (zero-drawdown baseline)
+  const peakValue = baseline;
+  const valueRange = peakValue - minValue;
   const padding =
-    minDrawdown < 0 ? Math.max(Math.abs(minDrawdown) * 0.1, 50) : 50;
+    valueRange > 0
+      ? valueRange * 0.1
+      : Math.max(Math.abs(peakValue) * 0.1, 100);
 
   return (
     <WidgetWrapper
@@ -95,14 +104,14 @@ export function PublicProofDrawdownCard({
                   tick={{ fill: "rgba(255,255,255,0.4)" }}
                 />
                 <YAxis
-                  domain={[minDrawdown - padding, 0]}
+                  domain={[minValue - padding, peakValue]}
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
-                  width={56}
+                  width={64}
                   tick={{ fill: "rgba(255,255,255,0.4)" }}
                   tickFormatter={(value) =>
-                    formatSignedCurrency(Number(value), 0)
+                    formatSignedCurrency(Number(value), 0, currencyCode)
                   }
                 />
                 <ChartTooltip
@@ -124,7 +133,8 @@ export function PublicProofDrawdownCard({
                           label="Drawdown"
                           value={formatSignedCurrency(
                             Number(point.drawdown),
-                            2
+                            2,
+                            currencyCode
                           )}
                           indicatorColor="#F43F5E"
                         />
@@ -132,12 +142,18 @@ export function PublicProofDrawdownCard({
                     );
                   }}
                 />
+                <ReferenceLine
+                  y={peakValue}
+                  stroke="rgba(255,255,255,0.12)"
+                  strokeDasharray="4 4"
+                />
                 <Area
                   type="monotone"
                   dataKey="drawdown"
                   stroke="#F43F5E"
                   strokeWidth={2}
                   fill="url(#publicProofDrawdownGradient)"
+                  baseValue={peakValue}
                   dot={false}
                   activeDot={{ r: 4, fill: "#F43F5E" }}
                 />

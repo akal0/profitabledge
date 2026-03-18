@@ -120,6 +120,9 @@ export async function loadPublicShareBySlug(publicAccountSlug: string) {
       updatedAt: publicAccountShare.updatedAt,
       username: userTable.username,
       traderName: userTable.name,
+      traderImage: userTable.image,
+      traderBannerUrl: userTable.profileBannerUrl,
+      traderBannerPosition: userTable.profileBannerPosition,
       accountName: tradingAccount.name,
       broker: tradingAccount.broker,
       brokerType: tradingAccount.brokerType,
@@ -127,6 +130,8 @@ export async function loadPublicShareBySlug(publicAccountSlug: string) {
       verificationLevel: tradingAccount.verificationLevel,
       isVerified: tradingAccount.isVerified,
       lastSyncedAt: tradingAccount.lastSyncedAt,
+      initialBalance: tradingAccount.initialBalance,
+      initialCurrency: tradingAccount.initialCurrency,
     })
     .from(publicAccountShare)
     .innerJoin(userTable, eq(userTable.id, publicAccountShare.userId))

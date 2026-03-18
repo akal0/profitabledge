@@ -13,11 +13,14 @@ import { toast } from "sonner";
 import {
   Camera,
   ImagePlus,
+  Loader2,
+  Pencil,
   Trash2,
   MapPin,
   Link as LinkIcon,
 } from "lucide-react";
 import { useUploadThing } from "@/utils/uploadthing";
+import { CoverImageCropDialog } from "@/components/cover-image-crop-dialog";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -36,7 +39,10 @@ export default function EditProfilePage() {
   const clearImage = useMutation(
     trpcOptions.users.clearImage.mutationOptions()
   );
-  const { startUpload, isUploading } = useUploadThing((r) => r.imageUploader);
+  const { startUpload: startAvatarUpload, isUploading: isAvatarUploading } =
+    useUploadThing((r) => r.imageUploader);
+  const { startUpload: startBannerUpload, isUploading: isBannerUploading } =
+    useUploadThing((r) => r.imageUploader);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -51,13 +57,26 @@ export default function EditProfilePage() {
   });
 
   const [bannerUrl, setBannerUrl] = useState("");
+  const [bannerPosition, setBannerPosition] = useState("50% 50%");
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [bannerFile, setBannerFile] = useState<File | null>(null);
+
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const bannerContainerRef = useRef<HTMLDivElement>(null);
+  const formInitialized = useRef(false);
+
+  // Use refs for pending banner data to avoid stale closures entirely
+  const pendingBannerFileRef = useRef<File | null>(null);
+  const previousBannerUrlRef = useRef<string>("");
+
+  // Crop dialog state
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [pendingBannerSrc, setPendingBannerSrc] = useState("");
+  const [coverAspectRatio, setCoverAspectRatio] = useState(5);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || formInitialized.current) return;
+    formInitialized.current = true;
     setForm({
       fullName: user.name || "",
       username: user.username || "",
@@ -70,15 +89,15 @@ export default function EditProfilePage() {
       image: user.image || "",
     });
     setBannerUrl((user as any).profileBannerUrl || "");
+    setBannerPosition((user as any).profileBannerPosition || "50% 50%");
     setAvatarFile(null);
-    setBannerFile(null);
   }, [user]);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be under 5MB");
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Image must be under 8MB");
       return;
     }
     const reader = new FileReader();
@@ -92,16 +111,70 @@ export default function EditProfilePage() {
   const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image must be under 5MB");
+    if (file.size > 8 * 1024 * 1024) {
+      toast.error("Image must be under 8MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setBannerFile(file);
-      setBannerUrl(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    if (bannerInputRef.current) bannerInputRef.current.value = "";
+
+    // Store previous URL for cancel reverting
+    previousBannerUrlRef.current = bannerUrl;
+    pendingBannerFileRef.current = file;
+
+    // Set preview immediately — synchronous, no async
+    const blobUrl = URL.createObjectURL(file);
+    setBannerUrl(blobUrl);
+
+    // Open crop dialog so user can set position
+    openCropDialog(blobUrl);
+  };
+
+  const openCropDialog = (src: string) => {
+    if (bannerContainerRef.current) {
+      const { width, height } =
+        bannerContainerRef.current.getBoundingClientRect();
+      if (width > 0 && height > 0) setCoverAspectRatio(width / height);
+    }
+    setPendingBannerSrc(src);
+    setCropDialogOpen(true);
+  };
+
+  // "Edit cover" — reposition existing banner, no new file
+  const openEditDialog = () => {
+    openCropDialog(bannerUrl);
+  };
+
+  // Apply: set position, upload file to UploadThing in background
+  const handleCropApply = async (objectPosition: string) => {
+    const fileToUpload = pendingBannerFileRef.current;
+
+    setBannerPosition(objectPosition);
+    setPendingBannerSrc("");
+    setCropDialogOpen(false);
+
+    if (fileToUpload) {
+      // Upload in background — blob URL already showing as preview
+      try {
+        const res = await startBannerUpload([fileToUpload]);
+        const uploadedUrl = res?.[0]?.ufsUrl ?? res?.[0]?.url;
+        if (uploadedUrl) {
+          setBannerUrl(uploadedUrl);
+          pendingBannerFileRef.current = null;
+        }
+      } catch {
+        toast.error("Failed to upload cover image");
+      }
+    }
+  };
+
+  const handleCropCancel = () => {
+    // If a new file was picked but not yet uploaded, revert preview
+    if (pendingBannerFileRef.current) {
+      setBannerUrl(previousBannerUrlRef.current);
+      pendingBannerFileRef.current = null;
+    }
+    setPendingBannerSrc("");
+    setCropDialogOpen(false);
   };
 
   const handleRemoveAvatar = async () => {
@@ -128,24 +201,23 @@ export default function EditProfilePage() {
 
     try {
       let imageUrl = form.image;
-      let persistedBannerUrl = bannerUrl;
-
-      if (avatarFile) {
-        const upload = await startUpload([avatarFile]);
-        imageUrl = upload?.[0]?.url ?? "";
-
-        if (!imageUrl) {
-          throw new Error("Failed to upload profile photo");
+      // bannerUrl is already the UploadThing URL (set on Apply).
+      // If still a blob URL (upload failed), try uploading now.
+      let finalBannerUrl = bannerUrl;
+      if (bannerUrl.startsWith("blob:") && pendingBannerFileRef.current) {
+        const res = await startBannerUpload([pendingBannerFileRef.current]);
+        const url = res?.[0]?.ufsUrl ?? res?.[0]?.url;
+        if (url) {
+          finalBannerUrl = url;
+          setBannerUrl(url);
+          pendingBannerFileRef.current = null;
         }
       }
 
-      if (bannerFile) {
-        const upload = await startUpload([bannerFile]);
-        persistedBannerUrl = upload?.[0]?.url ?? "";
-
-        if (!persistedBannerUrl) {
-          throw new Error("Failed to upload cover image");
-        }
+      if (avatarFile) {
+        const upload = await startAvatarUpload([avatarFile]);
+        imageUrl = upload?.[0]?.ufsUrl ?? "";
+        if (!imageUrl) throw new Error("Failed to upload profile photo");
       }
 
       await updateProfile.mutateAsync({
@@ -158,12 +230,15 @@ export default function EditProfilePage() {
         twitter: form.twitter || null,
         discord: form.discord || null,
         ...(imageUrl && imageUrl.startsWith("http") ? { image: imageUrl } : {}),
-        profileBannerUrl: persistedBannerUrl || null,
+        profileBannerUrl: finalBannerUrl.startsWith("http")
+          ? finalBannerUrl
+          : null,
+        profileBannerPosition: bannerPosition || null,
       });
+
       setAvatarFile(null);
-      setBannerFile(null);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
       setForm((prev) => ({ ...prev, image: imageUrl }));
-      setBannerUrl(persistedBannerUrl);
       queryClient.invalidateQueries({ queryKey: [["users", "me"]] });
       toast.success("Profile updated");
     } catch (error: any) {
@@ -187,38 +262,65 @@ export default function EditProfilePage() {
   return (
     <div className="flex flex-col w-full">
       {/* Cover / Banner */}
-      <div className="relative h-52 bg-gradient-to-r from-teal-900/40 to-indigo-900/40">
+      <div
+        ref={bannerContainerRef}
+        className="relative h-52 md:h-64 bg-gradient-to-r from-teal-900/40 to-indigo-900/40"
+      >
         {bannerUrl && (
           <img
             src={bannerUrl}
             alt="Banner"
             className="absolute inset-0 w-full h-full object-cover"
+            style={{ objectPosition: bannerPosition }}
           />
         )}
-        <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 hover:opacity-100 transition-opacity bg-black/40">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
-            onClick={() => bannerInputRef.current?.click()}
-          >
-            <ImagePlus className="size-4 mr-1.5" />
-            {bannerUrl ? "Change cover" : "Add cover image"}
-          </Button>
-          {bannerUrl && (
+
+        {/* Upload loading overlay */}
+        {isBannerUploading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
+            <Loader2 className="size-5 text-white animate-spin" />
+          </div>
+        )}
+
+        {/* Hover controls */}
+        {!isBannerUploading && (
+          <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 hover:opacity-100 transition-opacity bg-black/40">
             <Button
               variant="ghost"
               size="sm"
               className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
-              onClick={() => {
-                setBannerFile(null);
-                setBannerUrl("");
-              }}
+              onClick={() => bannerInputRef.current?.click()}
             >
-              <Trash2 className="size-4" />
+              <ImagePlus className="size-4 mr-1.5" />
+              {bannerUrl ? "Change cover" : "Add cover image"}
             </Button>
-          )}
-        </div>
+            {bannerUrl && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
+                onClick={openEditDialog}
+              >
+                <Pencil className="size-4 mr-1.5" />
+                Edit cover
+              </Button>
+            )}
+            {bannerUrl && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
+                onClick={() => {
+                  pendingBannerFileRef.current = null;
+                  setBannerUrl("");
+                }}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            )}
+          </div>
+        )}
+
         <input
           ref={bannerInputRef}
           type="file"
@@ -484,14 +586,26 @@ export default function EditProfilePage() {
       <div className="flex justify-end px-6 sm:px-8 py-6">
         <Button
           onClick={handleSave}
-          disabled={updateProfile.isPending || isUploading}
+          disabled={
+            updateProfile.isPending || isAvatarUploading || isBannerUploading
+          }
           className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
         >
-          {updateProfile.isPending || isUploading
+          {updateProfile.isPending || isAvatarUploading || isBannerUploading
             ? "Saving..."
             : "Save changes"}
         </Button>
       </div>
+
+      {pendingBannerSrc && (
+        <CoverImageCropDialog
+          open={cropDialogOpen}
+          imageSrc={pendingBannerSrc}
+          aspectRatio={coverAspectRatio}
+          onApply={handleCropApply}
+          onCancel={handleCropCancel}
+        />
+      )}
     </div>
   );
 }

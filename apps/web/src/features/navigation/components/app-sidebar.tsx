@@ -41,6 +41,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { trpcOptions } from "@/utils/trpc";
+import { useOnborda } from "onborda";
+import { TOUR_STEP_URLS } from "@/features/onboarding-tour/tour-steps";
 
 import NavUser from "@/components/nav-user";
 import { useQuery } from "@tanstack/react-query";
@@ -96,6 +98,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [createdAccounts, fetchedAccounts]);
 
   const pathname = usePathname();
+  const { isOnbordaVisible, currentStep } = useOnborda();
+  const tourActiveUrl = isOnbordaVisible ? (TOUR_STEP_URLS[currentStep] ?? null) : null;
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
@@ -143,8 +147,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       return [...NAV_SECTIONS, ...dynamicSections].map((section) => ({
         ...section,
         items: section.items.map((item) => {
-          const isActive =
-            item.url === "/dashboard"
+          const isActive = tourActiveUrl !== null
+            ? item.url === tourActiveUrl
+            : item.url === "/dashboard"
               ? pathname === item.url
               : item.url === "/dashboard/settings"
               ? pathname === "/dashboard/settings" ||
@@ -158,7 +163,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         }),
       }));
     },
-    [canViewAffiliateDashboard, pathname]
+    [canViewAffiliateDashboard, pathname, tourActiveUrl]
   );
 
   return (
@@ -231,9 +236,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </>
                 );
 
+                const onbordaId = `nav-${item.url.replace(/^\//, "").replace(/\//g, "-") || "dashboard"}`;
+
                 if (disabledByFeature) {
                   return (
-                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex">
+                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex" data-onborda={onbordaId}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
@@ -253,7 +260,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                 if (locked) {
                   return (
-                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex">
+                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex" data-onborda={onbordaId}>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
@@ -274,7 +281,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
 
                 return (
-                  <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex">
+                  <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex" data-onborda={onbordaId}>
                     <SidebarMenuButton
                       asChild
                       tooltip={item.title}

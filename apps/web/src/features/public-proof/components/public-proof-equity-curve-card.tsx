@@ -32,8 +32,10 @@ type PublicProofCurvePoint = {
 
 export function PublicProofEquityCurveCard({
   points,
+  currencyCode,
 }: {
   points: PublicProofCurvePoint[];
+  currencyCode?: string | null;
 }) {
   const chartData = points.map((point) => ({
     label: formatShortDate(point.x),
@@ -108,7 +110,7 @@ export function PublicProofEquityCurveCard({
                   width={56}
                   tick={{ fill: "rgba(255,255,255,0.4)" }}
                   tickFormatter={(value) =>
-                    formatSignedCurrency(Number(value), 0)
+                    formatSignedCurrency(Number(value), 0, currencyCode)
                   }
                 />
                 <ChartTooltip
@@ -128,7 +130,7 @@ export function PublicProofEquityCurveCard({
                       <DashboardChartTooltipFrame title={point.tooltipDate}>
                         <DashboardChartTooltipRow
                           label="Equity"
-                          value={formatSignedCurrency(Number(point.equity), 2)}
+                          value={formatSignedCurrency(Number(point.equity), 2, currencyCode)}
                           indicatorColor="#00E0C8"
                         />
                       </DashboardChartTooltipFrame>

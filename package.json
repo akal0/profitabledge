@@ -51,6 +51,7 @@
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "html-to-image": "^1.11.13",
-    "nanoid": "^5.1.6"
+    "nanoid": "^5.1.6",
+    "react-easy-crop": "^5.5.6"
   }
 }

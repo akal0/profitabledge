@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
@@ -42,10 +43,71 @@ import {
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
 import { useAccountTransitionStore } from "@/stores/account-transition";
-import { OnbordaProvider, Onborda } from "onborda";
+import { OnbordaProvider, Onborda, useOnborda } from "onborda";
 import { DashboardTour } from "@/features/onboarding-tour/dashboard-tour";
-import { DASHBOARD_TOURS } from "@/features/onboarding-tour/tour-steps";
+import { DASHBOARD_TOURS, TOUR_ID } from "@/features/onboarding-tour/tour-steps";
 import { TourCard } from "@/features/onboarding-tour/tour-card";
+
+const SPOTLIGHT_TRANSITION = "top 0.2s ease-out, left 0.2s ease-out, right 0.2s ease-out, width 0.2s ease-out, height 0.2s ease-out, bottom 0.2s ease-out";
+
+function TourBackdropBlur() {
+  const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
+  const [spotlightRect, setSpotlightRect] = useState<DOMRect | null>(null);
+
+  useLayoutEffect(() => {
+    if (!isOnbordaVisible || currentTour !== TOUR_ID) {
+      setSpotlightRect(null);
+      return;
+    }
+
+    const tour = DASHBOARD_TOURS.find((t) => t.tour === TOUR_ID);
+    const step = tour?.steps[currentStep];
+    if (!step?.selector) {
+      setSpotlightRect(null);
+      return;
+    }
+
+    const el = document.querySelector<HTMLElement>(step.selector);
+    if (!el) {
+      setSpotlightRect(null);
+      return;
+    }
+
+    const update = () => setSpotlightRect(el.getBoundingClientRect());
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [isOnbordaVisible, currentStep, currentTour]);
+
+  if (!isOnbordaVisible || typeof document === "undefined") return null;
+
+  const base: React.CSSProperties = {
+    position: "fixed",
+    backdropFilter: "blur(5px)",
+    WebkitBackdropFilter: "blur(5px)",
+    zIndex: 849,
+    pointerEvents: "none",
+    transition: SPOTLIGHT_TRANSITION,
+  };
+
+  if (!spotlightRect) {
+    return createPortal(<div style={{ ...base, inset: 0 }} />, document.body);
+  }
+
+  const pad = 10;
+  const { left, top, right, bottom } = spotlightRect;
+  const mh = bottom - top + 2 * pad;
+
+  return createPortal(
+    <>
+      <div style={{ ...base, top: 0, left: 0, right: 0, height: Math.max(0, top - pad) }} />
+      <div style={{ ...base, top: bottom + pad, left: 0, right: 0, bottom: 0 }} />
+      <div style={{ ...base, top: top - pad, left: 0, width: Math.max(0, left - pad), height: mh }} />
+      <div style={{ ...base, top: top - pad, left: right + pad, right: 0, height: mh }} />
+    </>,
+    document.body
+  );
+}
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
@@ -247,7 +309,10 @@ export default function DashboardLayoutClient({
       )
   );
 
-  useAlphaPageTracking("dashboard", hasConfirmedSession && !isRecoveringSession);
+  useAlphaPageTracking(
+    "dashboard",
+    hasConfirmedSession && !isRecoveringSession
+  );
   useSettingsAccountScopeGuard({
     pathname: safePathname,
     accountId: resolvedAccountId,
@@ -351,64 +416,69 @@ export default function DashboardLayoutClient({
       <Onborda
         steps={DASHBOARD_TOURS}
         shadowRgb="0,0,0"
-        shadowOpacity="0.6"
+        shadowOpacity="0.7"
         cardComponent={TourCard}
+        cardTransition={{ duration: 0.2, ease: "easeOut" }}
       >
-    <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
-      <DashboardTour />
-      <DashboardShellBootstrap />
-      <AIInsightToast />
-      <DashboardShellSidebar pathname={safePathname} />
-      <VerticalSeparator />
+        <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
+          <DashboardTour />
+          <TourBackdropBlur />
+          <DashboardShellBootstrap />
+          <AIInsightToast />
+          <DashboardShellSidebar pathname={safePathname} />
+          <VerticalSeparator />
 
-      <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden">
-        <DashboardShellHeader
-          breadcrumbs={breadcrumbs}
-          accountId={resolvedAccountId}
-          currentAccountName={currentAccount?.name}
-          currentAccountBroker={currentAccount?.broker}
-          currentAccountIsProp={currentAccount?.isPropAccount}
-          currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
-          currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
-          currentAccountSupportsLiveSync={accountSupportsLiveSync(
-            currentAccount
-          )}
-          currentAccountLastImportedAt={currentAccount?.lastImportedAt}
-          connectionBadge={connectionBadge}
-          isAccountsRoute={Boolean(isAccountsRoute)}
-          isGoalsRoute={Boolean(isGoalsRoute)}
-          isPropTrackerRoute={Boolean(isPropTrackerRoute)}
-          isTradesRoute={Boolean(isTradesRoute)}
-          onOpenCommandPalette={openCommandPalette}
-          onOpenGoalDialog={() => setGoalDialogOpen(true)}
-        />
+          <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden min-h-screen">
+            <DashboardShellHeader
+              breadcrumbs={breadcrumbs}
+              accountId={resolvedAccountId}
+              currentAccountName={currentAccount?.name}
+              currentAccountBroker={currentAccount?.broker}
+              currentAccountIsProp={currentAccount?.isPropAccount}
+              currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
+              currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
+              currentAccountSupportsLiveSync={accountSupportsLiveSync(
+                currentAccount
+              )}
+              currentAccountLastImportedAt={currentAccount?.lastImportedAt}
+              connectionBadge={connectionBadge}
+              isAccountsRoute={Boolean(isAccountsRoute)}
+              isGoalsRoute={Boolean(isGoalsRoute)}
+              isPropTrackerRoute={Boolean(isPropTrackerRoute)}
+              isTradesRoute={Boolean(isTradesRoute)}
+              onOpenCommandPalette={openCommandPalette}
+              onOpenGoalDialog={() => setGoalDialogOpen(true)}
+            />
 
-        <div
-          className={cn(
-            "relative flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
-            isJournalRoute ? "overflow-hidden" : "overflow-y-auto gap-4 pb-12"
-          )}
-        >
-          <div
-            className={cn(
-              "flex min-h-0 flex-1 flex-col",
-              showAccountTransitionFallback && "pointer-events-none opacity-0"
-            )}
-          >
-            {shouldHoldAccountScopedContent ? null : children}
-          </div>
+            <div
+              className={cn(
+                "relative flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
+                isJournalRoute || isAccountsRoute
+                  ? "overflow-hidden"
+                  : "overflow-y-auto gap-4 pb-12"
+              )}
+            >
+              <div
+                className={cn(
+                  "flex min-h-0 flex-1 flex-col",
+                  showAccountTransitionFallback &&
+                    "pointer-events-none opacity-0"
+                )}
+              >
+                {shouldHoldAccountScopedContent ? null : children}
+              </div>
 
-          {showAccountTransitionFallback ? (
-            <div className="absolute inset-0 z-10 flex">
-              <RouteLoadingFallback
-                route={routeLoadingVariant}
-                className="min-h-0 bg-background dark:bg-sidebar"
-              />
+              {showAccountTransitionFallback ? (
+                <div className="absolute inset-0 z-10 flex">
+                  <RouteLoadingFallback
+                    route={routeLoadingVariant}
+                    className="min-h-0 bg-background dark:bg-sidebar"
+                  />
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+          </SidebarInset>
+        </SidebarProvider>
       </Onborda>
     </OnbordaProvider>
   );

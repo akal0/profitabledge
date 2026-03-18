@@ -3,6 +3,16 @@
 
 @import "uploadthing/tw/v4";
 
+/* Onborda tour — extend shadow to cover ultrawide monitors */
+[data-name="onborda-pointer"] {
+  box-shadow: 0 0 30px 100vmax rgba(0, 0, 0, 0.75) !important;
+}
+
+/* Lift the Onborda overlay above the backdrop-blur panels (z-849) */
+[data-name="onborda-overlay"] {
+  z-index: 9000 !important;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes slideInLeft {

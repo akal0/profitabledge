@@ -35,7 +35,7 @@ import {
 import { useAccountTransitionStore } from "@/stores/account-transition";
 import { useEffect, useState } from "react";
 import { useOnborda } from "onborda";
-import { TOUR_ID, ACCOUNT_SELECTOR_TOUR_STEP } from "@/features/onboarding-tour/tour-steps";
+import { TOUR_ID, ACCOUNT_SELECTOR_TOUR_STEP, ADD_ACCOUNT_TOUR_STEP } from "@/features/onboarding-tour/tour-steps";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -70,15 +70,16 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   const hasInitialized = React.useRef(false);
 
   const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
-  const isAccountSelectorTourStep =
-    isOnbordaVisible &&
-    currentTour === TOUR_ID &&
-    currentStep === ACCOUNT_SELECTOR_TOUR_STEP;
+  const isTourActive = isOnbordaVisible && currentTour === TOUR_ID;
+  const isAccountSelectorTourStep = isTourActive && currentStep === ACCOUNT_SELECTOR_TOUR_STEP;
+  const isAddAccountTourStep = isTourActive && currentStep === ADD_ACCOUNT_TOUR_STEP;
+  // Keep dropdown open for both account-selector and add-account steps
+  const isDropdownTourStep = isAccountSelectorTourStep || isAddAccountTourStep;
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAccountSelectorTourStep) setDropdownOpen(false);
-  }, [isAccountSelectorTourStep]);
+    if (!isDropdownTourStep) setDropdownOpen(false);
+  }, [isDropdownTourStep]);
 
   const allAccountsItem = React.useMemo<Account>(
     () => ({
@@ -240,8 +241,8 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
         className={cn("h-full w-full", isCollapsed && "flex justify-center")}
       >
         <DropdownMenu
-          open={isAccountSelectorTourStep ? true : dropdownOpen}
-          onOpenChange={(o) => !isAccountSelectorTourStep && setDropdownOpen(o)}
+          open={isDropdownTourStep ? true : dropdownOpen}
+          onOpenChange={(o) => !isDropdownTourStep && setDropdownOpen(o)}
         >
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
@@ -279,7 +280,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
           <DropdownMenuContent
             className={cn(
               "w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-lg min-w-64",
-              isAccountSelectorTourStep && "!z-[9500]"
+              isDropdownTourStep && "!z-[9500]"
             )}
             align="start"
           >
@@ -380,7 +381,11 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
             </div>
 
             <div className="p-1">
-              <AddAccountSheet onAccountCreated={handleAccountCreated} />
+              <AddAccountSheet
+                onAccountCreated={handleAccountCreated}
+                open={isAddAccountTourStep ? true : undefined}
+                contentClassName={isAddAccountTourStep ? "!z-[9600]" : undefined}
+              />
             </div>
           </DropdownMenuContent>
         </DropdownMenu>

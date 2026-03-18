@@ -119,12 +119,19 @@ type DemoWorkspaceResult = {
 export function AddAccountSheet({
   onAccountCreated,
   trigger,
+  open: controlledOpen,
+  contentClassName,
 }: {
   onAccountCreated: (account: NewAccount) => void;
   trigger?: React.ReactNode;
+  /** When provided, overrides internal open state (e.g. for tour) */
+  open?: boolean;
+  /** Extra className applied to SheetContent (e.g. z-index override for tour) */
+  contentClassName?: string;
 }) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : sheetOpen;
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [form, setForm] = useState<AddAccountForm>({
     method: null,
@@ -204,8 +211,17 @@ export function AddAccountSheet({
     }
   }, [form.broker, pendingCsvImportResolution]);
 
+  // Reset form when externally forced closed
+  useEffect(() => {
+    if (controlledOpen === false) {
+      setSheetOpen(false);
+      resetAll();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlledOpen]);
+
   function handleOpenChange(next: boolean) {
-    setOpen(next);
+    setSheetOpen(next);
     if (!next) resetAll();
   }
 
@@ -267,7 +283,7 @@ export function AddAccountSheet({
           })
         );
         setSubmitting(false);
-        setOpen(false);
+        setSheetOpen(false);
         resetAll();
         window.location.reload();
         return;
@@ -345,7 +361,7 @@ export function AddAccountSheet({
           : `Demo account created with ${result.tradeCount} trades and ${result.openTradeCount} live positions.`
       );
 
-      setOpen(false);
+      setSheetOpen(false);
 
       if (demoAccounts.length > 0) {
         // Regeneration replaced existing accounts — hard reload to reset all stores
@@ -429,7 +445,7 @@ export function AddAccountSheet({
 
       <SheetContent
         side="right"
-        className="w-full sm:max-w-2xl overflow-y-auto rounded-md p-0"
+        className={cn("w-full sm:max-w-2xl overflow-y-auto rounded-md p-0", contentClassName)}
       >
         <div className="px-6 py-5 pb-0">
           <SheetHeader className="p-0">
@@ -1113,7 +1129,7 @@ export function AddAccountSheet({
                   >
                     <Link
                       href="/dashboard/settings/connections"
-                      onClick={() => setOpen(false)}
+                      onClick={() => setSheetOpen(false)}
                     >
                       <ExternalLink className="size-3.5" />
                       Go to Connections
@@ -1199,7 +1215,7 @@ export function AddAccountSheet({
                   >
                     <Link
                       href="/dashboard/settings/ea-setup"
-                      onClick={() => setOpen(false)}
+                      onClick={() => setSheetOpen(false)}
                     >
                       <ExternalLink className="size-3.5" />
                       Go to EA Setup
@@ -1270,7 +1286,7 @@ export function AddAccountSheet({
                       TRADE_ACTION_BUTTON_PRIMARY_CLASS,
                       "h-9 w-full"
                     )}
-                    onClick={() => setOpen(false)}
+                    onClick={() => setSheetOpen(false)}
                   >
                     Done
                   </Button>

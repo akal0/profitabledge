@@ -5,9 +5,13 @@ export const TOUR_ID = "dashboard-tour";
 /** Step index for the account-selector step (used to auto-open the dropdown) */
 export const ACCOUNT_SELECTOR_TOUR_STEP = 0;
 
+/** Step index for the add-account step (used to auto-open the add-account sheet) */
+export const ADD_ACCOUNT_TOUR_STEP = 1;
+
 /** Maps each step index to the nav URL it highlights */
 export const TOUR_STEP_URLS: string[] = [
   "/dashboard",           // account-selector step — keep dashboard nav active
+  "/dashboard",           // add-account step
   "/dashboard",
   "/dashboard/reports",
   "/dashboard/trades",
@@ -34,7 +38,18 @@ export const DASHBOARD_TOURS: Tour[] = [
         content:
           "All your connected trading accounts live here. Click to switch between them, or select 'All accounts' to see your combined performance across every account at once.",
         selector: '[data-onborda="account-selector"]',
-        side: "right",
+        side: "right-top",
+        showControls: true,
+        pointerPadding: 6,
+        pointerRadius: 8,
+      },
+      {
+        icon: "",
+        title: "Connect your trading account",
+        content:
+          "Import via CSV, XML or XLSX file, create a manual account and enter trades yourself, or sync directly with your broker for live automatic trade tracking.",
+        selector: '[data-onborda="account-selector"]',
+        side: "right-top",
         showControls: true,
         pointerPadding: 6,
         pointerRadius: 8,

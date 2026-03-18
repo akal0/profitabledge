@@ -33,7 +33,9 @@ import {
   useAccountStore,
 } from "@/stores/account";
 import { useAccountTransitionStore } from "@/stores/account-transition";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useOnborda } from "onborda";
+import { TOUR_ID, ACCOUNT_SELECTOR_TOUR_STEP } from "@/features/onboarding-tour/tour-steps";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { useQueries, useQuery } from "@tanstack/react-query";
@@ -66,6 +68,17 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   );
   const pendingSelectRef = React.useRef<string | undefined>(undefined);
   const hasInitialized = React.useRef(false);
+
+  const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
+  const isAccountSelectorTourStep =
+    isOnbordaVisible &&
+    currentTour === TOUR_ID &&
+    currentStep === ACCOUNT_SELECTOR_TOUR_STEP;
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isAccountSelectorTourStep) setDropdownOpen(false);
+  }, [isAccountSelectorTourStep]);
 
   const allAccountsItem = React.useMemo<Account>(
     () => ({
@@ -226,9 +239,13 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
       <SidebarMenuItem
         className={cn("h-full w-full", isCollapsed && "flex justify-center")}
       >
-        <DropdownMenu>
+        <DropdownMenu
+          open={isAccountSelectorTourStep ? true : dropdownOpen}
+          onOpenChange={(o) => !isAccountSelectorTourStep && setDropdownOpen(o)}
+        >
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
+              data-onborda="account-selector"
               className={cn(
                 "cursor-pointer items-center gap-2 bg-sidebar-accent text-xs shadow-sm ring-1! ring-white/5 transition-all duration-150 active:scale-95 hover:!brightness-110",
                 isCollapsed
@@ -260,7 +277,10 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-lg min-w-64"
+            className={cn(
+              "w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-lg min-w-64",
+              isAccountSelectorTourStep && "!z-[9500]"
+            )}
             align="start"
           >
             <div className="flex flex-col px-1">

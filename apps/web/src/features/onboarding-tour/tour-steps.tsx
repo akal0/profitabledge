@@ -2,8 +2,12 @@ import type { Step } from "onborda";
 
 export const TOUR_ID = "dashboard-tour";
 
+/** Step index for the account-selector step (used to auto-open the dropdown) */
+export const ACCOUNT_SELECTOR_TOUR_STEP = 0;
+
 /** Maps each step index to the nav URL it highlights */
 export const TOUR_STEP_URLS: string[] = [
+  "/dashboard",           // account-selector step — keep dashboard nav active
   "/dashboard",
   "/dashboard/reports",
   "/dashboard/trades",
@@ -24,6 +28,17 @@ export const DASHBOARD_TOURS: Tour[] = [
   {
     tour: TOUR_ID,
     steps: [
+      {
+        icon: "",
+        title: "Switch between accounts",
+        content:
+          "All your connected trading accounts live here. Click to switch between them, or select 'All accounts' to see your combined performance across every account at once.",
+        selector: '[data-onborda="account-selector"]',
+        side: "right",
+        showControls: true,
+        pointerPadding: 6,
+        pointerRadius: 8,
+      },
       {
         icon: "",
         title: "Your trading dashboard",

@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import {
   Gift,
   LifeBuoy,
+  Plus,
   Settings,
   TrendingUp,
   Users,
@@ -29,6 +30,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AddAccountSheet } from "@/features/accounts/components/add-account-sheet";
 import { getAccountImage } from "@/features/accounts/lib/account-metadata";
+import { Button } from "@/components/ui/button";
 import {
   NAV_SECTIONS,
   meetsRequirement,
@@ -42,7 +44,14 @@ import {
 } from "@/components/ui/tooltip";
 import { trpcOptions } from "@/utils/trpc";
 import { useOnborda } from "onborda";
-import { TOUR_STEP_URLS } from "@/features/onboarding-tour/tour-steps";
+import {
+  TOUR_ID,
+  TOUR_STEP_URLS,
+  ADD_ACCOUNT_SHEET_FIRST_STEP,
+  ADD_ACCOUNT_SHEET_LAST_STEP,
+  SHEET_OPTION_BY_STEP,
+} from "@/features/onboarding-tour/tour-steps";
+import { useTourStore } from "@/features/onboarding-tour/tour-store";
 
 import NavUser from "@/components/nav-user";
 import { useQuery } from "@tanstack/react-query";
@@ -52,6 +61,14 @@ import { RequestFeatureDialog } from "@/features/navigation/components/request-f
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [createdAccounts, setCreatedAccounts] = useState<Account[]>([]);
   const [requestFeatureOpen, setRequestFeatureOpen] = useState(false);
+  const [emptyStateAddAccountSheetOpen, setEmptyStateAddAccountSheetOpen] =
+    useState(false);
+  const requestedAddAccountSheetOpen = useTourStore(
+    (s) => s.requestedAddAccountSheetOpen
+  );
+  const setRequestedAddAccountSheetOpen = useTourStore(
+    (s) => s.setRequestedAddAccountSheetOpen
+  );
   const { accounts: fetchedAccounts } = useAccountCatalog();
   const { data: me } = useQuery({
     ...trpcOptions.users.me.queryOptions(),
@@ -79,6 +96,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       accountNumber: account.accountNumber ?? null,
       isVerified: account.isVerified ?? null,
       verificationLevel: account.verificationLevel ?? null,
+      lastSyncedAt: account.lastSyncedAt ?? null,
       lastImportedAt: account.lastImportedAt ?? null,
     }));
 
@@ -98,18 +116,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [createdAccounts, fetchedAccounts]);
 
   const pathname = usePathname();
-  const { isOnbordaVisible, currentStep } = useOnborda();
-  const tourActiveUrl = isOnbordaVisible ? (TOUR_STEP_URLS[currentStep] ?? null) : null;
+  const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
+  const isDashboardTourActive = isOnbordaVisible && currentTour === TOUR_ID;
+  const isAddAccountSheetStep =
+    isDashboardTourActive &&
+    currentStep >= ADD_ACCOUNT_SHEET_FIRST_STEP &&
+    currentStep <= ADD_ACCOUNT_SHEET_LAST_STEP;
+  const isSidebarTourStep =
+    isDashboardTourActive && currentStep > ADD_ACCOUNT_SHEET_LAST_STEP;
+  const isTourDrivingAddAccountSheet =
+    requestedAddAccountSheetOpen || isAddAccountSheetStep;
+  const shouldKeepEmptyStateSheetHost =
+    isTourDrivingAddAccountSheet && fetchedAccounts.length === 0;
+  const shouldShowAccountSwitcher =
+    accounts.length > 0 && !shouldKeepEmptyStateSheetHost;
+  const showTourAddAccountTrigger =
+    shouldShowAccountSwitcher &&
+    isDashboardTourActive &&
+    currentStep <= ADD_ACCOUNT_SHEET_LAST_STEP;
+  const highlightedTourOption = isAddAccountSheetStep
+    ? SHEET_OPTION_BY_STEP[currentStep]
+    : undefined;
+  React.useEffect(() => {
+    if (
+      !isDashboardTourActive ||
+      currentStep > ADD_ACCOUNT_SHEET_LAST_STEP
+    ) {
+      setRequestedAddAccountSheetOpen(false);
+    }
+  }, [
+    currentStep,
+    isDashboardTourActive,
+    setRequestedAddAccountSheetOpen,
+  ]);
+  const tourActiveUrl = isDashboardTourActive
+    ? (TOUR_STEP_URLS[currentStep] ?? null)
+    : null;
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
   const settingsActive =
     pathname === "/dashboard/settings" ||
     pathname?.startsWith("/dashboard/settings/");
-  const navItemButtonClass =
-    "group/navlink flex items-center justify-start gap-3 group-data-[collapsible=icon]:justify-center";
-  const footerItemButtonClass =
-    "group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent transition-all duration-150 hover:bg-sidebar-accent dark:hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center";
+  const navItemButtonClass = cn(
+    "group/navlink flex items-center justify-start gap-3 group-data-[collapsible=icon]:justify-center",
+    isSidebarTourStep && "transition-none"
+  );
+  const footerItemButtonClass = cn(
+    "group/navlink flex items-center justify-start gap-3 cursor-pointer rounded-md bg-transparent hover:bg-sidebar-accent dark:hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center",
+    isSidebarTourStep ? "transition-none" : "transition-all duration-150"
+  );
 
   const sections = useMemo(
     () => {
@@ -168,9 +224,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
-      <SidebarHeader className="h-[3.725rem] p-4 pb-1 pt-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-2.5">
-        {accounts.length > 0 ? (
-          <AccountSwitcher accounts={accounts} />
+      <SidebarHeader className="min-h-[3.725rem] p-4 pb-1 pt-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-2.5">
+        {shouldShowAccountSwitcher ? (
+          <div className="flex w-full flex-col gap-2 pt-1">
+            <AccountSwitcher accounts={accounts} />
+            {showTourAddAccountTrigger ? (
+              <Button
+                data-onborda="add-account-trigger"
+                className="ring-1 ring-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
+                onClick={() => {
+                  setRequestedAddAccountSheetOpen(true);
+                }}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Plus className="size-3.5" />
+                  <span className="truncate">Add an account</span>
+                </div>
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <div className="pt-1">
             <AddAccountSheet
@@ -180,6 +252,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   { id: a.id, name: a.name, image: a.image } as Account,
                 ])
               }
+              open={
+                isTourDrivingAddAccountSheet || emptyStateAddAccountSheetOpen
+              }
+              onOpenChange={(open) => {
+                if (
+                  !isTourDrivingAddAccountSheet
+                ) {
+                  setEmptyStateAddAccountSheetOpen(open);
+                }
+              }}
+              contentClassName={
+                isTourDrivingAddAccountSheet
+                  ? "!z-[860]"
+                  : undefined
+              }
+              highlightedOption={highlightedTourOption}
             />
           </div>
         )}
@@ -211,6 +299,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <item.icon
                       className={cn(
                         "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] size-[18px]",
+                        isSidebarTourStep ? "transition-none" : "transition-all duration-250",
                         locked
                           ? "opacity-35"
                           : "group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
@@ -221,7 +310,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     />
                     <p
                       className={cn(
-                        "text-xs font-normal transition-all duration-250 min-w-max group-data-[collapsible=icon]:hidden",
+                        "text-xs font-normal min-w-max group-data-[collapsible=icon]:hidden",
+                        isSidebarTourStep ? "transition-none" : "transition-all duration-250",
                         locked || disabledByFeature
                           ? "text-[#8b8b97] opacity-35"
                           : "text-secondary dark:text-[#8b8b97] group-hover/navlink:!text-black dark:group-hover/navlink:!text-white",
@@ -341,7 +431,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                 <p
                   className={cn(
-                    "text-xs text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden",
+                    "text-xs text-secondary dark:text-[#8b8b97] font-normal group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden",
+                    isSidebarTourStep ? "transition-none" : "transition-all duration-250",
                     settingsActive && "text-black dark:text-white font-medium"
                   )}
                 >

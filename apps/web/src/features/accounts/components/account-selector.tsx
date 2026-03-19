@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   FlaskConical,
   Plug,
+  Plus,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -23,6 +24,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { AddAccountSheet, type NewAccount } from "./add-account-sheet";
+import { Button } from "@/components/ui/button";
 import {
   accountIsEaSynced,
   isDemoWorkspaceAccount,
@@ -35,10 +37,16 @@ import {
 import { useAccountTransitionStore } from "@/stores/account-transition";
 import { useEffect, useState } from "react";
 import { useOnborda } from "onborda";
-import { TOUR_ID, ACCOUNT_SELECTOR_TOUR_STEP, ADD_ACCOUNT_TOUR_STEP } from "@/features/onboarding-tour/tour-steps";
-import { trpcClient, trpcOptions } from "@/utils/trpc";
+import {
+  TOUR_ID,
+  ADD_ACCOUNT_SHEET_FIRST_STEP,
+  ADD_ACCOUNT_SHEET_LAST_STEP,
+  SHEET_OPTION_BY_STEP,
+} from "@/features/onboarding-tour/tour-steps";
+import { useTourStore } from "@/features/onboarding-tour/tour-store";
+import { trpcOptions } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
   pickPreferredAccountConnection,
@@ -55,6 +63,7 @@ export type Account = {
   accountNumber?: string | number | null;
   isVerified?: number | boolean | null;
   verificationLevel?: string | null;
+  lastSyncedAt?: string | Date | null;
   lastImportedAt?: string | Date | null;
 };
 
@@ -71,15 +80,26 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
 
   const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
   const isTourActive = isOnbordaVisible && currentTour === TOUR_ID;
-  const isAccountSelectorTourStep = isTourActive && currentStep === ACCOUNT_SELECTOR_TOUR_STEP;
-  const isAddAccountTourStep = isTourActive && currentStep === ADD_ACCOUNT_TOUR_STEP;
-  // Keep dropdown open for both account-selector and add-account steps
-  const isDropdownTourStep = isAccountSelectorTourStep || isAddAccountTourStep;
+  const requestedAddAccountSheetOpen = useTourStore(
+    (s) => s.requestedAddAccountSheetOpen
+  );
+  const setRequestedAddAccountSheetOpen = useTourStore(
+    (s) => s.setRequestedAddAccountSheetOpen
+  );
+  const isAddAccountSheetStep =
+    isTourActive &&
+    currentStep >= ADD_ACCOUNT_SHEET_FIRST_STEP &&
+    currentStep <= ADD_ACCOUNT_SHEET_LAST_STEP;
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [addAccountSheetOpen, setAddAccountSheetOpen] = useState(false);
+  const isTourDrivingAddAccountSheet =
+    requestedAddAccountSheetOpen || isAddAccountSheetStep;
 
   useEffect(() => {
-    if (!isDropdownTourStep) setDropdownOpen(false);
-  }, [isDropdownTourStep]);
+    if (!isTourActive || currentStep > ADD_ACCOUNT_SHEET_LAST_STEP) {
+      setRequestedAddAccountSheetOpen(false);
+    }
+  }, [currentStep, isTourActive, setRequestedAddAccountSheetOpen]);
 
   const allAccountsItem = React.useMemo<Account>(
     () => ({
@@ -99,6 +119,13 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
     setItems(accounts);
   }, [accounts]);
 
+  // Pre-seed demoCreated if user already has a demo workspace
+  React.useEffect(() => {
+    if (accounts.some(isDemoWorkspaceAccount)) {
+      useTourStore.getState().setDemoCreated(true);
+    }
+  }, [accounts]);
+
   // Initialize selection once when items are available
   // CRITICAL: Only depend on `items`, not on `selectedAccountId` or `setSelectedAccountId`
   // This prevents the effect from re-running when Zustand hydrates
@@ -115,7 +142,9 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
         persistedId = parsed?.state?.selectedAccountId;
       }
     } catch (e) {
-      console.error("Failed to read persisted account:", e);
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Failed to read persisted account:", e);
+      }
     }
 
     const currentStoreValue = useAccountStore.getState().selectedAccountId;
@@ -144,46 +173,17 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
     setSelectedAccountId(id);
   }, [items, setSelectedAccountId]);
 
-  // Fetch live metrics for all accounts using tRPC hooks
-  const metricsQueries = useQueries({
-    queries: items.map((account) => ({
-      queryKey: ["accounts.liveMetrics", { accountId: account.id }],
-      queryFn: () =>
-        trpcClient.accounts.liveMetrics.query({ accountId: account.id }),
-      refetchInterval: 5000, // Poll every 5 seconds
-      staleTime: 4000, // Consider data stale after 4 seconds
-      retry: false, // Don't retry on error (manual accounts don't have metrics)
-    })),
-  });
-
   const { data: aggregatedStats } = useQuery({
     ...trpcOptions.accounts.aggregatedStats.queryOptions(),
-    staleTime: 4000,
-    refetchInterval: 5000,
+    enabled: dropdownOpen,
+    staleTime: 30_000,
+    refetchInterval: dropdownOpen ? 30_000 : false,
   });
-  const { data: rawConnections } = useQuery(
-    trpcOptions.connections.list.queryOptions()
-  );
-
-  // Derive accountMetrics from queries (no setState needed - prevents infinite loop)
-  // Create stable dependency array
-  const queriesData = React.useMemo(
-    () => metricsQueries.map((q) => q.data),
-    [metricsQueries]
-  );
-
-  const accountMetrics = React.useMemo(() => {
-    const metrics: Record<string, any> = {};
-    queriesData.forEach((data, index) => {
-      if (data && items[index]) {
-        metrics[items[index].id] = data;
-      }
-    });
-    if (aggregatedStats) {
-      metrics[ALL_ACCOUNTS_ID] = aggregatedStats;
-    }
-    return metrics;
-  }, [aggregatedStats, queriesData, items]);
+  const { data: rawConnections } = useQuery({
+    ...trpcOptions.connections.list.queryOptions(),
+    enabled: dropdownOpen,
+    staleTime: 30_000,
+  });
 
   const accountConnections = React.useMemo(
     () => (rawConnections as ConnectionRow[] | undefined) ?? [],
@@ -241,8 +241,8 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
         className={cn("h-full w-full", isCollapsed && "flex justify-center")}
       >
         <DropdownMenu
-          open={isDropdownTourStep ? true : dropdownOpen}
-          onOpenChange={(o) => !isDropdownTourStep && setDropdownOpen(o)}
+          open={dropdownOpen}
+          onOpenChange={setDropdownOpen}
         >
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
@@ -280,24 +280,28 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
           <DropdownMenuContent
             className={cn(
               "w-(--radix-dropdown-menu-trigger-width) border-[0.5px] pt-2 border-black/10 dark:border-white/5 font-semibold bg-[#1D1D20] rounded-lg min-w-64",
-              isDropdownTourStep && "!z-[9500]"
+              isTourActive && "!z-[9500]"
             )}
             align="start"
           >
             <div className="flex flex-col px-1">
               {selectorItems.map((account, idx) => {
-                const metrics = accountMetrics[account.id];
                 const isAggregate = isAllAccountsScope(account.id);
-                const lastSyncedAt = isAggregate ? null : metrics?.lastSyncedAt;
+                const lastSyncedAt = isAggregate ? null : account.lastSyncedAt;
                 const lastSyncedText = lastSyncedAt
                   ? formatDistanceToNow(new Date(lastSyncedAt), {
                       addSuffix: true,
                     })
                   : null;
                 const aggregateText = isAggregate
-                  ? `${metrics?.accounts?.length ?? items.length} accounts · ${
-                      metrics?.totals?.totalTrades ?? 0
-                    } trades`
+                  ? aggregatedStats
+                    ? `${aggregatedStats.accounts?.length ?? items.length} accounts · ${
+                        aggregatedStats.accounts?.reduce(
+                          (sum, current) => sum + (current.totalTrades ?? 0),
+                          0
+                        ) ?? 0
+                      } trades`
+                    : `${items.length} accounts`
                   : null;
                 const isDemoWorkspace =
                   !isAggregate && isDemoWorkspaceAccount(account);
@@ -313,7 +317,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
                   !isAggregate &&
                   !hasConnection &&
                   accountIsEaSynced({
-                    isVerified: metrics?.isVerified ?? account.isVerified,
+                    isVerified: account.isVerified,
                     verificationLevel: account.verificationLevel,
                   });
                 const StatusIcon = isDemoWorkspace
@@ -381,15 +385,38 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
             </div>
 
             <div className="p-1">
-              <AddAccountSheet
-                onAccountCreated={handleAccountCreated}
-                open={isAddAccountTourStep ? true : undefined}
-                contentClassName={isAddAccountTourStep ? "!z-[9600]" : undefined}
-              />
+              <Button
+                className="ring-1 ring-white/5 cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-3 transition-all active:scale-95 bg-sidebar-accent text-white w-full text-xs hover:bg-[#222225] hover:!brightness-120 hover:text-white duration-250"
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setAddAccountSheetOpen(true);
+                }}
+              >
+                <div className="flex items-center gap-2 truncate">
+                  <Plus className="size-3.5" />
+                  <span className="truncate">Add an account</span>
+                </div>
+              </Button>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>
+      <AddAccountSheet
+        noTrigger
+        onAccountCreated={handleAccountCreated}
+        open={isTourDrivingAddAccountSheet || addAccountSheetOpen}
+        onOpenChange={(open) => {
+          if (!isTourDrivingAddAccountSheet) {
+            setAddAccountSheetOpen(open);
+          }
+        }}
+        contentClassName={
+          isTourDrivingAddAccountSheet ? "!z-[860]" : undefined
+        }
+        highlightedOption={
+          isAddAccountSheetStep ? SHEET_OPTION_BY_STEP[currentStep] : undefined
+        }
+      />
     </SidebarMenu>
   );
 };

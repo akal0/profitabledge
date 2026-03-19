@@ -27,7 +27,9 @@ export async function trackAlphaMilestone(
       metadata: input.metadata ?? null,
     });
   } catch (error) {
-    console.warn("[AlphaAnalytics] Failed to track milestone", key, error);
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[AlphaAnalytics] Failed to track milestone", key, error);
+    }
   }
 }
 
@@ -47,6 +49,8 @@ export async function trackAlphaEvent(input: {
       metadata: input.metadata ?? null,
     });
   } catch (error) {
-    console.warn("[AlphaAnalytics] Failed to track event", input.name, error);
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[AlphaAnalytics] Failed to track event", input.name, error);
+    }
   }
 }

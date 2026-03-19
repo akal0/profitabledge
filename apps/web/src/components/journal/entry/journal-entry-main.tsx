@@ -425,7 +425,7 @@ export function JournalEntryMain({
 
           <TabsContent value="goals" className="mt-0">
             {entryId ? (
-              <GoalSelector entryId={entryId} onChange={(goalIds) => console.log("Linked goals:", goalIds)} />
+              <GoalSelector entryId={entryId} />
             ) : (
               <EmptyTabState
                 icon={<Target className="mb-3 h-10 w-10 text-white/20" />}

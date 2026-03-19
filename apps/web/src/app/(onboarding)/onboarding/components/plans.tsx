@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -7,10 +8,10 @@ import {
   getPlanFeatureLines,
   type BillingPlanCopySource,
 } from "@/features/settings/billing/lib/plan-copy";
-import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 import CircleCheck from "@/public/icons/circle-check.svg";
 import Image from "next/image";
 import { useState } from "react";
+import { Sparkles } from "lucide-react";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
 
@@ -38,23 +39,19 @@ const CARD_META: Record<
   {
     imageSrc: string;
     badgeClassName: string;
-    placeholderBadgeClassName: string;
   }
 > = {
   student: {
     imageSrc: "/plans/explorer.png",
     badgeClassName: "bg-sidebar text-sidebar",
-    placeholderBadgeClassName: "bg-sidebar text-sidebar",
   },
   professional: {
     imageSrc: "/plans/trader.png",
-    badgeClassName: "bg-blue-600 text-white shadow-sidebar-button",
-    placeholderBadgeClassName: "bg-sidebar text-sidebar",
+    badgeClassName: "ring ring-blue-500/20 bg-blue-500/10 text-blue-300",
   },
   institutional: {
     imageSrc: "/plans/institutional.png",
-    badgeClassName: "bg-emerald-700/80 text-white shadow-sidebar-button",
-    placeholderBadgeClassName: "bg-sidebar text-sidebar",
+    badgeClassName: "ring ring-emerald-500/20 bg-emerald-500/10 text-white",
   },
 };
 
@@ -108,29 +105,57 @@ const Plans = ({
           const isInstitutional = plan.key === "institutional";
           const price = splitPriceLabel(plan.priceLabel);
           const featureLines = getPlanFeatureLines(plan);
+          const canCheckout = !plan.isFree && plan.isConfigured;
+          const outerCn = isProfessional
+            ? "bg-blue-500/10 ring-blue-500/25"
+            : isInstitutional
+            ? "bg-emerald-500/10 ring-emerald-500/25"
+            : "bg-sidebar ring-white/10";
+          const innerCn = isProfessional
+            ? "bg-blue-500/5"
+            : isInstitutional
+            ? "bg-emerald-500/5"
+            : "bg-sidebar-accent";
+          const titleCn = isProfessional
+            ? "text-blue-200"
+            : isInstitutional
+            ? "text-emerald-200"
+            : "text-white";
           const accentTextCn = isProfessional
             ? "text-blue-300"
             : isInstitutional
             ? "text-emerald-300"
             : "text-white";
+          const currentBadgeCn = isProfessional
+            ? "ring ring-blue-500/20 bg-blue-900/30 text-blue-300"
+            : isInstitutional
+            ? "ring ring-white/10 bg-white/5 text-white"
+            : "ring ring-white/10 bg-white/5 text-white/60";
+          const ctaButtonCn = isProfessional
+            ? "!ring !ring-blue-400/40 !bg-blue-400/32 !text-blue-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(37,99,235,0.075)] hover:!bg-blue-500/40 hover:!text-white"
+            : isInstitutional
+            ? "!ring !ring-emerald-400/40 !bg-emerald-400/32 !text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_28px_rgba(0,0,0,0.075)] hover:!bg-emerald-400/40 hover:!text-white"
+            : "!ring !ring-white/8 !bg-white/[0.04] !text-white/75 hover:!bg-white/[0.08] hover:!text-white";
+          const currentPlanCn = isProfessional
+            ? "ring ring-blue-400/10 bg-blue-500/8 text-blue-100/55"
+            : isInstitutional
+            ? "ring ring-white/10 bg-white/[0.04] text-white/45"
+            : "ring ring-white/5 bg-white/[0.02] text-white/25";
+          const freePlanCn =
+            "ring ring-white/5 bg-white/[0.02] text-white/25";
           const checkCn = isProfessional
             ? "fill-blue-400"
             : isInstitutional
             ? "fill-emerald-400"
             : "fill-white/40";
-          const buttonTone =
-            !plan.isConfigured || (isSelected && plan.isFree)
-              ? "neutral"
-              : isProfessional
-              ? "teal"
-              : isInstitutional
-              ? "gold"
-              : "neutral";
 
           return (
             <div
               key={plan.key}
-              className="bg-sidebar ring ring-white/5 shadow-sidebar-button rounded-lg w-full group overflow-hidden transition-all duration-300 hover:scale-[101.5%] cursor-pointer"
+              className={cn(
+                "group flex flex-col overflow-hidden rounded-sm p-1.5 ring-1 shadow-sidebar-button transition-all duration-300 hover:scale-[103%] cursor-pointer",
+                outerCn
+              )}
               style={{
                 opacity: hoveredCard && hoveredCard !== plan.key ? 0.2 : 1,
                 filter:
@@ -141,108 +166,146 @@ const Plans = ({
               onMouseEnter={() => setHoveredCard(plan.key)}
               onMouseLeave={() => setHoveredCard(null)}
             >
-              <div>
-                <div className="relative w-full h-32 p-3 px-6 flex items-end">
+              <div
+                className={cn(
+                  "flex flex-1 flex-col overflow-hidden rounded-sm transition-all duration-250 group-hover:brightness-110",
+                  innerCn
+                )}
+              >
+                <div className="relative h-32 w-full overflow-hidden rounded-t-sm">
                   <Image
                     src={meta.imageSrc}
                     alt={plan.title}
                     fill
-                    className="object-cover opacity-75 shadow-secondary-button group-hover:opacity-100 transition duration-500 grayscale group-hover:grayscale-0"
+                    className="object-cover opacity-75 grayscale transition duration-500 group-hover:grayscale-0 group-hover:opacity-100"
                   />
-
-                  <div className="flex text-xs text-white uppercase font-bold z-10 w-full justify-between items-end select-none">
-                    <h1>{plan.title}</h1>
-                  </div>
                 </div>
-                <Separator />
-              </div>
+                <Separator className="opacity-25" />
 
-              <div className="py-4 flex flex-col gap-4">
-                <h1 className="text-xs text-secondary leading-relaxed px-6 select-none min-h-10">
-                  {plan.summary}
-                </h1>
+                <div className="flex flex-1 flex-col gap-4 p-5">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p
+                        className={cn(
+                          "text-xs font-bold tracking-[-0.04em] text-white/40 sm:text-base",
+                          titleCn
+                        )}
+                      >
+                        {plan.title}
+                      </p>
+                      {isActive ? (
+                        <Badge className={cn("text-[11px]", currentBadgeCn)}>
+                          Current
+                        </Badge>
+                      ) : null}
+                    </div>
 
-                <Separator />
+                    <p className="text-xs font-medium tracking-[-0.04em] text-white/50 sm:text-xs">
+                      {plan.summary}
+                    </p>
+                  </div>
 
-                <div className="flex w-full justify-between px-6 select-none items-center gap-3">
-                  <h1 className="text-white font-bold text-lg">
-                    {price.amount}
-                    {price.interval ? (
-                      <span className="text-secondary text-sm font-normal ml-1">
-                        {price.interval}
+                  <Separator className="-mx-5 w-auto opacity-15" />
+
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xl font-bold text-white">
+                      {price.amount}
+                      {price.interval ? (
+                        <span className="ml-1 text-sm font-normal text-white/35">
+                          {price.interval}
+                        </span>
+                      ) : null}
+                    </p>
+                    {plan.highlight ? (
+                      <span
+                        className={cn(
+                          "rounded px-3 py-1 text-[10px] font-semibold",
+                          meta.badgeClassName
+                        )}
+                      >
+                        {plan.highlight}
                       </span>
                     ) : null}
-                  </h1>
-
-                  {plan.highlight ? (
-                    <h1
-                      className={`px-4 py-1.5 text-[10px] rounded-[6px] font-semibold ${meta.badgeClassName}`}
-                    >
-                      {plan.highlight}
-                    </h1>
-                  ) : (
-                    <h1
-                      className={`px-4 py-1.5 text-[10px] rounded-[6px] font-semibold select-none ${meta.placeholderBadgeClassName}`}
-                    >
-                      .
-                    </h1>
-                  )}
-                </div>
-
-                <Separator />
-
-                <div className="flex flex-col gap-4">
-                  <div className="px-6 py-1.5">
-                    <div className="grid gap-3 text-white/50 font-medium select-none">
-                      {featureLines.map((line) => (
-                        <div
-                          key={`${plan.key}-${line.key}`}
-                          className={`flex items-start gap-2 text-[13px] ${
-                            line.tone === "muted"
-                              ? "text-white/28"
-                              : "text-white"
-                          }`}
-                        >
-                          <CircleCheck
-                            className={`mt-px size-4.5 shrink-0 ${
-                              line.tone === "muted" ? "fill-white/18" : checkCn
-                            }`}
-                          />
-                          <p>
-                            {line.prefix}
-                            {line.accent ? (
-                              <span
-                                className={
-                                  line.accentTone === "card"
-                                    ? accentTextCn
-                                    : undefined
-                                }
-                              >
-                                {line.accent}
-                              </span>
-                            ) : null}
-                            {line.suffix}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
                   </div>
 
-                  <div className="px-6">
-                    <Button
-                      disabled={isButtonDisabled}
-                      onClick={() => onSelectPlan(plan.key)}
-                      className={getOnboardingButtonClassName({
-                        tone: buttonTone,
-                        className: cn(
-                          "w-full",
-                          isLockedCurrentPlan && "disabled:opacity-60",
-                          isSelected && plan.isFree && "disabled:opacity-55"
-                        ),
-                      })}
-                    >
-                      {buttonLabel}
-                    </Button>
+                  <Separator className="-mx-5 w-auto opacity-15" />
+
+                  <ul className="flex flex-1 flex-col gap-2.5">
+                    {featureLines.map((line) => (
+                      <li
+                        key={`${plan.key}-${line.key}`}
+                        className={cn(
+                          "flex items-start gap-2 text-[13px] font-medium",
+                          line.tone === "positive"
+                            ? "text-white"
+                            : line.tone === "muted"
+                            ? "text-white/28"
+                            : "text-white"
+                        )}
+                      >
+                        <CircleCheck
+                          className={cn(
+                            "mt-px size-4.5 shrink-0",
+                            line.tone === "muted" ? "fill-white/18" : checkCn
+                          )}
+                        />
+                        <span>
+                          {line.prefix}
+                          {line.accent ? (
+                            <span
+                              className={
+                                line.accentTone === "card"
+                                  ? accentTextCn
+                                  : undefined
+                              }
+                            >
+                              {line.accent}
+                            </span>
+                          ) : null}
+                          {line.suffix}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="mt-auto pt-1">
+                    {isLockedCurrentPlan ? (
+                      <div
+                        className={cn(
+                          "flex h-9 w-full items-center justify-center rounded-sm text-xs",
+                          currentPlanCn
+                        )}
+                      >
+                        Current plan
+                      </div>
+                    ) : !plan.isConfigured ? (
+                      <div
+                        className={cn(
+                          "flex h-9 w-full items-center justify-center rounded-sm text-xs",
+                          freePlanCn
+                        )}
+                      >
+                        Unavailable
+                      </div>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        disabled={isButtonDisabled}
+                        onClick={() => onSelectPlan(plan.key)}
+                        className={cn(
+                          "h-9 w-full cursor-pointer rounded-sm text-xs font-medium shadow-sidebar-button transition-all duration-250 active:scale-95",
+                          ctaButtonCn,
+                          isSelected && plan.isFree && freePlanCn,
+                          isSelected && plan.isFree && "hover:!bg-white/[0.02] hover:!text-white/25",
+                          isPending && "cursor-wait"
+                        )}
+                      >
+                        {canCheckout ? (
+                          <Sparkles className="size-3" />
+                        ) : null}
+                        {buttonLabel}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

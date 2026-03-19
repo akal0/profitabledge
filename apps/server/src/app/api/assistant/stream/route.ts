@@ -64,12 +64,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log("[API] Streaming assistant request:", {
-      userId: session.user.id,
-      accountId,
-      message: message.substring(0, 100),
-    });
-
     await Promise.all([
       ensureActivationMilestone({
         userId: session.user.id,
@@ -87,7 +81,7 @@ export async function POST(request: NextRequest) {
         source: "server",
         pagePath:
           typeof pageContext?.pathname === "string" ? pageContext.pathname : null,
-        summary: message.substring(0, 120),
+        summary: "Assistant stream request started",
         metadata: {
           accountId,
           evidenceMode: Boolean(evidenceMode),

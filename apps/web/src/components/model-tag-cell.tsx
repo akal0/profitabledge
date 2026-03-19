@@ -99,13 +99,14 @@ export function ModelTagCell({
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [["trades"]] });
-      queryClient.refetchQueries({ queryKey: [["trades"]] });
+      queryClient.invalidateQueries({
+        queryKey: [["trades"]],
+        refetchType: "active",
+      });
       setOpen(false);
       setIsColorDirty(false);
     },
-    onError: (error) => {
-      console.error("Model tag update failed:", error);
+    onError: () => {
       toast.error("Couldn’t update model tag. Please try again.");
     },
   });

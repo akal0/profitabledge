@@ -4,12 +4,12 @@ import EconomicCalendar from "@/features/dashboard/economic-calendar/components/
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
 
-export default function NewsPage() {
+export default function EconomicCalendarPage() {
   if (!isPublicAlphaFeatureEnabled("community")) {
     return (
       <AlphaFeatureLocked
         feature="community"
-        title="News is held back in this alpha"
+        title="Economic calendar is held back in this alpha"
       />
     );
   }

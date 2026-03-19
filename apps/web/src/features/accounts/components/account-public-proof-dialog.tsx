@@ -179,7 +179,7 @@ export function AccountPublicProofDialog({
                   </Badge>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-white/45">
+                <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-white/45">
                   <span>{shareStatus.activeShare.viewCount} views</span>
                   <span>·</span>
                   <span>
@@ -234,48 +234,49 @@ export function AccountPublicProofDialog({
         <Separator />
 
         <DialogFooter className="px-6 py-4 sm:justify-between">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 rounded-sm ring-rose-500/20! bg-rose-500/35! px-3 text-xs text-rose-300 hover:bg-rose-500/40! gap-1 hover:text-rose-200!"
+            onClick={() => revoke.mutate({ accountId: account.id })}
+            disabled={!shareStatus?.activeShare || isBusy}
+          >
+            <Trash2 className="size-3" />
+            Revoke
+          </Button>
+
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
-              className="h-9 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+              className="h-9 rounded-sm ring-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent gap-1"
+              onClick={handleCopy}
+              disabled={!shareStatus?.activeShare || isBusy}
+            >
+              <Copy className="size-3" />
+              Copy link
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-sm ring-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent gap-1"
               onClick={() => createOrRotate.mutate({ accountId: account.id })}
               disabled={!shareStatus?.canCreate || isBusy}
             >
               {shareStatus?.activeShare ? (
                 <>
-                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  <RotateCcw className="size-3" />
                   Rotate link
                 </>
               ) : (
                 <>
-                  <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                  <Link2 className="size-3" />
                   Create link
                 </>
               )}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
-              onClick={handleCopy}
-              disabled={!shareStatus?.activeShare || isBusy}
-            >
-              <Copy className="mr-1.5 h-3.5 w-3.5" />
-              Copy link
-            </Button>
           </div>
-
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 rounded-sm border border-rose-500/20 bg-rose-500/10 px-3 text-xs text-rose-200 hover:bg-rose-500/15"
-            onClick={() => revoke.mutate({ accountId: account.id })}
-            disabled={!shareStatus?.activeShare || isBusy}
-          >
-            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            Revoke
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

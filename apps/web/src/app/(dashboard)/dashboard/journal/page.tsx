@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { JournalList } from "@/components/journal/journal-list";
 import { JournalEntryPage } from "@/components/journal/journal-entry";
+import { JournalPrompts } from "@/components/journal/journal-prompts";
 import { TemplateBrowser } from "@/components/journal/template-browser";
 import {
   Tabs,
@@ -27,7 +28,7 @@ import {
   journalActionButtonMutedClassName,
 } from "@/components/journal/action-button-styles";
 import { toast } from "sonner";
-import { FileText } from "lucide-react";
+import { ArrowRight, FileText, Sparkles } from "lucide-react";
 
 const JOURNAL_TABS = [
   "entries",
@@ -158,9 +159,19 @@ function JournalPageContent() {
     }),
     staleTime: 30000,
   });
+  const { data: prompts = [] } = useQuery(
+    trpcOptions.journal.getPrompts.queryOptions()
+  );
   const reviewItems = React.useMemo(
     () => (reviewQueue as { items?: ReviewQueueItem[] } | undefined)?.items ?? [],
     [reviewQueue]
+  );
+  const pendingPrompts = React.useMemo(
+    () =>
+      ((prompts as Array<{ status?: string }> | undefined) ?? []).filter(
+        (prompt) => prompt.status === "pending"
+      ),
+    [prompts]
   );
   const completePromptMutation = trpc.journal.completePrompt.useMutation();
   const notifyPendingReviews =
@@ -396,6 +407,81 @@ function JournalPageContent() {
       </div>
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="shrink-0 border-b border-white/5 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,0.95fr)_auto]">
+            <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3">
+              <div className="flex items-center gap-2 text-white/70">
+                <Sparkles className="size-4 text-teal-300" />
+                <span className="text-xs uppercase tracking-[0.18em]">
+                  Prompt inbox
+                </span>
+              </div>
+              <div className="mt-3 flex items-end gap-2">
+                <span className="text-2xl font-semibold text-white">
+                  {pendingPrompts.length}
+                </span>
+                <span className="pb-1 text-xs text-white/35">pending</span>
+              </div>
+              <p className="mt-2 text-xs text-white/45">
+                Reflection prompts generated from trade closes and journaling
+                patterns.
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3">
+              <div className="flex items-center gap-2 text-white/70">
+                <FileText className="size-4 text-violet-300" />
+                <span className="text-xs uppercase tracking-[0.18em]">
+                  Review queue
+                </span>
+              </div>
+              <div className="mt-3 flex items-end gap-2">
+                <span className="text-2xl font-semibold text-white">
+                  {reviewItems.length}
+                </span>
+                <span className="pb-1 text-xs text-white/35">ready</span>
+              </div>
+              <p className="mt-2 text-xs text-white/45">
+                Auto-generated trade reviews waiting for your manual reflection.
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3 xl:min-w-[260px]">
+              <p className="text-xs uppercase tracking-[0.18em] text-white/35">
+                Quick actions
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <JournalPrompts
+                  triggerVariant="button"
+                  buttonLabel="Open inbox"
+                  onJournalFromPrompt={handleCreateFromPrompt}
+                />
+                {reviewItems.length > 0 ? (
+                  <Button
+                    size="sm"
+                    className={journalActionButtonMutedClassName}
+                    onClick={() =>
+                      setSelectedEntryId(reviewItems[0]?.id || null)
+                    }
+                  >
+                    Latest review
+                    <ArrowRight className="size-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    className={journalActionButtonMutedClassName}
+                    onClick={() => handleTabChange("review-ready")}
+                  >
+                    Review tab
+                    <ArrowRight className="size-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <TabsContent
           value="entries"
           className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"

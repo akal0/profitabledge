@@ -20,7 +20,7 @@ const ROUTE_LOADING_COPY = {
   journal: "Opening the notebook and arranging your reflections...",
   leaderboard: "Sorting the standings and polishing the podium...",
   login: "Checking your credentials and opening the desk...",
-  news: "Gathering headlines and checking the market pulse...",
+  news: "Pinning the key events onto the calendar...",
   onboarding: "Laying out the essentials for your trading workspace...",
   propTracker: "Checking limits, phases, and prop account pace...",
   psychology: "Untangling patterns, emotions, and decision loops...",
@@ -54,6 +54,7 @@ type RouteLoadingFallbackProps = {
   className?: string;
   textClassName?: string;
   message?: string;
+  animated?: boolean;
 };
 
 export function RouteLoadingFallback({
@@ -61,8 +62,14 @@ export function RouteLoadingFallback({
   className,
   textClassName,
   message,
+  animated = true,
 }: RouteLoadingFallbackProps) {
   const copy = message ?? ROUTE_LOADING_COPY[route];
+  const textClasses = cn(
+    "text-base font-medium leading-relaxed tracking-[-0.04em] text-balance",
+    "sm:text-lg",
+    textClassName
+  );
 
   return (
     <div
@@ -72,19 +79,21 @@ export function RouteLoadingFallback({
       )}
     >
       <div className="mx-auto flex w-full max-w-2xl items-center justify-center">
-        <TextShimmer
-          as="p"
-          duration={2.4}
-          spread={1.6}
-          className={cn(
-            "text-base font-medium leading-relaxed tracking-[-0.04em] text-balance",
-            "[--base-color:rgb(255_255_255_/_0.24)] [--base-gradient-color:rgb(255_255_255_/_0.9)]",
-            "sm:text-lg",
-            textClassName
-          )}
-        >
-          {copy}
-        </TextShimmer>
+        {animated ? (
+          <TextShimmer
+            as="p"
+            duration={2.4}
+            spread={1.6}
+            className={cn(
+              textClasses,
+              "[--base-color:rgb(255_255_255_/_0.24)] [--base-gradient-color:rgb(255_255_255_/_0.9)]"
+            )}
+          >
+            {copy}
+          </TextShimmer>
+        ) : (
+          <p className={cn(textClasses, "text-white/72")}>{copy}</p>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,39 @@
   z-index: 9000 !important;
 }
 
+/* During sheet steps: allow interaction with sheet content (overlay would otherwise block clicks) */
+body.tour-sheet-active-step [data-name="onborda-overlay"] {
+  pointer-events: none !important;
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+/* During sheet steps the blur panels handle the spotlight — hide the Onborda pointer ring/shadow */
+body.tour-sheet-active-step [data-name="onborda-pointer"] {
+  box-shadow: none !important;
+  border: none !important;
+  opacity: 0 !important;
+  transition: none !important;
+}
+
+/* Keep the Radix sheet stable once the guided sheet steps are active */
+body.tour-sheet-active-step [data-slot="sheet-overlay"] {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+body.tour-sheet-active-step [data-slot="sheet-content"] {
+  animation: none !important;
+  transition: none !important;
+  backface-visibility: hidden;
+  contain: paint;
+  transform: translateZ(0);
+}
+
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes slideInLeft {

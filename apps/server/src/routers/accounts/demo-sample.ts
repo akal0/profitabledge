@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { db } from "../../db";
 import { equitySnapshot } from "../../db/schema/connections";
@@ -20,6 +20,7 @@ import {
   DEMO_ACCOUNT_PREFIX,
   DEMO_BROKER,
   DEMO_BROKER_SERVER,
+  isDemoWorkspaceAccountRecord,
   seedDemoAiHistory,
 } from "./demo-workspace";
 
@@ -27,24 +28,209 @@ type SeedSampleAccountOptions = {
   accountId?: string;
   accountNumber?: string | null;
   resetExistingAccount?: boolean;
+  provisionShell?: boolean;
 };
+
+const DEMO_INITIAL_BALANCE = 100_000;
+const INSERT_BATCH_SIZE = 100;
+const POST_SEED_CONCURRENCY = 6;
+
+type DemoWorkspaceAccountSummary = {
+  id: string;
+  name: string;
+  broker: string;
+  brokerType: string | null;
+  brokerServer: string | null;
+  accountNumber: string | null;
+};
+
+type DemoSeedAccountRow = typeof tradingAccount.$inferSelect;
+type DemoSeedTradeRow = typeof trade.$inferSelect;
+type DemoSeedOpenTradeRow = typeof openTrade.$inferSelect;
+
+function makeDemoAccountNumber(input?: string | null) {
+  if (input && input.trim().length > 0) {
+    return input;
+  }
+
+  return `${DEMO_ACCOUNT_PREFIX}${Math.floor(
+    10_000_000 + Math.random() * 90_000_000
+  )}`;
+}
+
+async function insertRowsInBatches<T>(
+  rows: T[],
+  insertBatch: (batch: T[]) => Promise<unknown>,
+  batchSize = INSERT_BATCH_SIZE
+) {
+  if (rows.length === 0) {
+    return;
+  }
+
+  const tasks: Array<Promise<unknown>> = [];
+
+  for (let index = 0; index < rows.length; index += batchSize) {
+    tasks.push(insertBatch(rows.slice(index, index + batchSize)));
+  }
+
+  await Promise.all(tasks);
+}
+
+async function runInBatches<T>(
+  items: T[],
+  worker: (item: T) => Promise<unknown>,
+  batchSize = POST_SEED_CONCURRENCY
+) {
+  for (let index = 0; index < items.length; index += batchSize) {
+    await Promise.all(
+      items.slice(index, index + batchSize).map((item) => worker(item))
+    );
+  }
+}
+
+async function runOptionalDemoSeedStep<T>(
+  label: string,
+  task: () => Promise<T>
+) {
+  try {
+    return await task();
+  } catch (error) {
+    console.error(`[hydrateDemoWorkspace] ${label} failed`, error);
+    return null;
+  }
+}
+
+async function selectDemoWorkspaceAccount(
+  userId: string,
+  accountId: string
+): Promise<DemoWorkspaceAccountSummary> {
+  const [account] = await db
+    .select({
+      id: tradingAccount.id,
+      name: tradingAccount.name,
+      broker: tradingAccount.broker,
+      brokerType: tradingAccount.brokerType,
+      brokerServer: tradingAccount.brokerServer,
+      accountNumber: tradingAccount.accountNumber,
+    })
+    .from(tradingAccount)
+    .where(and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)))
+    .limit(1);
+
+  if (!account || !isDemoWorkspaceAccountRecord(account)) {
+    throw new Error("Demo workspace account not found");
+  }
+
+  return account;
+}
+
+async function loadExistingDemoWorkspaceSeedState(
+  userId: string,
+  accountId: string
+): Promise<{
+  account: DemoSeedAccountRow;
+  closedTrades: DemoSeedTradeRow[];
+  liveOpenTrades: DemoSeedOpenTradeRow[];
+}> {
+  const [account] = await db
+    .select()
+    .from(tradingAccount)
+    .where(and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)))
+    .limit(1);
+
+  if (!account) {
+    throw new Error("Demo workspace account not found");
+  }
+
+  const [closedTrades, liveOpenTrades] = await Promise.all([
+    db
+      .select()
+      .from(trade)
+      .where(eq(trade.accountId, accountId))
+      .orderBy(asc(trade.closeTime), asc(trade.openTime), asc(trade.createdAt)),
+    db
+      .select()
+      .from(openTrade)
+      .where(eq(openTrade.accountId, accountId))
+      .orderBy(asc(openTrade.createdAt), asc(openTrade.openTime)),
+  ]);
+
+  return {
+    account,
+    closedTrades,
+    liveOpenTrades,
+  };
+}
+
+export async function provisionDemoWorkspaceAccount(
+  userId: string,
+  options: SeedSampleAccountOptions = {}
+) {
+  const accountId = options.accountId ?? crypto.randomUUID();
+  const accountNumber = makeDemoAccountNumber(options.accountNumber);
+  const nowDate = new Date();
+
+  if (options.resetExistingAccount) {
+    await db.delete(tradingAccount).where(
+      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+    );
+  }
+
+  const [account] = await db
+    .insert(tradingAccount)
+    .values({
+      id: accountId,
+      userId,
+      name: DEMO_ACCOUNT_NAME,
+      broker: DEMO_BROKER,
+      brokerType: "mt5",
+      brokerServer: DEMO_BROKER_SERVER,
+      accountNumber,
+      preferredDataSource: "broker",
+      averageSpreadPips: "1.20",
+      initialBalance: DEMO_INITIAL_BALANCE.toFixed(2),
+      initialCurrency: "USD",
+      isVerified: 1,
+      liveBalance: DEMO_INITIAL_BALANCE.toFixed(2),
+      liveEquity: DEMO_INITIAL_BALANCE.toFixed(2),
+      liveMargin: "0.00",
+      liveFreeMargin: DEMO_INITIAL_BALANCE.toFixed(2),
+      lastSyncedAt: nowDate,
+      propManualOverride: false,
+      verificationLevel: "ea_synced",
+      socialOptIn: true,
+      socialVisibleSince: new Date(nowDate.getTime() - 14 * 24 * 60 * 60 * 1000),
+      followerCount: 12,
+      feedEventCount: 0,
+    })
+    .returning({
+      id: tradingAccount.id,
+      name: tradingAccount.name,
+      broker: tradingAccount.broker,
+      brokerType: tradingAccount.brokerType,
+      brokerServer: tradingAccount.brokerServer,
+      accountNumber: tradingAccount.accountNumber,
+    });
+
+  return { account };
+}
 
 export async function seedSampleAccount(
   userId: string,
   options: SeedSampleAccountOptions = {}
 ) {
-  const accountId = options.accountId ?? crypto.randomUUID();
+  const seededAccount =
+    options.provisionShell === false && options.accountId
+      ? await selectDemoWorkspaceAccount(userId, options.accountId)
+      : (await provisionDemoWorkspaceAccount(userId, options)).account;
+
+  const accountId = seededAccount.id;
   const now = Date.now();
   const nowDate = new Date(now);
-  const initialBalance = 100_000;
+  const initialBalance = DEMO_INITIAL_BALANCE;
   const tradeCount = 120;
   const openTradeCount = 5 + Math.floor(Math.random() * 9);
-  const accountNumber =
-    options.accountNumber && options.accountNumber.trim().length > 0
-      ? options.accountNumber
-      : `${DEMO_ACCOUNT_PREFIX}${Math.floor(
-          10_000_000 + Math.random() * 90_000_000
-        )}`;
+  const accountNumber = makeDemoAccountNumber(seededAccount.accountNumber);
 
   const symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "XAUUSD"] as const;
   const sessions = ["London", "New York", "Asian"] as const;
@@ -752,7 +938,7 @@ export async function seedSampleAccount(
       true
     );
 
-    const tradeId = crypto.randomUUID();
+    const tradeId = `${accountId}:demo-trade:${String(i + 1).padStart(3, "0")}`;
     closedTrades.push({
       id: tradeId,
       accountId,
@@ -928,7 +1114,7 @@ export async function seedSampleAccount(
     totalOpenMargin += margin;
 
     liveOpenTrades.push({
-      id: crypto.randomUUID(),
+      id: `${accountId}:demo-open-trade:${String(i + 1).padStart(3, "0")}`,
       accountId,
       ticket: `LIVE-${String(i + 1).padStart(4, "0")}`,
       symbol,
@@ -966,88 +1152,17 @@ export async function seedSampleAccount(
   const liveMargin = roundTo(totalOpenMargin, 2);
   const liveFreeMargin = roundTo(liveEquity - liveMargin, 2);
 
-  const closedTradesByDay = new Map<
-    string,
-    { profit: number; count: number; closeTimes: Date[] }
-  >();
-  for (const row of closedTrades) {
-    const dateKey = formatDay(row.closeTime as Date);
-    const existing = closedTradesByDay.get(dateKey) || {
-      profit: 0,
-      count: 0,
-      closeTimes: [],
-    };
-    existing.profit += Number(row.profit || 0);
-    existing.count += 1;
-    existing.closeTimes.push(row.closeTime as Date);
-    closedTradesByDay.set(dateKey, existing);
-  }
+  let account: DemoSeedAccountRow;
+  let effectiveClosedTrades:
+    | (typeof trade.$inferInsert)[]
+    | DemoSeedTradeRow[] = closedTrades;
+  let effectiveLiveOpenTrades:
+    | (typeof openTrade.$inferInsert)[]
+    | DemoSeedOpenTradeRow[] = liveOpenTrades;
 
-  const snapshots: (typeof equitySnapshot.$inferInsert)[] = [];
-  let rollingBalance = initialBalance;
-
-  for (let dayOffset = 29; dayOffset >= 0; dayOffset--) {
-    const date = new Date(now);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() - dayOffset);
-    const dateKey = formatDay(date);
-    const dayData = closedTradesByDay.get(dateKey) || {
-      profit: 0,
-      count: 0,
-      closeTimes: [],
-    };
-    const startingBalance = rollingBalance;
-    const dailyProfit = roundTo(dayData.profit, 2);
-    const endingBalance = roundTo(startingBalance + dailyProfit, 2);
-    const floatingForDay = dayOffset === 0 ? totalFloatingPnl : 0;
-    const endingEquity = roundTo(endingBalance + floatingForDay, 2);
-    const dailyHighWaterMark = roundTo(
-      Math.max(startingBalance, endingBalance, endingEquity) +
-        (dayData.count > 0 ? Math.random() * 180 : 0),
-      2
-    );
-    const lowEquity = roundTo(
-      Math.min(startingBalance, endingBalance, endingEquity) -
-        (dayData.count > 0 ? Math.random() * 140 : 0),
-      2
-    );
-    const dailyDrawdown = roundTo(
-      Math.max(0, dailyHighWaterMark - lowEquity),
-      2
-    );
-    const dailyDrawdownPercent = roundTo(
-      dailyHighWaterMark > 0 ? (dailyDrawdown / dailyHighWaterMark) * 100 : 0,
-      2
-    );
-
-    snapshots.push({
-      accountId,
-      snapshotDate: dateKey,
-      balance: endingBalance.toFixed(2),
-      equity: endingEquity.toFixed(2),
-      floatingPnl: floatingForDay.toFixed(2),
-      highEquity: dailyHighWaterMark.toFixed(2),
-      lowEquity: lowEquity.toFixed(2),
-      closedTradesCount: dayData.count,
-      dailyRealizedPnl: dailyProfit.toFixed(2),
-      source: "manual",
-      createdAt: new Date(date.getTime() + 18 * 60 * 60 * 1000),
-      updatedAt: new Date(date.getTime() + 18 * 60 * 60 * 1000),
-    });
-    rollingBalance = endingBalance;
-  }
-
-  if (options.resetExistingAccount) {
-    await db.delete(tradingAccount).where(
-      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
-    );
-  }
-
-  const [account] = await db
-    .insert(tradingAccount)
-    .values({
-      id: accountId,
-      userId,
+  const [seededAccountRow] = await db
+    .update(tradingAccount)
+    .set({
       name: DEMO_ACCOUNT_NAME,
       broker: DEMO_BROKER,
       brokerType: "mt5",
@@ -1070,22 +1185,116 @@ export async function seedSampleAccount(
       followerCount: 12,
       feedEventCount: 0,
     })
+    .where(and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)))
     .returning();
 
-  for (let i = 0; i < closedTrades.length; i += 25) {
-    await db.insert(trade).values(closedTrades.slice(i, i + 25));
+  if (!seededAccountRow) {
+    throw new Error("Demo workspace account not found");
   }
 
-  if (liveOpenTrades.length > 0) {
-    await db.insert(openTrade).values(liveOpenTrades);
+  await Promise.all([
+    insertRowsInBatches(closedTrades, (batch) =>
+      db.insert(trade).values(batch).onConflictDoNothing()
+    ),
+    liveOpenTrades.length > 0
+      ? db.insert(openTrade).values(liveOpenTrades).onConflictDoNothing()
+      : Promise.resolve(),
+  ]);
+
+  const existingSeedState = await loadExistingDemoWorkspaceSeedState(
+    userId,
+    accountId
+  );
+  account = existingSeedState.account;
+  effectiveClosedTrades = existingSeedState.closedTrades;
+  effectiveLiveOpenTrades = existingSeedState.liveOpenTrades;
+
+  const effectiveTotalFloatingPnl = effectiveLiveOpenTrades.reduce(
+    (sum, row) => sum + Number(row.profit || 0),
+    0
+  );
+
+  const closedTradesByDay = new Map<
+    string,
+    { profit: number; count: number; closeTimes: Date[] }
+  >();
+  for (const row of effectiveClosedTrades) {
+    const closeTime = row.closeTime instanceof Date ? row.closeTime : null;
+    if (!closeTime) continue;
+    const dateKey = formatDay(closeTime);
+    const existing = closedTradesByDay.get(dateKey) || {
+      profit: 0,
+      count: 0,
+      closeTimes: [],
+    };
+    existing.profit += Number(row.profit || 0);
+    existing.count += 1;
+    existing.closeTimes.push(closeTime);
+    closedTradesByDay.set(dateKey, existing);
   }
 
-  for (let i = 0; i < snapshots.length; i += 25) {
-    await db.insert(equitySnapshot).values(snapshots.slice(i, i + 25));
+  const snapshots: (typeof equitySnapshot.$inferInsert)[] = [];
+  let rollingBalance = initialBalance;
+  const snapshotBaseDate = startOfUtcDay(nowDate);
+
+  for (let dayOffset = 29; dayOffset >= 0; dayOffset--) {
+    const date = new Date(snapshotBaseDate);
+    date.setUTCDate(date.getUTCDate() - dayOffset);
+    const dateKey = formatDay(date);
+    const dayData = closedTradesByDay.get(dateKey) || {
+      profit: 0,
+      count: 0,
+      closeTimes: [],
+    };
+    const startingBalance = rollingBalance;
+    const dailyProfit = roundTo(dayData.profit, 2);
+    const endingBalance = roundTo(startingBalance + dailyProfit, 2);
+    const floatingForDay = dayOffset === 0 ? effectiveTotalFloatingPnl : 0;
+    const endingEquity = roundTo(endingBalance + floatingForDay, 2);
+    const dailyHighWaterMark = roundTo(
+      Math.max(startingBalance, endingBalance, endingEquity) +
+        (dayData.count > 0 ? Math.random() * 180 : 0),
+      2
+    );
+    const lowEquity = roundTo(
+      Math.min(startingBalance, endingBalance, endingEquity) -
+        (dayData.count > 0 ? Math.random() * 140 : 0),
+      2
+    );
+
+    snapshots.push({
+      accountId,
+      snapshotDate: dateKey,
+      balance: endingBalance.toFixed(2),
+      equity: endingEquity.toFixed(2),
+      floatingPnl: floatingForDay.toFixed(2),
+      highEquity: dailyHighWaterMark.toFixed(2),
+      lowEquity: lowEquity.toFixed(2),
+      closedTradesCount: dayData.count,
+      dailyRealizedPnl: dailyProfit.toFixed(2),
+      source: "manual",
+      createdAt: new Date(date.getTime() + 18 * 60 * 60 * 1000),
+      updatedAt: new Date(date.getTime() + 18 * 60 * 60 * 1000),
+    });
+    rollingBalance = endingBalance;
   }
 
-  const checklistTemplateId = crypto.randomUUID();
-  await db.insert(tradeChecklistTemplate).values({
+  const [existingChecklistTemplate] = await db
+    .select({ id: tradeChecklistTemplate.id })
+    .from(tradeChecklistTemplate)
+    .where(
+      and(
+        eq(tradeChecklistTemplate.accountId, accountId),
+        eq(tradeChecklistTemplate.userId, userId),
+        eq(tradeChecklistTemplate.name, "Demo Pre-Trade Checklist")
+      )
+    )
+    .orderBy(asc(tradeChecklistTemplate.createdAt))
+    .limit(1);
+
+  const checklistTemplateId =
+    existingChecklistTemplate?.id ?? crypto.randomUUID();
+  const checklistTemplateRow: typeof tradeChecklistTemplate.$inferInsert = {
     id: checklistTemplateId,
     accountId,
     userId,
@@ -1111,61 +1320,105 @@ export async function seedSampleAccount(
       },
     ],
     isDefault: true,
-  });
+  };
 
-  const checklistSeedTrades = closedTrades.slice(-36);
+  const checklistSeedTrades = effectiveClosedTrades.slice(-36);
+  const checklistTradeIds = checklistSeedTrades
+    .map((row) => row.id)
+    .filter((tradeId): tradeId is string => Boolean(tradeId));
+  const existingChecklistResultTradeIds =
+    checklistTradeIds.length > 0
+      ? new Set(
+          (
+            await db
+              .select({ tradeId: tradeChecklistResult.tradeId })
+              .from(tradeChecklistResult)
+              .where(
+                and(
+                  eq(tradeChecklistResult.accountId, accountId),
+                  inArray(tradeChecklistResult.tradeId, checklistTradeIds)
+                )
+              )
+          )
+            .map((row) => row.tradeId)
+            .filter((tradeId): tradeId is string => Boolean(tradeId))
+        )
+      : new Set<string>();
   const checklistRows: (typeof tradeChecklistResult.$inferInsert)[] =
-    checklistSeedTrades.map((row, index) => {
-      const completionRate = Math.max(
-        50,
-        Math.min(100, 72 + ((index % 5) - 2) * 8 + Math.random() * 12)
-      );
-      const completedItems = Array.from({ length: 4 }, (_, itemIndex) => ({
-        itemIndex,
-        checked: itemIndex < Math.round((completionRate / 100) * 4),
-        timestamp: new Date(
-          (row.openTime as Date).getTime() - (4 - itemIndex) * 60 * 1000
-        ).toISOString(),
-      }));
+    checklistSeedTrades
+      .filter(
+        (row) => row.id && !existingChecklistResultTradeIds.has(row.id)
+      )
+      .map((row, index) => {
+        const openTime = row.openTime instanceof Date ? row.openTime : nowDate;
+        const completionRate = Math.max(
+          50,
+          Math.min(100, 72 + ((index % 5) - 2) * 8 + Math.random() * 12)
+        );
+        const completedItems = Array.from({ length: 4 }, (_, itemIndex) => ({
+          itemIndex,
+          checked: itemIndex < Math.round((completionRate / 100) * 4),
+          timestamp: new Date(
+            openTime.getTime() - (4 - itemIndex) * 60 * 1000
+          ).toISOString(),
+        }));
 
-      return {
-        id: crypto.randomUUID(),
-        templateId: checklistTemplateId,
-        tradeId: row.id,
-        accountId,
-        userId,
-        completedItems,
-        completionRate: completionRate.toFixed(2),
-        createdAt: new Date((row.openTime as Date).getTime() - 5 * 60 * 1000),
-      };
-    });
+        return {
+          id: crypto.randomUUID(),
+          templateId: checklistTemplateId,
+          tradeId: row.id,
+          accountId,
+          userId,
+          completedItems,
+          completionRate: completionRate.toFixed(2),
+          createdAt: new Date(openTime.getTime() - 5 * 60 * 1000),
+        };
+      });
 
-  if (checklistRows.length > 0) {
-    await db.insert(tradeChecklistResult).values(checklistRows);
-  }
+  await Promise.all([
+    runOptionalDemoSeedStep("equity snapshot seed", () =>
+      insertRowsInBatches(snapshots, (batch) =>
+        db
+          .insert(equitySnapshot)
+          .values(batch)
+          .onConflictDoNothing({
+            target: [equitySnapshot.accountId, equitySnapshot.snapshotDate],
+          })
+      )
+    ),
+    runOptionalDemoSeedStep("trade checklist seed", async () => {
+      if (existingChecklistTemplate) {
+        await db
+          .update(tradeChecklistTemplate)
+          .set({
+            description: checklistTemplateRow.description,
+            strategyTag: checklistTemplateRow.strategyTag,
+            items: checklistTemplateRow.items,
+            isDefault: checklistTemplateRow.isDefault,
+            updatedAt: new Date(),
+          })
+          .where(eq(tradeChecklistTemplate.id, checklistTemplateId));
+      } else {
+        await db.insert(tradeChecklistTemplate).values(checklistTemplateRow);
+      }
 
-  const reviewTradeIds = closedTrades
+      if (checklistRows.length > 0) {
+        await db.insert(tradeChecklistResult).values(checklistRows);
+      }
+    }),
+  ]);
+
+  const reviewTradeIds = effectiveClosedTrades
     .slice(-36)
     .map((row) => row.id)
     .filter((tradeId): tradeId is string => Boolean(tradeId));
-  for (const tradeId of reviewTradeIds) {
-    await createAutoTradeReviewEntry({ userId, tradeId });
-  }
 
-  const feedTradeIds = closedTrades
+  const feedTradeIds = effectiveClosedTrades
     .slice(-24)
     .map((row) => row.id)
     .filter((tradeId): tradeId is string => Boolean(tradeId));
-  for (const tradeId of feedTradeIds) {
-    await generateFeedEventForTrade(tradeId).catch((error) => {
-      console.error(
-        "[createSampleAccount] feed event generation failed",
-        error
-      );
-    });
-  }
 
-  const richTradeSeedRows = closedTrades.slice(-18).reverse();
+  const richTradeSeedRows = [...effectiveClosedTrades].slice(-18).reverse();
   const mediaRows: (typeof tradeMedia.$inferInsert)[] = [];
   const noteRows: (typeof tradeNote.$inferInsert)[] = [];
   const annotationRows: (typeof tradeAnnotation.$inferInsert)[] = [];
@@ -1293,135 +1546,255 @@ export async function seedSampleAccount(
     });
   });
 
-  if (mediaRows.length > 0) {
-    for (let i = 0; i < mediaRows.length; i += 25) {
-      await db.insert(tradeMedia).values(mediaRows.slice(i, i + 25));
-    }
-  }
+  const richTradeIds = richTradeSeedRows
+    .map((row) => row.id)
+    .filter((tradeId): tradeId is string => Boolean(tradeId));
+  const [existingMediaRows, existingNoteRows, existingAnnotationRows] =
+    richTradeIds.length > 0
+      ? await Promise.all([
+          db
+            .select({
+              tradeId: tradeMedia.tradeId,
+              sortOrder: tradeMedia.sortOrder,
+            })
+            .from(tradeMedia)
+            .where(inArray(tradeMedia.tradeId, richTradeIds)),
+          db
+            .select({ tradeId: tradeNote.tradeId })
+            .from(tradeNote)
+            .where(inArray(tradeNote.tradeId, richTradeIds)),
+          db
+            .select({ tradeId: tradeAnnotation.tradeId })
+            .from(tradeAnnotation)
+            .where(inArray(tradeAnnotation.tradeId, richTradeIds)),
+        ])
+      : [[], [], []];
 
-  if (noteRows.length > 0) {
-    for (let i = 0; i < noteRows.length; i += 25) {
-      await db.insert(tradeNote).values(noteRows.slice(i, i + 25));
-    }
-  }
+  const existingMediaKeys = new Set(
+    existingMediaRows.map(
+      (row) => `${row.tradeId}:${Number(row.sortOrder ?? 0)}`
+    )
+  );
+  const existingNoteTradeIds = new Set(
+    existingNoteRows
+      .map((row) => row.tradeId)
+      .filter((tradeId): tradeId is string => Boolean(tradeId))
+  );
+  const existingAnnotationTradeIds = new Set(
+    existingAnnotationRows
+      .map((row) => row.tradeId)
+      .filter((tradeId): tradeId is string => Boolean(tradeId))
+  );
 
-  if (annotationRows.length > 0) {
-    for (let i = 0; i < annotationRows.length; i += 25) {
-      await db.insert(tradeAnnotation).values(annotationRows.slice(i, i + 25));
-    }
-  }
+  const missingMediaRows = mediaRows.filter(
+    (row) =>
+      !existingMediaKeys.has(`${row.tradeId}:${Number(row.sortOrder ?? 0)}`)
+  );
+  const missingNoteRows = noteRows.filter(
+    (row) => !existingNoteTradeIds.has(row.tradeId)
+  );
+  const missingAnnotationRows = annotationRows.filter(
+    (row) => !existingAnnotationTradeIds.has(row.tradeId)
+  );
 
-  const alignedTradeCount = closedTrades.filter(
+  await Promise.all([
+    runOptionalDemoSeedStep("trade media seed", () =>
+      missingMediaRows.length > 0
+        ? insertRowsInBatches(missingMediaRows, (batch) =>
+            db.insert(tradeMedia).values(batch)
+          )
+        : Promise.resolve()
+    ),
+    runOptionalDemoSeedStep("trade note seed", () =>
+      missingNoteRows.length > 0
+        ? insertRowsInBatches(missingNoteRows, (batch) =>
+            db.insert(tradeNote).values(batch)
+          )
+        : Promise.resolve()
+    ),
+    runOptionalDemoSeedStep("trade annotation seed", () =>
+      missingAnnotationRows.length > 0
+        ? insertRowsInBatches(missingAnnotationRows, (batch) =>
+            db
+              .insert(tradeAnnotation)
+              .values(batch)
+              .onConflictDoNothing({ target: [tradeAnnotation.tradeId] })
+          )
+        : Promise.resolve()
+    ),
+  ]);
+
+  await runInBatches(reviewTradeIds, async (tradeId) => {
+    await createAutoTradeReviewEntry({ userId, tradeId }).catch((error) => {
+      console.error(
+        "[hydrateDemoWorkspace] auto trade review seed failed",
+        { tradeId, error }
+      );
+    });
+  });
+
+  await runInBatches(feedTradeIds, async (tradeId) => {
+    await generateFeedEventForTrade(tradeId).catch((error) => {
+      console.error(
+        "[hydrateDemoWorkspace] feed event generation failed",
+        error
+      );
+    });
+  });
+
+  const alignedTradeCount = effectiveClosedTrades.filter(
     (row) => row.protocolAlignment === "aligned"
   ).length;
-  const totalLosses = closedTrades.filter(
+  const totalLosses = effectiveClosedTrades.filter(
     (row) => Number(row.profit || 0) < 0
   ).length;
-  const sortedClosedTrades = [...closedTrades].sort(
-    (a, b) => (a.closeTime as Date).getTime() - (b.closeTime as Date).getTime()
+  const sortedClosedTrades = [...effectiveClosedTrades].sort(
+    (a, b) =>
+      (a.closeTime instanceof Date ? a.closeTime.getTime() : 0) -
+      (b.closeTime instanceof Date ? b.closeTime.getTime() : 0)
   );
   let properBreaks = 0;
   for (let i = 0; i < sortedClosedTrades.length - 1; i++) {
-    if (Number(sortedClosedTrades[i].profit || 0) >= 0) continue;
-    const gapMinutes =
-      ((sortedClosedTrades[i + 1].openTime as Date).getTime() -
-        (sortedClosedTrades[i].closeTime as Date).getTime()) /
-      60000;
+    const currentTrade = sortedClosedTrades[i];
+    const nextTrade = sortedClosedTrades[i + 1];
+    if (!currentTrade || !nextTrade) continue;
+    if (Number(currentTrade.profit || 0) >= 0) continue;
+    const nextOpenTime =
+      nextTrade.openTime instanceof Date
+        ? nextTrade.openTime.getTime()
+        : 0;
+    const currentCloseTime =
+      currentTrade.closeTime instanceof Date
+        ? currentTrade.closeTime.getTime()
+        : 0;
+    const gapMinutes = (nextOpenTime - currentCloseTime) / 60000;
     if (gapMinutes >= 15) properBreaks++;
   }
 
+  const checklistMetricRows =
+    checklistTradeIds.length > 0
+      ? await db
+          .select({ completionRate: tradeChecklistResult.completionRate })
+          .from(tradeChecklistResult)
+          .where(
+            and(
+              eq(tradeChecklistResult.accountId, accountId),
+              inArray(tradeChecklistResult.tradeId, checklistTradeIds)
+            )
+          )
+      : [];
   const checklistCompletionRate =
-    checklistRows.length > 0
-      ? checklistRows.reduce(
+    checklistMetricRows.length > 0
+      ? checklistMetricRows.reduce(
           (sum, row) => sum + Number(row.completionRate || 0),
           0
-        ) / checklistRows.length
+        ) / checklistMetricRows.length
       : 0;
-  const journalRate = (reviewTradeIds.length / closedTrades.length) * 100;
-  const ruleCompliance = (alignedTradeCount / closedTrades.length) * 100;
+  const journalRate =
+    effectiveClosedTrades.length > 0
+      ? (reviewTradeIds.length / effectiveClosedTrades.length) * 100
+      : 0;
+  const ruleCompliance =
+    effectiveClosedTrades.length > 0
+      ? (alignedTradeCount / effectiveClosedTrades.length) * 100
+      : 0;
   const breakAfterLoss =
     totalLosses > 0 ? (properBreaks / totalLosses) * 100 : 100;
   const winRate =
-    (closedTrades.filter((row) => Number(row.profit || 0) > 0).length /
-      closedTrades.length) *
-    100;
-  const totalProfit = closedTrades.reduce(
+    effectiveClosedTrades.length > 0
+      ? (effectiveClosedTrades.filter((row) => Number(row.profit || 0) > 0)
+          .length /
+          effectiveClosedTrades.length) *
+        100
+      : 0;
+  const totalProfit = effectiveClosedTrades.reduce(
     (sum, row) => sum + Number(row.profit || 0),
     0
   );
   const averageRR =
-    closedTrades.reduce((sum, row) => sum + Number(row.realisedRR || 0), 0) /
-    closedTrades.length;
+    effectiveClosedTrades.length > 0
+      ? effectiveClosedTrades.reduce(
+          (sum, row) => sum + Number(row.realisedRR || 0),
+          0
+        ) / effectiveClosedTrades.length
+      : 0;
 
   const tradeDayKeys = [...closedTradesByDay.keys()].sort();
   const fallbackGoalDay =
-    closedTrades.at(-1)?.closeTime instanceof Date
-      ? formatDay(closedTrades.at(-1)!.closeTime as Date)
+    effectiveClosedTrades.at(-1)?.closeTime instanceof Date
+      ? formatDay(effectiveClosedTrades.at(-1)!.closeTime as Date)
       : formatDay(previousTradingDay(nowDate));
-  await seedDemoGoalsAndAlerts({
-    userId,
-    accountId,
-    now,
-    tradeDayKeys,
-    fallbackGoalDay,
-    totalProfit,
-    journalRate,
-    ruleCompliance,
-    checklistCompletionRate,
-    breakAfterLoss,
-    winRate,
-    averageRR,
-  });
-  await seedDemoBacktestSessions({
-    userId,
-    now,
-    basePrices: {
-      EURUSD: basePrices.EURUSD,
-      XAUUSD: basePrices.XAUUSD,
-    },
-    pipSizes: {
-      EURUSD: pipSizes.EURUSD,
-      XAUUSD: pipSizes.XAUUSD,
-    },
-    pipValuePerLot: {
-      EURUSD: pipValuePerLot.EURUSD,
-      XAUUSD: pipValuePerLot.XAUUSD,
-    },
-  });
+  await Promise.all([
+    runOptionalDemoSeedStep("demo goals and alerts seed", () =>
+      seedDemoGoalsAndAlerts({
+        userId,
+        accountId,
+        now,
+        tradeDayKeys,
+        fallbackGoalDay,
+        totalProfit,
+        journalRate,
+        ruleCompliance,
+        checklistCompletionRate,
+        breakAfterLoss,
+        winRate,
+        averageRR,
+      })
+    ),
+    runOptionalDemoSeedStep("demo backtest seed", () =>
+      seedDemoBacktestSessions({
+        userId,
+        now,
+        basePrices: {
+          EURUSD: basePrices.EURUSD,
+          XAUUSD: basePrices.XAUUSD,
+        },
+        pipSizes: {
+          EURUSD: pipSizes.EURUSD,
+          XAUUSD: pipSizes.XAUUSD,
+        },
+        pipValuePerLot: {
+          EURUSD: pipValuePerLot.EURUSD,
+          XAUUSD: pipValuePerLot.XAUUSD,
+        },
+      })
+    ),
+    runOptionalDemoSeedStep("demo digest seed", async () => {
+      const {
+        bestSession,
+        bestSymbol,
+        bestModel,
+        weakestSymbol,
+        weakestSession,
+        weakestProtocol,
+      } = await seedDemoDigests({
+        userId,
+        accountId,
+        now,
+        closedTrades: effectiveClosedTrades,
+        totalProfit,
+        winRate,
+        alignedTradeCount,
+        totalLosses,
+      });
 
-  const {
-    bestSession,
-    bestSymbol,
-    bestModel,
-    weakestSymbol,
-    weakestSession,
-    weakestProtocol,
-  } = await seedDemoDigests({
-    userId,
-    accountId,
-    now,
-    closedTrades,
-    totalProfit,
-    winRate,
-    alignedTradeCount,
-    totalLosses,
-  });
-
-  await seedDemoAiHistory({
-    userId,
-    accountId,
-    now,
-    bestSession,
-    bestSymbol,
-    bestModel,
-    weakestSymbol,
-    weakestSession,
-    weakestProtocol,
-  });
+      await seedDemoAiHistory({
+        userId,
+        accountId,
+        now,
+        bestSession,
+        bestSymbol,
+        bestModel,
+        weakestSymbol,
+        weakestSession,
+        weakestProtocol,
+      });
+    }),
+  ]);
 
   return {
     account,
-    tradeCount: closedTrades.length,
-    openTradeCount: liveOpenTrades.length,
+    tradeCount: effectiveClosedTrades.length,
+    openTradeCount: effectiveLiveOpenTrades.length,
   };
 }

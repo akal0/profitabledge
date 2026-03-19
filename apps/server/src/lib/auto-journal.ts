@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "../db";
 import { journalEntry, type JournalBlock } from "../db/schema/journal";
@@ -30,13 +30,18 @@ export async function createAutoTradeReviewEntry(input: {
 }) {
   const { userId, tradeId } = input;
 
-  const existingEntries = await db.query.journalEntry.findMany({
-    where: and(eq(journalEntry.userId, userId), eq(journalEntry.entryType, "trade_review")),
-    orderBy: desc(journalEntry.createdAt),
-    limit: 250,
-  });
-
-  const existing = existingEntries.find((entry) => entry.linkedTradeIds?.includes(tradeId));
+  const [existing] = await db
+    .select()
+    .from(journalEntry)
+    .where(
+      and(
+        eq(journalEntry.userId, userId),
+        eq(journalEntry.entryType, "trade_review"),
+        sql`${journalEntry.linkedTradeIds} @> ${JSON.stringify([tradeId])}::jsonb`
+      )
+    )
+    .orderBy(desc(journalEntry.createdAt))
+    .limit(1);
 
   if (existing) {
     return {

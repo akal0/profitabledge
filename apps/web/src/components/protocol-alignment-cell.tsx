@@ -65,10 +65,13 @@ export function ProtocolAlignmentCell({
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({
+        queryKey: [["trades"]],
+        refetchType: "active",
+      });
     },
-    onError: (error) => {
-      console.error("Protocol alignment update failed:", error);
+    onError: () => {
+      toast.error("Couldn’t update protocol alignment. Please try again.");
     },
   });
 

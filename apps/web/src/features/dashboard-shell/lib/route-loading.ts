@@ -1,4 +1,5 @@
 import type { RouteLoadingVariant } from "@/components/ui/route-loading-fallback";
+import { isHeldBackDashboardRoute } from "@/features/navigation/lib/held-back-routes";
 
 export function resolveRouteLoadingVariant(pathname: string): RouteLoadingVariant {
   if (pathname.startsWith("/assistant")) return "assistant";
@@ -8,13 +9,12 @@ export function resolveRouteLoadingVariant(pathname: string): RouteLoadingVarian
   if (pathname.startsWith("/dashboard/psychology")) return "psychology";
   if (pathname.startsWith("/dashboard/prop-tracker")) return "propTracker";
   if (pathname.startsWith("/dashboard/backtest")) return "backtest";
+  if (pathname.startsWith("/dashboard/news")) return "economicCalendar";
   if (pathname.startsWith("/dashboard/settings/alerts")) return "settingsAlerts";
   if (pathname.startsWith("/dashboard/settings/billing")) return "settingsBilling";
   if (pathname.startsWith("/dashboard/settings/broker")) return "settingsBroker";
-  if (pathname.startsWith("/dashboard/settings/compliance")) return "settingsCompliance";
   if (pathname.startsWith("/dashboard/settings/connections")) return "settingsConnections";
   if (pathname.startsWith("/dashboard/settings/rules")) return "settingsRules";
-  if (pathname.startsWith("/dashboard/settings/social")) return "settingsSocial";
   if (pathname.startsWith("/dashboard/settings/tags")) return "settingsTags";
   if (pathname.startsWith("/dashboard/settings")) return "settingsProfile";
   if (pathname.startsWith("/dashboard")) return "dashboard";
@@ -23,6 +23,10 @@ export function resolveRouteLoadingVariant(pathname: string): RouteLoadingVarian
 }
 
 export function isAccountScopedRoute(pathname: string): boolean {
+  if (isHeldBackDashboardRoute(pathname)) {
+    return false;
+  }
+
   return (
     pathname === "/dashboard" ||
     pathname.startsWith("/assistant") ||
@@ -32,13 +36,12 @@ export function isAccountScopedRoute(pathname: string): boolean {
     pathname.startsWith("/dashboard/psychology") ||
     pathname.startsWith("/dashboard/prop-tracker") ||
     pathname.startsWith("/dashboard/backtest") ||
+    pathname.startsWith("/dashboard/news") ||
     pathname.startsWith("/dashboard/settings/alerts") ||
     pathname.startsWith("/dashboard/settings/billing") ||
     pathname.startsWith("/dashboard/settings/broker") ||
-    pathname.startsWith("/dashboard/settings/compliance") ||
     pathname.startsWith("/dashboard/settings/connections") ||
     pathname.startsWith("/dashboard/settings/rules") ||
-    pathname.startsWith("/dashboard/settings/social") ||
     pathname.startsWith("/dashboard/settings/tags")
   );
 }

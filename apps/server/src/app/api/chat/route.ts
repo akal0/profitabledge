@@ -76,7 +76,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 6. Orchestrate query through unified pipeline
-    console.log("[Chat API] Orchestrating query:", userMessage);
     await Promise.all([
       ensureActivationMilestone({
         userId: session.user.id,
@@ -94,7 +93,7 @@ export async function POST(request: NextRequest) {
         source: "server",
         pagePath:
           typeof pageContext?.pathname === "string" ? pageContext.pathname : null,
-        summary: userMessage.slice(0, 120),
+        summary: "Assistant chat request started",
         metadata: {
           accountId: accountId ?? null,
         },

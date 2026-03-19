@@ -13,27 +13,22 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import AvatarUpload from "@/components/upload/AvatarUpload";
 
 import { OverlapSeparator, Separator } from "@/components/ui/separator";
 import Link from "next/link";
 
 import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
-import Discord from "@/public/icons/social-media/discord.svg";
 import { cn } from "@/lib/utils";
 import PasswordInput from "./components/password-input";
 import { authClient } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import { trackAlphaMilestone } from "@/lib/alpha-analytics";
-import { trpcClient } from "@/utils/trpc";
 import {
-  getStoredGrowthIntent,
   storeAffiliateIntent,
-  storeBetaCode,
   storeReferralIntent,
 } from "@/features/growth/lib/access-intent";
 
@@ -63,53 +58,33 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function deriveSignupName(email: string) {
+  const localPart = email.split("@")[0]?.trim() ?? "";
+  const normalized = localPart
+    .replace(/^[^a-zA-Z0-9]+/, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "")
+    .slice(0, 40);
+
+  return normalized || "trader";
+}
+
 const SignupPage = () => {
   const router = useRouter();
-  const [privateBetaRequired, setPrivateBetaRequired] = useState(false);
-  const [publicConfigResolved, setPublicConfigResolved] = useState(false);
-  const [betaCode, setBetaCode] = useState("");
-  const [betaMessage, setBetaMessage] = useState<string | null>(null);
-  const [betaValid, setBetaValid] = useState<boolean | null>(null);
-  const [betaChecking, setBetaChecking] = useState(false);
   const [socialProviderLoading, setSocialProviderLoading] = useState<
     "google" | "twitter" | null
   >(null);
-  const betaCodeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    const params = new URLSearchParams(window.location.search);
+    const referralCode = params.get("ref");
+    const affiliateCode = params.get("aff");
+    const affiliateGroupSlug = params.get("group");
 
-    (async () => {
-      const config = await trpcClient.billing.getPublicConfig.query();
-      if (cancelled) return;
-
-      setPrivateBetaRequired(config.privateBetaRequired);
-      setPublicConfigResolved(true);
-      const storedIntent = getStoredGrowthIntent();
-      if (storedIntent.betaCode) {
-        setBetaCode(storedIntent.betaCode);
-      }
-
-      const params = new URLSearchParams(window.location.search);
-      const referralCode = params.get("ref");
-      const affiliateCode = params.get("aff");
-      const affiliateGroupSlug = params.get("group");
-
-      if (affiliateCode) {
-        storeAffiliateIntent(affiliateCode, affiliateGroupSlug);
-      } else if (referralCode) {
-        storeReferralIntent(referralCode);
-      }
-    })().catch(() => {
-      if (!cancelled) {
-        setPrivateBetaRequired(false);
-        setPublicConfigResolved(true);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    if (affiliateCode) {
+      storeAffiliateIntent(affiliateCode, affiliateGroupSlug);
+    } else if (referralCode) {
+      storeReferralIntent(referralCode);
+    }
   }, []);
 
   const form = useForm<z.infer<typeof FormSchema>>({
@@ -119,38 +94,6 @@ const SignupPage = () => {
       password: "",
     },
   });
-
-  async function validateBetaCode(value: string) {
-    const normalized = value.trim().toUpperCase();
-    if (!normalized) {
-      setBetaValid(null);
-      setBetaMessage(null);
-      return null;
-    }
-
-    setBetaChecking(true);
-
-    try {
-      const result = await trpcClient.billing.validatePrivateBetaCode.query({
-        code: normalized,
-      });
-      const label = "label" in result ? result.label : null;
-      const message = "message" in result ? result.message : null;
-
-      setBetaValid(result.valid);
-      setBetaMessage(
-        result.valid
-          ? label
-            ? `${label} access unlocked`
-            : "Code accepted"
-          : message
-      );
-
-      return result;
-    } finally {
-      setBetaChecking(false);
-    }
-  }
 
   async function waitForConfirmedSession() {
     for (const delay of SESSION_CONFIRM_RETRY_DELAYS_MS) {
@@ -168,49 +111,13 @@ const SignupPage = () => {
   }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    if (!publicConfigResolved) {
-      setBetaMessage("Checking invite access requirements...");
-      betaCodeInputRef.current?.focus();
-      toast.message("Checking invite access requirements...");
-      return;
-    }
-
-    const normalizedBetaCode = betaCode.trim().toUpperCase();
-
-    if (privateBetaRequired) {
-      if (!normalizedBetaCode) {
-        setBetaValid(false);
-        setBetaMessage("A private beta code is required");
-        toast.error("A private beta code is required");
-        return;
-      }
-
-      const result = await validateBetaCode(normalizedBetaCode);
-      if (!result?.valid) {
-        toast.error(
-          (result && "message" in result ? result.message : null) ||
-            "Invalid private beta code"
-        );
-        return;
-      }
-    } else if (normalizedBetaCode) {
-      await validateBetaCode(normalizedBetaCode);
-    }
-
-    storeBetaCode(normalizedBetaCode);
-
     await authClient.signUp.email(
       {
         email: data.email,
-        name: "placeholder",
+        name: deriveSignupName(data.email),
         password: data.password,
       },
       {
-        body: normalizedBetaCode
-          ? {
-              betaCode: normalizedBetaCode,
-            }
-          : undefined,
         onSuccess: async () => {
           void trackAlphaMilestone("sign_up_completed", {
             pagePath: "/sign-up",
@@ -235,58 +142,9 @@ const SignupPage = () => {
     );
   }
 
-  async function ensureProviderBetaAccess(providerLabel: string) {
-    if (!publicConfigResolved) {
-      setBetaValid(null);
-      setBetaMessage("Checking invite access requirements...");
-      betaCodeInputRef.current?.focus();
-      toast.message("Checking invite access requirements...");
-      return null;
-    }
-
-    const normalizedBetaCode = betaCode.trim().toUpperCase();
-
-    if (privateBetaRequired) {
-      if (!normalizedBetaCode) {
-        setBetaValid(false);
-        setBetaMessage(
-          `Enter your private beta code to continue with ${providerLabel}`
-        );
-        betaCodeInputRef.current?.focus();
-        toast.error("A private beta code is required");
-        return null;
-      }
-
-      const result = await validateBetaCode(normalizedBetaCode);
-      if (!result?.valid) {
-        setBetaValid(false);
-        setBetaMessage(
-          (result && "message" in result ? result.message : null) ||
-            `Enter a valid private beta code to continue with ${providerLabel}`
-        );
-        betaCodeInputRef.current?.focus();
-        toast.error(
-          (result && "message" in result ? result.message : null) ||
-            "Invalid private beta code"
-        );
-        return null;
-      }
-    } else if (normalizedBetaCode) {
-      await validateBetaCode(normalizedBetaCode);
-    }
-
-    storeBetaCode(normalizedBetaCode);
-    return normalizedBetaCode;
-  }
-
   async function handleSocialSignUp(provider: "google" | "twitter") {
     const providerLabel =
       provider === "google" ? "Google sign up" : "X sign up";
-    const normalizedBetaCode = await ensureProviderBetaAccess(providerLabel);
-    if (normalizedBetaCode === null) {
-      return;
-    }
-
     setSocialProviderLoading(provider);
 
     try {
@@ -397,55 +255,6 @@ const SignupPage = () => {
                       </FormItem>
                     )}
                   />
-
-                  <div className="w-full space-y-1">
-                    <label className="text-xs text-white/80">
-                      Private beta code
-                    </label>
-
-                    <Input
-                      ref={betaCodeInputRef}
-                      value={betaCode}
-                      onChange={(event) => {
-                        setBetaCode(event.target.value.toUpperCase());
-                        if (!event.target.value.trim()) {
-                          setBetaValid(null);
-                          setBetaMessage(null);
-                        }
-                      }}
-                      onBlur={() => {
-                        if (betaCode.trim()) {
-                          void validateBetaCode(betaCode);
-                        }
-                      }}
-                      placeholder={
-                        privateBetaRequired ? "BETA1234" : "Optional"
-                      }
-                      aria-invalid={betaValid === false}
-                      className={cn(
-                        "mt-1",
-                        betaValid === false &&
-                          "border-red-500/60 focus-visible:ring-red-500"
-                      )}
-                    />
-                    <p
-                      className={cn(
-                        "text-[11px]",
-                        betaValid === true
-                          ? "text-emerald-400"
-                          : betaValid === false
-                          ? "text-red-400"
-                          : "text-secondary"
-                      )}
-                    >
-                      {betaChecking
-                        ? "Checking code..."
-                        : betaMessage ||
-                          (privateBetaRequired
-                            ? "Enter your invite code to unlock the beta."
-                            : "Optional if you were invited into the beta.")}
-                    </p>
-                  </div>
                 </div>
               </div>
 

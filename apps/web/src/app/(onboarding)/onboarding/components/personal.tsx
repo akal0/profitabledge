@@ -9,57 +9,95 @@ import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import AvatarUpload from "@/components/upload/AvatarUpload";
-
 import X from "@/public/icons/social-media/x.svg";
 import Discord from "@/public/icons/social-media/discord.svg";
-import Instagram from "@/public/icons/social-media/instagram.svg";
 import { Separator } from "@/components/ui/separator";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { authClient } from "@/lib/auth-client";
-import Image from "next/image";
 import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-// import AvatarUploader from "./avatar-uploader";
 import AvatarUploader from "./avatar-uploader";
-import { ArrowRightIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 
 type Me = Awaited<ReturnType<typeof trpcClient.users.me.query>>;
 
 const FormSchema = z.object({
-  fullName: z.string().min(2, {
-    message: "Full name must be at least 3 characters.",
-  }),
-  username: z.string().min(2, {
+  username: z.string().trim().min(2, {
     message: "Username must be at least 2 characters.",
   }),
-  email: z.email().optional(),
   avatar: z.any().optional().nullable(),
   twitter: z.string().optional().nullable(),
   discord: z.string().optional().nullable(),
 });
 
+function sanitizeUsernameCandidate(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^@+/, "")
+    .replace(/\s+/g, "")
+    .replace(/[^a-z0-9._-]/g, "")
+    .replace(/^[._-]+|[._-]+$/g, "");
+}
+
+function deriveUsername(me: Me | undefined, sessionUser: {
+  email?: string | null;
+  name?: string | null;
+} | null | undefined) {
+  const fromProfile = sanitizeUsernameCandidate(me?.username);
+  if (fromProfile.length >= 2) {
+    return fromProfile;
+  }
+
+  const profileName =
+    me?.name && me.name !== "placeholder" ? me.name : sessionUser?.name;
+  const fromName = sanitizeUsernameCandidate(profileName);
+  if (fromName.length >= 2) {
+    return fromName;
+  }
+
+  const fromEmail = sanitizeUsernameCandidate(
+    (me?.email ?? sessionUser?.email ?? "").split("@")[0]
+  );
+  return fromEmail;
+}
+
+function deriveDisplayName(
+  me: Me | undefined,
+  sessionUser: { name?: string | null } | null | undefined,
+  username: string
+) {
+  const profileName = me?.name?.trim();
+  if (profileName && profileName !== "placeholder") {
+    return profileName;
+  }
+
+  const sessionName = sessionUser?.name?.trim();
+  if (sessionName && sessionName !== "placeholder") {
+    return sessionName;
+  }
+
+  return username;
+}
+
 const Personal = ({ onNext }: { onNext: () => void }) => {
+  const { data: session } = authClient.useSession();
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
       avatar: null,
-      fullName: "",
       username: "",
-      email: "",
       twitter: "",
       discord: "",
     },
   });
+  const hydratedDefaultsRef = useRef<string | null>(null);
 
   const uploaderApiRef = useRef<null | {
     pick: () => void;
@@ -75,10 +113,12 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
       imageUrl = (await uploaderApiRef.current.upload()) || null;
     }
 
+    const username = data.username.trim();
+    const fullName = deriveDisplayName(me, session?.user, username);
+
     await trpcClient.users.updateProfile.mutate({
-      fullName: data.fullName,
-      username: data.username,
-      email: data.email || undefined,
+      fullName,
+      username,
       image: imageUrl || (data.avatar as string | null) || undefined,
       twitter: data.twitter?.trim() || null,
       discord: data.discord?.trim() || null,
@@ -91,21 +131,45 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
 
   const { data: me } = useQuery({
     ...trpcOptions.users.me.queryOptions(),
+    enabled: Boolean(session?.user),
     staleTime: 5 * 60_000,
   });
 
-  useEffect(() => {
-    if (!me) return;
+  const email = me?.email ?? session?.user.email ?? "";
+  const username = useMemo(
+    () => deriveUsername(me, session?.user),
+    [me, session?.user]
+  );
 
+  useEffect(() => {
+    if (!session?.user && !me) {
+      return;
+    }
+
+    const defaultsKey = [
+      me?.id ?? session?.user.id ?? "",
+      username,
+      email,
+      me?.twitter ?? "",
+      me?.discord ?? "",
+    ].join("|");
+
+    if (!defaultsKey || hydratedDefaultsRef.current === defaultsKey) {
+      return;
+    }
+
+    if (form.formState.isDirty) {
+      return;
+    }
+
+    hydratedDefaultsRef.current = defaultsKey;
     form.reset({
-      fullName: me.name ?? "",
-      username: me.username ?? "",
-      email: me.email ?? "",
+      username,
       avatar: null,
-      twitter: me.twitter ?? "",
-      discord: me.discord ?? "",
+      twitter: me?.twitter ?? "",
+      discord: me?.discord ?? "",
     });
-  }, [form, me]);
+  }, [email, form, form.formState.isDirty, me, session?.user, username]);
 
   return (
     <div className="w-full max-w-lg bg-sidebar rounded-xl shadow-sidebar-button">
@@ -117,7 +181,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
           <FormField
             control={form.control}
             name="avatar"
-            render={({ field }) => (
+            render={() => (
               <FormItem className="px-10 space-y-1 flex flex-col">
                 <FormLabel className="text-xs">Profile picture</FormLabel>
 
@@ -134,22 +198,7 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
           />
 
           <Separator />
-          {/* Existing fields */}
           <div className="px-10 space-y-5">
-            <FormField
-              control={form.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem className="space-y-1">
-                  <FormLabel className="text-xs">Full name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Profitable trader" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <FormField
               control={form.control}
               name="username"
@@ -177,22 +226,16 @@ const Personal = ({ onNext }: { onNext: () => void }) => {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem className="space-y-1">
-                  <FormLabel className="text-xs">Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder={me?.email ?? "profitabletrader@gmail.com"}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="space-y-1">
+              <FormLabel className="text-xs">Email</FormLabel>
+              <Input
+                value={email}
+                readOnly
+                disabled
+                className="cursor-not-allowed opacity-70"
+                placeholder="profitabletrader@gmail.com"
+              />
+            </div>
           </div>
 
           <Separator />

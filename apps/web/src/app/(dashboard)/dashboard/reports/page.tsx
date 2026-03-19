@@ -650,50 +650,68 @@ function ReportsContent() {
     enabled: Boolean(accountId),
   });
 
-  const trades = dashboardTradeFilters?.filteredTrades ?? [];
+  const filteredTrades = dashboardTradeFilters?.filteredTrades;
+  const trades = useMemo(() => filteredTrades ?? [], [filteredTrades]);
   const stats = dashboardTradeFilters?.filteredStats;
-  const selectedAccount = accounts.find((account) => account.id === accountId);
   const availableCurrencyCodes = useMemo(
     () => getAvailableDashboardCurrencyCodes(accounts),
     [accounts]
   );
+  const {
+    selectedAccount,
+    hourlyRows,
+    weekdayRows,
+    symbolRows,
+    sessionRows,
+    modelRows,
+    customTagRows,
+    weekdayPnlRows,
+    symbolPnlRows,
+    weekdayNet,
+  } = useMemo(() => {
+    const selectedAccount =
+      accounts.find((account) => account.id === accountId) ?? null;
+    const hourlyRows = groupByHour(trades);
+    const weekdayRows = groupByWeekday(trades);
+    const symbolRows = groupBySymbol(trades);
+    const sessionRows = groupByLabel(trades, (trade) => [
+      trade.sessionTag || "Unassigned",
+    ]);
+    const modelRows = groupByLabel(trades, (trade) => [
+      trade.modelTag || "Unassigned",
+    ]);
+    const customTagRows = groupByLabel(trades, (trade) =>
+      trade.customTags?.length ? trade.customTags : ["Unassigned"]
+    );
+    const weekdayPnlRows = weekdayRows.map((row) => ({
+      label: row.label,
+      value: row.pnl,
+    }));
+    const symbolPnlRows = symbolRows.map((row) => ({
+      label: row.label,
+      value: row.pnl,
+    }));
+    const weekdayNet = weekdayRows.reduce((sum, row) => sum + row.pnl, 0);
+
+    return {
+      selectedAccount,
+      hourlyRows,
+      weekdayRows,
+      symbolRows,
+      sessionRows,
+      modelRows,
+      customTagRows,
+      weekdayPnlRows,
+      symbolPnlRows,
+      weekdayNet,
+    };
+  }, [accountId, accounts, trades]);
   const currencyCode = resolveDashboardCurrencyCode({
     isAllAccounts: isAllAccountsScope(accountId),
     preferredCurrencyCode: allAccountsPreferredCurrencyCode,
     availableCurrencyCodes,
     selectedAccountCurrency: selectedAccount?.initialCurrency,
   });
-
-  const hourlyRows = useMemo(() => groupByHour(trades), [trades]);
-  const weekdayRows = useMemo(() => groupByWeekday(trades), [trades]);
-  const symbolRows = useMemo(() => groupBySymbol(trades), [trades]);
-  const weekdayPnlRows = useMemo(
-    () => weekdayRows.map((row) => ({ label: row.label, value: row.pnl })),
-    [weekdayRows]
-  );
-  const symbolPnlRows = useMemo(
-    () => symbolRows.map((row) => ({ label: row.label, value: row.pnl })),
-    [symbolRows]
-  );
-  const weekdayNet = useMemo(
-    () => weekdayRows.reduce((sum, row) => sum + row.pnl, 0),
-    [weekdayRows]
-  );
-  const sessionRows = useMemo(
-    () => groupByLabel(trades, (trade) => [trade.sessionTag || "Unassigned"]),
-    [trades]
-  );
-  const modelRows = useMemo(
-    () => groupByLabel(trades, (trade) => [trade.modelTag || "Unassigned"]),
-    [trades]
-  );
-  const customTagRows = useMemo(
-    () =>
-      groupByLabel(trades, (trade) =>
-        trade.customTags?.length ? trade.customTags : ["Unassigned"]
-      ),
-    [trades]
-  );
 
   return (
     <main className="space-y-4 p-6 py-4">

@@ -17,6 +17,8 @@ The frontend lives in `apps/web` and is a Next.js App Router application using R
   - same-origin browser proxy for tRPC requests into the server app
 - `apps/web/src/app/api/auth/[...all]/route.ts`
   - same-origin browser proxy for Better Auth routes into the server app
+- `apps/web/src/lib/server-proxy.ts`
+  - shared same-origin proxy helper used by auth, tRPC, UploadThing, and AI routes
 - `apps/web/src/app/(dashboard)/layout.tsx`
   - dashboard shell composition, sidebar, header, breadcrumbs, account context, and plan/admin/affiliate route guards
 
@@ -146,6 +148,7 @@ Current example:
 - the billing settings area now uses a shared billing route layout that mounts the journal-style subnav directly under the settings shell header, with `/dashboard/settings/billing` focused on plan management and `/dashboard/settings/billing/payment-methods` handling affiliate payout instructions and payout history
 - the current Vercel-safe beta posture should be applied through deployment env flags rather than local defaults: when Backtest, scheduled sync, or MT5 ingestion are disabled in production, the main sidebar still shows Backtest as a disabled `Coming soon!` item, and Connections downgrades MT5/auto-sync copy so the UI matches the workerless beta environment without breaking local development
 - the settings sidebar now also includes a dedicated AI page for personal Gemini, OpenAI, and Anthropic keys, using the same settings shell language as billing/connections while keeping provider-key UI in `apps/web/src/features/settings/ai-keys`
+- the old standalone compliance page is now just a redirect into `/dashboard/settings/rules#guardrails`; rules, compliance audit thresholds, replay rulebooks, and checklist templates are intentionally grouped into the same settings surface so trader-discipline setup does not fragment across multiple pages
 - the AI settings page should present Gemini as live for current in-product routing while OpenAI and Anthropic appear as validated connector-ready providers until multi-provider runtime selection is enabled
 - the AI settings page should surface provider-specific key-source links and a usage analytics section with toggles for `Profitabledge`, `Gemini`, `OpenAI`, and `Anthropic`, so members can both connect keys and inspect recent AI activity from the same route
 - the sidebar `NavUser` dropdown should act as quick access into concrete settings destinations such as profile, billing, and notifications, while sign-out routes through the shared Better Auth client and the current-plan / upgrade CTA reflects the live billing plan, showing the target plan's current upgrade offer badge (`10% off` for `Professional`, `15% off` for `Institutional`) and disappearing once the member is already on `Institutional`
@@ -171,8 +174,10 @@ Current note:
 - the shared `Select` primitive now reuses the same dark filter-menu surface language as the journal and trades toolbars, so dashboard/product pages should prefer sizing/layout overrides only instead of introducing page-specific select skins
 - AI mutations and assistant streaming surfaces should route provider/rate-limit failures through the shared AI toast path, so users see a short recoverable message instead of raw quota errors or stalled UI state
 - the journal entry route now waits for fetched entry state to hydrate before mounting the content editor, journal autosave debounces the full draft so slash-inserted widgets do not trigger overlapping `journal.update` loops, and journal save actions read from the live editor snapshot so slash/AI/chart inserts are not lost behind stale page-state content
+- the main journal route now surfaces a top-level review workflow strip across tabs, keeping prompt inbox count, review-ready count, and quick actions visible even before the user drills into Insights or Review Ready
 - dashboard charts mounted inside the journal editor should use the embedded render mode rather than full dashboard fetch/render behavior, booting into a one-week window with comparison disabled and non-essential Recharts churn removed so rich chart blocks stay responsive inside TipTap
 - the journal Insights tab now uses a dedicated shell primitive modeled after `/dashboard/prop-tracker`, so workflow cards, question/pattern panels, and psychology/performance analysis all share the same nested border/body structure instead of mixing route-local widget frames
+- the psychology route should behave like a coaching cockpit before it behaves like a chart page: lead with tilt status, mental score, emotion tagging/self-awareness, and recent rule pressure, then drop into correlation analysis and scatter diagnostics lower on the page
 - dashboard widget edit entry should come from direct double-click interactions on widget surfaces rather than long-press timers, so the main widget grid and chart widget section share the same discoverable gesture without a separate long-press path
 
 ## State and data patterns
@@ -215,6 +220,8 @@ At runtime, browser-side server origin resolution is intentionally stricter than
 - trailing slashes are normalized away before tRPC/auth/proxy requests are built
 - localhost/LAN failover is only kept for local browser sessions; production browser sessions stay pinned to the configured server origin instead of retrying `localhost`
 - browser auth and tRPC traffic now terminates on the web app origin first (`/api/auth/...` and `/trpc/...`) and is proxied server-side, so split deployments do not depend on third-party browser cookies between separate `*.vercel.app` project domains
+- AI proxy routes should also stay on that shared same-origin proxy path rather than reimplementing bespoke fetch forwarding per route, so streamed assistant responses and JSON catalog responses inherit the same safe header handling and request-abort behavior
+- dashboard workspace warmup should stay scoped to the overview route (`/dashboard`) and reserve heavier account-scoped background queries for concrete account selections, so settings/journal/trades navigation does not pay for overview/chart preloads it will not use immediately
 - the server proxy strips upstream compression and transfer headers before returning proxied auth/tRPC responses, so browsers do not attempt to decode already-decoded bodies on split deployments
 - the assistant surface lives at `/assistant`, and the legacy `/ai` path is kept as a redirect so stale bundles or old navigation links do not 404 in production
 - unfinished community discovery surfaces are intentionally hidden from the sidebar, command palette, settings navigation, notification deep-links, and public-profile routing until feed, leaderboard, and public-profile paths are ready to ship

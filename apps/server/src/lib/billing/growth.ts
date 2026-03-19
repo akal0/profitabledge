@@ -14,6 +14,7 @@ import {
   affiliateProfile,
   billingCustomer,
   billingEntitlementOverride,
+  billingOrder,
   billingSubscription,
   edgeCreditGrant,
   privateBetaWaitlist,
@@ -37,6 +38,7 @@ import {
 import { getPolarClient } from "./polar";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
+const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
 const REWARD_TYPE_EDGE_CREDITS = "edge_credits";
 const REWARD_TYPE_FREE_MONTH = "free_month";
 const REWARD_TYPE_UPGRADE_TRIAL = "upgrade_trial";
@@ -130,6 +132,17 @@ export async function getEffectiveBillingState(userId: string) {
     .where(eq(billingCustomer.userId, userId))
     .limit(1);
 
+  const paidOrders = await db
+    .select()
+    .from(billingOrder)
+    .where(and(eq(billingOrder.userId, userId), eq(billingOrder.paid, true)))
+    .orderBy(
+      desc(billingOrder.paidAt),
+      desc(billingOrder.updatedAt),
+      desc(billingOrder.createdAt)
+    )
+    .limit(10);
+
   const now = new Date();
   const [override] = await db
     .select()
@@ -182,14 +195,32 @@ export async function getEffectiveBillingState(userId: string) {
     "student"
   );
 
+  const recentPaidOrderPlanKey = paidOrders.reduce<BillingPlanKey>(
+    (highestPlanKey, currentOrder) => {
+      const currentPlanKey = currentOrder.planKey as BillingPlanKey;
+      const planDefinition = getBillingPlanDefinition(currentPlanKey);
+      if (!planDefinition) {
+        return highestPlanKey;
+      }
+
+      const paidAt = currentOrder.paidAt ?? currentOrder.createdAt;
+      if (now.getTime() - paidAt.getTime() > CHECKOUT_ORDER_GRACE_WINDOW_MS) {
+        return highestPlanKey;
+      }
+
+      return getHigherBillingPlanKey(highestPlanKey, currentPlanKey);
+    },
+    "student"
+  );
+
   const activePlanKey =
     override?.planKey &&
     getBillingPlanDefinition(override.planKey as BillingPlanKey)
       ? getHigherBillingPlanKey(
-          subscriptionPlanKey,
+          getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey),
           override.planKey as BillingPlanKey
         )
-      : subscriptionPlanKey;
+      : getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey);
 
   return {
     subscription: subscription ?? null,

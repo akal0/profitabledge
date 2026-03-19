@@ -8,6 +8,7 @@ import {
   trade,
   tradingAccount,
 } from "../db/schema/trading";
+import { cache } from "./cache";
 import { ensurePropChallengeLineageForAccount } from "./prop-challenge-lineage";
 
 /**
@@ -46,6 +47,7 @@ export interface AutoPropClassificationResult {
 
 const DEFAULT_PROP_START_BALANCE = 100_000;
 const BUILTIN_PROP_TIMESTAMP = new Date("2025-01-01T00:00:00.000Z");
+const AUTO_PROP_SYNC_TTL_MS = 60_000;
 
 const BUILTIN_PROP_FIRMS: PropFirmRecord[] = [
   {
@@ -687,6 +689,34 @@ export async function syncAutoPropClassificationForUser(userId: string) {
   return {
     checkedCount: accounts.length,
     updatedCount,
+  };
+}
+
+function getAutoPropSyncCacheKey(userId: string) {
+  return `auto-prop-sync:${userId}`;
+}
+
+export function invalidateRecentAutoPropClassification(userId: string) {
+  cache.invalidate(getAutoPropSyncCacheKey(userId));
+}
+
+export async function ensureRecentAutoPropClassificationForUser(userId: string) {
+  const cacheKey = getAutoPropSyncCacheKey(userId);
+  const recentlySynced = cache.get<boolean>(cacheKey);
+
+  if (recentlySynced) {
+    return {
+      checkedCount: 0,
+      updatedCount: 0,
+      skipped: true as const,
+    };
+  }
+
+  const result = await syncAutoPropClassificationForUser(userId);
+  cache.set(cacheKey, true, AUTO_PROP_SYNC_TTL_MS);
+  return {
+    ...result,
+    skipped: false as const,
   };
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
 import { useDateRangeStore } from "@/stores/date-range";
 import {
@@ -11,8 +11,7 @@ import {
 } from "@/features/dashboard/calendar/lib/calendar-utils";
 
 const DASHBOARD_WIDGET_TRADE_LIMIT = 200;
-const CHART_TRADE_PAGE_LIMIT = 200;
-const CHART_TRADE_MAX_PAGES = 40;
+const DEFERRED_WARMUP_TIMEOUT_MS = 1200;
 
 type WarmupAccount = {
   id: string;
@@ -23,8 +22,32 @@ type OpenBounds = {
   maxISO: string;
 };
 
+type WarmupTask = () => Promise<unknown>;
+
 function isDashboardWorkspacePath(path: string) {
-  return path === "/dashboard" || path.startsWith("/dashboard/");
+  const [pathname] = path.split("?");
+  return pathname === "/dashboard";
+}
+
+function runWhenBrowserIdle(task: () => void) {
+  if (typeof window === "undefined") {
+    task();
+    return;
+  }
+
+  const requestIdleCallback =
+    "requestIdleCallback" in window
+      ? window.requestIdleCallback.bind(window)
+      : null;
+
+  if (requestIdleCallback) {
+    requestIdleCallback(() => task(), {
+      timeout: DEFERRED_WARMUP_TIMEOUT_MS,
+    });
+    return;
+  }
+
+  window.setTimeout(task, DEFERRED_WARMUP_TIMEOUT_MS);
 }
 
 function resolveDashboardAccountSelection(accounts: WarmupAccount[]) {
@@ -120,45 +143,6 @@ export function syncPrefetchedDashboardWorkspace(targetPath: string) {
   }
 
   syncDashboardStores(selectedAccountId, bounds);
-}
-
-async function prefetchDashboardChartTrades(args: {
-  accountId: string;
-  startISO: string;
-  endISO: string;
-}) {
-  return queryClient.prefetchQuery({
-    queryKey: [
-      "dashboard-chart-trades",
-      args.accountId,
-      args.startISO,
-      args.endISO,
-      "default",
-    ],
-    staleTime: 60_000,
-    queryFn: async () => {
-      const trades: unknown[] = [];
-      let cursor: { createdAtISO: string; id: string } | undefined;
-      let pageCount = 0;
-
-      do {
-        const page = await trpcClient.trades.listInfinite.query({
-          accountId: args.accountId,
-          limit: CHART_TRADE_PAGE_LIMIT,
-          startISO: args.startISO,
-          endISO: args.endISO,
-          cursor,
-        });
-
-        trades.push(...page.items);
-        cursor =
-          "nextCursor" in page ? (page.nextCursor ?? undefined) : undefined;
-        pageCount += 1;
-      } while (cursor && pageCount < CHART_TRADE_MAX_PAGES);
-
-      return trades;
-    },
-  });
 }
 
 export function hasPrefetchedDashboardWorkspace(targetPath: string) {
@@ -284,6 +268,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
   const rangeState = syncDashboardStores(selectedAccountId, bounds);
   const visibleRange = rangeState?.visibleRange;
   const calendarFetchRange = rangeState?.calendarFetchRange;
+  const hasScopedAccountSelection = selectedAccountId !== ALL_ACCOUNTS_ID;
 
   const criticalWarmups = [
     queryClient.prefetchQuery({
@@ -346,100 +331,125 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
 
   await Promise.allSettled(criticalWarmups);
 
-  const backgroundWarmups = [
-    queryClient.prefetchQuery({
-      ...trpcOptions.trades.listSymbols.queryOptions({
-        accountId: selectedAccountId,
+  const backgroundWarmups: WarmupTask[] = [
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.trades.listSymbols.queryOptions({
+          accountId: selectedAccountId,
+        }),
+        staleTime: 60_000,
       }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.trades.listSessionTags.queryOptions({
-        accountId: selectedAccountId,
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.trades.listSessionTags.queryOptions({
+          accountId: selectedAccountId,
+        }),
+        staleTime: 60_000,
       }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.trades.listModelTags.queryOptions({
-        accountId: selectedAccountId,
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.trades.listModelTags.queryOptions({
+          accountId: selectedAccountId,
+        }),
+        staleTime: 60_000,
       }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.trades.listCustomTags.queryOptions({
-        accountId: selectedAccountId,
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.trades.listCustomTags.queryOptions({
+          accountId: selectedAccountId,
+        }),
+        staleTime: 60_000,
       }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.accounts.listTags.queryOptions(),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.accounts.executionStats.queryOptions({
-        accountId: selectedAccountId,
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.accounts.listTags.queryOptions(),
+        staleTime: 60_000,
       }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.accounts.moneyLeftOnTable.queryOptions({
-        accountId: selectedAccountId,
-      }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.accounts.profitByDayOverall.queryOptions({
-        accountId: selectedAccountId,
-      }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.accounts.tradeCountsOverall.queryOptions({
-        accountId: selectedAccountId,
-      }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.connections.list.queryOptions(),
-      staleTime: 15_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.accounts.lossesByAssetRange.queryOptions({
-        accountId: selectedAccountId,
-      }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.goals.list.queryOptions({
-        accountId: selectedAccountId || undefined,
-      }),
-      staleTime: 60_000,
-    }),
-    queryClient.prefetchQuery({
-      ...trpcOptions.ai.getProfile.queryOptions({
-        accountId: selectedAccountId,
-      }),
-      staleTime: 60_000,
-    }),
   ];
 
-  if (visibleRange) {
+  if (hasScopedAccountSelection) {
     backgroundWarmups.push(
-      queryClient.prefetchQuery({
-        ...trpcOptions.accounts.profitByAssetRange.queryOptions({
-          accountId: selectedAccountId,
-          startISO: visibleRange.start.toISOString(),
-          endISO: visibleRange.end.toISOString(),
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.executionStats.queryOptions({
+            accountId: selectedAccountId,
+          }),
+          staleTime: 60_000,
         }),
-        staleTime: 30_000,
-      }),
-      prefetchDashboardChartTrades({
-        accountId: selectedAccountId,
-        startISO: visibleRange.start.toISOString(),
-        endISO: visibleRange.end.toISOString(),
-      })
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.moneyLeftOnTable.queryOptions({
+            accountId: selectedAccountId,
+          }),
+          staleTime: 60_000,
+        }),
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.profitByDayOverall.queryOptions({
+            accountId: selectedAccountId,
+          }),
+          staleTime: 60_000,
+        }),
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.tradeCountsOverall.queryOptions({
+            accountId: selectedAccountId,
+          }),
+          staleTime: 60_000,
+        })
     );
   }
 
-  void Promise.allSettled(backgroundWarmups);
+  const deferredWarmups: WarmupTask[] = [
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.connections.list.queryOptions(),
+        staleTime: 15_000,
+      }),
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.goals.list.queryOptions({
+          accountId: selectedAccountId || undefined,
+        }),
+        staleTime: 60_000,
+      }),
+  ];
+
+  if (hasScopedAccountSelection) {
+    deferredWarmups.push(
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.lossesByAssetRange.queryOptions({
+            accountId: selectedAccountId,
+          }),
+          staleTime: 60_000,
+        }),
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.ai.getProfile.queryOptions({
+            accountId: selectedAccountId,
+          }),
+          staleTime: 60_000,
+        })
+    );
+  }
+
+  if (visibleRange && hasScopedAccountSelection) {
+    deferredWarmups.push(
+      () =>
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.profitByAssetRange.queryOptions({
+            accountId: selectedAccountId,
+            startISO: visibleRange.start.toISOString(),
+            endISO: visibleRange.end.toISOString(),
+          }),
+          staleTime: 30_000,
+        })
+    );
+  }
+
+  void Promise.allSettled(backgroundWarmups.map((run) => run()));
+  runWhenBrowserIdle(() => {
+    void Promise.allSettled(deferredWarmups.map((run) => run()));
+  });
 }

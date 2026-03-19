@@ -14,7 +14,7 @@ import {
 } from "../lib/account-scope";
 import {
   buildAutoPropAccountFields,
-  syncAutoPropClassificationForUser,
+  ensureRecentAutoPropClassificationForUser,
 } from "../lib/prop-firm-detection";
 import { ensurePropChallengeLineageForAccount } from "../lib/prop-challenge-lineage";
 import {
@@ -33,7 +33,10 @@ import {
 } from "./accounts/track-record";
 import { eaHealthProcedure, healthScoreProcedure } from "./accounts/health";
 import { aggregatedStatsProcedure } from "./accounts/aggregated-stats";
-import { seedSampleAccount } from "./accounts/demo-sample";
+import {
+  provisionDemoWorkspaceAccount,
+  seedSampleAccount,
+} from "./accounts/demo-sample";
 import {
   resetDemoWorkspaceForUser,
 } from "./accounts/demo-workspace";
@@ -224,7 +227,7 @@ export const accountsRouter = router({
     }),
   list: protectedProcedure.query(async ({ ctx }) => {
     const userId = ctx.session.user.id;
-    await syncAutoPropClassificationForUser(userId);
+    await ensureRecentAutoPropClassificationForUser(userId);
     const rows = await db
       .select()
       .from(tradingAccount)
@@ -236,20 +239,41 @@ export const accountsRouter = router({
     }
 
     const accountIds = rows.map((row) => row.id);
-    const importRows = await db
-      .select({
-        accountId: notification.accountId,
-        lastImportedAt: sql<Date | null>`MAX(${notification.createdAt})`,
-      })
-      .from(notification)
-      .where(
-        and(
-          eq(notification.userId, userId),
-          eq(notification.type, "trade_imported"),
-          inArray(notification.accountId, accountIds)
+    const accountsNeedingDerivedBalance = rows.filter(
+      (row) => row.liveBalance == null && row.initialBalance != null
+    );
+    const [importRows, profitRows] = await Promise.all([
+      db
+        .select({
+          accountId: notification.accountId,
+          lastImportedAt: sql<Date | null>`MAX(${notification.createdAt})`,
+        })
+        .from(notification)
+        .where(
+          and(
+            eq(notification.userId, userId),
+            eq(notification.type, "trade_imported"),
+            inArray(notification.accountId, accountIds)
+          )
         )
-      )
-      .groupBy(notification.accountId);
+        .groupBy(notification.accountId),
+      accountsNeedingDerivedBalance.length > 0
+        ? db
+            .select({
+              accountId: trade.accountId,
+              totalProfit:
+                sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
+            })
+            .from(trade)
+            .where(
+              inArray(
+                trade.accountId,
+                accountsNeedingDerivedBalance.map((row) => row.id)
+              )
+            )
+            .groupBy(trade.accountId)
+        : Promise.resolve([]),
+    ]);
 
     const lastImportedAtByAccountId = new Map(
       importRows
@@ -263,32 +287,9 @@ export const accountsRouter = router({
         )
         .map((row) => [row.accountId, row.lastImportedAt ?? null])
     );
-
-    const accountsNeedingDerivedBalance = rows.filter(
-      (row) => row.liveBalance == null && row.initialBalance != null
+    const profitByAccountId = new Map(
+      profitRows.map((row) => [row.accountId, Number(row.totalProfit ?? 0)])
     );
-
-    let profitByAccountId = new Map<string, number>();
-    if (accountsNeedingDerivedBalance.length > 0) {
-      const profitRows = await db
-        .select({
-          accountId: trade.accountId,
-          totalProfit:
-            sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
-        })
-        .from(trade)
-        .where(
-          inArray(
-            trade.accountId,
-            accountsNeedingDerivedBalance.map((row) => row.id)
-          )
-        )
-        .groupBy(trade.accountId);
-
-      profitByAccountId = new Map(
-        profitRows.map((row) => [row.accountId, Number(row.totalProfit ?? 0)])
-      );
-    }
 
     return rows.map((row) => {
       const lastImportedAt = lastImportedAtByAccountId.get(row.id) ?? null;
@@ -606,10 +607,49 @@ export const accountsRouter = router({
   // ============== SAMPLE / DEMO ACCOUNT ==============
 
   resetDemoWorkspace: protectedProcedure.mutation(async ({ ctx }) => {
-    return resetDemoWorkspaceForUser(ctx.session.user.id, seedSampleAccount);
+    const result = (await resetDemoWorkspaceForUser(
+      ctx.session.user.id,
+      provisionDemoWorkspaceAccount
+    )) as {
+      account?: {
+        id: string;
+        name: string;
+        broker: string;
+        brokerType: string | null;
+      };
+      resetCount?: number;
+    };
+
+    return {
+      account: result.account,
+      resetCount: result.resetCount,
+      tradeCount: 0,
+      openTradeCount: 0,
+      isHydrating: true,
+    };
   }),
 
   createSampleAccount: protectedProcedure.mutation(async ({ ctx }) => {
-    return seedSampleAccount(ctx.session.user.id);
+    const result = await provisionDemoWorkspaceAccount(ctx.session.user.id);
+
+    return {
+      ...result,
+      tradeCount: 0,
+      openTradeCount: 0,
+      isHydrating: true,
+    };
+  }),
+
+  hydrateDemoWorkspace: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().trim().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return seedSampleAccount(ctx.session.user.id, {
+        accountId: input.accountId,
+        provisionShell: false,
+      });
   }),
 });

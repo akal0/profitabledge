@@ -681,7 +681,7 @@ export default function PropTrackerIndexPage() {
 
   if (isLoading) {
     return (
-      <main className="space-y-6 p-6 py-4">
+      <main className="space-y-6 p-6 py-4 min-h-screen">
         <div className="flex justify-end">
           <div className="h-9 w-36 animate-pulse rounded-sm ring ring-white/5 bg-sidebar" />
         </div>
@@ -718,7 +718,7 @@ export default function PropTrackerIndexPage() {
   }
 
   return (
-    <main className="space-y-6 p-6 py-4">
+    <main className="space-y-6 p-6 py-4 min-h-screen">
       {propAccounts.length === 0 ? (
         <EmptyState />
       ) : (

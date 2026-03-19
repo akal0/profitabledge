@@ -259,12 +259,15 @@ export function QuickTradeEntry({
 
   const effectiveSymbol =
     symbol === "custom" ? customSymbol.trim().toUpperCase() : symbol;
-  const manualTradeSizing =
-    (
-      advancedPrefsQuery.data as
-        | { manualTradeSizing?: ManualTradeSizingPreferences }
-        | undefined
-    )?.manualTradeSizing ?? {};
+  const manualTradeSizing = useMemo(
+    () =>
+      (
+        advancedPrefsQuery.data as
+          | { manualTradeSizing?: ManualTradeSizingPreferences }
+          | undefined
+      )?.manualTradeSizing ?? {},
+    [advancedPrefsQuery.data]
+  );
   const fallbackSizingProfile = useMemo(
     () => mergeManualTradeSizingPreferences(manualTradeSizing).forex,
     [manualTradeSizing]

@@ -184,17 +184,20 @@ export function useAssistantStream() {
                 }
               });
             } catch (error) {
-              console.error("Failed to parse stream event:", line, error);
+              if (process.env.NODE_ENV !== "production") {
+                console.error("Failed to parse stream event:", line, error);
+              }
             }
           }
         }
       } catch (error: any) {
         if (error.name === "AbortError") {
-          console.log("Stream aborted");
           return;
         }
 
-        console.error("Stream error:", error);
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Stream error:", error);
+        }
         setState((prev) => ({
           ...prev,
           isStreaming: false,

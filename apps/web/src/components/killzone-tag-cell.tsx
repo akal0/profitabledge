@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
 import Color from "color";
+import { toast } from "sonner";
 import {
   getTradeIdentifierColorStyle,
   TRADE_IDENTIFIER_BUTTON_CLASS,
@@ -64,18 +65,17 @@ export function KillzoneTagCell({
       killzone: string | null;
       killzoneColor: string | null;
     }) => {
-      console.log("Mutation input:", input);
-      const result = await trpcClient.trades.updateKillzone.mutate(input);
-      console.log("Mutation result:", result);
-      return result;
+      return await trpcClient.trades.updateKillzone.mutate(input);
     },
     onSuccess: () => {
-      console.log("Mutation successful, invalidating queries");
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({
+        queryKey: [["trades"]],
+        refetchType: "active",
+      });
       setOpen(false);
     },
-    onError: (error) => {
-      console.error("Mutation failed:", error);
+    onError: () => {
+      toast.error("Couldn’t update the killzone tag. Please try again.");
     },
   });
 

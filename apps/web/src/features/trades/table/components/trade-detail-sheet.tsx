@@ -181,7 +181,7 @@ export function TradeDetailSheet({
 
     setIsEditing(false);
     setEditState(createTradeEditState(selectedTrade));
-  }, [selectedTrade?.id]);
+  }, [selectedTrade]);
 
   useEffect(() => {
     if (!selectedTrade) {

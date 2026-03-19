@@ -5,9 +5,7 @@ import Image from "next/image";
 import { Building2, Trophy, type LucideIcon } from "lucide-react";
 
 import { AddAccountSheet } from "@/features/accounts/components/add-account-sheet";
-import {
-  WidgetWrapper,
-} from "@/components/dashboard/widget-wrapper";
+import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { APP_TOOLTIP_SURFACE_CLASS } from "@/components/ui/tooltip";
@@ -59,12 +57,7 @@ export function PropFirmAvatar({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "relative overflow-hidden rounded-sm ring-1 ring-white/10 bg-white/[0.04]",
-        className
-      )}
-    >
+    <div className={cn("relative", className)}>
       {isFtmoFirm(firm) ? (
         <Image
           src={FTMO_IMAGE_SRC}

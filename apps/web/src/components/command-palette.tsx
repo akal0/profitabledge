@@ -173,7 +173,7 @@ const allResults: ResultItem[] = [
     label: "Rules",
     subtitle: "Tools  ·  Trading rules & discipline",
     shortcut: "⌘U",
-    href: "/dashboard/rules",
+    href: "/dashboard/settings/rules",
     key: "u",
     category: "tools",
     iconColor: "text-teal-400",

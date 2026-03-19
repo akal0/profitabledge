@@ -21,7 +21,6 @@ import {
   TrendingUp,
   Key,
   Tag,
-  ShieldCheck,
   Shield,
   Bell,
   Plug,
@@ -82,12 +81,7 @@ const settingsNavSections: NavSection[] = [
       },
       { title: "Alerts", href: "/dashboard/settings/alerts", icon: Bell },
       { title: "Risk profile", href: "/dashboard/settings/risk", icon: Shield },
-      {
-        title: "Compliance",
-        href: "/dashboard/settings/compliance",
-        icon: ShieldCheck,
-      },
-      { title: "Rules", href: "/dashboard/settings/rules", icon: ShieldCheck },
+      { title: "Rules", href: "/dashboard/settings/rules", icon: Shield },
     ],
   },
   {

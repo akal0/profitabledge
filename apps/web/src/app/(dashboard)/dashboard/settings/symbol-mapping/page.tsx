@@ -194,19 +194,21 @@ function getSymbolMappingErrorMessage(error: any) {
 
 async function invalidateSymbolMappingQueries() {
   await Promise.all([
-    queryClient.invalidateQueries({ queryKey: [["symbolMappings"]] }),
-    queryClient.refetchQueries({
+    queryClient.invalidateQueries({
       queryKey: [["symbolMappings"]],
-      type: "active",
+      refetchType: "active",
     }),
-    queryClient.invalidateQueries({ queryKey: [["trades"]] }),
-    queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" }),
-    queryClient.invalidateQueries({ queryKey: [["accounts"]] }),
-    queryClient.refetchQueries({ queryKey: [["accounts"]], type: "active" }),
-    queryClient.invalidateQueries({ queryKey: ["dashboard-chart-trades"] }),
-    queryClient.refetchQueries({
+    queryClient.invalidateQueries({
+      queryKey: [["trades"]],
+      refetchType: "active",
+    }),
+    queryClient.invalidateQueries({
+      queryKey: [["accounts"]],
+      refetchType: "active",
+    }),
+    queryClient.invalidateQueries({
       queryKey: ["dashboard-chart-trades"],
-      type: "active",
+      refetchType: "active",
     }),
   ]);
 }
@@ -229,9 +231,18 @@ export default function SymbolMappingSettingsPage() {
     trpcOptions.symbolMappings.listBaseMappings.queryOptions()
   );
 
-  const customMappings = (customMappingsRaw ?? []) as CustomMappingRow[];
-  const detectedSymbols = (detectedSymbolsRaw ?? []) as DetectedSymbolRow[];
-  const baseMappings = (baseMappingsRaw ?? []) as BaseMappingRow[];
+  const customMappings = useMemo(
+    () => (customMappingsRaw ?? []) as CustomMappingRow[],
+    [customMappingsRaw]
+  );
+  const detectedSymbols = useMemo(
+    () => (detectedSymbolsRaw ?? []) as DetectedSymbolRow[],
+    [detectedSymbolsRaw]
+  );
+  const baseMappings = useMemo(
+    () => (baseMappingsRaw ?? []) as BaseMappingRow[],
+    [baseMappingsRaw]
+  );
 
   const aliasSuggestions = useMemo(
     () =>

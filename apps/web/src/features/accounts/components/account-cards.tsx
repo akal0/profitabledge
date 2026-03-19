@@ -14,7 +14,10 @@ import { AccountCardActionsMenu } from "@/features/accounts/components/account-c
 import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
-import { getAccountSourceBadge } from "@/features/accounts/lib/account-metadata";
+import {
+  getAccountImage,
+  getAccountSourceBadge,
+} from "@/features/accounts/lib/account-metadata";
 import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { WIDGET_CONTENT_SEPARATOR_CLASS } from "@/features/dashboard/widgets/lib/widget-shared";
 import { PropAccountStatusBadges } from "@/components/prop-account-status-badges";
@@ -152,7 +155,11 @@ export function BrokerAccountCard({ account }: { account: AccountRecord }) {
     >
       <div className="flex items-end justify-between gap-3">
         <div className="flex items-center gap-3">
-          <BrokerAccountAvatar className="size-12 shrink-0 rounded-full!" />
+          <img
+            src={getAccountImage(account)}
+            alt={brokerLabel}
+            className="size-8 object-contain"
+          />
           <div>
             <p className="text-sm font-semibold text-white">{brokerLabel}</p>
             <p className="mt-0.5 text-xs font-medium text-white/50 truncate max-w-[180px]">

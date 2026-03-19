@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port=3001",
-    "clean:next": "node -e \"require('node:fs').rmSync('.next', { recursive: true, force: true })\"",
+    "clean:next": "node -e \"const fs=require('node:fs'); for (const dir of ['.next','.next-build']) fs.rmSync(dir,{ recursive:true, force:true });\"",
     "build": "bun run clean:next && bun run contracts:generate-trpc && next build",
     "start": "next start",
     "lint": "../../node_modules/.bin/eslint .",

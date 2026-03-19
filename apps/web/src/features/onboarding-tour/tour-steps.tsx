@@ -2,17 +2,36 @@ import type { Step } from "onborda";
 
 export const TOUR_ID = "dashboard-tour";
 
-/** Step index for the account-selector step (used to auto-open the dropdown) */
-export const ACCOUNT_SELECTOR_TOUR_STEP = 0;
+/** Step index for the "Add an account" trigger step */
+export const ADD_ACCOUNT_TRIGGER_TOUR_STEP = 0;
 
-/** Step index for the add-account step (used to auto-open the add-account sheet) */
-export const ADD_ACCOUNT_TOUR_STEP = 1;
+/** First step index for the add-account sheet steps */
+export const ADD_ACCOUNT_SHEET_FIRST_STEP = 1;
+
+/** Last step index for the add-account sheet steps */
+export const ADD_ACCOUNT_SHEET_LAST_STEP = 5;
+
+/** Buffer to keep the sheet-tour suppression active until the close animation finishes */
+export const ADD_ACCOUNT_SHEET_CLOSE_DURATION_MS = 320;
+
+/** Maps each sheet step index to its option key */
+export const SHEET_OPTION_BY_STEP: Record<number, string> = {
+  1: "csv",
+  2: "manual",
+  3: "broker",
+  4: "ea",
+  5: "demo",
+};
 
 /** Maps each step index to the nav URL it highlights */
 export const TOUR_STEP_URLS: string[] = [
-  "/dashboard",           // account-selector step — keep dashboard nav active
-  "/dashboard",           // add-account step
-  "/dashboard",
+  "/dashboard",           // 0: add-account trigger
+  "/dashboard",           // 1: import via file
+  "/dashboard",           // 2: manual account
+  "/dashboard",           // 3: broker sync
+  "/dashboard",           // 4: ea sync
+  "/dashboard",           // 5: demo data
+  "/dashboard",           // 6: dashboard nav
   "/dashboard/reports",
   "/dashboard/trades",
   "/dashboard/journal",
@@ -34,10 +53,10 @@ export const DASHBOARD_TOURS: Tour[] = [
     steps: [
       {
         icon: "",
-        title: "Switch between accounts",
+        title: "Add an account",
         content:
-          "All your connected trading accounts live here. Click to switch between them, or select 'All accounts' to see your combined performance across every account at once.",
-        selector: '[data-onborda="account-selector"]',
+          "Start here to connect your first trading account. You can import statements, connect a broker, set up the MT5 EA bridge, or create a manual account.",
+        selector: '[data-onborda="add-account-trigger"]',
         side: "right-top",
         showControls: true,
         pointerPadding: 6,
@@ -45,10 +64,54 @@ export const DASHBOARD_TOURS: Tour[] = [
       },
       {
         icon: "",
-        title: "Connect your trading account",
+        title: "Import via file",
         content:
-          "Import via CSV, XML or XLSX file, create a manual account and enter trades yourself, or sync directly with your broker for live automatic trade tracking.",
-        selector: '[data-onborda="account-selector"]',
+          "Upload a CSV, XML, or XLSX statement export from your broker and we'll create an account from it automatically.",
+        selector: '[data-onborda="sheet-option-csv"]',
+        side: "right-top",
+        showControls: true,
+        pointerPadding: 6,
+        pointerRadius: 8,
+      },
+      {
+        icon: "",
+        title: "Manual account",
+        content:
+          "Create a blank account first, then log your trades by hand directly inside the platform — full control, zero automation required.",
+        selector: '[data-onborda="sheet-option-manual"]',
+        side: "right-top",
+        showControls: true,
+        pointerPadding: 6,
+        pointerRadius: 8,
+      },
+      {
+        icon: "",
+        title: "Broker sync",
+        content:
+          "Connect via the Connections page and your trades sync automatically whenever you open or close a position — nothing to import manually.",
+        selector: '[data-onborda="sheet-option-broker"]',
+        side: "right-top",
+        showControls: true,
+        pointerPadding: 6,
+        pointerRadius: 8,
+      },
+      {
+        icon: "",
+        title: "EA sync",
+        content:
+          "Install the MT5 EA bridge on your terminal for real-time sync with richer intra-trade metrics like MAE, MFE and partial fill tracking.",
+        selector: '[data-onborda="sheet-option-ea"]',
+        side: "right-top",
+        showControls: true,
+        pointerPadding: 6,
+        pointerRadius: 8,
+      },
+      {
+        icon: "",
+        title: "Explore with demo data",
+        content:
+          "Not ready to connect a live account? Spin up a fully-seeded demo workspace with historical trades and live positions so you can explore every feature straight away.",
+        selector: '[data-onborda="sheet-option-demo"]',
         side: "right-top",
         showControls: true,
         pointerPadding: 6,

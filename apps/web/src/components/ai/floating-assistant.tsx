@@ -15,6 +15,7 @@ import { TextShimmer } from "@/components/ui/text-shimmer";
 import { STAGE_CONFIG } from "@/types/assistant-stream";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAssistantPageContext } from "@/hooks/use-assistant-page-context";
+import { toast } from "sonner";
 
 interface ChatMessage {
   id: string;
@@ -85,6 +86,7 @@ export function FloatingAssistant() {
       e?.preventDefault();
       if (!input.trim() || state.isStreaming) return;
       if (!accountId) {
+        toast.error("Select an account before using the assistant.");
         return;
       }
 
@@ -106,15 +108,19 @@ export function FloatingAssistant() {
         },
       ]);
 
-      setConversationHistory((prev) => [...prev, `user: ${input}`]);
       const messageToSend = input;
+      const nextConversationHistory = [
+        ...conversationHistory,
+        `user: ${messageToSend}`,
+      ];
+      setConversationHistory(nextConversationHistory);
       setInput("");
       reset();
 
       await startStream("/api/assistant/stream", {
         message: messageToSend,
         accountId,
-        conversationHistory,
+        conversationHistory: nextConversationHistory,
         evidenceMode: false,
         pageContext,
       });

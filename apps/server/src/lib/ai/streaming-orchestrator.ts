@@ -219,9 +219,6 @@ export async function* streamQuery(
       return;
     }
 
-    // Small delay for visual feedback
-    await sleep(300);
-
     // ===== STAGE: PLANNING =====
     yield {
       event: "status",
@@ -527,23 +524,14 @@ export async function* streamQuery(
   }
 }
 
-// ===== HELPER FUNCTIONS =====
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * Stream text with natural typing speed
+ * Stream text in chunks so the client can progressively render the answer
  */
 async function* streamText(text: string): AsyncGenerator<string> {
-  // Split into words for more natural streaming
-  const words = text.split(/(\s+)/);
+  const chunks = text.split(/(\s+)/).filter(Boolean);
 
-  for (const word of words) {
-    yield word;
-    // Small delay between words (10-30ms)
-    await sleep(Math.random() * 20 + 10);
+  for (const chunk of chunks) {
+    yield chunk;
   }
 }
 

@@ -110,9 +110,15 @@ export function useTradeTableReferenceData({
   const disableSampleGating = advancedPrefs?.disableSampleGating;
 
   React.useEffect(() => {
-    if (disableSampleGating === undefined) return;
-    queryClient.invalidateQueries({ queryKey: [["trades"]] });
-  }, [disableSampleGating]);
+    if (disableSampleGating === undefined || !accountId) return;
+
+    queryClient.invalidateQueries({
+      predicate: (query) =>
+        queryKeyIncludesSegment(query.queryKey, "trades") &&
+        queryKeyIncludesAccountId(query.queryKey, accountId),
+      refetchType: "active",
+    });
+  }, [accountId, disableSampleGating]);
 
   const boundsOpts = trpcOptions.accounts.opensBounds.queryOptions({
     accountId: accountId || "",

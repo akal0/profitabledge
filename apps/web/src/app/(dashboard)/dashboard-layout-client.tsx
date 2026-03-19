@@ -12,9 +12,13 @@ import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog
 import {
   getConnectionBadge,
   pickPreferredAccountConnection,
+  type ConnectionBadge,
   type ConnectionRow,
 } from "@/features/dashboard-shell/lib/connection-status";
-import { getDashboardBreadcrumbs } from "@/features/dashboard-shell/lib/breadcrumbs";
+import {
+  getDashboardBreadcrumbs,
+  type DashboardBreadcrumbs,
+} from "@/features/dashboard-shell/lib/breadcrumbs";
 import { useAccountStore, ALL_ACCOUNTS_ID } from "@/stores/account";
 import { useFloatingAssistant } from "@/stores/floating-assistant";
 import { AIInsightToast } from "@/components/ai-insight-toast";
@@ -40,58 +44,140 @@ import {
   meetsRequirement,
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
+import { isHeldBackDashboardRoute } from "@/features/navigation/lib/held-back-routes";
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
 import { useAccountTransitionStore } from "@/stores/account-transition";
-import { OnbordaProvider, Onborda, useOnborda } from "onborda";
+import { OnbordaProvider, useOnborda } from "onborda";
 import { DashboardTour } from "@/features/onboarding-tour/dashboard-tour";
-import { DASHBOARD_TOURS, TOUR_ID } from "@/features/onboarding-tour/tour-steps";
+import {
+  DASHBOARD_TOURS,
+  TOUR_ID,
+  ADD_ACCOUNT_SHEET_FIRST_STEP,
+  ADD_ACCOUNT_SHEET_LAST_STEP,
+} from "@/features/onboarding-tour/tour-steps";
 import { TourCard } from "@/features/onboarding-tour/tour-card";
+import { StableOnborda } from "@/features/onboarding-tour/stable-onborda";
+import { useTourStore } from "@/features/onboarding-tour/tour-store";
 
-const SPOTLIGHT_TRANSITION = "top 0.2s ease-out, left 0.2s ease-out, right 0.2s ease-out, width 0.2s ease-out, height 0.2s ease-out, bottom 0.2s ease-out";
+const SPOTLIGHT_TRANSITION =
+  "top 0.2s ease-out, left 0.2s ease-out, right 0.2s ease-out, width 0.2s ease-out, height 0.2s ease-out, bottom 0.2s ease-out";
 
 function TourBackdropBlur() {
   const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
+  const requestedAddAccountSheetOpen = useTourStore(
+    (s) => s.requestedAddAccountSheetOpen
+  );
+  const guidedSheetTransitionActive = useTourStore(
+    (s) => s.guidedSheetTransitionActive
+  );
   const [spotlightRect, setSpotlightRect] = useState<DOMRect | null>(null);
+  const isDashboardTourActive = isOnbordaVisible && currentTour === TOUR_ID;
+  const isSheetStep =
+    isDashboardTourActive &&
+    currentStep >= ADD_ACCOUNT_SHEET_FIRST_STEP &&
+    currentStep <= ADD_ACCOUNT_SHEET_LAST_STEP;
+  const isSidebarTourStep =
+    isDashboardTourActive && currentStep > ADD_ACCOUNT_SHEET_LAST_STEP;
+  const isSheetPhase =
+    isSheetStep ||
+    requestedAddAccountSheetOpen ||
+    guidedSheetTransitionActive;
+  const isSheetAnimationLock = isSheetStep || guidedSheetTransitionActive;
+
+  useEffect(() => {
+    document.body.classList.toggle("tour-active", isDashboardTourActive);
+    document.body.classList.toggle("tour-sheet-step", isSheetPhase);
+    document.body.classList.toggle(
+      "tour-sheet-active-step",
+      isSheetAnimationLock
+    );
+    return () => {
+      document.body.classList.remove("tour-active");
+      document.body.classList.remove("tour-sheet-step");
+      document.body.classList.remove("tour-sheet-active-step");
+    };
+  }, [isDashboardTourActive, isSheetAnimationLock, isSheetPhase]);
 
   useLayoutEffect(() => {
-    if (!isOnbordaVisible || currentTour !== TOUR_ID) {
+    if (!isDashboardTourActive || isSheetPhase) {
       setSpotlightRect(null);
       return;
     }
 
     const tour = DASHBOARD_TOURS.find((t) => t.tour === TOUR_ID);
-    const step = tour?.steps[currentStep];
-    if (!step?.selector) {
+    const stepDef = tour?.steps[currentStep];
+
+    // All other steps: use the step's selector
+    if (!stepDef?.selector) {
       setSpotlightRect(null);
       return;
     }
 
-    const el = document.querySelector<HTMLElement>(step.selector);
-    if (!el) {
-      setSpotlightRect(null);
-      return;
-    }
+    const update = () => {
+      const element = document.querySelector<HTMLElement>(stepDef.selector);
+      if (!element) {
+        if (!isSidebarTourStep) {
+          setSpotlightRect(null);
+        }
+        return;
+      }
 
-    const update = () => setSpotlightRect(el.getBoundingClientRect());
+      setSpotlightRect(element.getBoundingClientRect());
+    };
+
     update();
     window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
-  }, [isOnbordaVisible, currentStep, currentTour]);
+    window.addEventListener("scroll", update, true);
 
-  if (!isOnbordaVisible || typeof document === "undefined") return null;
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    });
+
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      observer.disconnect();
+    };
+  }, [currentStep, isDashboardTourActive, isSheetPhase, isSidebarTourStep]);
+
+  if (!isDashboardTourActive || typeof document === "undefined") return null;
 
   const base: React.CSSProperties = {
     position: "fixed",
     backdropFilter: "blur(5px)",
     WebkitBackdropFilter: "blur(5px)",
-    zIndex: 849,
+    backgroundColor: "rgba(5, 5, 7, 0.28)",
     pointerEvents: "none",
-    transition: SPOTLIGHT_TRANSITION,
+    transition: isSidebarTourStep ? "none" : SPOTLIGHT_TRANSITION,
   };
 
+  if (isSheetPhase) {
+    return createPortal(
+      <div
+        style={{
+          ...base,
+          inset: 0,
+          zIndex: 849,
+          pointerEvents: "auto",
+        }}
+      />,
+      document.body
+    );
+  }
+
+  if (isSidebarTourStep && spotlightRect) {
+    return null;
+  }
+
   if (!spotlightRect) {
-    return createPortal(<div style={{ ...base, inset: 0 }} />, document.body);
+    return createPortal(
+      <div style={{ ...base, inset: 0, zIndex: 849 }} />,
+      document.body
+    );
   }
 
   const pad = 10;
@@ -100,12 +186,281 @@ function TourBackdropBlur() {
 
   return createPortal(
     <>
-      <div style={{ ...base, top: 0, left: 0, right: 0, height: Math.max(0, top - pad) }} />
-      <div style={{ ...base, top: bottom + pad, left: 0, right: 0, bottom: 0 }} />
-      <div style={{ ...base, top: top - pad, left: 0, width: Math.max(0, left - pad), height: mh }} />
-      <div style={{ ...base, top: top - pad, left: right + pad, right: 0, height: mh }} />
+      <div
+        style={{
+          ...base,
+          zIndex: 849,
+          top: 0,
+          left: 0,
+          right: 0,
+          height: Math.max(0, top - pad),
+        }}
+      />
+      <div
+        style={{
+          ...base,
+          zIndex: 849,
+          top: bottom + pad,
+          left: 0,
+          right: 0,
+          bottom: 0,
+        }}
+      />
+      <div
+        style={{
+          ...base,
+          zIndex: 849,
+          top: top - pad,
+          left: 0,
+          width: Math.max(0, left - pad),
+          height: mh,
+        }}
+      />
+      <div
+        style={{
+          ...base,
+          zIndex: 849,
+          top: top - pad,
+          left: right + pad,
+          right: 0,
+          height: mh,
+        }}
+      />
     </>,
     document.body
+  );
+}
+
+function DashboardOnbordaShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
+  const disablePointerTransition = useTourStore(
+    (s) => s.disablePointerTransition
+  );
+  const requestedAddAccountSheetOpen = useTourStore(
+    (s) => s.requestedAddAccountSheetOpen
+  );
+  const guidedSheetTransitionActive = useTourStore(
+    (s) => s.guidedSheetTransitionActive
+  );
+  const isSheetStep =
+    isOnbordaVisible &&
+    currentTour === TOUR_ID &&
+    currentStep >= ADD_ACCOUNT_SHEET_FIRST_STEP &&
+    currentStep <= ADD_ACCOUNT_SHEET_LAST_STEP;
+  const isSidebarTourStep =
+    isOnbordaVisible &&
+    currentTour === TOUR_ID &&
+    currentStep > ADD_ACCOUNT_SHEET_LAST_STEP;
+  const suppressOverlayForSheet =
+    isSheetStep || guidedSheetTransitionActive;
+
+  const allowInteraction =
+    isOnbordaVisible &&
+    currentTour === TOUR_ID &&
+    suppressOverlayForSheet;
+
+  return (
+    <StableOnborda
+      steps={DASHBOARD_TOURS}
+      interact={allowInteraction}
+      suppressOverlay={suppressOverlayForSheet}
+      shadowRgb="0,0,0"
+      shadowOpacity="0.7"
+      cardComponent={TourCard}
+      cardTransition={
+        disablePointerTransition || isSheetStep || isSidebarTourStep
+          ? { duration: 0, ease: "linear" }
+          : { duration: 0.2, ease: "easeOut" }
+      }
+    >
+      {children}
+    </StableOnborda>
+  );
+}
+
+function DashboardTourChrome() {
+  const { isOnbordaVisible, currentTour } = useOnborda();
+  const isStartingDashboardTour = useTourStore(
+    (s) => s.isStartingDashboardTour
+  );
+  const isDashboardTourActive =
+    isStartingDashboardTour || (isOnbordaVisible && currentTour === TOUR_ID);
+
+  if (isDashboardTourActive) {
+    return null;
+  }
+
+  return (
+    <>
+      <DashboardShellBootstrap />
+      <AIInsightToast />
+    </>
+  );
+}
+
+function DashboardMainStage({
+  children,
+  isJournalRoute,
+  isAccountsRoute,
+  routeLoadingVariant,
+  showAccountTransitionFallback,
+  shouldHoldAccountScopedContent,
+}: {
+  children: React.ReactNode;
+  isJournalRoute: boolean;
+  isAccountsRoute: boolean;
+  routeLoadingVariant: ReturnType<typeof resolveRouteLoadingVariant>;
+  showAccountTransitionFallback: boolean;
+  shouldHoldAccountScopedContent: boolean;
+}) {
+  const { isOnbordaVisible, currentTour } = useOnborda();
+  const isStartingDashboardTour = useTourStore(
+    (s) => s.isStartingDashboardTour
+  );
+  const isDashboardTourActive =
+    isStartingDashboardTour || (isOnbordaVisible && currentTour === TOUR_ID);
+
+  return (
+    <div
+      className={cn(
+        "relative flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
+        isJournalRoute || isAccountsRoute
+          ? "overflow-hidden"
+          : "overflow-y-auto gap-4 pb-12"
+      )}
+    >
+      {isDashboardTourActive ? (
+        <RouteLoadingFallback
+          route="dashboard"
+          message="Preparing your onboarding workspace..."
+          className="min-h-0 bg-background dark:bg-sidebar"
+          animated={false}
+        />
+      ) : (
+        <>
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 flex-col",
+              showAccountTransitionFallback && "pointer-events-none opacity-0"
+            )}
+          >
+            {shouldHoldAccountScopedContent ? null : children}
+          </div>
+
+          {showAccountTransitionFallback ? (
+            <div className="absolute inset-0 z-10 flex">
+              <RouteLoadingFallback
+                route={routeLoadingVariant}
+                className="min-h-0 bg-background dark:bg-sidebar"
+              />
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
+function DashboardContentStage({
+  children,
+  breadcrumbs,
+  accountId,
+  currentAccountName,
+  currentAccountBroker,
+  currentAccountIsProp,
+  currentAccountIsDemo,
+  currentAccountIsEaSynced,
+  currentAccountSupportsLiveSync,
+  currentAccountLastImportedAt,
+  connectionBadge,
+  isAccountsRoute,
+  isGoalsRoute,
+  isPropTrackerRoute,
+  isTradesRoute,
+  onOpenCommandPalette,
+  onOpenGoalDialog,
+  routeLoadingVariant,
+  showAccountTransitionFallback,
+  shouldHoldAccountScopedContent,
+  isJournalRoute,
+}: {
+  children: React.ReactNode;
+  breadcrumbs: DashboardBreadcrumbs;
+  accountId?: string;
+  currentAccountName?: string;
+  currentAccountBroker?: string | null;
+  currentAccountIsProp?: boolean;
+  currentAccountIsDemo?: boolean;
+  currentAccountIsEaSynced?: boolean;
+  currentAccountSupportsLiveSync?: boolean;
+  currentAccountLastImportedAt?: string | Date | null;
+  connectionBadge: ConnectionBadge | null;
+  isAccountsRoute: boolean;
+  isGoalsRoute: boolean;
+  isPropTrackerRoute: boolean;
+  isTradesRoute: boolean;
+  onOpenCommandPalette: () => void;
+  onOpenGoalDialog: () => void;
+  routeLoadingVariant: ReturnType<typeof resolveRouteLoadingVariant>;
+  showAccountTransitionFallback: boolean;
+  shouldHoldAccountScopedContent: boolean;
+  isJournalRoute: boolean;
+}) {
+  const { isOnbordaVisible, currentTour } = useOnborda();
+  const isStartingDashboardTour = useTourStore(
+    (s) => s.isStartingDashboardTour
+  );
+  const isDashboardTourActive =
+    isStartingDashboardTour || (isOnbordaVisible && currentTour === TOUR_ID);
+
+  if (isDashboardTourActive) {
+    return (
+      <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden min-h-screen">
+        <RouteLoadingFallback
+          route="dashboard"
+          message="Preparing your onboarding workspace..."
+          className="min-h-0 flex-1 bg-background dark:bg-sidebar"
+          animated={false}
+        />
+      </SidebarInset>
+    );
+  }
+
+  return (
+    <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden min-h-screen">
+      <DashboardShellHeader
+        breadcrumbs={breadcrumbs}
+        accountId={accountId}
+        currentAccountName={currentAccountName}
+        currentAccountBroker={currentAccountBroker}
+        currentAccountIsProp={currentAccountIsProp}
+        currentAccountIsDemo={currentAccountIsDemo}
+        currentAccountIsEaSynced={currentAccountIsEaSynced}
+        currentAccountSupportsLiveSync={currentAccountSupportsLiveSync}
+        currentAccountLastImportedAt={currentAccountLastImportedAt}
+        connectionBadge={connectionBadge}
+        isAccountsRoute={Boolean(isAccountsRoute)}
+        isGoalsRoute={Boolean(isGoalsRoute)}
+        isPropTrackerRoute={Boolean(isPropTrackerRoute)}
+        isTradesRoute={Boolean(isTradesRoute)}
+        onOpenCommandPalette={onOpenCommandPalette}
+        onOpenGoalDialog={onOpenGoalDialog}
+      />
+
+      <DashboardMainStage
+        isJournalRoute={Boolean(isJournalRoute)}
+        isAccountsRoute={Boolean(isAccountsRoute)}
+        routeLoadingVariant={routeLoadingVariant}
+        showAccountTransitionFallback={showAccountTransitionFallback}
+        shouldHoldAccountScopedContent={shouldHoldAccountScopedContent}
+      >
+        {children}
+      </DashboardMainStage>
+    </SidebarInset>
   );
 }
 
@@ -116,12 +471,23 @@ const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/backtest", plan: "professional" },
 ];
 
-const HELD_BACK_COMMUNITY_ROUTE_PREFIXES = [
-  "/dashboard/feed",
-  "/dashboard/leaderboard",
-  "/dashboard/achievements",
-  "/dashboard/settings/social",
-] as const;
+function DashboardGateFallback({
+  route,
+  message,
+}: {
+  route: React.ComponentProps<typeof RouteLoadingFallback>["route"];
+  message: string;
+}) {
+  return (
+    <div className="flex min-h-screen w-screen items-center justify-center bg-background dark:bg-sidebar">
+      <RouteLoadingFallback
+        route={route}
+        message={message}
+        className="min-h-screen w-screen bg-background dark:bg-sidebar"
+      />
+    </div>
+  );
+}
 
 export default function DashboardLayoutClient({
   children,
@@ -293,9 +659,7 @@ export default function DashboardLayoutClient({
       pathname?.startsWith("/dashboard/growth-admin")) &&
       !hasAdminAccess
   );
-  const hasBlockedCommunityAccess = HELD_BACK_COMMUNITY_ROUTE_PREFIXES.some(
-    (prefix) => safePathname.startsWith(prefix)
-  );
+  const hasBlockedCommunityAccess = isHeldBackDashboardRoute(safePathname);
 
   const activePlanKey = (billingState?.billing?.activePlanKey ??
     null) as PlanKey | null;
@@ -397,89 +761,94 @@ export default function DashboardLayoutClient({
   const showAccountTransitionFallback =
     routeIsAccountScoped && Boolean(pendingAccountId);
 
+  if (isSessionPending || isRecoveringSession) {
+    return (
+      <DashboardGateFallback
+        route="login"
+        message="Restoring your session and reopening the workspace..."
+      />
+    );
+  }
+
+  if (!hasConfirmedSession) {
+    return (
+      <DashboardGateFallback
+        route="login"
+        message="Session unavailable. Returning you to login..."
+      />
+    );
+  }
+
+  if (isSessionReady && !hasFetchedBillingState) {
+    return (
+      <DashboardGateFallback
+        route="dashboard"
+        message="Loading your workspace and plan access..."
+      />
+    );
+  }
+
+  if (hasIncompleteOnboarding) {
+    return (
+      <DashboardGateFallback
+        route="onboarding"
+        message="Redirecting you back to onboarding..."
+      />
+    );
+  }
+
   if (
-    isSessionPending ||
-    isRecoveringSession ||
-    !hasConfirmedSession ||
-    (isSessionReady && !hasFetchedBillingState) ||
-    hasIncompleteOnboarding ||
     hasBlockedCommunityAccess ||
     hasBlockedAdminAccess ||
     hasBlockedAffiliateAccess ||
     hasBlockedPlanAccess
   ) {
-    return null;
+    return (
+      <DashboardGateFallback
+        route="dashboard"
+        message="Opening the closest available workspace for this account..."
+      />
+    );
   }
 
   return (
     <OnbordaProvider>
-      <Onborda
-        steps={DASHBOARD_TOURS}
-        shadowRgb="0,0,0"
-        shadowOpacity="0.7"
-        cardComponent={TourCard}
-        cardTransition={{ duration: 0.2, ease: "easeOut" }}
-      >
+      <DashboardOnbordaShell>
         <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
           <DashboardTour />
           <TourBackdropBlur />
-          <DashboardShellBootstrap />
-          <AIInsightToast />
+          <DashboardTourChrome />
           <DashboardShellSidebar pathname={safePathname} />
           <VerticalSeparator />
 
-          <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden min-h-screen">
-            <DashboardShellHeader
-              breadcrumbs={breadcrumbs}
-              accountId={resolvedAccountId}
-              currentAccountName={currentAccount?.name}
-              currentAccountBroker={currentAccount?.broker}
-              currentAccountIsProp={currentAccount?.isPropAccount}
-              currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
-              currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
-              currentAccountSupportsLiveSync={accountSupportsLiveSync(
-                currentAccount
-              )}
-              currentAccountLastImportedAt={currentAccount?.lastImportedAt}
-              connectionBadge={connectionBadge}
-              isAccountsRoute={Boolean(isAccountsRoute)}
-              isGoalsRoute={Boolean(isGoalsRoute)}
-              isPropTrackerRoute={Boolean(isPropTrackerRoute)}
-              isTradesRoute={Boolean(isTradesRoute)}
-              onOpenCommandPalette={openCommandPalette}
-              onOpenGoalDialog={() => setGoalDialogOpen(true)}
-            />
-
-            <div
-              className={cn(
-                "relative flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
-                isJournalRoute || isAccountsRoute
-                  ? "overflow-hidden"
-                  : "overflow-y-auto gap-4 pb-12"
-              )}
-            >
-              <div
-                className={cn(
-                  "flex min-h-0 flex-1 flex-col",
-                  showAccountTransitionFallback &&
-                    "pointer-events-none opacity-0"
-                )}
-              >
-                {shouldHoldAccountScopedContent ? null : children}
-              </div>
-
-              {showAccountTransitionFallback ? (
-                <div className="absolute inset-0 z-10 flex">
-                  <RouteLoadingFallback
-                    route={routeLoadingVariant}
-                    className="min-h-0 bg-background dark:bg-sidebar"
-                  />
-                </div>
-              ) : null}
-            </div>
-          </SidebarInset>
+          <DashboardContentStage
+            breadcrumbs={breadcrumbs}
+            accountId={resolvedAccountId}
+            currentAccountName={currentAccount?.name}
+            currentAccountBroker={currentAccount?.broker}
+            currentAccountIsProp={currentAccount?.isPropAccount}
+            currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
+            currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
+            currentAccountSupportsLiveSync={accountSupportsLiveSync(
+              currentAccount
+            )}
+            currentAccountLastImportedAt={currentAccount?.lastImportedAt}
+            connectionBadge={connectionBadge}
+            isAccountsRoute={Boolean(isAccountsRoute)}
+            isGoalsRoute={Boolean(isGoalsRoute)}
+            isPropTrackerRoute={Boolean(isPropTrackerRoute)}
+            isTradesRoute={Boolean(isTradesRoute)}
+            onOpenCommandPalette={openCommandPalette}
+            onOpenGoalDialog={() => setGoalDialogOpen(true)}
+            routeLoadingVariant={routeLoadingVariant}
+            showAccountTransitionFallback={showAccountTransitionFallback}
+            shouldHoldAccountScopedContent={shouldHoldAccountScopedContent}
+            isJournalRoute={Boolean(isJournalRoute)}
+          >
+            {children}
+          </DashboardContentStage>
         </SidebarProvider>
-      </Onborda>
+      </DashboardOnbordaShell>
     </OnbordaProvider>
   );
 }

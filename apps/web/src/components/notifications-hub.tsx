@@ -19,7 +19,7 @@ import {
   TabsListUnderlined,
   TabsTriggerUnderlined,
 } from "@/components/ui/tabs";
-import { useTRPC } from "@/utils/trpc";
+import { queryClient, trpcOptions, useTRPC } from "@/utils/trpc";
 
 type NotificationPriority = "urgent" | "high" | "normal" | "low";
 
@@ -648,35 +648,89 @@ export default function NotificationsHub() {
   const trpc = useTRPC();
   const [activeTab, setActiveTab] = useState<NotificationTab>("all");
   const [open, setOpen] = useState(false);
+  const inactivePollingIntervalMs = 60_000;
+  const activePollingIntervalMs = 15_000;
   const {
     data: notifications = [],
-    refetch,
     isFetched: hasFetchedNotifications,
   } =
     trpc.notifications.list.useQuery(
       { limit: 25 },
       {
-        refetchInterval: 15000,
-        refetchIntervalInBackground: true,
-        refetchOnWindowFocus: true,
+        refetchInterval: open
+          ? activePollingIntervalMs
+          : inactivePollingIntervalMs,
+        refetchIntervalInBackground: open,
+        refetchOnWindowFocus: open,
       }
     );
+  type NotificationQueryItem = (typeof notifications)[number];
   const { data: preferences } = trpc.notifications.getPreferences.useQuery();
+  const notificationsQueryKey =
+    trpcOptions.notifications.list.queryOptions({ limit: 25 }).queryKey;
   const markAllRead = trpc.notifications.markAllRead.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: () => {
+      const readAt = new Date().toISOString();
+      const current =
+        (queryClient.getQueryData(notificationsQueryKey) as
+          | NotificationQueryItem[]
+          | undefined) ?? [];
+      queryClient.setQueryData(
+        notificationsQueryKey,
+        current.map((item) => ({
+          ...item,
+          readAt: item.readAt ?? readAt,
+        }))
+      );
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: notificationsQueryKey,
+        refetchType: "active",
+      });
+    },
   });
   const markRead = trpc.notifications.markRead.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: (_data, variables) => {
+      const readAt = new Date().toISOString();
+      const readIds = new Set(variables.ids);
+      const current =
+        (queryClient.getQueryData(notificationsQueryKey) as
+          | NotificationQueryItem[]
+          | undefined) ?? [];
+      queryClient.setQueryData(
+        notificationsQueryKey,
+        current.map((item) =>
+          readIds.has(item.id)
+            ? { ...item, readAt: item.readAt ?? readAt }
+            : item
+        )
+      );
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: notificationsQueryKey,
+        refetchType: "active",
+      });
+    },
   });
   const deliveredRef = useRef<Set<string>>(new Set());
   const initializedDeliveryRef = useRef(false);
 
-  const items = notifications as NotificationItem[];
+  const items = useMemo(
+    () => (notifications as NotificationItem[] | undefined) ?? [],
+    [notifications]
+  );
   const canUseInAppChannel = preferences?.inApp ?? true;
   const canUsePushChannel = preferences?.push === true;
-  const visibleItems = canUseInAppChannel ? items : [];
-
-  const notificationsByTab = useMemo(() => {
+  const {
+    visibleItems,
+    unreadItems,
+    notificationsByTab,
+    unreadCounts,
+    unreadCount,
+  } = useMemo(() => {
+    const visibleItems = canUseInAppChannel ? items : [];
     const grouped: Record<NotificationTab, NotificationItem[]> = {
       all: visibleItems,
       trades: [],
@@ -692,26 +746,27 @@ export default function NotificationsHub() {
       grouped[getNotificationPrimaryTab(item.type)].push(item);
     }
 
-    return grouped;
-  }, [visibleItems]);
-
-  const unreadCounts = useMemo(() => {
-    const counts: Record<NotificationTab, number> = {
-      all: visibleItems.filter((item) => !item.readAt).length,
-      trades: notificationsByTab.trades.filter((item) => !item.readAt).length,
-      "review-ready": notificationsByTab["review-ready"].filter(
-        (item) => !item.readAt
-      ).length,
-      goals: notificationsByTab.goals.filter((item) => !item.readAt).length,
-      alerts: notificationsByTab.alerts.filter((item) => !item.readAt).length,
-      news: notificationsByTab.news.filter((item) => !item.readAt).length,
-      social: notificationsByTab.social.filter((item) => !item.readAt).length,
-      system: notificationsByTab.system.filter((item) => !item.readAt).length,
+    const unreadItems = visibleItems.filter((item) => !item.readAt);
+    const unreadCounts: Record<NotificationTab, number> = {
+      all: unreadItems.length,
+      trades: grouped.trades.filter((item) => !item.readAt).length,
+      "review-ready": grouped["review-ready"].filter((item) => !item.readAt)
+        .length,
+      goals: grouped.goals.filter((item) => !item.readAt).length,
+      alerts: grouped.alerts.filter((item) => !item.readAt).length,
+      news: grouped.news.filter((item) => !item.readAt).length,
+      social: grouped.social.filter((item) => !item.readAt).length,
+      system: grouped.system.filter((item) => !item.readAt).length,
     };
-    return counts;
-  }, [notificationsByTab, visibleItems]);
 
-  const unreadCount = visibleItems.filter((item) => !item.readAt).length;
+    return {
+      visibleItems,
+      unreadItems,
+      notificationsByTab: grouped,
+      unreadCounts,
+      unreadCount: unreadItems.length,
+    };
+  }, [canUseInAppChannel, items]);
 
   const handleNavigate = (url: string) => {
     setOpen(false);
@@ -721,15 +776,14 @@ export default function NotificationsHub() {
   useEffect(() => {
     if (!canUsePushChannel) return;
     if (typeof Notification === "undefined") return;
+    if (!open) return;
     if (Notification.permission === "default") {
       Notification.requestPermission();
     }
-  }, [canUsePushChannel]);
+  }, [canUsePushChannel, open]);
 
   useEffect(() => {
     if (!hasFetchedNotifications) return;
-
-    const unreadItems = items.filter((item) => !item.readAt);
 
     if (!initializedDeliveryRef.current) {
       unreadItems.forEach((item) => {
@@ -760,7 +814,12 @@ export default function NotificationsHub() {
 
       showNotificationToast(item);
     });
-  }, [canUseInAppChannel, canUsePushChannel, hasFetchedNotifications, items]);
+  }, [
+    canUseInAppChannel,
+    canUsePushChannel,
+    hasFetchedNotifications,
+    unreadItems,
+  ]);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

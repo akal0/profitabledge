@@ -733,12 +733,15 @@ export const billingRouter = router({
 
   getState: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    const access = await getAccessStatus(user.id, user.email);
-    const referral = await buildReferralState(user.id);
-    const affiliate = await buildAffiliateState(user.id);
-    const billing = await getActiveBillingState(user.id);
-    const onboarding = await getOnboardingStatus(user.id);
-    const credits = await getUserEdgeCreditSnapshot(user.id);
+    const [access, referral, affiliate, billing, onboarding, credits] =
+      await Promise.all([
+        getAccessStatus(user.id, user.email),
+        buildReferralState(user.id),
+        buildAffiliateState(user.id),
+        getActiveBillingState(user.id),
+        getOnboardingStatus(user.id),
+        getUserEdgeCreditSnapshot(user.id),
+      ]);
     const isAdmin = isGrowthAdminEmail(user.email);
 
     return {

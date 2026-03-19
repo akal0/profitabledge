@@ -13,7 +13,7 @@ const LEGACY_DEMO_BROKERS = new Set(["Profitabledge"]);
 const LEGACY_DEMO_BROKER_SERVERS = new Set(["Profitabledge-Demo01"]);
 const LEGACY_DEMO_ACCOUNT_PREFIXES = ["DEMO-"];
 
-function isDemoWorkspaceAccountRecord(account: {
+export function isDemoWorkspaceAccountRecord(account: {
   name?: string | null;
   broker?: string | null;
   brokerServer?: string | null;

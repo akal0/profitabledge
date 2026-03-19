@@ -50,6 +50,7 @@
     "./next-env.d.ts",
     "./src/types/svg.d.ts",
     ".next/types/**/*.ts",
+    ".next-build/types/**/*.ts",
     ".next-dev/types/**/*.ts"
   ],
   "exclude": [

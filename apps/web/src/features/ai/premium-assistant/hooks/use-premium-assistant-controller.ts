@@ -15,6 +15,7 @@ import { trpcClient } from "@/utils/trpc";
 import { normalizeGoalTargetType } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import type { ChatMessage } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import { usePremiumAssistantSuggestions } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-suggestions";
+import { showAIErrorToast } from "@/lib/ai-error-toast";
 
 interface UsePremiumAssistantControllerOptions {
   accountId?: string;
@@ -136,7 +137,11 @@ export function usePremiumAssistantController({
                     }
                   : undefined,
             })
-            .catch(console.error);
+            .catch((error) => {
+              if (process.env.NODE_ENV !== "production") {
+                console.error("Failed to persist assistant message:", error);
+              }
+            });
         }
 
         return prev.map((message, index) =>
@@ -169,7 +174,7 @@ export function usePremiumAssistantController({
       event.preventDefault();
       if (!inputValue.trim() || state.isStreaming) return;
       if (!accountId) {
-        alert("Please select an account first");
+        toast.error("Select an account before starting the assistant.");
         return;
       }
 
@@ -204,7 +209,9 @@ export function usePremiumAssistantController({
           reportId = report.id;
           setCurrentReportId(reportId);
         } catch (error) {
-          console.error("Failed to create report:", error);
+          if (process.env.NODE_ENV !== "production") {
+            console.error("Failed to create report:", error);
+          }
         }
       }
 
@@ -235,11 +242,19 @@ export function usePremiumAssistantController({
             content: inputValue,
             htmlContent: inputHtml || undefined,
           })
-          .catch(console.error);
+          .catch((error) => {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("Failed to persist user message:", error);
+            }
+          });
       }
 
       const message = inputValue;
-      setConversationHistory((prev) => [...prev, `user: ${message}`]);
+      const nextConversationHistory = [
+        ...conversationHistory,
+        `user: ${message}`,
+      ];
+      setConversationHistory(nextConversationHistory);
       setInputValue("");
       setInputHtml("");
       setIsTyping(false);
@@ -250,7 +265,7 @@ export function usePremiumAssistantController({
       await startStream("/api/assistant/stream", {
         message,
         accountId,
-        conversationHistory,
+        conversationHistory: nextConversationHistory,
         evidenceMode,
         pageContext,
       });
@@ -315,7 +330,7 @@ export function usePremiumAssistantController({
   const handleCreateGoal = useCallback(
     async (criteria: CustomGoalCriteria, title: string, type: string) => {
       if (!accountId) {
-        alert("Please select an account first");
+        toast.error("Select an account before creating a goal.");
         return;
       }
 
@@ -371,8 +386,12 @@ export function usePremiumAssistantController({
           },
         ]);
       } catch (error) {
-        console.error("Failed to create goal:", error);
-        alert("Failed to create goal. Please try again.");
+        if (process.env.NODE_ENV !== "production") {
+          console.error("Failed to create goal:", error);
+        }
+        if (!showAIErrorToast(error)) {
+          toast.error("Failed to create goal. Please try again.");
+        }
       }
     },
     [accountId, queryClient]

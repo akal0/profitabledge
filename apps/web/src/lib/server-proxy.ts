@@ -100,6 +100,7 @@ export async function proxyToServer(
     body: await buildRequestBody(request),
     redirect: "manual",
     cache: "no-store",
+    signal: request.signal,
   });
 
   return new Response(response.body, {

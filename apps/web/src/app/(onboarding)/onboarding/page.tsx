@@ -19,7 +19,6 @@ import {
   clearStoredGrowthIntent,
   getStoredGrowthIntent,
 } from "@/features/growth/lib/access-intent";
-import { AffiliateOfferCodeInput } from "@/features/growth/components/affiliate-offer-code-input";
 import {
   clearStoredOnboardingStep,
   getStoredOnboardingStep,
@@ -51,7 +50,6 @@ function OnboardingPageContent() {
     null
   );
   const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
-  const [affiliateOfferCode, setAffiliateOfferCode] = useState("");
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -232,7 +230,6 @@ function OnboardingPageContent() {
     const storedBetaCode = storedIntent.betaCode;
     const storedReferralCode = storedIntent.referralCode;
     const storedAffiliateCode = storedIntent.affiliateCode;
-    const storedAffiliateGroupSlug = storedIntent.affiliateGroupSlug;
 
     if (!storedBetaCode && !storedReferralCode && !storedAffiliateCode) {
       return;
@@ -243,7 +240,6 @@ function OnboardingPageContent() {
         betaCode: storedBetaCode ?? undefined,
         referralCode: storedReferralCode ?? undefined,
         affiliateCode: storedAffiliateCode ?? undefined,
-        affiliateGroupSlug: storedAffiliateGroupSlug ?? undefined,
         source: "onboarding",
       })
       .then((result) => {
@@ -403,7 +399,6 @@ function OnboardingPageContent() {
         betaCode: normalizedCode,
         referralCode: storedIntent.referralCode,
         affiliateCode: storedIntent.affiliateCode,
-        affiliateGroupSlug: storedIntent.affiliateGroupSlug,
         source: "onboarding",
       });
 
@@ -448,7 +443,6 @@ function OnboardingPageContent() {
       const result = await createCheckout.mutateAsync({
         planKey,
         returnPath: checkoutContinuePath,
-        affiliateOfferCode: affiliateOfferCode.trim() || undefined,
       });
 
       window.location.assign(result.url);
@@ -580,13 +574,6 @@ function OnboardingPageContent() {
             <div className="flex w-full flex-col items-center gap-8">
               {billingConfigQuery.data && !accessLocked ? (
                 <>
-                  <div className="w-full max-w-2xl">
-                    <AffiliateOfferCodeInput
-                      value={affiliateOfferCode}
-                      onChange={setAffiliateOfferCode}
-                      helperText="If an affiliate link already attached this account, a conflicting code will be rejected before checkout starts."
-                    />
-                  </div>
                   <Plans
                     plans={billingConfigQuery.data.plans}
                     activePlanKey={activePlanKey}

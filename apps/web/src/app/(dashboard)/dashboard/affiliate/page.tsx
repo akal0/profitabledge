@@ -1,12 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   BadgePercent,
   Copy,
   DollarSign,
-  ExternalLink,
   Link2,
   Users,
   UserPlus,
@@ -70,10 +68,6 @@ export default function AffiliateDashboardPage() {
   const affiliateDashboardQuery = useQuery(
     trpcOptions.billing.getAffiliateDashboard.queryOptions()
   );
-  const [newTrackingLinkName, setNewTrackingLinkName] = useState("");
-  const [newTrackingLinkDestination, setNewTrackingLinkDestination] =
-    useState("/sign-up");
-  const [newTrackingLinkOfferId, setNewTrackingLinkOfferId] = useState("");
 
   const dashboard = affiliateDashboardQuery.data?.dashboard as any;
   const isAdmin = affiliateDashboardQuery.data?.isAdmin === true;
@@ -83,32 +77,13 @@ export default function AffiliateDashboardPage() {
     profile?.defaultOfferCode ??
     profile?.offerCode ??
     "";
-  const defaultTrackingLinkUrl =
-    dashboard?.defaultLink?.shareUrl ?? profile?.defaultTrackingLinkUrl ?? "";
-  const trackingLinks = dashboard?.links ?? dashboard?.trackingLinks ?? [];
-
-  const saveAffiliateTrackingLink = useMutation({
-    ...trpcOptions.billing.saveAffiliateTrackingLink.mutationOptions(),
-    onSuccess: () => {
-      setNewTrackingLinkName("");
-      setNewTrackingLinkDestination("/sign-up");
-      setNewTrackingLinkOfferId("");
-      void affiliateDashboardQuery.refetch();
-      toast.success("Tracked link created");
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to create tracked link"
-      );
-    },
-  });
+  const channels = dashboard?.channels ?? [];
 
   const trackedClicks =
     typeof dashboard?.stats?.linkClicks === "number"
       ? dashboard.stats.linkClicks
-      : trackingLinks.reduce(
-          (sum: number, link: any) =>
-            sum + (link.touches ?? link.clickCount ?? 0),
+      : channels.reduce(
+          (sum: number, ch: any) => sum + (ch.touches ?? 0),
           0
         );
 
@@ -140,20 +115,6 @@ export default function AffiliateDashboardPage() {
     } catch {
       toast.error("Unable to copy right now");
     }
-  };
-
-  const handleCreateTrackedLink = async () => {
-    if (!newTrackingLinkName.trim()) {
-      toast.error("Tracked link name is required");
-      return;
-    }
-    await saveAffiliateTrackingLink.mutateAsync({
-      name: newTrackingLinkName.trim(),
-      destinationPath: newTrackingLinkDestination.trim() || "/sign-up",
-      affiliateOfferId:
-        newTrackingLinkOfferId || dashboard?.defaultOffer?.id || undefined,
-      affiliateGroupSlug: dashboard?.group?.slug ?? undefined,
-    });
   };
 
   if (affiliateDashboardQuery.isLoading) {
@@ -269,83 +230,8 @@ export default function AffiliateDashboardPage() {
               </div>
             </div>
           ) : null}
-
-          {defaultTrackingLinkUrl ? (
-            <div className="space-y-1.5">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
-                Default tracked link
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  readOnly
-                  value={defaultTrackingLinkUrl}
-                  className="h-8 border-white/10 bg-sidebar text-xs"
-                />
-                <Button
-                  onClick={() =>
-                    copyToClipboard(defaultTrackingLinkUrl, "Tracked link copied")
-                  }
-                  className="h-8 rounded-sm border border-white/10 bg-sidebar px-2 text-xs text-white hover:bg-sidebar-accent"
-                >
-                  <Link2 className="size-3" />
-                </Button>
-              </div>
-            </div>
-          ) : null}
         </div>
 
-        {dashboard.group ? (
-          <div className="mt-4 space-y-3 border-t border-white/5 pt-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-white">
-                  {dashboard.group.name}
-                </p>
-                <p className="text-xs text-white/40">`{dashboard.group.slug}`</p>
-              </div>
-              <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
-                {dashboard.group.memberCount} members
-              </Badge>
-            </div>
-            <p className="text-sm leading-6 text-white/45">
-              {dashboard.group.description}
-            </p>
-            <Button
-              onClick={() =>
-                copyToClipboard(
-                  dashboard.group!.inviteUrl,
-                  "Group invite link copied"
-                )
-              }
-              className="h-8 gap-1.5 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white hover:bg-sidebar-accent"
-            >
-              <ExternalLink className="size-3.5" />
-              Copy group invite link
-            </Button>
-          </div>
-        ) : null}
-
-        {profile?.publicProof ? (
-          <div className="mt-4 space-y-1.5 border-t border-white/5 pt-4">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
-              Public proof treatment
-            </p>
-            <div className="rounded-sm border border-white/5 bg-sidebar-accent p-3 text-xs text-white/55">
-              <p>
-                Badge:{" "}
-                <span className="font-medium text-white">
-                  {profile.publicProof.badgeLabel || "Affiliate"}
-                </span>
-              </p>
-              <p className="mt-1">
-                Effect variant:{" "}
-                <span className="font-medium text-white">
-                  {profile.publicProof.effectVariant || "gold_signal"}
-                </span>
-              </p>
-            </div>
-          </div>
-        ) : null}
       </GoalPanel>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
@@ -391,161 +277,44 @@ export default function AffiliateDashboardPage() {
             )}
           </div>
         </GoalPanel>
-
-        <GoalPanel
-          icon={Users}
-          title="Mentorship group"
-          description="Traders who join through your affiliate link and group slug."
-        >
-          <div className="space-y-2">
-            {dashboard.group?.members.length ? (
-              dashboard.group.members.map((member: any) => (
-                <div
-                  key={member.id}
-                  className="rounded-sm border border-white/5 bg-sidebar-accent p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-white">
-                        {member.name || member.email}
-                      </p>
-                      <p className="text-[10px] text-white/35">{member.email}</p>
-                    </div>
-                    <Badge className="rounded-full bg-white/5 text-[10px] text-white/60 ring ring-white/10">
-                      {formatDate(member.joinedAt)}
-                    </Badge>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
-                No one has joined your mentorship group yet.
-              </div>
-            )}
-          </div>
-        </GoalPanel>
       </div>
 
-      <GoalPanel
-        icon={Link2}
-        title="Tracked links"
-        description="Default share links and campaign links with their current performance."
-        action={
-          <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
-            {trackingLinks.length} links
-          </Badge>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <p className="text-xs font-medium text-white">Create tracked link</p>
-            <p className="mt-0.5 text-[11px] text-white/40">
-              Generate a campaign link with its own destination and attached offer.
-            </p>
-            <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_180px_auto]">
-              <Input
-                value={newTrackingLinkName}
-                onChange={(event) => setNewTrackingLinkName(event.target.value)}
-                placeholder="Campaign name"
-                className="h-9 border-white/10 bg-sidebar text-xs"
-              />
-              <Input
-                value={newTrackingLinkDestination}
-                onChange={(event) =>
-                  setNewTrackingLinkDestination(event.target.value)
-                }
-                placeholder="/sign-up"
-                className="h-9 border-white/10 bg-sidebar text-xs"
-              />
-              <select
-                value={
-                  newTrackingLinkOfferId || dashboard?.defaultOffer?.id || ""
-                }
-                onChange={(event) =>
-                  setNewTrackingLinkOfferId(event.target.value)
-                }
-                className="h-9 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white"
+      {channels.length > 0 && (
+        <GoalPanel
+          icon={Link2}
+          title="Channels"
+          description="Track where your sign-ups come from by appending ?channel=twitter, ?channel=discord, etc. to your invite link."
+          action={
+            <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+              {channels.length} channels
+            </Badge>
+          }
+        >
+          <div className="space-y-2">
+            {channels.map((ch: any) => (
+              <div
+                key={ch.channel}
+                className="flex items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent p-3"
               >
-                <option value="">Default offer</option>
-                {(dashboard?.offers ?? []).map((offer: any) => (
-                  <option key={offer.id} value={offer.id}>
-                    {offer.code}
-                  </option>
-                ))}
-              </select>
-              <Button
-                onClick={handleCreateTrackedLink}
-                disabled={saveAffiliateTrackingLink.isPending}
-                className="h-9 rounded-sm bg-emerald-600 px-4 text-xs text-white hover:brightness-110"
-              >
-                {saveAffiliateTrackingLink.isPending
-                  ? "Creating..."
-                  : "Create link"}
-              </Button>
-            </div>
-          </div>
-
-          <div className="space-y-2 border-t border-white/5 pt-4">
-            {trackingLinks.length ? (
-              trackingLinks.map((link: any) => (
-                <div
-                  key={link.id}
-                  className="rounded-sm border border-white/5 bg-sidebar-accent p-3"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-xs font-medium text-white">
-                          {link.name}
-                        </p>
-                        {link.isDefault ||
-                        dashboard?.defaultLink?.id === link.id ? (
-                          <Badge className="rounded-full bg-emerald-500/10 text-[10px] text-emerald-300 ring ring-emerald-500/15">
-                            Default
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 text-[10px] text-white/35">
-                        {link.destinationPath ?? "/sign-up"} •{" "}
-                        {link.offerCode ?? defaultOfferCode ?? "No offer"}
-                      </p>
-                    </div>
-                    <Button
-                      onClick={() =>
-                        copyToClipboard(
-                          link.shareUrl ?? link.url ?? "",
-                          `${link.name} copied`
-                        )
-                      }
-                      disabled={!link.shareUrl && !link.url}
-                      className="h-7 rounded-sm border border-white/10 bg-sidebar px-2 text-[11px] text-white hover:bg-sidebar-accent"
-                    >
-                      <Copy className="size-3" />
-                    </Button>
-                  </div>
-                  <div className="mt-2 grid gap-2 text-[11px] text-white/40 sm:grid-cols-4">
-                    <span>Clicks: {link.touches ?? link.clickCount ?? 0}</span>
-                    <span>
-                      Signups: {link.signups ?? link.signupCount ?? 0}
-                    </span>
-                    <span>
-                      Paid: {link.paidCustomers ?? link.paidCustomerCount ?? 0}
-                    </span>
-                    <span>
-                      Commission:{" "}
-                      {formatCurrency(link.totalCommissionAmount ?? 0)}
-                    </span>
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-white">{ch.channel}</p>
+                  <p className="mt-0.5 text-[10px] text-white/35">
+                    {ch.touches} click{ch.touches !== 1 ? "s" : ""}
+                  </p>
                 </div>
-              ))
-            ) : (
-              <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
-                No tracked links are attached to this affiliate yet.
+                <Button
+                  onClick={() =>
+                    copyToClipboard(ch.shareUrl, `${ch.channel} link copied`)
+                  }
+                  className="h-7 rounded-sm border border-white/10 bg-sidebar px-2 text-[11px] text-white hover:bg-sidebar-accent"
+                >
+                  <Copy className="size-3" />
+                </Button>
               </div>
-            )}
+            ))}
           </div>
-        </div>
-      </GoalPanel>
+        </GoalPanel>
+      )}
     </main>
   );
 }

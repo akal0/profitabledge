@@ -74,8 +74,14 @@ import {
   saveAffiliateTrackingLink,
   sendAffiliateStripeWithdrawal,
   setDefaultAffiliatePaymentMethod,
+  updateAffiliateProfileEffects,
   updatePrivateBetaWaitlistEntry,
   approveAffiliateWithdrawal,
+  getAffiliatePublicProfile,
+  AFFILIATE_PFP_EFFECTS,
+  AFFILIATE_NAME_EFFECTS,
+  AFFILIATE_NAME_FONTS,
+  AFFILIATE_NAME_COLORS,
 } from "../lib/billing/growth";
 import { getUserEdgeCreditSnapshot } from "../lib/billing/edge-credits";
 import { getPolarClient } from "../lib/billing/polar";
@@ -651,7 +657,6 @@ const completeGrowthAccessInput = z.object({
   betaCode: z.string().optional(),
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
-  affiliateGroupSlug: z.string().optional(),
   source: z.string().optional(),
 });
 
@@ -691,7 +696,6 @@ async function completeGrowthAccessForUser(
       await attachAffiliateAttributionToUser({
         userId: user.id,
         affiliateCode: input.affiliateCode,
-        affiliateGroupSlug: input.affiliateGroupSlug,
         source: input.source ?? "onboarding",
       });
       growthType = "affiliate";
@@ -763,6 +767,12 @@ export const billingRouter = router({
     };
   }),
 
+  getAffiliatePublicProfile: publicProcedure
+    .input(z.object({ code: z.string().min(1) }))
+    .query(async ({ input }) => {
+      return getAffiliatePublicProfile(input.code);
+    }),
+
   joinPrivateBetaWaitlist: publicProcedure
     .input(
       z.object({
@@ -809,6 +819,7 @@ export const billingRouter = router({
         type: z.enum(["affiliate", "referral"]),
         code: z.string().optional(),
         offerCode: z.string().optional(),
+        channel: z.string().optional(),
         trackingLinkSlug: z.string().optional(),
         affiliateGroupSlug: z.string().optional(),
         landingPath: z.string().optional(),
@@ -847,6 +858,7 @@ export const billingRouter = router({
         referralCode: input.type === "referral" ? input.code ?? null : null,
         affiliateCode: input.type === "affiliate" ? input.code ?? null : null,
         affiliateOfferCode: input.offerCode ?? null,
+        channel: input.channel ?? null,
         affiliateTrackingLinkSlug: input.trackingLinkSlug ?? null,
         affiliateGroupSlug: input.affiliateGroupSlug ?? null,
         sourcePath: input.landingPath ?? null,
@@ -1094,6 +1106,21 @@ export const billingRouter = router({
         details: input.details,
         isDefault: input.isDefault,
       });
+    }),
+
+  updateAffiliateProfileEffects: protectedProcedure
+    .input(
+      z.object({
+        pfpEffect: z.enum(AFFILIATE_PFP_EFFECTS).optional(),
+        nameEffect: z.enum(AFFILIATE_NAME_EFFECTS).optional(),
+        nameFont: z.enum(AFFILIATE_NAME_FONTS).optional(),
+        nameColor: z.enum(AFFILIATE_NAME_COLORS).optional(),
+        badgeLabel: z.string().min(1).max(40).optional(),
+        effectVariant: z.string().min(1).max(40).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return updateAffiliateProfileEffects(ctx.session.user.id, input);
     }),
 
   requestAffiliateWithdrawal: protectedProcedure

@@ -8,8 +8,8 @@ export type GrowthTouchPayload = {
   type: "affiliate" | "referral";
   code: string;
   offerCode?: string;
+  channel?: string;
   trackingLinkSlug?: string;
-  affiliateGroupSlug?: string;
   landingPath?: string;
   query?: string;
 };
@@ -36,13 +36,13 @@ export function readGrowthTouchFromSearchParams(
   searchParams: URLSearchParams,
   pathname?: string | null
 ) {
-  const affiliateCode = normalizeGrowthCode(searchParams.get("aff"));
+  const affiliateCode = searchParams.get("aff")?.trim() || "";
   const referralCode = normalizeGrowthCode(searchParams.get("ref"));
   const offerCode = normalizeGrowthCode(
     searchParams.get("offer") ?? searchParams.get("code")
   );
+  const channel = searchParams.get("channel")?.trim().toLowerCase() || "";
   const trackingLinkSlug = normalizeSlug(searchParams.get("link"));
-  const affiliateGroupSlug = normalizeSlug(searchParams.get("group"));
 
   if (!affiliateCode && !referralCode && !offerCode) {
     return null;
@@ -53,8 +53,8 @@ export function readGrowthTouchFromSearchParams(
       type: "affiliate" as const,
       code: affiliateCode,
       offerCode: offerCode || undefined,
+      channel: channel || undefined,
       trackingLinkSlug: trackingLinkSlug || undefined,
-      affiliateGroupSlug: affiliateGroupSlug || undefined,
       landingPath: pathname ?? undefined,
       query: searchParams.toString() || undefined,
     };
@@ -74,8 +74,8 @@ export function readGrowthTouchFromSearchParams(
       type: "affiliate" as const,
       code: "",
       offerCode,
+      channel: channel || undefined,
       trackingLinkSlug: trackingLinkSlug || undefined,
-      affiliateGroupSlug: affiliateGroupSlug || undefined,
       landingPath: pathname ?? undefined,
       query: searchParams.toString() || undefined,
     };

@@ -4,22 +4,18 @@ export const GROWTH_STORAGE_KEYS = {
   betaCode: "pe_beta_code",
   referralCode: "pe_referral_code",
   affiliateCode: "pe_affiliate_code",
-  affiliateGroupSlug: "pe_affiliate_group",
+  affiliateChannel: "pe_affiliate_channel",
 } as const;
 
 export type StoredGrowthIntent = {
   betaCode?: string;
   referralCode?: string;
   affiliateCode?: string;
-  affiliateGroupSlug?: string;
+  affiliateChannel?: string;
 };
 
 function normalizeGrowthCode(value: string) {
   return value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-function normalizeGroupSlug(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function getStorage() {
@@ -42,8 +38,8 @@ export function getStoredGrowthIntent(): StoredGrowthIntent {
       storage.getItem(GROWTH_STORAGE_KEYS.referralCode) ?? undefined,
     affiliateCode:
       storage.getItem(GROWTH_STORAGE_KEYS.affiliateCode) ?? undefined,
-    affiliateGroupSlug:
-      storage.getItem(GROWTH_STORAGE_KEYS.affiliateGroupSlug) ?? undefined,
+    affiliateChannel:
+      storage.getItem(GROWTH_STORAGE_KEYS.affiliateChannel) ?? undefined,
   };
 }
 
@@ -56,7 +52,7 @@ export function clearStoredGrowthIntent() {
   storage.removeItem(GROWTH_STORAGE_KEYS.betaCode);
   storage.removeItem(GROWTH_STORAGE_KEYS.referralCode);
   storage.removeItem(GROWTH_STORAGE_KEYS.affiliateCode);
-  storage.removeItem(GROWTH_STORAGE_KEYS.affiliateGroupSlug);
+  storage.removeItem(GROWTH_STORAGE_KEYS.affiliateChannel);
 }
 
 export function storeBetaCode(value: string) {
@@ -88,32 +84,31 @@ export function storeReferralIntent(value: string) {
 
   storage.setItem(GROWTH_STORAGE_KEYS.referralCode, code);
   storage.removeItem(GROWTH_STORAGE_KEYS.affiliateCode);
-  storage.removeItem(GROWTH_STORAGE_KEYS.affiliateGroupSlug);
 }
 
-export function storeAffiliateIntent(codeValue: string, groupSlug?: string | null) {
+export function storeAffiliateIntent(
+  codeValue: string,
+  channel?: string | null,
+) {
   const storage = getStorage();
   if (!storage) {
     return;
   }
 
-  const code = normalizeGrowthCode(codeValue);
+  const code = codeValue.trim();
   if (!code) {
     storage.removeItem(GROWTH_STORAGE_KEYS.affiliateCode);
-    storage.removeItem(GROWTH_STORAGE_KEYS.affiliateGroupSlug);
+    storage.removeItem(GROWTH_STORAGE_KEYS.affiliateChannel);
     return;
   }
 
   storage.setItem(GROWTH_STORAGE_KEYS.affiliateCode, code);
   storage.removeItem(GROWTH_STORAGE_KEYS.referralCode);
 
-  const normalizedGroupSlug = groupSlug ? normalizeGroupSlug(groupSlug) : "";
-  if (normalizedGroupSlug) {
-    storage.setItem(
-      GROWTH_STORAGE_KEYS.affiliateGroupSlug,
-      normalizedGroupSlug
-    );
+  const normalizedChannel = channel?.trim().toLowerCase() ?? "";
+  if (normalizedChannel) {
+    storage.setItem(GROWTH_STORAGE_KEYS.affiliateChannel, normalizedChannel);
   } else {
-    storage.removeItem(GROWTH_STORAGE_KEYS.affiliateGroupSlug);
+    storage.removeItem(GROWTH_STORAGE_KEYS.affiliateChannel);
   }
 }

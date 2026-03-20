@@ -130,6 +130,7 @@ export const usersRouter = router({
         tablePreferences: userTable.tablePreferences,
         advancedMetricsPreferences: userTable.advancedMetricsPreferences,
         notificationPreferences: userTable.notificationPreferences,
+        profileEffects: userTable.profileEffects,
         hasSeenTour: userTable.hasSeenTour,
         createdAt: userTable.createdAt,
         updatedAt: userTable.updatedAt,
@@ -636,6 +637,54 @@ export const usersRouter = router({
       await db.update(userTable).set(updates).where(eq(userTable.id, userId));
 
       return { ok: true } as const;
+    }),
+
+  updateProfileEffects: protectedProcedure
+    .input(
+      z.object({
+        pfpEffect: z
+          .enum(["none", "gold_glow", "emerald_pulse", "rainbow_ring", "frost_aura", "shadow_pulse", "electric_spark", "sakura_ring", "neon_pulse", "hearts", "custom"])
+          .optional(),
+        customRingFrom: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        customRingTo: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        customRingEffect: z.enum(["none", "pulse", "electric", "sakura", "heartbeat"]).optional(),
+        nameEffect: z.enum(["none", "sparkle", "glow", "shimmer", "gradient_shift", "breathe"]).optional(),
+        nameFont: z
+          .enum(["default", "serif", "mono", "display", "handwriting", "gothic", "thin", "rounded"])
+          .optional(),
+        nameColor: z
+          .enum(["default", "gold", "emerald", "ocean", "sunset", "rose", "aurora", "ice", "midnight", "fire", "neon", "custom"])
+          .optional(),
+        customGradientFrom: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+        customGradientTo: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const [row] = await db
+        .select({ profileEffects: userTable.profileEffects })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const existing = row?.profileEffects ?? {};
+      const updated = { ...existing };
+      if (input.pfpEffect !== undefined) updated.pfpEffect = input.pfpEffect;
+      if (input.nameEffect !== undefined) updated.nameEffect = input.nameEffect;
+      if (input.nameFont !== undefined) updated.nameFont = input.nameFont;
+      if (input.nameColor !== undefined) updated.nameColor = input.nameColor;
+      if (input.customGradientFrom !== undefined) (updated as any).customGradientFrom = input.customGradientFrom;
+      if (input.customGradientTo !== undefined) (updated as any).customGradientTo = input.customGradientTo;
+      if (input.customRingFrom !== undefined) (updated as any).customRingFrom = input.customRingFrom;
+      if (input.customRingTo !== undefined) (updated as any).customRingTo = input.customRingTo;
+      if (input.customRingEffect !== undefined) (updated as any).customRingEffect = input.customRingEffect;
+
+      await db
+        .update(userTable)
+        .set({ profileEffects: updated, updatedAt: new Date() })
+        .where(eq(userTable.id, userId));
+
+      return { ok: true, profileEffects: updated } as const;
     }),
 
   clearImage: protectedProcedure.mutation(async ({ ctx }) => {

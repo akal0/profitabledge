@@ -1,10 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AuthHeroArtwork } from "@/components/auth/auth-hero-artwork";
 import { cn } from "@/lib/utils";
+
+export interface AffiliateInfo {
+  name: string;
+  username: string | null;
+  image: string | null;
+}
 
 interface AuthSplitShellProps {
   children: ReactNode;
@@ -12,6 +19,7 @@ interface AuthSplitShellProps {
   heroEyebrow?: string;
   heroTitle?: string;
   heroDescription?: string;
+  affiliate?: AffiliateInfo | null;
 }
 
 const DEFAULT_HERO_EYEBROW = "Trading review, rebuilt";
@@ -25,6 +33,7 @@ export function AuthSplitShell({
   heroEyebrow = DEFAULT_HERO_EYEBROW,
   heroTitle = DEFAULT_HERO_TITLE,
   heroDescription = DEFAULT_HERO_DESCRIPTION,
+  affiliate,
 }: AuthSplitShellProps) {
   return (
     <div className="relative min-h-screen w-screen max-w-none overflow-hidden bg-[#050505] text-white">
@@ -52,16 +61,54 @@ export function AuthSplitShell({
         <aside className="relative hidden min-h-screen min-w-0 overflow-hidden lg:block">
           <AuthHeroArtwork />
 
-          <div className="relative z-10 flex h-full items-end px-12 pb-12 xl:px-16 xl:pb-16">
-            <div className="max-w-3xl space-y-2 drop-shadow-[0_10px_34px_rgba(0,0,0,0.42)]">
-              <h2 className="max-full text-4xl font-semibold tracking-[-0.04em] text-white xl:text-[3rem] leading-12">
-                {heroTitle}
-              </h2>
-              <p className="max-w-md mt-2 text-sm leading-5.5 text-white/58 xl:text-[15px]">
-                {heroDescription}
-              </p>
+          {affiliate ? (
+            <div className="absolute inset-0 z-20 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-5">
+                <div className="flex items-center gap-3">
+                  <span className="text-lg font-semibold tracking-[-0.08em] text-white">
+                    profitabledge
+                  </span>
+                  <span className="text-sm font-medium text-white/40">
+                    &times;
+                  </span>
+                  <div className="flex items-center gap-2">
+                    {affiliate.image ? (
+                      <Image
+                        src={affiliate.image}
+                        alt={affiliate.name}
+                        width={28}
+                        height={28}
+                        className="rounded-full ring-1 ring-white/15"
+                      />
+                    ) : (
+                      <div className="flex size-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/70 ring-1 ring-white/15">
+                        {affiliate.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="text-sm font-medium text-white/80">
+                      {affiliate.username || affiliate.name}
+                    </span>
+                  </div>
+                </div>
+                <p className="max-w-md text-center text-sm leading-5.5 text-white/50">
+                  You&apos;ve been invited to the sharpest trading journal on
+                  the market. <br />
+                  Are you ready to find your own profitable edge?
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="relative z-10 flex h-full items-end px-12 pb-12 xl:px-16 xl:pb-16">
+              <div className="max-w-3xl space-y-2 drop-shadow-[0_10px_34px_rgba(0,0,0,0.42)]">
+                <h2 className="max-full text-4xl font-semibold tracking-[-0.04em] text-white xl:text-[3rem] leading-12">
+                  {heroTitle}
+                </h2>
+                <p className="max-w-md mt-2 text-sm leading-5.5 text-white/58 xl:text-[15px]">
+                  {heroDescription}
+                </p>
+              </div>
+            </div>
+          )}
         </aside>
       </div>
     </div>

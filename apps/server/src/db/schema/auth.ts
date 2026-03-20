@@ -59,6 +59,13 @@ export const user = pgTable("user", {
   metricsStable: boolean("metrics_stable").default(false), // 90+ days, 100+ trades
   avgProtocolRate: numeric("avg_protocol_rate"), // Across all accounts
 
+  profileEffects: jsonb("profile_effects").$type<{
+    pfpEffect?: string;
+    nameEffect?: string;
+    nameFont?: string;
+    nameColor?: string;
+  }>(),
+
   hasSeenTour: boolean("has_seen_tour").notNull().default(false),
 
   createdAt: timestamp("created_at").notNull(),

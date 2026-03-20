@@ -24,6 +24,12 @@ type PublicProofShare = {
   traderImage?: string | null;
   traderBannerUrl?: string | null;
   traderBannerPosition?: string | null;
+  traderProfileEffects?: {
+    pfpEffect?: string;
+    nameEffect?: string;
+    nameFont?: string;
+    nameColor?: string;
+  } | null;
   verificationLevel: string | null;
   isVerified: number | boolean | null;
   lastSyncedAt?: Date | null;
@@ -338,6 +344,7 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
       image: input.share.traderImage ?? null,
       profileBannerUrl: input.share.traderBannerUrl ?? null,
       profileBannerPosition: input.share.traderBannerPosition ?? null,
+      profileEffects: input.share.traderProfileEffects ?? null,
     },
     account: {
       name: input.share.accountName,

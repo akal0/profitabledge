@@ -124,6 +124,7 @@ export async function loadPublicShareBySlug(publicAccountSlug: string) {
       traderImage: userTable.image,
       traderBannerUrl: userTable.profileBannerUrl,
       traderBannerPosition: userTable.profileBannerPosition,
+      traderProfileEffects: userTable.profileEffects,
       accountName: tradingAccount.name,
       broker: tradingAccount.broker,
       brokerType: tradingAccount.brokerType,

@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { BadgePercent, Check } from "lucide-react";
 
 import { trackAlphaMilestone } from "@/lib/alpha-analytics";
 import {
@@ -25,10 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
-import {
-  storeAffiliateIntent,
-  storeReferralIntent,
-} from "@/features/growth/lib/access-intent";
+import { storeAffiliateIntent } from "@/features/growth/lib/access-intent";
 import {
   buildLoginPath,
   buildPostAuthContinuePath,
@@ -37,8 +33,7 @@ import {
 import { trpcClient } from "@/utils/trpc";
 import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
-
-import PasswordInput from "./components/password-input";
+import PasswordInput from "../../sign-up/components/password-input";
 
 const SOCIAL_BUTTON_CLASS =
   "group h-max w-full justify-center rounded-sm ring ring-white/10 bg-sidebar px-4 text-sm font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white";
@@ -88,7 +83,8 @@ function deriveSignupName(email: string) {
   return normalized || "trader";
 }
 
-const SignupPage = () => {
+export default function InvitePage() {
+  const params = useParams<{ username: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
@@ -98,86 +94,24 @@ const SignupPage = () => {
     "google" | "twitter" | null
   >(null);
   const [affiliate, setAffiliate] = useState<AffiliateInfo | null>(null);
-  const [cameFromLink, setCameFromLink] = useState(false);
-  const [showAffiliateInput, setShowAffiliateInput] = useState(false);
-  const [affiliateCodeInput, setAffiliateCodeInput] = useState("");
-  const [affiliateCodeResolved, setAffiliateCodeResolved] = useState(false);
-  const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const username = decodeURIComponent(params?.username ?? "");
+  const channel = searchParams?.get("channel") ?? null;
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const referralCode = params.get("ref");
-    const affiliateCode = params.get("aff");
-
-    if (affiliateCode) {
-      setCameFromLink(true);
-      storeAffiliateIntent(affiliateCode);
-
-      trpcClient.billing.getAffiliatePublicProfile
-        .query({ code: affiliateCode })
-        .then((profile) => {
-          if (profile) {
-            setAffiliate(profile);
-          }
-        })
-        .catch(() => {
-          // Silently ignore — affiliate badge is optional
-        });
-    } else if (referralCode) {
-      storeReferralIntent(referralCode);
-    }
-  }, []);
-
-  const resolveAffiliateCode = useCallback((code: string) => {
-    const trimmed = code.trim();
-    if (!trimmed) {
-      setAffiliate(null);
-      setAffiliateCodeResolved(false);
-      storeAffiliateIntent("");
-      return;
-    }
-
-    storeAffiliateIntent(trimmed);
+    storeAffiliateIntent(username, channel);
 
     trpcClient.billing.getAffiliatePublicProfile
-      .query({ code: trimmed })
+      .query({ code: username })
       .then((profile) => {
         if (profile) {
           setAffiliate(profile);
-          setAffiliateCodeResolved(true);
-        } else {
-          setAffiliate(null);
-          setAffiliateCodeResolved(false);
         }
       })
       .catch(() => {
-        setAffiliate(null);
-        setAffiliateCodeResolved(false);
+        // Silently ignore — affiliate badge is optional
       });
-  }, []);
-
-  const handleAffiliateCodeChange = useCallback(
-    (value: string) => {
-      setAffiliateCodeInput(value);
-      setAffiliateCodeResolved(false);
-
-      if (resolveTimerRef.current) {
-        clearTimeout(resolveTimerRef.current);
-      }
-
-      const trimmed = value.trim();
-      if (!trimmed) {
-        setAffiliate(null);
-        storeAffiliateIntent("");
-        return;
-      }
-
-      resolveTimerRef.current = setTimeout(() => {
-        resolveAffiliateCode(trimmed);
-      }, 500);
-    },
-    [resolveAffiliateCode]
-  );
+  }, [username, channel]);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -213,7 +147,7 @@ const SignupPage = () => {
       {
         onSuccess: async () => {
           void trackAlphaMilestone("sign_up_completed", {
-            pagePath: "/sign-up",
+            pagePath: `/invite/${username}`,
           });
 
           toast.success("Account successfully created!", {
@@ -368,48 +302,6 @@ const SignupPage = () => {
           </form>
         </Form>
 
-        {!cameFromLink && (
-          <div className="space-y-3">
-            {!showAffiliateInput ? (
-              <button
-                type="button"
-                onClick={() => setShowAffiliateInput(true)}
-                className="mx-auto flex items-center gap-1.5 text-xs text-white/35 transition-colors hover:text-white/55"
-              >
-                <BadgePercent className="size-3" />
-                Have an affiliate code?
-              </button>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-center text-[11px] uppercase tracking-[0.14em] text-white/30">
-                  Affiliate code
-                </p>
-                <div className="relative">
-                  <Input
-                    value={affiliateCodeInput}
-                    onChange={(e) => handleAffiliateCodeChange(e.target.value)}
-                    placeholder="Enter username or code"
-                    className={INPUT_CLASS}
-                  />
-                  {affiliateCodeResolved && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                      <Check className="size-3.5 text-emerald-400" />
-                    </div>
-                  )}
-                </div>
-                {affiliateCodeResolved && affiliate && (
-                  <p className="text-center text-xs text-white/40">
-                    Referred by{" "}
-                    <span className="text-white/60">
-                      {affiliate.username || affiliate.name}
-                    </span>
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         <p className="text-sm text-white/46 text-center">
           Already have an account?{" "}
           <Link
@@ -422,6 +314,4 @@ const SignupPage = () => {
       </div>
     </AuthSplitShell>
   );
-};
-
-export default SignupPage;
+}

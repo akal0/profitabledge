@@ -86,7 +86,6 @@ type AffiliateTouchContext = {
   profile: typeof affiliateProfile.$inferSelect;
   offer: typeof affiliateOffer.$inferSelect | null;
   trackingLink: typeof affiliateTrackingLink.$inferSelect | null;
-  group: typeof affiliateGroup.$inferSelect | null;
 };
 
 function buildReferralCode() {
@@ -121,23 +120,28 @@ function buildReferralShareUrl(code: string) {
   return url.toString();
 }
 
+async function getUsername(userId: string) {
+  const [row] = await db
+    .select({ username: userTable.username })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1);
+  return row?.username ?? null;
+}
+
 function buildAffiliateShareUrl(input: {
   affiliateCode: string;
+  username?: string | null;
   groupSlug?: string | null;
   offerCode?: string | null;
   trackingLinkSlug?: string | null;
+  channel?: string | null;
   destinationPath?: string | null;
 }) {
-  const url = new URL(input.destinationPath || "/sign-up", getWebAppUrl());
-  url.searchParams.set("aff", input.affiliateCode);
-  if (input.groupSlug) {
-    url.searchParams.set("group", input.groupSlug);
-  }
-  if (input.offerCode) {
-    url.searchParams.set("offer", input.offerCode);
-  }
-  if (input.trackingLinkSlug) {
-    url.searchParams.set("link", input.trackingLinkSlug);
+  const handle = input.username || input.affiliateCode;
+  const url = new URL(`/invite/${encodeURIComponent(handle)}`, getWebAppUrl());
+  if (input.channel) {
+    url.searchParams.set("channel", input.channel);
   }
   return url.toString();
 }
@@ -478,21 +482,70 @@ async function getReferralProfileByCode(code: string) {
 
 async function getApprovedAffiliateProfileByCode(code: string) {
   const normalized = normalizeGrowthCode(code);
-  if (!normalized) {
+
+  // Try exact code match first
+  if (normalized) {
+    const [profile] = await db
+      .select()
+      .from(affiliateProfile)
+      .where(and(eq(affiliateProfile.code, normalized), eq(affiliateProfile.isActive, true)))
+      .limit(1);
+
+    if (profile?.approvedAt) {
+      return profile;
+    }
+  }
+
+  // Fallback: resolve by username
+  const username = code.trim().toLowerCase();
+  if (!username) {
     return null;
   }
 
   const [profile] = await db
-    .select()
+    .select({ profile: affiliateProfile })
     .from(affiliateProfile)
-    .where(and(eq(affiliateProfile.code, normalized), eq(affiliateProfile.isActive, true)))
+    .innerJoin(userTable, eq(userTable.id, affiliateProfile.userId))
+    .where(
+      and(
+        sql`lower(${userTable.username}) = ${username}`,
+        eq(affiliateProfile.isActive, true)
+      )
+    )
     .limit(1);
 
-  if (!profile?.approvedAt) {
+  if (!profile?.profile?.approvedAt) {
     return null;
   }
 
-  return profile;
+  return profile.profile;
+}
+
+export async function getAffiliatePublicProfile(code: string) {
+  const profile = await getApprovedAffiliateProfileByCode(code);
+  if (!profile) {
+    return null;
+  }
+
+  const [row] = await db
+    .select({
+      name: userTable.name,
+      username: userTable.username,
+      image: userTable.image,
+    })
+    .from(userTable)
+    .where(eq(userTable.id, profile.userId))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    name: profile.displayName || row.name,
+    username: row.username,
+    image: row.image,
+  };
 }
 
 async function getAffiliateOfferRows(userId: string) {
@@ -794,7 +847,7 @@ async function resolveAffiliateTouchContext(
   }
 ): Promise<AffiliateTouchContext | null> {
   const strict = options?.strict ?? false;
-  const normalizedAffiliateCode = normalizeGrowthCode(input.affiliateCode ?? "");
+  const rawAffiliateCode = input.affiliateCode?.trim() ?? "";
   const normalizedOfferCode = normalizeGrowthCode(input.offerCode ?? "");
 
   const offer =
@@ -804,8 +857,8 @@ async function resolveAffiliateTouchContext(
     (normalizedOfferCode ? await getAffiliateOfferByCode(normalizedOfferCode) : null);
 
   let profile =
-    normalizedAffiliateCode
-      ? await getApprovedAffiliateProfileByCode(normalizedAffiliateCode)
+    rawAffiliateCode
+      ? await getApprovedAffiliateProfileByCode(rawAffiliateCode)
       : null;
 
   if (offer) {
@@ -863,28 +916,10 @@ async function resolveAffiliateTouchContext(
     });
   }
 
-  const group = await getAffiliateGroupBySlug({
-    affiliateProfileId: profile.id,
-    slug: input.affiliateGroupSlug,
-  });
-
-  if (
-    strict &&
-    input.affiliateGroupSlug &&
-    normalizeGrowthSlug(input.affiliateGroupSlug) &&
-    !group
-  ) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "That affiliate group is not available",
-    });
-  }
-
   return {
     profile,
     offer,
     trackingLink,
-    group,
   };
 }
 
@@ -1512,7 +1547,6 @@ export async function buildAffiliateState(userId: string) {
       isAffiliate: false,
       application,
       profile: null,
-      group: null,
       stats: {
         signups: 0,
         paidCustomers: 0,
@@ -1521,15 +1555,10 @@ export async function buildAffiliateState(userId: string) {
     };
   }
 
-  const [group] = await db
-    .select()
-    .from(affiliateGroup)
-    .where(eq(affiliateGroup.affiliateProfileId, profile.id))
-    .limit(1);
+  const username = await getUsername(userId);
+
   const offers = await getAffiliateOfferRows(userId);
-  const links = await getAffiliateTrackingLinkRows(userId);
   const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
-  const defaultLink = links.find((row) => row.isDefault) ?? links[0] ?? null;
 
   const attributions = await db
     .select()
@@ -1543,6 +1572,11 @@ export async function buildAffiliateState(userId: string) {
     .where(eq(affiliateCommissionEvent.affiliateUserId, userId))
     .orderBy(desc(affiliateCommissionEvent.occurredAt), desc(affiliateCommissionEvent.createdAt));
 
+  const shareUrl = buildAffiliateShareUrl({
+    affiliateCode: profile.code,
+    username,
+  });
+
   return {
     isAffiliate: true,
     application,
@@ -1551,39 +1585,8 @@ export async function buildAffiliateState(userId: string) {
       code: profile.code,
       offerCode: defaultOffer?.code ?? null,
       defaultOfferCode: defaultOffer?.code ?? null,
-      defaultTrackingLinkUrl: defaultLink
-        ? buildAffiliateShareUrl({
-            affiliateCode: profile.code,
-            groupSlug: defaultLink.affiliateGroupSlug ?? group?.slug ?? null,
-            offerCode: defaultOffer?.code ?? null,
-            trackingLinkSlug: defaultLink.slug,
-            destinationPath: defaultLink.destinationPath,
-          })
-        : null,
-      shareUrl: buildAffiliateShareUrl({
-        affiliateCode: profile.code,
-        groupSlug: defaultLink?.affiliateGroupSlug ?? group?.slug ?? null,
-        offerCode: defaultOffer?.code ?? null,
-        trackingLinkSlug: defaultLink?.slug ?? null,
-        destinationPath: defaultLink?.destinationPath ?? "/sign-up",
-      }),
+      shareUrl,
     },
-    group:
-      group
-        ? {
-            id: group.id,
-            name: group.name,
-            slug: group.slug,
-            description: group.description,
-            inviteUrl: buildAffiliateShareUrl({
-              affiliateCode: profile.code,
-              groupSlug: group.slug,
-              offerCode: defaultOffer?.code ?? null,
-              trackingLinkSlug: defaultLink?.slug ?? null,
-              destinationPath: defaultLink?.destinationPath ?? "/sign-up",
-            }),
-          }
-        : null,
     stats: {
       signups: attributions.length,
       paidCustomers: attributions.filter((row) => row.firstPaidAt).length,
@@ -1601,15 +1604,10 @@ export async function buildAffiliateDashboard(userId: string) {
     return null;
   }
 
-  const [group] = await db
-    .select()
-    .from(affiliateGroup)
-    .where(eq(affiliateGroup.affiliateProfileId, profile.id))
-    .limit(1);
+  const username = await getUsername(userId);
+
   const offers = await getAffiliateOfferRows(userId);
-  const links = await getAffiliateTrackingLinkRows(userId);
   const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
-  const defaultLink = links.find((row) => row.isDefault) ?? links[0] ?? null;
 
   const attributions = await db
     .select()
@@ -1628,72 +1626,31 @@ export async function buildAffiliateDashboard(userId: string) {
     .where(eq(affiliateTouchEvent.affiliateUserId, userId))
     .orderBy(desc(affiliateTouchEvent.createdAt));
 
-  const members = group
-    ? await db
-        .select({
-          membership: affiliateGroupMember,
-          user: {
-            id: userTable.id,
-            name: userTable.name,
-            email: userTable.email,
-          },
-        })
-        .from(affiliateGroupMember)
-        .innerJoin(userTable, eq(affiliateGroupMember.userId, userTable.id))
-        .where(eq(affiliateGroupMember.affiliateGroupId, group.id))
-        .orderBy(desc(affiliateGroupMember.createdAt))
-    : [];
-  const offerLookup = new Map(offers.map((row) => [row.id, row]));
-  const linkStats = links.map((link) => {
-    const signups = attributions.filter(
-      (row) => row.affiliateTrackingLinkId === link.id
-    );
-    const attributedIds = new Set(signups.map((row) => row.id));
-    const commissionAmount = commissionEvents.reduce((sum, row) => {
-      return attributedIds.has(row.affiliateAttributionId)
-        ? sum + (row.commissionAmount ?? 0)
-        : sum;
-    }, 0);
+  // Build channel stats from touch event metadata
+  const channelMap = new Map<string, { touches: number }>();
+  for (const touch of touchEvents) {
+    const ch =
+      (touch.metadata as Record<string, unknown> | null)?.channel as string | undefined;
+    if (ch) {
+      const entry = channelMap.get(ch) ?? { touches: 0 };
+      entry.touches += 1;
+      channelMap.set(ch, entry);
+    }
+  }
 
-    return {
-      id: link.id,
-      name: link.name,
-      slug: link.slug,
-      isDefault: link.isDefault,
-      destinationPath: link.destinationPath,
-      offerCode:
-        link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
-          ? offerLookup.get(link.affiliateOfferId)!.code
-          : null,
-      shareUrl: buildAffiliateShareUrl({
-        affiliateCode: profile.code,
-        groupSlug: link.affiliateGroupSlug ?? null,
-        offerCode:
-          link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
-            ? offerLookup.get(link.affiliateOfferId)!.code
-            : null,
-        trackingLinkSlug: link.slug,
-        destinationPath: link.destinationPath,
-      }),
-      touches: touchEvents.filter((row) => row.affiliateTrackingLinkId === link.id).length,
-      signups: signups.length,
-      paidCustomers: signups.filter((row) => row.firstPaidAt).length,
-      totalCommissionAmount: commissionAmount,
-      url: buildAffiliateShareUrl({
-        affiliateCode: profile.code,
-        groupSlug: link.affiliateGroupSlug ?? null,
-        offerCode:
-          link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
-            ? offerLookup.get(link.affiliateOfferId)!.code
-            : null,
-        trackingLinkSlug: link.slug,
-        destinationPath: link.destinationPath,
-      }),
-      clickCount: touchEvents.filter((row) => row.affiliateTrackingLinkId === link.id)
-        .length,
-      signupCount: signups.length,
-      paidCustomerCount: signups.filter((row) => row.firstPaidAt).length,
-    };
+  const channelStats = Array.from(channelMap.entries()).map(([name, stat]) => ({
+    channel: name,
+    touches: stat.touches,
+    shareUrl: buildAffiliateShareUrl({
+      affiliateCode: profile.code,
+      username,
+      channel: name,
+    }),
+  }));
+
+  const shareUrl = buildAffiliateShareUrl({
+    affiliateCode: profile.code,
+    username,
   });
 
   return {
@@ -1702,54 +1659,14 @@ export async function buildAffiliateDashboard(userId: string) {
       code: profile.code,
       offerCode: defaultOffer?.code ?? null,
       defaultOfferCode: defaultOffer?.code ?? null,
-      defaultTrackingLinkUrl: defaultLink
-        ? buildAffiliateShareUrl({
-            affiliateCode: profile.code,
-            groupSlug: defaultLink.affiliateGroupSlug ?? group?.slug ?? null,
-            offerCode: defaultOffer?.code ?? null,
-            trackingLinkSlug: defaultLink.slug,
-            destinationPath: defaultLink.destinationPath,
-          })
-        : null,
-      shareUrl: buildAffiliateShareUrl({
-        affiliateCode: profile.code,
-        groupSlug: defaultLink?.affiliateGroupSlug ?? group?.slug ?? null,
-        offerCode: defaultOffer?.code ?? null,
-        trackingLinkSlug: defaultLink?.slug ?? null,
-        destinationPath: defaultLink?.destinationPath ?? "/sign-up",
-      }),
+      shareUrl,
       publicProof: buildAffiliatePublicProofMetadata(
         (profile.metadata as Record<string, unknown> | null | undefined) ?? null
       ),
     },
     defaultOffer,
     offers,
-    defaultLink,
-    links: linkStats,
-    trackingLinks: linkStats,
-    group:
-      group
-        ? {
-            id: group.id,
-            name: group.name,
-            slug: group.slug,
-            description: group.description,
-            inviteUrl: buildAffiliateShareUrl({
-              affiliateCode: profile.code,
-              groupSlug: group.slug,
-              offerCode: defaultOffer?.code ?? null,
-              trackingLinkSlug: defaultLink?.slug ?? null,
-              destinationPath: defaultLink?.destinationPath ?? "/sign-up",
-            }),
-            memberCount: members.length,
-            members: members.map((row) => ({
-              id: row.user.id,
-              name: row.user.name,
-              email: row.user.email,
-              joinedAt: row.membership.createdAt,
-            })),
-          }
-        : null,
+    channels: channelStats,
     stats: {
       signups: attributions.length,
       paidCustomers: attributions.filter((row) => row.firstPaidAt).length,
@@ -1757,6 +1674,7 @@ export async function buildAffiliateDashboard(userId: string) {
         (sum, row) => sum + (row.commissionAmount ?? 0),
         0
       ),
+      linkClicks: touchEvents.length,
     },
     attributions,
     commissionEvents,
@@ -2982,6 +2900,7 @@ export async function listAffiliatePayoutQueue() {
         id: userTable.id,
         name: userTable.name,
         email: userTable.email,
+        username: userTable.username,
       },
     })
     .from(affiliateProfile)
@@ -3038,6 +2957,7 @@ export async function listAffiliatePayoutQueue() {
               ...defaultLink,
               shareUrl: buildAffiliateShareUrl({
                 affiliateCode: entry.profile.code,
+                username: entry.user.username,
                 groupSlug: defaultLink.affiliateGroupSlug ?? null,
                 offerCode:
                   defaultLink.affiliateOfferId &&
@@ -3053,6 +2973,7 @@ export async function listAffiliatePayoutQueue() {
           ...link,
           shareUrl: buildAffiliateShareUrl({
             affiliateCode: entry.profile.code,
+            username: entry.user.username,
             groupSlug: link.affiliateGroupSlug ?? null,
             offerCode:
               link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
@@ -3262,14 +3183,15 @@ async function resolveGrowthTouchTarget(input: {
   const referralCode = input.referralCode
     ? normalizeGrowthCode(input.referralCode)
     : "";
-  const affiliateCode = input.affiliateCode
-    ? normalizeGrowthCode(input.affiliateCode)
+  const rawAffiliateCode = input.affiliateCode?.trim() ?? "";
+  const affiliateCode = rawAffiliateCode
+    ? normalizeGrowthCode(rawAffiliateCode)
     : "";
   const affiliateOfferCode = input.affiliateOfferCode
     ? normalizeGrowthCode(input.affiliateOfferCode)
     : "";
 
-  if (referralCode && (affiliateCode || affiliateOfferCode)) {
+  if (referralCode && (rawAffiliateCode || affiliateOfferCode)) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Use either a referral code or an affiliate code, not both",
@@ -3329,13 +3251,8 @@ async function resolveGrowthTouchTarget(input: {
       )
       .limit(1);
     profile = row ?? null;
-  } else if (affiliateCode) {
-    const [row] = await db
-      .select()
-      .from(affiliateProfile)
-      .where(and(eq(affiliateProfile.code, affiliateCode), eq(affiliateProfile.isActive, true)))
-      .limit(1);
-    profile = row ?? null;
+  } else if (rawAffiliateCode) {
+    profile = await getApprovedAffiliateProfileByCode(rawAffiliateCode);
   }
 
   const approvedProfile =
@@ -3344,7 +3261,7 @@ async function resolveGrowthTouchTarget(input: {
     return null;
   }
 
-  if (affiliateCode && approvedProfile.code !== affiliateCode) {
+  if (affiliateCode && approvedProfile.code !== affiliateCode && offer) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: "Affiliate offer code does not match affiliate link",
@@ -3398,6 +3315,7 @@ export async function captureGrowthTouch(input: {
   referralCode?: string | null;
   affiliateCode?: string | null;
   affiliateOfferCode?: string | null;
+  channel?: string | null;
   affiliateTrackingLinkSlug?: string | null;
   affiliateGroupSlug?: string | null;
   referrerUrl?: string | null;
@@ -3413,6 +3331,12 @@ export async function captureGrowthTouch(input: {
   }
 
   const now = new Date();
+  const channel = input.channel?.trim().toLowerCase() || null;
+  const touchMetadata = {
+    ...(input.metadata ?? {}),
+    ...(channel ? { channel } : {}),
+  };
+
   await db.insert(affiliateTouchEvent).values({
     id: crypto.randomUUID(),
     visitorToken: input.visitorToken,
@@ -3427,7 +3351,7 @@ export async function captureGrowthTouch(input: {
     affiliateGroupSlug: resolved.affiliateGroupSlug,
     sourcePath: normalizeDestinationPath(input.sourcePath),
     referrerUrl: input.referrerUrl?.trim() || null,
-    metadata: input.metadata ?? null,
+    metadata: Object.keys(touchMetadata).length > 0 ? touchMetadata : null,
     createdAt: now,
   });
 
@@ -3469,7 +3393,7 @@ export async function captureGrowthTouch(input: {
     expiresAt: buildAttributionExpiryDate(now),
     claimedUserId: null,
     claimedAt: null,
-    metadata: input.metadata ?? null,
+    metadata: Object.keys(touchMetadata).length > 0 ? touchMetadata : null,
     updatedAt: now,
   };
 
@@ -3551,7 +3475,6 @@ export async function claimPendingGrowthAttribution(input: {
       affiliate = await attachAffiliateAttributionToUser({
         userId: input.userId,
         affiliateCode: pending.affiliateCode,
-        affiliateGroupSlug: pending.affiliateGroupSlug,
         affiliateOfferId: pending.affiliateOfferId ?? null,
         affiliateTrackingLinkId: pending.affiliateTrackingLinkId ?? null,
         source: input.source ?? "claim",
@@ -3775,13 +3698,11 @@ async function joinAffiliateGroupIfNeeded(input: {
 export async function attachAffiliateAttributionToUser(input: {
   userId: string;
   affiliateCode: string;
-  affiliateGroupSlug?: string | null;
   affiliateOfferId?: string | null;
   affiliateTrackingLinkId?: string | null;
   source?: string | null;
 }) {
-  const normalized = normalizeGrowthCode(input.affiliateCode);
-  if (!normalized) {
+  if (!input.affiliateCode.trim()) {
     return null;
   }
 
@@ -3808,14 +3729,7 @@ export async function attachAffiliateAttributionToUser(input: {
     });
   }
 
-  const [profile] = await db
-    .select()
-    .from(affiliateProfile)
-    .where(and(eq(affiliateProfile.code, normalized), eq(affiliateProfile.isActive, true)))
-    .limit(1);
-
-  const approvedProfile =
-    profile && profile.approvedAt && profile.isActive ? profile : null;
+  const approvedProfile = await getApprovedAffiliateProfileByCode(input.affiliateCode);
   if (!approvedProfile) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -3830,29 +3744,6 @@ export async function attachAffiliateAttributionToUser(input: {
     });
   }
 
-  let groupRow: typeof affiliateGroup.$inferSelect | null = null;
-  if (input.affiliateGroupSlug?.trim()) {
-    const rows = await db
-      .select()
-      .from(affiliateGroup)
-      .where(
-        and(
-          eq(affiliateGroup.affiliateProfileId, approvedProfile.id),
-          eq(affiliateGroup.slug, input.affiliateGroupSlug.trim())
-        )
-      )
-      .limit(1);
-
-    if (!rows[0]) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "That affiliate group is not available",
-      });
-    }
-
-    groupRow = rows[0];
-  }
-
   const [inserted] = await db
     .insert(affiliateAttribution)
     .values({
@@ -3863,7 +3754,7 @@ export async function attachAffiliateAttributionToUser(input: {
       affiliateCode: approvedProfile.code,
       affiliateOfferId: input.affiliateOfferId ?? null,
       affiliateTrackingLinkId: input.affiliateTrackingLinkId ?? null,
-      affiliateGroupId: groupRow?.id ?? null,
+      affiliateGroupId: null,
       metadata: {
         source: input.source?.trim() || "app",
         affiliateOfferId: input.affiliateOfferId ?? null,
@@ -3871,14 +3762,6 @@ export async function attachAffiliateAttributionToUser(input: {
       },
     })
     .returning();
-
-  if (groupRow) {
-    await joinAffiliateGroupIfNeeded({
-      userId: input.userId,
-      groupId: groupRow.id,
-      source: input.source ?? "open_link",
-    });
-  }
 
   return inserted ?? null;
 }
@@ -4300,7 +4183,6 @@ export async function recordAffiliateCommissionEvent(input: {
         attribution = await attachAffiliateAttributionToUser({
           userId: input.referredUserId,
           affiliateCode: touchContext.profile.code,
-          affiliateGroupSlug: touchContext.group?.slug ?? null,
           affiliateOfferId: touchContext.offer?.id ?? null,
           affiliateTrackingLinkId: touchContext.trackingLink?.id ?? null,
           source: "order_metadata",
@@ -4391,6 +4273,105 @@ export async function getAvailableReferralFreeMonthGrantForPlan(
     .limit(1);
 
   return rows[0] ?? null;
+}
+
+export const AFFILIATE_PFP_EFFECTS = [
+  "none",
+  "gold_glow",
+  "emerald_pulse",
+  "rainbow_ring",
+  "frost_aura",
+  "shadow_pulse",
+  "electric_spark",
+  "sakura_ring",
+  "neon_pulse",
+  "hearts",
+  "custom",
+] as const;
+
+export const AFFILIATE_NAME_EFFECTS = [
+  "none",
+  "sparkle",
+  "glow",
+  "shimmer",
+  "gradient_shift",
+  "breathe",
+] as const;
+
+export const AFFILIATE_NAME_FONTS = [
+  "default",
+  "serif",
+  "mono",
+  "display",
+  "handwriting",
+  "gothic",
+  "thin",
+  "rounded",
+] as const;
+
+export const AFFILIATE_NAME_COLORS = [
+  "default",
+  "gold",
+  "emerald",
+  "ocean",
+  "sunset",
+  "rose",
+  "aurora",
+  "ice",
+  "midnight",
+  "fire",
+  "neon",
+  "custom",
+] as const;
+
+export async function updateAffiliateProfileEffects(
+  userId: string,
+  effects: {
+    pfpEffect?: string;
+    nameEffect?: string;
+    nameFont?: string;
+    nameColor?: string;
+    badgeLabel?: string;
+    effectVariant?: string;
+  }
+) {
+  const profile = await getApprovedAffiliateProfile(userId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Affiliate access required",
+    });
+  }
+
+  const existingMetadata =
+    profile.metadata && typeof profile.metadata === "object"
+      ? (profile.metadata as Record<string, unknown>)
+      : {};
+  const existingPublicProof =
+    existingMetadata.publicProof &&
+    typeof existingMetadata.publicProof === "object"
+      ? (existingMetadata.publicProof as Record<string, unknown>)
+      : { badgeLabel: "Affiliate", effectVariant: "gold-emerald" };
+
+  const updatedPublicProof = { ...existingPublicProof };
+
+  if (effects.pfpEffect !== undefined) updatedPublicProof.pfpEffect = effects.pfpEffect;
+  if (effects.nameEffect !== undefined) updatedPublicProof.nameEffect = effects.nameEffect;
+  if (effects.nameFont !== undefined) updatedPublicProof.nameFont = effects.nameFont;
+  if (effects.nameColor !== undefined) updatedPublicProof.nameColor = effects.nameColor;
+  if (effects.badgeLabel !== undefined) updatedPublicProof.badgeLabel = effects.badgeLabel;
+  if (effects.effectVariant !== undefined) updatedPublicProof.effectVariant = effects.effectVariant;
+
+  const [updated] = await db
+    .update(affiliateProfile)
+    .set({
+      metadata: { ...existingMetadata, publicProof: updatedPublicProof },
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateProfile.id, profile.id))
+    .returning();
+
+  return updated ?? profile;
 }
 
 export async function markReferralRewardGrantConsumed(grantId: string) {

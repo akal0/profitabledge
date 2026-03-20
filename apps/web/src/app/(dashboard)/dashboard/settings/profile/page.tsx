@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
+import {
+  Tabs,
+  TabsContent,
+  TabsListUnderlined,
+  TabsTriggerUnderlined,
+} from "@/components/ui/tabs";
 import { trpcOptions, queryClient } from "@/utils/trpc";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -25,6 +31,7 @@ import {
   CoverImageCropDialog,
   type CoverFrameDimensions,
 } from "@/components/cover-image-crop-dialog";
+import { ProfileEffectsEditor } from "@/features/growth/components/affiliate-profile-effects";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -259,341 +266,376 @@ export default function EditProfilePage() {
 
   return (
     <div className="flex flex-col w-full">
-      {/* Cover / Banner */}
-      <div
-        ref={bannerContainerRef}
-        className="relative h-52 md:h-64 bg-gradient-to-r from-teal-900/40 to-indigo-900/40"
-      >
-        {bannerUrl && (
-          <img
-            src={bannerUrl}
-            alt="Banner"
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ objectPosition: bannerPosition }}
-          />
-        )}
-
-        {/* Upload loading overlay */}
-        {isBannerUploading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
-            <Loader2 className="size-5 text-white animate-spin" />
-          </div>
-        )}
-
-        {/* Hover controls */}
-        {!isBannerUploading && (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 hover:opacity-100 transition-opacity bg-black/40">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
-              onClick={() => bannerInputRef.current?.click()}
+      <Tabs defaultValue="profile" className="w-full">
+        <div className="px-6 sm:px-8 pt-4">
+          <TabsListUnderlined className="flex h-auto items-stretch gap-5 border-b-0">
+            <TabsTriggerUnderlined
+              value="profile"
+              className="h-10 pb-0 pt-0 text-xs font-medium text-neutral-400 hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
             >
-              <ImagePlus className="size-4 mr-1.5" />
-              {bannerUrl ? "Change cover" : "Add cover image"}
-            </Button>
-            {bannerUrl && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
-                onClick={openEditDialog}
-              >
-                <Pencil className="size-4 mr-1.5" />
-                Edit cover
-              </Button>
-            )}
-            {bannerUrl && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
-                onClick={() => {
-                  pendingBannerFileRef.current = null;
-                  setBannerUrl("");
-                }}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            )}
-          </div>
-        )}
+              Edit profile
+            </TabsTriggerUnderlined>
+            <TabsTriggerUnderlined
+              value="effects"
+              className="h-10 pb-0 pt-0 text-xs font-medium text-neutral-400 hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+            >
+              Profile effects
+            </TabsTriggerUnderlined>
+          </TabsListUnderlined>
+        </div>
+        <Separator />
 
-        <input
-          ref={bannerInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleBannerChange}
-        />
-      </div>
-
-      {/* Avatar overlapping banner */}
-      <div className="px-6 sm:px-8 -mt-10 pb-6">
-        <div className="relative group w-max">
-          <Avatar className="size-20 rounded-full ring-4 ring-sidebar shadow-lg">
-            {form.image ? (
-              <AvatarImage
-                src={form.image}
-                alt={form.fullName}
-                className="object-cover"
-              />
-            ) : null}
-            <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
-              {form.fullName?.charAt(0)?.toUpperCase() ?? "U"}
-            </AvatarFallback>
-          </Avatar>
-          <button
-            onClick={() => avatarInputRef.current?.click()}
-            className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        <TabsContent value="profile" className="mt-0">
+          {/* Cover / Banner */}
+          <div
+            ref={bannerContainerRef}
+            className="relative h-52 md:h-64 bg-gradient-to-r from-teal-900/40 to-indigo-900/40"
           >
-            <Camera className="size-5 text-white" />
-          </button>
-          <input
-            ref={avatarInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Profile Photo */}
-      <div className="flex flex-col items-start gap-2 sm:gap-4 px-6 sm:px-8 py-5">
-        <div>
-          <Label className="text-sm text-white/80 font-medium">
-            Profile photo
-          </Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            This photo will be visible to others.
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Avatar className="size-14 rounded-full shadow-lg shrink-0">
-            {form.image ? (
-              <AvatarImage
-                src={form.image}
-                alt={form.fullName}
-                className="object-cover"
+            {bannerUrl && (
+              <img
+                src={bannerUrl}
+                alt="Banner"
+                className="absolute inset-0 w-full h-full object-cover"
+                style={{ objectPosition: bannerPosition }}
               />
-            ) : null}
-            <AvatarFallback className="bg-sidebar-accent text-foreground text-lg font-semibold">
-              {form.fullName?.charAt(0)?.toUpperCase() ?? "U"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex gap-2">
-            <Button
-              className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
-              onClick={() => avatarInputRef.current?.click()}
-            >
-              <Camera className="size-3.5" />
-              Upload new image
-            </Button>
-            {form.image && (
-              <Button
-                className="ring ring-red-500/25 bg-red-600/15 hover:bg-red-600/25 px-4 py-2 h-[38px] w-max text-xs text-red-400 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
-                onClick={handleRemoveAvatar}
-              >
-                <Trash2 className="size-3.5" />
-                Delete current image
-              </Button>
             )}
+
+            {/* Upload loading overlay */}
+            {isBannerUploading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
+                <Loader2 className="size-5 text-white animate-spin" />
+              </div>
+            )}
+
+            {/* Hover controls */}
+            {!isBannerUploading && (
+              <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 hover:opacity-100 transition-opacity bg-black/40">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
+                  onClick={() => bannerInputRef.current?.click()}
+                >
+                  <ImagePlus className="size-4 mr-1.5" />
+                  {bannerUrl ? "Change cover" : "Add cover image"}
+                </Button>
+                {bannerUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
+                    onClick={openEditDialog}
+                  >
+                    <Pencil className="size-4 mr-1.5" />
+                    Edit cover
+                  </Button>
+                )}
+                {bannerUrl && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
+                    onClick={() => {
+                      pendingBannerFileRef.current = null;
+                      setBannerUrl("");
+                    }}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleBannerChange}
+            />
           </div>
-        </div>
-      </div>
 
-      <Separator />
-
-      {/* Full Name */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div>
-          <Label className="text-sm text-white/80 font-medium">Full name</Label>
-          <p className="text-xs text-white/40 mt-0.5">Your display name.</p>
-        </div>
-        <Input
-          value={form.fullName}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, fullName: e.target.value }))
-          }
-          placeholder="John Doe"
-          className="bg-sidebar-accent ring-white/5 text-white"
-        />
-      </div>
-
-      <Separator />
-
-      {/* Username */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div>
-          <Label className="text-sm text-white/80 font-medium">Username</Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            A unique name for your profile.
-          </p>
-        </div>
-        <div className="flex items-center">
-          <span className="px-3 py-2 text-xs text-white/40 bg-sidebar-accent ring ring-white/5 ring-r-0 rounded-l-md whitespace-nowrap border-none!">
-            profitabledge.com/
-          </span>
-          <Input
-            value={form.username}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                username: e.target.value
-                  .toLowerCase()
-                  .replace(/[^a-z0-9_-]/g, ""),
-              }))
-            }
-            placeholder="johndoe"
-            className="bg-sidebar-accent ring-white/5 text-white rounded-l-none"
-          />
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Display Name */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div>
-          <Label className="text-sm text-white/80 font-medium">
-            Display name
-          </Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            Used across your account and shareable proof surfaces.
-          </p>
-        </div>
-        <Input
-          value={form.displayName}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, displayName: e.target.value }))
-          }
-          placeholder="Optional display name"
-          className="bg-sidebar-accent ring-white/5 text-white"
-        />
-      </div>
-
-      <Separator />
-
-      {/* About you */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div>
-          <Label className="text-sm text-white/80 font-medium">About you</Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            Write a description for your profile.
-          </p>
-        </div>
-        <div className="space-y-1.5">
-          <Textarea
-            value={form.bio}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, bio: e.target.value }))
-            }
-            placeholder="I'm a trader who..."
-            rows={3}
-            maxLength={500}
-            className="ring-white/5 text-white resize-none text-xs! bg-transparent!"
-          />
-          <p className="text-[11px] text-white/30 text-right">
-            {form.bio.length}/500
-          </p>
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Location */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div>
-          <Label className="text-sm text-white/80 font-medium">Location</Label>
-          <p className="text-xs text-white/40 mt-0.5">Where you trade from.</p>
-        </div>
-        <div className="relative">
-          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/30" />
-          <Input
-            value={form.location}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, location: e.target.value }))
-            }
-            placeholder="e.g., London, UK"
-            className="bg-sidebar-accent ring-white/5 text-white pl-9"
-          />
-        </div>
-      </div>
-
-      <Separator />
-
-      {/* Connect socials heading */}
-      <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">
-          Connect with your socials
-        </h2>
-        <p className="text-xs text-white/40 mt-0.5">Add your social links.</p>
-      </div>
-
-      <Separator />
-
-      {/* X (Twitter) */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div className="flex items-center gap-2.5">
-          <div className="size-5 flex items-center justify-center">
-            <XIcon className="size-3.5 text-white" />
+          {/* Avatar overlapping banner */}
+          <div className="px-6 sm:px-8 -mt-10 pb-6">
+            <div className="relative group w-max">
+              <Avatar className="size-20 rounded-full ring-4 ring-sidebar shadow-lg">
+                {form.image ? (
+                  <AvatarImage
+                    src={form.image}
+                    alt={form.fullName}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
+                  {form.fullName?.charAt(0)?.toUpperCase() ?? "U"}
+                </AvatarFallback>
+              </Avatar>
+              <button
+                onClick={() => avatarInputRef.current?.click()}
+                className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+              >
+                <Camera className="size-5 text-white" />
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
+            </div>
           </div>
-          <Label className="text-sm text-white/80 font-medium">
-            X (Twitter)
-          </Label>
-        </div>
-        <div className="flex items-center">
-          <span className="px-3 py-2 text-xs text-white/40 bg-sidebar-accent ring ring-white/5 ring-r-0 rounded-l-md whitespace-nowrap">
-            x.com/
-          </span>
-          <Input
-            value={form.twitter}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, twitter: e.target.value }))
-            }
-            placeholder="handle"
-            className="bg-sidebar-accent ring-white/5 text-white rounded-l-none"
-          />
-        </div>
-      </div>
 
-      <Separator />
+          <Separator />
 
-      {/* Discord */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div className="flex items-center gap-2.5">
-          <LinkIcon className="size-4 text-indigo-400" />
-          <Label className="text-sm text-white/80 font-medium">Discord</Label>
-        </div>
-        <Input
-          value={form.discord}
-          onChange={(e) =>
-            setForm((prev) => ({ ...prev, discord: e.target.value }))
-          }
-          placeholder="username#0000"
-          className="bg-sidebar-accent ring-white/5 text-white"
-        />
-      </div>
+          {/* Profile Photo */}
+          <div className="flex flex-col items-start gap-2 sm:gap-4 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                Profile photo
+              </Label>
+              <p className="text-xs text-white/40 mt-0.5">
+                This photo will be visible to others.
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Avatar className="size-14 rounded-full shadow-lg shrink-0">
+                {form.image ? (
+                  <AvatarImage
+                    src={form.image}
+                    alt={form.fullName}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-sidebar-accent text-foreground text-lg font-semibold">
+                  {form.fullName?.charAt(0)?.toUpperCase() ?? "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex gap-2">
+                <Button
+                  className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  <Camera className="size-3.5" />
+                  Upload new image
+                </Button>
+                {form.image && (
+                  <Button
+                    className="ring ring-red-500/25 bg-red-600/15 hover:bg-red-600/25 px-4 py-2 h-[38px] w-max text-xs text-red-400 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+                    onClick={handleRemoveAvatar}
+                  >
+                    <Trash2 className="size-3.5" />
+                    Delete current image
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
 
-      <Separator />
+          <Separator />
 
-      {/* Save */}
-      <div className="flex justify-end px-6 sm:px-8 py-6">
-        <Button
-          onClick={handleSave}
-          disabled={
-            updateProfile.isPending || isAvatarUploading || isBannerUploading
-          }
-          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
-        >
-          {updateProfile.isPending || isAvatarUploading || isBannerUploading
-            ? "Saving..."
-            : "Save changes"}
-        </Button>
-      </div>
+          {/* Full Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">Full name</Label>
+              <p className="text-xs text-white/40 mt-0.5">Your display name.</p>
+            </div>
+            <Input
+              value={form.fullName}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, fullName: e.target.value }))
+              }
+              placeholder="John Doe"
+              className="bg-sidebar-accent ring-white/5 text-white"
+            />
+          </div>
+
+          <Separator />
+
+          {/* Username */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">Username</Label>
+              <p className="text-xs text-white/40 mt-0.5">
+                A unique name for your profile.
+              </p>
+            </div>
+            <div className="flex items-center">
+              <span className="px-3 py-2 text-xs text-white/40 bg-sidebar-accent ring ring-white/5 ring-r-0 rounded-l-md whitespace-nowrap border-none!">
+                profitabledge.com/
+              </span>
+              <Input
+                value={form.username}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    username: e.target.value
+                      .toLowerCase()
+                      .replace(/[^a-z0-9_-]/g, ""),
+                  }))
+                }
+                placeholder="johndoe"
+                className="bg-sidebar-accent ring-white/5 text-white rounded-l-none"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Display Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                Display name
+              </Label>
+              <p className="text-xs text-white/40 mt-0.5">
+                Used across your account and shareable proof surfaces.
+              </p>
+            </div>
+            <Input
+              value={form.displayName}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, displayName: e.target.value }))
+              }
+              placeholder="Optional display name"
+              className="bg-sidebar-accent ring-white/5 text-white"
+            />
+          </div>
+
+          <Separator />
+
+          {/* About you */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">About you</Label>
+              <p className="text-xs text-white/40 mt-0.5">
+                Write a description for your profile.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Textarea
+                value={form.bio}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, bio: e.target.value }))
+                }
+                placeholder="I'm a trader who..."
+                rows={3}
+                maxLength={500}
+                className="ring-white/5 text-white resize-none text-xs! bg-transparent!"
+              />
+              <p className="text-[11px] text-white/30 text-right">
+                {form.bio.length}/500
+              </p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Location */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">Location</Label>
+              <p className="text-xs text-white/40 mt-0.5">Where you trade from.</p>
+            </div>
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/30" />
+              <Input
+                value={form.location}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, location: e.target.value }))
+                }
+                placeholder="e.g., London, UK"
+                className="bg-sidebar-accent ring-white/5 text-white pl-9"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Connect socials heading */}
+          <div className="px-6 sm:px-8 py-5">
+            <h2 className="text-sm font-semibold text-white">
+              Connect with your socials
+            </h2>
+            <p className="text-xs text-white/40 mt-0.5">Add your social links.</p>
+          </div>
+
+          <Separator />
+
+          {/* X (Twitter) */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div className="flex items-center gap-2.5">
+              <div className="size-5 flex items-center justify-center">
+                <XIcon className="size-3.5 text-white" />
+              </div>
+              <Label className="text-sm text-white/80 font-medium">
+                X (Twitter)
+              </Label>
+            </div>
+            <div className="flex items-center">
+              <span className="px-3 py-2 text-xs text-white/40 bg-sidebar-accent ring ring-white/5 ring-r-0 rounded-l-md whitespace-nowrap">
+                x.com/
+              </span>
+              <Input
+                value={form.twitter}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, twitter: e.target.value }))
+                }
+                placeholder="handle"
+                className="bg-sidebar-accent ring-white/5 text-white rounded-l-none"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Discord */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div className="flex items-center gap-2.5">
+              <LinkIcon className="size-4 text-indigo-400" />
+              <Label className="text-sm text-white/80 font-medium">Discord</Label>
+            </div>
+            <Input
+              value={form.discord}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, discord: e.target.value }))
+              }
+              placeholder="username#0000"
+              className="bg-sidebar-accent ring-white/5 text-white"
+            />
+          </div>
+
+          <Separator />
+
+          {/* Save */}
+          <div className="flex justify-end px-6 sm:px-8 py-6">
+            <Button
+              onClick={handleSave}
+              disabled={
+                updateProfile.isPending || isAvatarUploading || isBannerUploading
+              }
+              className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+            >
+              {updateProfile.isPending || isAvatarUploading || isBannerUploading
+                ? "Saving..."
+                : "Save changes"}
+            </Button>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="effects" className="mt-0">
+          <div className="px-6 sm:px-8 py-6">
+            <ProfileEffectsEditor
+              profileEffects={(user as any)?.profileEffects ?? null}
+              user={{
+                name: user?.name ?? null,
+                username: user?.username ?? null,
+                image: user?.image ?? null,
+              }}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {pendingBannerSrc && (
       <CoverImageCropDialog

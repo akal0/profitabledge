@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -66,8 +66,9 @@ function SessionQueryBoundary({ children }: { children: React.ReactNode }) {
       touch.type,
       touch.code,
       touch.offerCode ?? "",
+      touch.channel ?? "",
       touch.trackingLinkSlug ?? "",
-      touch.affiliateGroupSlug ?? "",
+      "",
       pathname ?? "",
       searchParams?.toString() ?? "",
     ].join(":");
@@ -131,17 +132,19 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <NuqsAdapter>
       <trpc.Provider client={trpcReactClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <SessionQueryBoundary>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="dark"
-              forcedTheme="dark"
-              disableTransitionOnChange
-            >
-              <TooltipProvider>{children}</TooltipProvider>
-              <Toaster richColors />
-            </ThemeProvider>
-          </SessionQueryBoundary>
+          <Suspense>
+            <SessionQueryBoundary>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="dark"
+                forcedTheme="dark"
+                disableTransitionOnChange
+              >
+                <TooltipProvider>{children}</TooltipProvider>
+                <Toaster richColors />
+              </ThemeProvider>
+            </SessionQueryBoundary>
+          </Suspense>
         </QueryClientProvider>
       </trpc.Provider>
     </NuqsAdapter>

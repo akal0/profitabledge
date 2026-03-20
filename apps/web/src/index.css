@@ -724,3 +724,134 @@ html.dark body {
   stroke-width: 6;
   paint-order: stroke fill;
 }
+
+/* ── Affiliate profile effects ── */
+
+@keyframes pfp-pulse {
+  0%,
+  100% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000), 0 0 20px var(--pfp-glow, rgba(255, 255, 255, 0.3)),
+      0 0 40px var(--pfp-glow-outer, rgba(255, 255, 255, 0.1));
+  }
+  50% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000), 0 0 30px var(--pfp-glow, rgba(255, 255, 255, 0.5)),
+      0 0 60px var(--pfp-glow-outer, rgba(255, 255, 255, 0.2));
+  }
+}
+
+@keyframes pfp-rainbow-spin {
+  to {
+    --tw-rotate: 360deg;
+    transform: translate(var(--tw-translate-x), var(--tw-translate-y))
+      rotate(360deg) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y))
+      scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+  }
+}
+
+@keyframes name-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes name-shimmer {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+
+@keyframes name-gradient-shift {
+  0% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
+  100% {
+    background-position: 0% center;
+  }
+}
+
+@keyframes name-breathe {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+    filter: brightness(1.3);
+  }
+}
+
+@keyframes pfp-electric {
+  0%,
+  100% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 16px var(--pfp-glow, rgba(34, 211, 238, 0.6)),
+      0 0 32px var(--pfp-glow-outer, rgba(56, 189, 248, 0.3));
+  }
+  25% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 24px var(--pfp-glow, rgba(34, 211, 238, 0.8)),
+      0 0 48px var(--pfp-glow-outer, rgba(56, 189, 248, 0.4));
+  }
+  50% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 12px var(--pfp-glow, rgba(34, 211, 238, 0.4)),
+      0 0 24px var(--pfp-glow-outer, rgba(56, 189, 248, 0.2));
+  }
+  75% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 28px var(--pfp-glow, rgba(34, 211, 238, 0.9)),
+      0 0 56px var(--pfp-glow-outer, rgba(56, 189, 248, 0.5));
+  }
+}
+
+@keyframes pfp-sakura {
+  0%,
+  100% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 18px var(--pfp-glow, rgba(244, 114, 182, 0.45)),
+      0 0 36px var(--pfp-glow-outer, rgba(251, 113, 133, 0.2));
+  }
+  50% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 28px var(--pfp-glow, rgba(244, 114, 182, 0.65)),
+      0 0 48px var(--pfp-glow-outer, rgba(251, 113, 133, 0.35));
+  }
+}
+
+@keyframes pfp-hearts {
+  0%,
+  100% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 20px var(--pfp-glow, rgba(251, 113, 133, 0.5)),
+      0 0 40px var(--pfp-glow-outer, rgba(244, 63, 94, 0.25));
+  }
+  50% {
+    box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 30px var(--pfp-glow, rgba(251, 113, 133, 0.7)),
+      0 0 50px var(--pfp-glow-outer, rgba(244, 63, 94, 0.4));
+    transform: scale(1.03);
+  }
+}

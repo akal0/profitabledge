@@ -39,8 +39,15 @@ import {
 import { cn } from "@/lib/utils";
 import {
   getAffiliateBadgeClassName,
-  getAffiliateBannerOverlayClassName,
   getAffiliateHighlightClassName,
+  getAffiliatePfpEffectClassName,
+  getAffiliatePfpEffectStyle,
+  getAffiliatePfpWrapperClassName,
+  getCustomPfpAnimationClassName,
+  getAffiliateNameColorStyle,
+  getAffiliateNameFontClassName,
+  getAffiliateNameEffectClassName,
+  getAffiliateNameEffectStyle,
   getConnectionBadgeClassName,
   getOriginBadgeClassName,
 } from "@/features/public-proof/lib/public-proof-badges";
@@ -351,6 +358,12 @@ export function PublicProofPage({
     page as PublicProofPageData & { affiliate?: PublicProofAffiliate }
   ).affiliate;
   const affiliateBadgeLabel = affiliate?.badgeLabel?.trim() || "Affiliate";
+  const profileEffects = (page.trader as any).profileEffects as {
+    pfpEffect?: string;
+    nameEffect?: string;
+    nameFont?: string;
+    nameColor?: string;
+  } | null;
   const trustStartedAt = formatProofDate(page.proof.auditCoverageStartsAt);
   const lastSyncedLabel = page.proof.lastSyncedAt
     ? formatTimestamp(page.proof.lastSyncedAt)
@@ -413,153 +426,168 @@ export function PublicProofPage({
 
   return (
     <div className="min-h-screen h-full w-full bg-sidebar text-white">
-      {/* Full-bleed banner */}
-      <div className="relative h-52 md:h-64 bg-gradient-to-r from-teal-900/40 to-indigo-900/40">
+      {/* First section */}
+      <div className="relative">
         {affiliate?.isAffiliate ? (
-          <>
-            <div
-              className={cn(
-                "absolute inset-0 opacity-90",
-                getAffiliateBannerOverlayClassName(affiliate.effectVariant)
-              )}
-            />
-            <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(251,191,36,0.09),transparent_34%,rgba(255,255,255,0.02)_54%,transparent_72%)]" />
-          </>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.35),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.18),transparent_35%)]" />
         ) : null}
-        {page.trader.profileBannerUrl && (
-          <img
-            src={page.trader.profileBannerUrl}
-            alt="Cover"
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition: page.trader.profileBannerPosition ?? "50% 50%" }}
-            loading="eager"
-          />
-        )}
-      </div>
 
-      <div className="px-4 md:px-6 lg:px-8">
-        {/* Avatar overlapping banner */}
-        <div className="-mt-9 pb-4">
-          <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
-            {page.trader.image ? (
-              <AvatarImage
-                src={page.trader.image}
-                alt={page.trader.name ?? page.trader.username}
-                className="object-cover"
-              />
-            ) : null}
-            <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
-              {(page.trader.name ?? page.trader.username)
-                ?.charAt(0)
-                ?.toUpperCase() ?? "T"}
-            </AvatarFallback>
-          </Avatar>
+        {/* Full-bleed banner */}
+        <div className="relative h-52 md:h-64">
+          {page.trader.profileBannerUrl && (
+            <img
+              src={page.trader.profileBannerUrl}
+              alt="Cover"
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{
+                objectPosition: page.trader.profileBannerPosition ?? "50% 50%",
+              }}
+              loading="eager"
+            />
+          )}
         </div>
 
-        {/* Account info + action buttons */}
-        <div className="flex w-full flex-col gap-5 py-5 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0 space-y-4">
-            <div className="space-y-2">
-              <p className="text-xs ">
-                <span className="text-teal-300/80 font-semibold">
-                  @{page.trader.username}'s
-                </span>{" "}
-                public proof page
-              </p>
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
-                  {page.account.name}
-                </h1>
-                <div className="mt-2 flex items-center gap-1.5">
-                  <img
-                    src={getAccountImage({ broker: page.account.broker })}
-                    alt={page.account.broker ?? "Broker"}
-                    className="size-4 rounded-sm object-contain"
-                  />
-                  {page.account.broker && (
-                    <span className="text-sm text-white/55">
-                      {page.account.broker}
-                    </span>
+        <div className="relative px-4 md:px-6 lg:px-8">
+          {/* Avatar overlapping banner */}
+          <div className="-mt-9 pb-4">
+            {profileEffects?.pfpEffect && profileEffects.pfpEffect !== "none" ? (
+              <div className={cn("inline-flex rounded-full", getAffiliatePfpWrapperClassName(profileEffects.pfpEffect))}>
+                <Avatar
+                  className={cn(
+                    "size-[72px] rounded-full shadow-lg",
+                    getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
+                    profileEffects.pfpEffect === "custom" && getCustomPfpAnimationClassName((profileEffects as any).customRingEffect)
                   )}
+                  style={profileEffects.pfpEffect === "custom" ? getAffiliatePfpEffectStyle("custom", { from: (profileEffects as any).customRingFrom, to: (profileEffects as any).customRingTo }) : undefined}
+                >
+                  {page.trader.image ? (
+                    <AvatarImage
+                      src={page.trader.image}
+                      alt={page.trader.name ?? page.trader.username}
+                      className="object-cover"
+                    />
+                  ) : null}
+                  <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
+                    {(page.trader.name ?? page.trader.username)
+                      ?.charAt(0)
+                      ?.toUpperCase() ?? "T"}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+            ) : (
+              <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
+                {page.trader.image ? (
+                  <AvatarImage
+                    src={page.trader.image}
+                    alt={page.trader.name ?? page.trader.username}
+                    className="object-cover"
+                  />
+                ) : null}
+                <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
+                  {(page.trader.name ?? page.trader.username)
+                    ?.charAt(0)
+                    ?.toUpperCase() ?? "T"}
+                </AvatarFallback>
+              </Avatar>
+            )}
+          </div>
+
+          {/* Account info + action buttons */}
+          <div className="flex w-full flex-col gap-5 py-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0 space-y-4">
+              <div className="space-y-2">
+                <p className="text-xs ">
+                  <span
+                    className={cn(
+                      "font-semibold",
+                      profileEffects
+                        ? [
+                            getAffiliateNameFontClassName(profileEffects.nameFont),
+                            getAffiliateNameEffectClassName(profileEffects.nameEffect),
+                          ]
+                        : "text-teal-300/80"
+                    )}
+                    style={
+                      profileEffects
+                        ? {
+                            ...getAffiliateNameColorStyle(profileEffects.nameColor, profileEffects.nameColor === "custom" ? { from: (profileEffects as any).customGradientFrom, to: (profileEffects as any).customGradientTo } : null),
+                            ...getAffiliateNameEffectStyle(
+                              profileEffects.nameEffect,
+                              profileEffects.nameColor,
+                              profileEffects.nameColor === "custom" ? { from: (profileEffects as any).customGradientFrom, to: (profileEffects as any).customGradientTo } : null
+                            ),
+                          }
+                        : undefined
+                    }
+                  >
+                    @{page.trader.username}'s
+                  </span>{" "}
+                  public proof page
+                </p>
+                <div>
+                  <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">
+                    {page.account.name}
+                  </h1>
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <img
+                      src={getAccountImage({ broker: page.account.broker })}
+                      alt={page.account.broker ?? "Broker"}
+                      className="size-4 rounded-sm object-contain"
+                    />
+                    {page.account.broker && (
+                      <span className="text-sm text-white/55">
+                        {page.account.broker}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              {affiliate?.isAffiliate ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {affiliate?.isAffiliate ? (
+                  <Badge
+                    className={cn(
+                      "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
+                      getAffiliateBadgeClassName(affiliate.effectVariant)
+                    )}
+                  >
+                    {affiliateBadgeLabel}
+                  </Badge>
+                ) : null}
                 <Badge
                   className={cn(
                     "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
-                    getAffiliateBadgeClassName(affiliate.effectVariant)
+                    getConnectionBadgeClassName(page.proof.connectionKind)
                   )}
                 >
-                  {affiliateBadgeLabel}
+                  {page.proof.connectionLabel}
                 </Badge>
-              ) : null}
-              <Badge
-                className={cn(
-                  "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
-                  getConnectionBadgeClassName(page.proof.connectionKind)
-                )}
-              >
-                {page.proof.connectionLabel}
-              </Badge>
 
-              <Badge className="rounded-sm ring-1 ring-white/10 bg-white/5 text-[10px] uppercase tracking-[0.05em] text-white/70">
-                {page.proof.verificationLabel}
-              </Badge>
-              <Badge
-                className={cn(
-                  "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
-                  page.summary.openTradesCount > 0
-                    ? "ring-teal-500/25 bg-teal-500/15 text-teal-300"
-                    : "ring-white/10 bg-white/5 text-white/60"
-                )}
-              >
-                {page.proof.liveStatusLabel}
-              </Badge>
-            </div>
-            <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/45">
-              <span>Last synced: {lastSyncedLabel}</span>
-              <span>Audit coverage: {trustStartedAt}</span>
-              <span>
-                Source mix: {page.trust.sourceBadges.length || 1} channel
-                {page.trust.sourceBadges.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            {affiliate?.isAffiliate ? (
-              <div
-                className={cn(
-                  "relative overflow-hidden rounded-sm border px-4 py-3",
-                  getAffiliateHighlightClassName(affiliate.effectVariant)
-                )}
-              >
-                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08),transparent_45%,rgba(255,255,255,0.02)_70%)]" />
-                <div className="relative flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="size-3.5" />
-                      <p className="text-xs font-medium uppercase tracking-[0.18em]">
-                        {affiliateBadgeLabel}
-                      </p>
-                    </div>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-current/80">
-                      This proof page belongs to an approved affiliate. Referral
-                      traffic, offers, and proof presentation are tied to the
-                      affiliate profile behind this account.
-                    </p>
-                  </div>
-                  <div className="rounded-sm border border-white/10 bg-black/20 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-current/80">
-                    {affiliate.effectVariant
-                      ? affiliate.effectVariant.replace(/_/g, " ")
-                      : "affiliate effect"}
-                  </div>
-                </div>
+                <Badge className="rounded-sm ring-1 ring-white/10 bg-white/5 text-[10px] uppercase tracking-[0.05em] text-white/70">
+                  {page.proof.verificationLabel}
+                </Badge>
+                <Badge
+                  className={cn(
+                    "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
+                    page.summary.openTradesCount > 0
+                      ? "ring-teal-500/25 bg-teal-500/15 text-teal-300"
+                      : "ring-white/10 bg-white/5 text-white/60"
+                  )}
+                >
+                  {page.proof.liveStatusLabel}
+                </Badge>
               </div>
-            ) : null}
-          </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/45">
+                <span>Last synced: {lastSyncedLabel}</span>
+                <span>Audit coverage: {trustStartedAt}</span>
+                <span>
+                  Source mix: {page.trust.sourceBadges.length || 1} channel
+                  {page.trust.sourceBadges.length === 1 ? "" : "s"}
+                </span>
+              </div>
+            </div>
 
-          <div className="flex flex-wrap gap-2">
-            {/*<Button
+            <div className="flex flex-wrap gap-2">
+              {/*<Button
               variant="outline"
               className="rounded-sm ring-white/8! text-white/75 bg-transparent! h-8! text-xs!"
               onClick={copyLink}
@@ -568,20 +596,21 @@ export function PublicProofPage({
               Copy link
             </Button>*/}
 
-            <Link
-              href="/sign-up"
-              className={cn(
-                buttonVariants({}),
-                getPropAssignActionButtonClassName({
-                  tone: "teal",
-                  size: "sm",
-                  className: "w-max! gap-0.5",
-                })
-              )}
-            >
-              Build your own
-              <ChevronRight className="size-3" />
-            </Link>
+              <Link
+                href="/sign-up"
+                className={cn(
+                  buttonVariants({}),
+                  getPropAssignActionButtonClassName({
+                    tone: "teal",
+                    size: "sm",
+                    className: "w-max! gap-0.5",
+                  })
+                )}
+              >
+                Build your own
+                <ChevronRight className="size-3" />
+              </Link>
+            </div>
           </div>
         </div>
       </div>

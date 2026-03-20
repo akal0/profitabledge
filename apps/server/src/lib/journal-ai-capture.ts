@@ -284,7 +284,8 @@ Keep the contentBlocks concise and useful for inserting directly into the journa
         ],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 4096,
+          maxOutputTokens: 16384,
+          responseMimeType: "application/json",
         },
       },
       metadata: {
@@ -296,6 +297,7 @@ Keep the contentBlocks concise and useful for inserting directly into the journa
     const responseText = result.response.text();
     const parsed = extractJsonObject(responseText);
     if (!parsed) {
+      console.error("[journal-ai-capture] unparseable Gemini response:", responseText.slice(0, 1000));
       throw new Error("Failed to parse video transcription result");
     }
 
@@ -348,7 +350,9 @@ Keep the contentBlocks concise and useful for inserting directly into the journa
       psychology:
         parsed.psychology &&
         typeof parsed.psychology === "object"
-          ? parsed.psychology
+          ? Object.fromEntries(
+              Object.entries(parsed.psychology).filter(([, v]) => v != null)
+            )
           : fallback.psychology,
       plannedEntryPrice:
         typeof parsed.plannedEntryPrice === "string" || parsed.plannedEntryPrice === null
@@ -421,18 +425,14 @@ export async function parseNaturalJournalCapture(
   const trimmed = text.trim();
 
   if (context?.userId && context.videoUrl) {
-    try {
-      return await transcribeVideoCapture({
-        userId: context.userId,
-        accountId: context.accountId,
-        text: trimmed,
-        videoUrl: context.videoUrl,
-        videoName: context.videoName,
-        videoMimeType: context.videoMimeType,
-      });
-    } catch (error) {
-      console.error("[journal-ai-capture] video transcription failed", error);
-    }
+    return await transcribeVideoCapture({
+      userId: context.userId,
+      accountId: context.accountId,
+      text: trimmed,
+      videoUrl: context.videoUrl,
+      videoName: context.videoName,
+      videoMimeType: context.videoMimeType,
+    });
   }
 
   return buildFallbackCapture(trimmed);

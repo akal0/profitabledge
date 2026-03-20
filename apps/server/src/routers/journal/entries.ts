@@ -36,6 +36,18 @@ const journalAICaptureResultSchema = z.object({
   entryType: journalEntryTypeSchema.nullable(),
   tradePhase: tradePhaseSchema.nullable(),
   psychology: psychologySchema.partial().nullable(),
+  plannedEntryPrice: z.string().nullable().optional(),
+  plannedExitPrice: z.string().nullable().optional(),
+  plannedStopLoss: z.string().nullable().optional(),
+  plannedTakeProfit: z.string().nullable().optional(),
+  plannedRiskReward: z.string().nullable().optional(),
+  plannedNotes: z.string().nullable().optional(),
+  actualOutcome: z.enum(['win', 'loss', 'breakeven', 'scratched']).nullable().optional(),
+  actualPnl: z.string().nullable().optional(),
+  actualPips: z.string().nullable().optional(),
+  postTradeAnalysis: z.string().nullable().optional(),
+  lessonsLearned: z.string().nullable().optional(),
+  transcript: z.string().nullable().optional(),
   contentBlocks: z.array(journalBlockSchema),
 });
 
@@ -134,6 +146,7 @@ export const journalEntryProcedures = {
           title: journalEntry.title,
           emoji: journalEntry.emoji,
           coverImageUrl: journalEntry.coverImageUrl,
+          coverImagePosition: journalEntry.coverImagePosition,
           entryType: journalEntry.entryType,
           tags: journalEntry.tags,
           journalDate: journalEntry.journalDate,
@@ -338,15 +351,27 @@ export const journalEntryProcedures = {
   parseNaturalCapture: protectedProcedure
     .input(
       z.object({
-        text: z.string().trim().min(1).max(1500),
+        text: z.string().trim().max(1500).optional().default(""),
         accountId: z.string().optional(),
-      })
+        videoUrl: z.string().url().optional(),
+        videoName: z.string().optional(),
+        videoMimeType: z.string().optional(),
+      }).refine(
+        (value) => Boolean(value.text.trim()) || Boolean(value.videoUrl),
+        {
+          message: "Provide text or a video for AI capture",
+          path: ["text"],
+        }
+      )
     )
     .output(journalAICaptureResultSchema)
     .mutation(async ({ ctx, input }) => {
       return parseNaturalJournalCapture(input.text, {
         userId: ctx.session.user.id,
         accountId: input.accountId,
+        videoUrl: input.videoUrl,
+        videoName: input.videoName,
+        videoMimeType: input.videoMimeType,
       });
     }),
 
@@ -695,7 +720,7 @@ export const journalEntryProcedures = {
 
   getEntryGoals: protectedProcedure
     .input(z.object({ entryId: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       return db
         .select({
           id: journalEntryGoal.id,
@@ -706,8 +731,13 @@ export const journalEntryProcedures = {
           goal: goal,
         })
         .from(journalEntryGoal)
+        .innerJoin(journalEntry, eq(journalEntryGoal.entryId, journalEntry.id))
         .innerJoin(goal, eq(journalEntryGoal.goalId, goal.id))
-        .where(eq(journalEntryGoal.entryId, input.entryId));
+        .where(and(
+          eq(journalEntryGoal.entryId, input.entryId),
+          eq(journalEntry.userId, ctx.session.user.id),
+          eq(goal.userId, ctx.session.user.id)
+        ));
     }),
 
   search: protectedProcedure

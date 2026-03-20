@@ -21,6 +21,7 @@
   - `apps/server/src/routers/accounts/archive-preferences.ts`
 - aggregated portfolio stats
   - `apps/server/src/routers/accounts/aggregated-stats.ts`
+  - mixed-currency all-account totals should be normalized through the shared currency helper when the client sends a preferred dashboard currency
 - account performance and broker-owned trade interpretation
   - `apps/server/src/routers/accounts/performance.ts`
   - `apps/server/src/lib/trades/trade-outcome.ts`
@@ -31,11 +32,18 @@
   - `apps/server/src/routers/proof/...`
   - `apps/server/src/lib/public-proof/...`
   - `apps/server/src/lib/public-proof/page-data.ts` owns public proof overview/stat/trust shaping so router queries can stay focused on fetch + authorization instead of inlining proof-page aggregation logic
+  - live public-proof open-trade rows should treat their headline floating P&L as net open P&L (`profit + swap`) while still preserving raw swap separately for any downstream UI that wants to break it out
 - health and sync status
   - `apps/server/src/routers/accounts/health.ts`
 
 These files exist to keep `accounts.ts` as the router composition surface rather
 than forcing every account concern back into one file.
+
+Current account guardrails:
+
+- `apps/server/src/routers/accounts.ts`
+  - owns the hard delete mutation guard that prevents a user from deleting their only remaining account
+  - all-account `stats` queries can receive an optional preferred currency so portfolio money metrics are normalized before the frontend renders the widgets
 
 Public proof pages are intentionally separate from social/public-profile work:
 

@@ -20,6 +20,7 @@ import {
   boolean,
   jsonb,
   index,
+  uniqueIndex,
   varchar,
   numeric,
 } from "drizzle-orm/pg-core";
@@ -87,6 +88,22 @@ export interface JournalPrompt {
   tradeId?: string;
   goalId?: string;
 }
+
+export type JournalShareInviteStatus =
+  | "pending"
+  | "claimed"
+  | "revoked"
+  | "expired";
+
+export type JournalShareViewerStatus = "approved" | "revoked";
+
+export type JournalShareViewerSource = "invite" | "request" | "manual";
+
+export type JournalShareAccessRequestStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled";
 
 // ============================================================================
 // Journal Entry - Main journal page/document
@@ -188,6 +205,188 @@ export const journalEntryGoal = pgTable("journal_entry_goal", {
   goalIdx: index("idx_journal_entry_goal_goal").on(table.goalId),
   uniqueIdx: index("idx_journal_entry_goal_unique").on(table.entryId, table.goalId),
 }));
+
+export const journalShare = pgTable(
+  "journal_share",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    shareToken: varchar("share_token", { length: 64 }).notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    revokedAt: timestamp("revoked_at"),
+    viewCount: integer("view_count").notNull().default(0),
+    lastViewedAt: timestamp("last_viewed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    ownerIdx: index("idx_journal_share_owner").on(
+      table.ownerUserId,
+      table.createdAt
+    ),
+    activeIdx: index("idx_journal_share_active").on(
+      table.ownerUserId,
+      table.isActive
+    ),
+    tokenIdx: uniqueIndex("journal_share_token_idx").on(table.shareToken),
+  })
+);
+
+export const journalShareEntry = pgTable(
+  "journal_share_entry",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shareId: text("share_id")
+      .notNull()
+      .references(() => journalShare.id, { onDelete: "cascade" }),
+    journalEntryId: text("journal_entry_id")
+      .notNull()
+      .references(() => journalEntry.id, { onDelete: "cascade" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    shareIdx: index("idx_journal_share_entry_share").on(
+      table.shareId,
+      table.sortOrder
+    ),
+    entryIdx: index("idx_journal_share_entry_entry").on(table.journalEntryId),
+    shareEntryUniqueIdx: uniqueIndex("journal_share_entry_unique_idx").on(
+      table.shareId,
+      table.journalEntryId
+    ),
+  })
+);
+
+export const journalShareInvite = pgTable(
+  "journal_share_invite",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shareId: text("share_id")
+      .notNull()
+      .references(() => journalShare.id, { onDelete: "cascade" }),
+    invitedByUserId: text("invited_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    invitedEmail: text("invited_email").notNull(),
+    invitedEmailNormalized: text("invited_email_normalized").notNull(),
+    status: varchar("status", { length: 16 })
+      .$type<JournalShareInviteStatus>()
+      .notNull()
+      .default("pending"),
+    claimedViewerUserId: text("claimed_viewer_user_id").references(
+      () => user.id,
+      { onDelete: "set null" }
+    ),
+    claimedAt: timestamp("claimed_at"),
+    revokedAt: timestamp("revoked_at"),
+    expiresAt: timestamp("expires_at"),
+    lastSentAt: timestamp("last_sent_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    shareIdx: index("idx_journal_share_invite_share").on(
+      table.shareId,
+      table.status,
+      table.createdAt
+    ),
+    emailIdx: index("idx_journal_share_invite_email").on(
+      table.invitedEmailNormalized,
+      table.status
+    ),
+    shareEmailUniqueIdx: uniqueIndex("journal_share_invite_share_email_idx").on(
+      table.shareId,
+      table.invitedEmailNormalized
+    ),
+  })
+);
+
+export const journalShareViewer = pgTable(
+  "journal_share_viewer",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shareId: text("share_id")
+      .notNull()
+      .references(() => journalShare.id, { onDelete: "cascade" }),
+    viewerUserId: text("viewer_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    approvedByUserId: text("approved_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    source: varchar("source", { length: 16 })
+      .$type<JournalShareViewerSource>()
+      .notNull()
+      .default("manual"),
+    status: varchar("status", { length: 16 })
+      .$type<JournalShareViewerStatus>()
+      .notNull()
+      .default("approved"),
+    approvedAt: timestamp("approved_at").notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    shareIdx: index("idx_journal_share_viewer_share").on(
+      table.shareId,
+      table.status,
+      table.createdAt
+    ),
+    viewerIdx: index("idx_journal_share_viewer_user").on(
+      table.viewerUserId,
+      table.status
+    ),
+    shareViewerUniqueIdx: uniqueIndex("journal_share_viewer_share_user_idx").on(
+      table.shareId,
+      table.viewerUserId
+    ),
+  })
+);
+
+export const journalShareAccessRequest = pgTable(
+  "journal_share_access_request",
+  {
+    id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+    shareId: text("share_id")
+      .notNull()
+      .references(() => journalShare.id, { onDelete: "cascade" }),
+    requesterUserId: text("requester_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    requesterEmailSnapshot: text("requester_email_snapshot"),
+    requesterNameSnapshot: text("requester_name_snapshot"),
+    message: text("message"),
+    status: varchar("status", { length: 16 })
+      .$type<JournalShareAccessRequestStatus>()
+      .notNull()
+      .default("pending"),
+    decidedByUserId: text("decided_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    decidedAt: timestamp("decided_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    shareIdx: index("idx_journal_share_access_request_share").on(
+      table.shareId,
+      table.status,
+      table.createdAt
+    ),
+    requesterIdx: index("idx_journal_share_access_request_user").on(
+      table.requesterUserId,
+      table.status
+    ),
+    shareRequesterUniqueIdx: uniqueIndex(
+      "journal_share_access_request_share_user_idx"
+    ).on(table.shareId, table.requesterUserId),
+  })
+);
 
 // ============================================================================
 // Psychology Performance Correlation - Cached correlation analysis
@@ -519,6 +718,8 @@ export interface JournalBlockProps {
   videoCaption?: string;
   videoAutoplay?: boolean;
   videoMuted?: boolean;
+  embedUrl?: string;
+  embedType?: 'youtube' | 'twitter' | 'generic';
   
   calloutEmoji?: string;
   calloutColor?: string;

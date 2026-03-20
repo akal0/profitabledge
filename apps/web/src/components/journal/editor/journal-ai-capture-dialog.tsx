@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Command, Loader2, Sparkles, X } from "lucide-react";
+import { Command, Loader2, Paperclip, Play, Sparkles, X } from "lucide-react";
 import { toast } from "sonner";
 
 import type { JournalAICaptureResult } from "@/components/journal/ai-capture-types";
@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
 import { cn } from "@/lib/utils";
+import { useUploadThing } from "@/utils/uploadthing";
 import { trpc } from "@/utils/trpc";
 
 export function JournalAICaptureDialog({
@@ -30,25 +31,88 @@ export function JournalAICaptureDialog({
   accountId?: string;
 }) {
   const [input, setInput] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null);
   const wasOpenRef = useRef(open);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const parseMutation = trpc.journal.parseNaturalCapture.useMutation();
+  const { startUpload: startVideoUpload, isUploading: isVideoUploading } =
+    useUploadThing((router) => router.videoUploader);
 
   useEffect(() => {
     if (!open && wasOpenRef.current) {
       setInput("");
+      setVideoFile(null);
+      setVideoPreviewUrl(null);
       parseMutation.reset();
     }
     wasOpenRef.current = open;
   }, [open, parseMutation]);
 
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(videoPreviewUrl);
+      }
+    };
+  }, [videoPreviewUrl]);
+
+  const handleVideoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    if (!file.type.startsWith("video/")) {
+      toast.error("Select a video file");
+      return;
+    }
+
+    if (videoPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+
+    setVideoFile(file);
+    setVideoPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleClearVideo = () => {
+    if (videoPreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(videoPreviewUrl);
+    }
+
+    setVideoFile(null);
+    setVideoPreviewUrl(null);
+    if (videoInputRef.current) {
+      videoInputRef.current.value = "";
+    }
+  };
+
   const handleInsert = async () => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed && !videoFile) return;
 
     try {
+      let videoUrl: string | undefined;
+      let videoName: string | undefined;
+      let videoMimeType: string | undefined;
+
+      if (videoFile) {
+        const uploadResult = await startVideoUpload([videoFile]);
+        videoUrl = uploadResult?.[0]?.ufsUrl ?? uploadResult?.[0]?.url;
+        if (!videoUrl) {
+          throw new Error("Failed to upload video");
+        }
+        videoName = videoFile.name;
+        videoMimeType = videoFile.type;
+      }
+
       const result = await parseMutation.mutateAsync({
         text: trimmed,
         accountId,
+        videoUrl,
+        videoName,
+        videoMimeType,
       });
       onApply(result as JournalAICaptureResult);
     } catch (error) {
@@ -114,6 +178,58 @@ export function JournalAICaptureDialog({
               placeholder="Today was rough. I chased EURUSD after missing the clean entry, got stopped, then kept trading trying to make it back."
               className="min-h-[180px] resize-none border-0 bg-transparent px-4 py-3 text-xl font-medium leading-relaxed text-white placeholder:text-white/20 focus-visible:ring-0"
             />
+            <div className="flex flex-col gap-3 rounded-sm border border-white/5 bg-sidebar/60 px-4 py-3 text-xs leading-relaxed text-white/38">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-white/60">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  <span>Optional video</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-7 px-2 text-[11px] text-white/60 hover:text-white"
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={isVideoUploading}
+                >
+                  Attach video
+                </Button>
+              </div>
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={handleVideoChange}
+              />
+              {videoFile ? (
+                <div className="flex items-center gap-3 rounded-md border border-white/8 bg-black/20 px-3 py-2">
+                  <div className="flex size-9 items-center justify-center rounded-md bg-white/5">
+                    {videoPreviewUrl ? (
+                      <Play className="h-4 w-4 text-teal-300" />
+                    ) : (
+                      <Paperclip className="h-4 w-4 text-teal-300" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs text-white/80">
+                      {videoFile.name}
+                    </p>
+                    <p className="text-[11px] text-white/35">
+                      {Math.round(videoFile.size / 1024 / 1024)} MB
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-7 w-7 p-0 text-white/40 hover:text-white"
+                    onClick={handleClearVideo}
+                    disabled={isVideoUploading}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ) : null}
+            </div>
             <div className="rounded-sm border border-white/5 bg-sidebar/60 px-4 py-3 text-xs leading-relaxed text-white/38">
               No special format needed. Example:{" "}
               <span className="text-white/58">
@@ -147,10 +263,10 @@ export function JournalAICaptureDialog({
                   journalActionButtonClassName,
                   "border-teal-500/30 bg-teal-500/12 text-teal-100 hover:bg-teal-500/20"
                 )}
-                disabled={!input.trim() || parseMutation.isPending}
+                disabled={(!input.trim() && !videoFile) || parseMutation.isPending || isVideoUploading}
                 onClick={() => void handleInsert()}
               >
-                {parseMutation.isPending ? (
+                {parseMutation.isPending || isVideoUploading ? (
                   <>
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Inserting…

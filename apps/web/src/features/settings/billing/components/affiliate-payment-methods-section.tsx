@@ -7,8 +7,12 @@ import {
   Banknote,
   CheckCircle2,
   CreditCard,
+  ExternalLink,
+  RefreshCw,
   Shield,
   Trash2,
+  Unplug,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,6 +35,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { trpcOptions } from "@/utils/trpc";
+import { getBillingV2Options } from "@/features/growth/lib/billing-v2";
 
 const AFFILIATE_PAYMENT_METHOD_TYPES = [
   "paypal",
@@ -136,6 +141,13 @@ function formatPaymentMethodType(methodType?: string | null) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function formatStatusLabel(status?: string | null) {
+  if (!status) return "Pending";
+  return status
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 function SummaryCard({
   label,
   value,
@@ -165,6 +177,11 @@ export function AffiliatePaymentMethodsSection() {
   const [paymentMethodForm, setPaymentMethodForm] = useState(
     createAffiliatePaymentMethodForm
   );
+  const [withdrawalAmount, setWithdrawalAmount] = useState("");
+  const [withdrawalDestination, setWithdrawalDestination] = useState<
+    "stripe_connect" | "manual"
+  >("stripe_connect");
+  const billingV2 = getBillingV2Options();
 
   const billingStateQuery = useQuery(
     trpcOptions.billing.getState.queryOptions()
@@ -216,8 +233,103 @@ export function AffiliatePaymentMethodsSection() {
       );
     },
   });
+  const createAffiliateStripeConnectSession = useMutation({
+    ...(billingV2.createAffiliateStripeConnectSession?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Stripe Connect is not available yet");
+      },
+    }),
+  });
+  const refreshAffiliateStripeConnectAccount = useMutation({
+    ...(billingV2.refreshAffiliateStripeConnectAccount?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Stripe Connect is not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Stripe account refreshed");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to refresh Stripe account"
+      );
+    },
+  });
+  const disconnectAffiliateStripeConnect = useMutation({
+    ...(billingV2.disconnectAffiliateStripeConnect?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Stripe Connect is not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Stripe account disconnected");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to disconnect Stripe account"
+      );
+    },
+  });
+  const requestAffiliateWithdrawal = useMutation({
+    ...(billingV2.requestAffiliateWithdrawal?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Withdrawals are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      setWithdrawalAmount("");
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Withdrawal request submitted");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to request withdrawal"
+      );
+    },
+  });
+  const cancelAffiliateWithdrawal = useMutation({
+    ...(billingV2.cancelAffiliateWithdrawal?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Withdrawals are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Withdrawal request cancelled");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to cancel withdrawal"
+      );
+    },
+  });
 
-  const affiliatePayoutSettings = affiliatePayoutSettingsQuery.data;
+  const affiliatePayoutSettings = affiliatePayoutSettingsQuery.data as any;
+  const stripeConnect = affiliatePayoutSettings?.stripeConnect ?? null;
+  const stripeAccountId =
+    stripeConnect?.accountId ?? stripeConnect?.providerAccountId ?? null;
+  const stripeStatusLabel =
+    stripeConnect?.statusLabel ??
+    (stripeAccountId
+      ? formatStatusLabel(stripeConnect?.onboardingStatus ?? "connected")
+      : "Not connected");
+  const stripeAccountLabel =
+    stripeConnect?.accountLabel ?? "Stripe Express payout account";
+  const manualPaymentMethods =
+    affiliatePayoutSettings?.manualPaymentMethods ??
+    affiliatePayoutSettings?.paymentMethods ??
+    [];
+  const withdrawalRequests = affiliatePayoutSettings?.withdrawalRequests ?? [];
   const isLocalhostPayoutTestingEnabled = process.env.NODE_ENV !== "production";
 
   const handleSavePaymentMethod = async () => {
@@ -238,6 +350,49 @@ export function AffiliatePaymentMethodsSection() {
       details: paymentMethodForm.details.trim(),
       isDefault: paymentMethodForm.isDefault,
     });
+  };
+
+  const handleStripeConnect = async (mode: "onboarding" | "dashboard") => {
+    try {
+      const result: any = await createAffiliateStripeConnectSession.mutateAsync({
+        mode,
+        returnPath: "/dashboard/settings/billing/payment-methods",
+      } as any);
+
+      if (result?.url) {
+        window.location.assign(result.url);
+        return;
+      }
+
+      toast.error("Stripe did not return a connect URL");
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to open Stripe Connect"
+      );
+    }
+  };
+
+  const handleRequestWithdrawal = async () => {
+    const amount = Number(withdrawalAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid withdrawal amount");
+      return;
+    }
+
+    const defaultManualMethod =
+      manualPaymentMethods.find((method: any) => method.isDefault) ??
+      manualPaymentMethods[0];
+
+    await requestAffiliateWithdrawal.mutateAsync({
+      amountUsd: Math.round(amount * 100),
+      destinationType: withdrawalDestination,
+      paymentMethodId:
+        withdrawalDestination === "manual"
+          ? defaultManualMethod?.id ?? undefined
+          : undefined,
+    } as any);
   };
 
   return (
@@ -291,7 +446,7 @@ export function AffiliatePaymentMethodsSection() {
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 lg:grid-cols-4">
               <SummaryCard
                 label="Available"
                 value={formatCurrency(affiliatePayoutSettings?.summary.availableAmount)}
@@ -307,9 +462,15 @@ export function AffiliatePaymentMethodsSection() {
               />
 
               <SummaryCard
+                label="Pending"
+                value={withdrawalRequests.filter((item: any) => item.status === "pending").length}
+                description="Withdrawal requests waiting for admin review"
+              />
+
+              <SummaryCard
                 label="Paid out"
                 value={formatCurrency(affiliatePayoutSettings?.summary.paidAmount)}
-                description="Recorded manual payouts sent by admins"
+                description="Settled withdrawals across Stripe and manual payouts"
               />
 
               <SummaryCard
@@ -319,15 +480,175 @@ export function AffiliatePaymentMethodsSection() {
               />
             </div>
 
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <GoalPanel
+                icon={Wallet}
+                title="Stripe Connect"
+                bodyClassName="p-3.5"
+              >
+                <div className="space-y-3">
+                  <GoalSurface>
+                    <div className="p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-medium text-white">
+                              {stripeAccountLabel}
+                            </p>
+                            <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
+                              {stripeStatusLabel}
+                            </Badge>
+                            {stripeConnect?.payoutsEnabled ? (
+                              <Badge className="ring ring-emerald-500/20 bg-emerald-900/30 text-[10px] text-emerald-300">
+                                <CheckCircle2 className="mr-1 size-2.5" />
+                                Payouts enabled
+                              </Badge>
+                            ) : null}
+                          </div>
+
+                          <p className="mt-2 text-xs leading-6 text-white/45">
+                            Connect Stripe Express if you want affiliate withdrawals to
+                            land directly in Stripe. Manual methods remain available as a
+                            fallback destination.
+                          </p>
+
+                          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-white/35">
+                            <span>
+                              Account ID: {stripeAccountId ?? "Not connected"}
+                            </span>
+                            <span>
+                              Charges: {stripeConnect?.chargesEnabled ? "Enabled" : "Pending"}
+                            </span>
+                            <span>
+                              Synced: {formatDate(stripeConnect?.lastSyncedAt)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            onClick={() =>
+                              handleStripeConnect(
+                                stripeAccountId ? "dashboard" : "onboarding"
+                              )
+                            }
+                            disabled={createAffiliateStripeConnectSession.isPending}
+                            className="h-8 rounded-sm border border-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent"
+                          >
+                            <ExternalLink className="size-3.5" />
+                            {createAffiliateStripeConnectSession.isPending
+                              ? "Opening..."
+                              : stripeAccountId
+                              ? "Manage Stripe"
+                              : "Connect Stripe"}
+                          </Button>
+
+                          {stripeAccountId ? (
+                            <>
+                              <Button
+                                onClick={() =>
+                                  refreshAffiliateStripeConnectAccount.mutate()
+                                }
+                                disabled={refreshAffiliateStripeConnectAccount.isPending}
+                                className="h-8 rounded-sm border border-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent"
+                              >
+                                <RefreshCw
+                                  className={`size-3.5 ${
+                                    refreshAffiliateStripeConnectAccount.isPending
+                                      ? "animate-spin"
+                                      : ""
+                                  }`}
+                                />
+                                Refresh
+                              </Button>
+
+                              <Button
+                                onClick={() =>
+                                  disconnectAffiliateStripeConnect.mutate()
+                                }
+                                disabled={disconnectAffiliateStripeConnect.isPending}
+                                className="h-8 rounded-sm bg-rose-600/90 px-3 text-[11px] text-white hover:brightness-110"
+                              >
+                                <Unplug className="size-3.5" />
+                                Disconnect
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </GoalSurface>
+
+                  <GoalSurface>
+                    <div className="p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-white">
+                            Request withdrawal
+                          </p>
+                          <p className="mt-1 text-[11px] leading-5 text-white/40">
+                            Submit a withdrawal request in Billing. Admins can settle it
+                            through Stripe Connect or your saved manual fallback method.
+                          </p>
+                        </div>
+                        <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
+                          {formatCurrency(
+                            affiliatePayoutSettings?.summary.availableAmount ?? 0
+                          )}{" "}
+                          available
+                        </Badge>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-[150px_minmax(0,1fr)_auto]">
+                        <Select
+                          value={withdrawalDestination}
+                          onValueChange={(value) =>
+                            setWithdrawalDestination(
+                              value as "stripe_connect" | "manual"
+                            )
+                          }
+                        >
+                          <SelectTrigger className="w-full ring-white/5 bg-sidebar text-xs">
+                            <SelectValue placeholder="Destination" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="stripe_connect">
+                              Stripe Connect
+                            </SelectItem>
+                            <SelectItem value="manual">Manual fallback</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <Input
+                          value={withdrawalAmount}
+                          onChange={(event) => setWithdrawalAmount(event.target.value)}
+                          placeholder="Amount in USD"
+                          className="ring-white/5 bg-sidebar text-xs"
+                        />
+
+                        <Button
+                          onClick={handleRequestWithdrawal}
+                          disabled={requestAffiliateWithdrawal.isPending}
+                          className="h-10 rounded-sm bg-emerald-600 px-4 text-xs text-white hover:brightness-110"
+                        >
+                          {requestAffiliateWithdrawal.isPending
+                            ? "Submitting..."
+                            : "Request withdrawal"}
+                        </Button>
+                      </div>
+                    </div>
+                  </GoalSurface>
+                </div>
+              </GoalPanel>
+
               <GoalPanel
                 icon={CreditCard}
-                title="Saved payment methods"
+                title="Manual fallback methods"
                 bodyClassName="p-3.5"
               >
                 <div className="space-y-2">
-                  {affiliatePayoutSettings?.paymentMethods?.length ? (
-                    affiliatePayoutSettings.paymentMethods.map((method) => (
+                  {manualPaymentMethods?.length ? (
+                    manualPaymentMethods.map((method: any) => (
                       <GoalSurface key={method.id}>
                         <div className="p-3">
                           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -393,17 +714,19 @@ export function AffiliatePaymentMethodsSection() {
                   ) : (
                     <GoalSurface>
                       <div className="p-4 text-xs text-white/30">
-                        No payout method saved yet. Add one so admins know where
-                        to send commission
+                        No manual fallback method saved yet. Add one so manual
+                        settlements still have a destination if Stripe is unavailable.
                       </div>
                     </GoalSurface>
                   )}
                 </div>
               </GoalPanel>
+            </div>
 
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <GoalPanel
                 icon={Banknote}
-                title="Add payment method"
+                title="Add manual payout method"
                 bodyClassName="p-3.5"
               >
                 {isLocalhostPayoutTestingEnabled ? (
@@ -530,9 +853,8 @@ export function AffiliatePaymentMethodsSection() {
                   </label>
 
                   <p className="text-[11px] leading-5 text-white/35">
-                    Payouts are still recorded manually by admins. Saving a
-                    method here stores the payout instructions that work the
-                    same way on localhost and in production
+                    Manual methods stay available as a fallback even when Stripe
+                    Connect is enabled.
                   </p>
                 </div>
 
@@ -546,6 +868,70 @@ export function AffiliatePaymentMethodsSection() {
                     : "Save payment method"}
                 </Button>
               </GoalPanel>
+
+              <GoalPanel
+                icon={Banknote}
+                title="Withdrawal requests"
+                bodyClassName="p-3.5"
+              >
+                <div className="space-y-2">
+                  {withdrawalRequests.length ? (
+                    withdrawalRequests.slice(0, 8).map((request: any) => (
+                      <GoalSurface key={request.id}>
+                        <div className="p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs font-medium text-white">
+                                {formatCurrency(
+                                  request.amountUsd ?? request.amount ?? 0
+                                )}
+                              </p>
+                              <p className="mt-1 text-[10px] text-white/35">
+                                {formatDate(request.requestedAt ?? request.createdAt)} •{" "}
+                                {request.destinationLabel ??
+                                  (request.destinationType === "stripe_connect"
+                                    ? "Stripe Connect"
+                                    : "Manual fallback")}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
+                                {formatStatusLabel(request.status)}
+                              </Badge>
+                              {request.status === "pending" ? (
+                                <Button
+                                  onClick={() =>
+                                    cancelAffiliateWithdrawal.mutate({
+                                      withdrawalRequestId: request.id,
+                                    } as any)
+                                  }
+                                  disabled={cancelAffiliateWithdrawal.isPending}
+                                  className="h-7 rounded-sm border border-white/10 bg-sidebar px-2.5 text-[10px] text-white hover:bg-sidebar-accent"
+                                >
+                                  Cancel
+                                </Button>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          {request.notes ? (
+                            <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-white/40">
+                              {request.notes}
+                            </p>
+                          ) : null}
+                        </div>
+                      </GoalSurface>
+                    ))
+                  ) : (
+                    <GoalSurface>
+                      <div className="p-4 text-xs text-white/30">
+                        No withdrawal requests submitted yet.
+                      </div>
+                    </GoalSurface>
+                  )}
+                </div>
+              </GoalPanel>
             </div>
 
             <GoalPanel
@@ -555,7 +941,7 @@ export function AffiliatePaymentMethodsSection() {
             >
               <div className="space-y-2">
                 {affiliatePayoutSettings?.payouts?.length ? (
-                  affiliatePayoutSettings.payouts.slice(0, 8).map((payout) => (
+                  affiliatePayoutSettings.payouts.slice(0, 8).map((payout: any) => (
                     <GoalSurface key={payout.id}>
                       <div className="p-3">
                         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -571,11 +957,14 @@ export function AffiliatePaymentMethodsSection() {
                           </div>
                           <div className="text-right">
                             <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
-                              {payout.paymentMethod
-                                ? `${payout.paymentMethod.label} · ${formatPaymentMethodType(
-                                    payout.paymentMethod.methodType
-                                  )}`
-                                : "Method removed"}
+                              {payout.destinationLabel ??
+                                (payout.paymentMethod
+                                  ? `${payout.paymentMethod.label} · ${formatPaymentMethodType(
+                                      payout.paymentMethod.methodType
+                                    )}`
+                                  : payout.provider === "stripe_connect"
+                                  ? "Stripe Connect"
+                                  : "Method removed")}
                             </Badge>
                           </div>
                         </div>

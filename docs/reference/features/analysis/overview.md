@@ -75,6 +75,7 @@ Current behavior:
 - the trading calendar summary widgets on the right now reuse the same framed widget-shell treatment as the main dashboard cards, so the sidebar stats read as first-class widgets instead of flatter helper boxes
 - the trading calendar summary widgets are now configured through built-in toolbar presets instead of drag/reorder/resize edit mode, and those presets can swap in calendar-native variants such as separate week-by-week P&L cards, active-day summaries, and best/worst-day callouts rather than only resizing the same fixed cards
 - the dashboard calendar goal overlay now suppresses empty start markers on zero-trade days, so goal callouts only appear for real deadline dates or active trading days that meaningfully anchor the goal window
+- live open-trade rows outside the widgets now follow the same net-P&L rule too: the trades table live rows, trading-calendar live previews, and public proof live-position cards all display `profit + swap` as the main live figure while still keeping swap available as its own field where the UI exposes it
 - the open-trades widget bottom-aligns partial pages so a small number of live positions sit in the lowest visible slots instead of stretching upward through the card
 - the open-trades widget keeps a separator above the first visible trade on partial pages, while full four-trade pages still omit the top divider
 - the open-trades widget now bakes swap into the main live P&L number for any position carrying it, while the small swap badge still exposes the raw open P&L and current swap amount on hover

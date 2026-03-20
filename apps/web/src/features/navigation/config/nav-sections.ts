@@ -8,6 +8,8 @@ import {
   Building2,
   BarChart3,
   TrendingUp,
+  Gift,
+  Users,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 
@@ -48,61 +50,89 @@ export type NavSection = {
   items: NavItem[];
 };
 
-export const NAV_SECTIONS: NavSection[] = [
-  {
-    label: "Analysis",
-    items: [
-      { title: "Dashboard", url: "/dashboard", icon: DashboardIcon },
-      { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
-      { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
-      { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
-      { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },
-      { title: "Goals", url: "/dashboard/goals", icon: Target },
-    ] satisfies NavItem[],
-  } satisfies NavSection,
-  {
-    label: "Accounts",
-    items: [
-      {
-        title: "Trading accounts",
-        url: "/dashboard/accounts",
-        icon: Building2,
-      },
-      {
-        title: "Prop tracker",
-        url: "/dashboard/prop-tracker",
-        icon: Trophy,
-        planRequirement: "professional",
-      },
-    ] satisfies NavItem[],
-  } satisfies NavSection,
-  {
-    label: "Tools",
-    items: [
-      {
-        title: "Trade copier",
-        url: "/dashboard/copier",
-        icon: Copy,
-        planRequirement: "institutional" as PlanKey,
-      },
-      ...(publicAlphaFlags.aiAssistant
-        ? [
-            {
-              title: "AI Assistant",
-              url: "/assistant",
-              icon: Sparkles,
-              planRequirement: "professional" as PlanKey,
-            },
-          ]
-        : []),
-      {
-        title: "Backtest",
-        url: "/backtest",
-        icon: BarChart3,
-        planRequirement: "professional" as PlanKey,
-        featureFlag: "backtest",
-        disabledTooltip: "Coming soon!",
-      },
-    ] satisfies NavItem[],
-  } satisfies NavSection,
-].filter((section) => section.items.length > 0);
+export function getNavSections(
+  canViewAffiliateDashboard: boolean
+): NavSection[] {
+  return [
+    {
+      label: "Analysis",
+      items: [
+        { title: "Dashboard", url: "/dashboard", icon: DashboardIcon },
+        { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
+        { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
+        { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
+        { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },
+        { title: "Goals", url: "/dashboard/goals", icon: Target },
+      ] satisfies NavItem[],
+    } satisfies NavSection,
+    {
+      label: "Accounts",
+      items: [
+        {
+          title: "Trading accounts",
+          url: "/dashboard/accounts",
+          icon: Building2,
+        },
+        {
+          title: "Prop tracker",
+          url: "/dashboard/prop-tracker",
+          icon: Trophy,
+          planRequirement: "professional",
+        },
+      ] satisfies NavItem[],
+    } satisfies NavSection,
+    {
+      label: "Tools",
+      items: [
+        {
+          title: "Trade copier",
+          url: "/dashboard/copier",
+          icon: Copy,
+          planRequirement: "institutional" as PlanKey,
+        },
+        ...(publicAlphaFlags.aiAssistant
+          ? [
+              {
+                title: "AI Assistant",
+                url: "/assistant",
+                icon: Sparkles,
+                planRequirement: "professional" as PlanKey,
+              },
+            ]
+          : []),
+        {
+          title: "Backtest",
+          url: "/backtest",
+          icon: BarChart3,
+          planRequirement: "professional" as PlanKey,
+          featureFlag: "backtest",
+          disabledTooltip: "Coming soon!",
+        },
+      ] satisfies NavItem[],
+    } satisfies NavSection,
+    {
+      label: "Growth",
+      items: [
+        {
+          title: "Growth",
+          url: "/dashboard/growth",
+          icon: TrendingUp,
+        },
+        {
+          title: "Referrals",
+          url: "/dashboard/referrals",
+          icon: Gift,
+        },
+        ...(canViewAffiliateDashboard
+          ? [
+              {
+                title: "Affiliate",
+                url: "/dashboard/affiliate",
+                icon: Users,
+              },
+            ]
+          : []),
+      ] satisfies NavItem[],
+    } satisfies NavSection,
+  ].filter((section) => section.items.length > 0);
+}

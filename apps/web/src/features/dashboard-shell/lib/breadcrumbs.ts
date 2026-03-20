@@ -7,7 +7,19 @@ export type DashboardBreadcrumbs = {
   items: DashboardBreadcrumbItem[];
 };
 
+const DASHBOARD_LABEL_OVERRIDES: Record<string, string> = {
+  accounts: "Trading accounts",
+  "economic-calendar": "Economic calendar",
+  "growth-admin": "Growth admin",
+  news: "Economic calendar",
+  "prop-tracker": "Prop tracker",
+};
+
 function formatDashboardLabel(segment: string) {
+  if (segment in DASHBOARD_LABEL_OVERRIDES) {
+    return DASHBOARD_LABEL_OVERRIDES[segment];
+  }
+
   return segment
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

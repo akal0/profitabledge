@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 
 import { db } from "../../db";
 import { user as userTable } from "../../db/schema/auth";
@@ -11,7 +11,13 @@ import {
   affiliateGroupMember,
   affiliatePaymentMethod,
   affiliatePayout,
+  affiliatePendingAttribution,
+  affiliateProviderAccount,
   affiliateProfile,
+  affiliateOffer,
+  affiliateTouchEvent,
+  affiliateTrackingLink,
+  affiliateWithdrawalRequest,
   billingCustomer,
   billingEntitlementOverride,
   billingOrder,
@@ -25,6 +31,7 @@ import {
 import {
   getAffiliateCommissionBps,
   getBillingPlanDefinition,
+  getBillingPlanDefinitions,
   getHigherBillingPlanKey,
   getNextBillingPlanKey,
   getWebAppUrl,
@@ -36,9 +43,21 @@ import {
   type BillingPlanKey,
 } from "./config";
 import { getPolarClient } from "./polar";
+import {
+  createStripeConnectedAccount,
+  createStripeLoginLink,
+  createStripeOnboardingLink,
+  createStripeTransfer,
+  deleteStripeConnectedAccount,
+  resolveStripeOnboardingStatus,
+  retrieveStripeConnectedAccount,
+} from "./stripe-connect";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
 const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
+const AFFILIATE_ATTRIBUTION_WINDOW_DAYS = 180;
+const GROWTH_VISITOR_COOKIE = "pe_growth_visitor";
+const GROWTH_TOUCH_COOKIE = "pe_growth_touch";
 const REWARD_TYPE_EDGE_CREDITS = "edge_credits";
 const REWARD_TYPE_FREE_MONTH = "free_month";
 const REWARD_TYPE_UPGRADE_TRIAL = "upgrade_trial";
@@ -49,12 +68,37 @@ type MinimalUser = {
   email: string;
 };
 
+type GrowthTouchType = "affiliate" | "referral";
+
+type StoredGrowthTouch = {
+  type: GrowthTouchType;
+  code: string;
+  offerCode?: string;
+  trackingLinkSlug?: string;
+  affiliateGroupSlug?: string;
+  landingPath?: string;
+  query?: string;
+  visitorToken: string;
+  capturedAtISO: string;
+};
+
+type AffiliateTouchContext = {
+  profile: typeof affiliateProfile.$inferSelect;
+  offer: typeof affiliateOffer.$inferSelect | null;
+  trackingLink: typeof affiliateTrackingLink.$inferSelect | null;
+  group: typeof affiliateGroup.$inferSelect | null;
+};
+
 function buildReferralCode() {
   return `PE${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
 function buildAffiliateCode() {
   return `AFF${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
+function buildAffiliateOfferCode(baseCode: string) {
+  return normalizeGrowthCode(baseCode);
 }
 
 function buildGroupName(name?: string | null) {
@@ -77,11 +121,23 @@ function buildReferralShareUrl(code: string) {
   return url.toString();
 }
 
-function buildAffiliateShareUrl(code: string, groupSlug?: string | null) {
-  const url = new URL("/sign-up", getWebAppUrl());
-  url.searchParams.set("aff", code);
-  if (groupSlug) {
-    url.searchParams.set("group", groupSlug);
+function buildAffiliateShareUrl(input: {
+  affiliateCode: string;
+  groupSlug?: string | null;
+  offerCode?: string | null;
+  trackingLinkSlug?: string | null;
+  destinationPath?: string | null;
+}) {
+  const url = new URL(input.destinationPath || "/sign-up", getWebAppUrl());
+  url.searchParams.set("aff", input.affiliateCode);
+  if (input.groupSlug) {
+    url.searchParams.set("group", input.groupSlug);
+  }
+  if (input.offerCode) {
+    url.searchParams.set("offer", input.offerCode);
+  }
+  if (input.trackingLinkSlug) {
+    url.searchParams.set("link", input.trackingLinkSlug);
   }
   return url.toString();
 }
@@ -90,8 +146,121 @@ export function normalizeGrowthCode(input: string) {
   return input.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+function normalizeGrowthSlug(input?: string | null) {
+  return (input ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function normalizeVisitorToken(input?: string | null) {
+  const value = (input ?? "").trim();
+  return value.length > 0 ? value.slice(0, 120) : null;
+}
+
+function parseStoredGrowthTouch(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(value)) as StoredGrowthTouch;
+    if (!parsed?.type || !parsed?.visitorToken || !parsed?.capturedAtISO) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function readGrowthCookie(
+  cookies:
+    | {
+        get(name: string):
+          | {
+              value: string;
+            }
+          | undefined;
+      }
+    | null
+    | undefined,
+  name: string
+) {
+  return cookies?.get(name)?.value ?? null;
+}
+
+export function readGrowthVisitorTokenFromCookies(
+  cookies:
+    | {
+        get(name: string):
+          | {
+              value: string;
+            }
+          | undefined;
+      }
+    | null
+    | undefined
+) {
+  return normalizeVisitorToken(readGrowthCookie(cookies, GROWTH_VISITOR_COOKIE));
+}
+
+export function readGrowthTouchFromCookies(
+  cookies:
+    | {
+        get(name: string):
+          | {
+              value: string;
+            }
+          | undefined;
+      }
+    | null
+    | undefined
+) {
+  return parseStoredGrowthTouch(readGrowthCookie(cookies, GROWTH_TOUCH_COOKIE));
+}
+
 function normalizeWaitlistEmail(input: string) {
   return input.trim().toLowerCase();
+}
+
+function normalizeDestinationPath(input?: string | null) {
+  const value = input?.trim() || "/sign-up";
+  return value.startsWith("/") ? value : "/sign-up";
+}
+
+function buildAffiliateTrackingLinkSlug(label: string) {
+  return slugify(label) || "main";
+}
+
+export function buildAffiliatePublicProofMetadata(
+  metadata?: Record<string, unknown> | null
+) {
+  const publicProof =
+    metadata && typeof metadata === "object"
+      ? ((metadata.publicProof as Record<string, unknown> | undefined) ?? undefined)
+      : undefined;
+
+  return {
+    badgeLabel:
+      typeof publicProof?.badgeLabel === "string" && publicProof.badgeLabel.trim()
+        ? publicProof.badgeLabel.trim()
+        : "Affiliate",
+    effectVariant:
+      typeof publicProof?.effectVariant === "string" &&
+      publicProof.effectVariant.trim()
+        ? publicProof.effectVariant.trim()
+        : "gold-emerald",
+  };
+}
+
+function buildAttributionExpiryDate(from = new Date()) {
+  return new Date(
+    from.getTime() + AFFILIATE_ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  );
 }
 
 function isActiveSubscriptionStatus(status?: string | null) {
@@ -290,6 +459,161 @@ export async function getApprovedAffiliateProfile(userId: string) {
   return row;
 }
 
+async function getReferralProfileByCode(code: string) {
+  const normalized = normalizeGrowthCode(code);
+  if (!normalized) {
+    return null;
+  }
+
+  const [profile] = await db
+    .select()
+    .from(referralProfile)
+    .where(
+      and(eq(referralProfile.code, normalized), eq(referralProfile.isActive, true))
+    )
+    .limit(1);
+
+  return profile ?? null;
+}
+
+async function getApprovedAffiliateProfileByCode(code: string) {
+  const normalized = normalizeGrowthCode(code);
+  if (!normalized) {
+    return null;
+  }
+
+  const [profile] = await db
+    .select()
+    .from(affiliateProfile)
+    .where(and(eq(affiliateProfile.code, normalized), eq(affiliateProfile.isActive, true)))
+    .limit(1);
+
+  if (!profile?.approvedAt) {
+    return null;
+  }
+
+  return profile;
+}
+
+async function getAffiliateOfferRows(userId: string) {
+  return db
+    .select()
+    .from(affiliateOffer)
+    .where(
+      and(eq(affiliateOffer.affiliateUserId, userId), eq(affiliateOffer.isActive, true))
+    )
+    .orderBy(desc(affiliateOffer.isDefault), desc(affiliateOffer.createdAt));
+}
+
+export async function getAffiliateOfferByCode(code: string) {
+  const normalized = normalizeGrowthCode(code);
+  if (!normalized) {
+    return null;
+  }
+
+  const [offer] = await db
+    .select()
+    .from(affiliateOffer)
+    .where(and(eq(affiliateOffer.code, normalized), eq(affiliateOffer.isActive, true)))
+    .limit(1);
+
+  return offer ?? null;
+}
+
+async function getAffiliateOfferById(offerId?: string | null) {
+  if (!offerId) {
+    return null;
+  }
+
+  const [offer] = await db
+    .select()
+    .from(affiliateOffer)
+    .where(and(eq(affiliateOffer.id, offerId), eq(affiliateOffer.isActive, true)))
+    .limit(1);
+
+  return offer ?? null;
+}
+
+async function getAffiliateTrackingLinkRows(userId: string) {
+  return db
+    .select()
+    .from(affiliateTrackingLink)
+    .where(
+      and(
+        eq(affiliateTrackingLink.affiliateUserId, userId),
+        eq(affiliateTrackingLink.isActive, true)
+      )
+    )
+    .orderBy(desc(affiliateTrackingLink.isDefault), desc(affiliateTrackingLink.createdAt));
+}
+
+async function getAffiliateTrackingLinkById(trackingLinkId?: string | null) {
+  if (!trackingLinkId) {
+    return null;
+  }
+
+  const [trackingLink] = await db
+    .select()
+    .from(affiliateTrackingLink)
+    .where(
+      and(
+        eq(affiliateTrackingLink.id, trackingLinkId),
+        eq(affiliateTrackingLink.isActive, true)
+      )
+    )
+    .limit(1);
+
+  return trackingLink ?? null;
+}
+
+async function getAffiliateTrackingLinkBySlug(input: {
+  affiliateProfileId: string;
+  slug?: string | null;
+}) {
+  const normalizedSlug = normalizeGrowthSlug(input.slug);
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  const [trackingLink] = await db
+    .select()
+    .from(affiliateTrackingLink)
+    .where(
+      and(
+        eq(affiliateTrackingLink.affiliateProfileId, input.affiliateProfileId),
+        eq(affiliateTrackingLink.slug, normalizedSlug),
+        eq(affiliateTrackingLink.isActive, true)
+      )
+    )
+    .limit(1);
+
+  return trackingLink ?? null;
+}
+
+async function getAffiliateGroupBySlug(input: {
+  affiliateProfileId: string;
+  slug?: string | null;
+}) {
+  const normalizedSlug = normalizeGrowthSlug(input.slug);
+  if (!normalizedSlug) {
+    return null;
+  }
+
+  const [group] = await db
+    .select()
+    .from(affiliateGroup)
+    .where(
+      and(
+        eq(affiliateGroup.affiliateProfileId, input.affiliateProfileId),
+        eq(affiliateGroup.slug, normalizedSlug),
+        eq(affiliateGroup.isActive, true)
+      )
+    )
+    .limit(1);
+
+  return group ?? null;
+}
+
 async function getAffiliatePaymentMethods(userId: string) {
   return db
     .select()
@@ -311,14 +635,62 @@ async function getAffiliatePayoutRows(userId: string) {
     .select({
       payout: affiliatePayout,
       paymentMethod: affiliatePaymentMethod,
+      providerAccount: affiliateProviderAccount,
+      withdrawalRequest: affiliateWithdrawalRequest,
     })
     .from(affiliatePayout)
     .leftJoin(
       affiliatePaymentMethod,
       eq(affiliatePayout.paymentMethodId, affiliatePaymentMethod.id)
     )
+    .leftJoin(
+      affiliateProviderAccount,
+      eq(affiliatePayout.providerAccountId, affiliateProviderAccount.id)
+    )
+    .leftJoin(
+      affiliateWithdrawalRequest,
+      eq(affiliatePayout.withdrawalRequestId, affiliateWithdrawalRequest.id)
+    )
     .where(eq(affiliatePayout.affiliateUserId, userId))
     .orderBy(desc(affiliatePayout.paidAt), desc(affiliatePayout.createdAt));
+}
+
+async function getAffiliateProviderAccountRow(userId: string) {
+  const [account] = await db
+    .select()
+    .from(affiliateProviderAccount)
+    .where(
+      and(
+        eq(affiliateProviderAccount.affiliateUserId, userId),
+        eq(affiliateProviderAccount.provider, "stripe_connect")
+      )
+    )
+    .limit(1);
+
+  return account ?? null;
+}
+
+async function getAffiliateWithdrawalRequestRows(userId: string) {
+  return db
+    .select({
+      request: affiliateWithdrawalRequest,
+      providerAccount: affiliateProviderAccount,
+      paymentMethod: affiliatePaymentMethod,
+    })
+    .from(affiliateWithdrawalRequest)
+    .leftJoin(
+      affiliateProviderAccount,
+      eq(affiliateWithdrawalRequest.providerAccountId, affiliateProviderAccount.id)
+    )
+    .leftJoin(
+      affiliatePaymentMethod,
+      eq(affiliateWithdrawalRequest.paymentMethodId, affiliatePaymentMethod.id)
+    )
+    .where(eq(affiliateWithdrawalRequest.affiliateUserId, userId))
+    .orderBy(
+      desc(affiliateWithdrawalRequest.requestedAt),
+      desc(affiliateWithdrawalRequest.createdAt)
+    );
 }
 
 async function getUnpaidAffiliateCommissionEvents(userId: string) {
@@ -352,12 +724,362 @@ function buildAffiliatePayoutSummary(input: {
   };
 }
 
+function buildStripeConnectStatusLabel(
+  account: typeof affiliateProviderAccount.$inferSelect | null
+) {
+  if (!account) {
+    return "Not connected";
+  }
+
+  switch (account.onboardingStatus) {
+    case "enabled":
+      return "Connected";
+    case "pending_review":
+      return "Pending review";
+    case "disconnected":
+      return "Disconnected";
+    default:
+      return "Needs onboarding";
+  }
+}
+
+function buildWithdrawalDestinationLabel(input: {
+  destinationType?: string | null;
+  paymentMethod?: {
+    label?: string | null;
+    methodType?: string | null;
+  } | null;
+  providerAccount?: {
+    provider?: string | null;
+  } | null;
+}) {
+  if (input.destinationType === "stripe_connect") {
+    return "Stripe Connect";
+  }
+
+  if (input.paymentMethod?.label) {
+    return input.paymentMethod.methodType
+      ? `${input.paymentMethod.label} · ${input.paymentMethod.methodType.replace(/_/g, " ")}`
+      : input.paymentMethod.label;
+  }
+
+  if (input.providerAccount?.provider === "stripe_connect") {
+    return "Stripe Connect";
+  }
+
+  return "Manual fallback";
+}
+
+async function getPendingAttributionRow(visitorToken: string) {
+  const [pending] = await db
+    .select()
+    .from(affiliatePendingAttribution)
+    .where(eq(affiliatePendingAttribution.visitorToken, visitorToken))
+    .limit(1);
+
+  return pending ?? null;
+}
+
+async function resolveAffiliateTouchContext(
+  input: {
+    affiliateCode?: string | null;
+    offerCode?: string | null;
+    trackingLinkSlug?: string | null;
+    affiliateTrackingLinkId?: string | null;
+    affiliateGroupSlug?: string | null;
+    affiliateOfferId?: string | null;
+  },
+  options?: {
+    strict?: boolean;
+  }
+): Promise<AffiliateTouchContext | null> {
+  const strict = options?.strict ?? false;
+  const normalizedAffiliateCode = normalizeGrowthCode(input.affiliateCode ?? "");
+  const normalizedOfferCode = normalizeGrowthCode(input.offerCode ?? "");
+
+  const offer =
+    (input.affiliateOfferId
+      ? await getAffiliateOfferById(input.affiliateOfferId)
+      : null) ??
+    (normalizedOfferCode ? await getAffiliateOfferByCode(normalizedOfferCode) : null);
+
+  let profile =
+    normalizedAffiliateCode
+      ? await getApprovedAffiliateProfileByCode(normalizedAffiliateCode)
+      : null;
+
+  if (offer) {
+    const offerProfile = await getApprovedAffiliateProfile(offer.affiliateUserId);
+    if (!offerProfile) {
+      if (strict) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "That affiliate offer is no longer active",
+        });
+      }
+
+      return null;
+    }
+
+    if (profile && profile.id !== offerProfile.id) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Affiliate code and offer code do not belong to the same affiliate",
+      });
+    }
+
+    profile = offerProfile;
+  }
+
+  if (!profile) {
+    if (strict) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid affiliate code",
+      });
+    }
+
+    return null;
+  }
+
+  const trackingLink =
+    (input.affiliateTrackingLinkId
+      ? await getAffiliateTrackingLinkById(input.affiliateTrackingLinkId)
+      : null) ??
+    (await getAffiliateTrackingLinkBySlug({
+      affiliateProfileId: profile.id,
+      slug: input.trackingLinkSlug,
+    }));
+
+  if (
+    strict &&
+    input.trackingLinkSlug &&
+    normalizeGrowthSlug(input.trackingLinkSlug) &&
+    !trackingLink
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "That affiliate tracking link is not available",
+    });
+  }
+
+  const group = await getAffiliateGroupBySlug({
+    affiliateProfileId: profile.id,
+    slug: input.affiliateGroupSlug,
+  });
+
+  if (
+    strict &&
+    input.affiliateGroupSlug &&
+    normalizeGrowthSlug(input.affiliateGroupSlug) &&
+    !group
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "That affiliate group is not available",
+    });
+  }
+
+  return {
+    profile,
+    offer,
+    trackingLink,
+    group,
+  };
+}
+
+async function upsertAffiliateProviderAccountFromStripe(input: {
+  affiliateUserId: string;
+  account: Awaited<ReturnType<typeof retrieveStripeConnectedAccount>>;
+}) {
+  const existing = await getAffiliateProviderAccountRow(input.affiliateUserId);
+  const payload = {
+    provider: "stripe_connect" as const,
+    providerAccountId: input.account.id,
+    country: input.account.country ?? null,
+    currency: input.account.default_currency?.toUpperCase() ?? null,
+    email: input.account.email ?? null,
+    onboardingStatus: resolveStripeOnboardingStatus(input.account),
+    detailsSubmitted: Boolean(input.account.details_submitted),
+    chargesEnabled: Boolean(input.account.charges_enabled),
+    payoutsEnabled: Boolean(input.account.payouts_enabled),
+    isActive: true,
+    disconnectedAt: null,
+    lastSyncedAt: new Date(),
+    metadata: input.account,
+    updatedAt: new Date(),
+  };
+
+  if (existing) {
+    const [updated] = await db
+      .update(affiliateProviderAccount)
+      .set(payload)
+      .where(eq(affiliateProviderAccount.id, existing.id))
+      .returning();
+
+    return updated ?? existing;
+  }
+
+  const [inserted] = await db
+    .insert(affiliateProviderAccount)
+    .values({
+      id: crypto.randomUUID(),
+      affiliateUserId: input.affiliateUserId,
+      ...payload,
+    })
+    .returning();
+
+  return inserted ?? null;
+}
+
+async function ensureAffiliateOfferRow(
+  profile: typeof affiliateProfile.$inferSelect,
+  createdByUserId?: string | null
+) {
+  const existingRows = await getAffiliateOfferRows(profile.userId);
+  if (existingRows[0]) {
+    return existingRows[0];
+  }
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code =
+      attempt === 0
+        ? buildAffiliateOfferCode(profile.code)
+        : buildAffiliateOfferCode(`${profile.code}${attempt + 1}`);
+
+    try {
+      const [inserted] = await db
+        .insert(affiliateOffer)
+        .values({
+          id: crypto.randomUUID(),
+          affiliateProfileId: profile.id,
+          affiliateUserId: profile.userId,
+          code,
+          label: `${profile.displayName || "Affiliate"} offer`,
+          description: "Default affiliate checkout offer.",
+          discountType: "percentage",
+          discountBasisPoints: 1000,
+          isDefault: true,
+          createdByUserId: createdByUserId ?? profile.approvedByUserId ?? null,
+        })
+        .returning();
+
+      if (inserted) {
+        return inserted;
+      }
+    } catch {
+      // Retry on code collisions.
+    }
+  }
+
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Unable to create affiliate offer",
+  });
+}
+
+async function ensureAffiliateTrackingLinkRow(input: {
+  profile: typeof affiliateProfile.$inferSelect;
+  group: typeof affiliateGroup.$inferSelect | null;
+  offer: typeof affiliateOffer.$inferSelect | null;
+}) {
+  const existingRows = await getAffiliateTrackingLinkRows(input.profile.userId);
+  if (existingRows[0]) {
+    return existingRows[0];
+  }
+
+  const baseSlug = buildAffiliateTrackingLinkSlug("main");
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+    try {
+      const [inserted] = await db
+        .insert(affiliateTrackingLink)
+        .values({
+          id: crypto.randomUUID(),
+          affiliateProfileId: input.profile.id,
+          affiliateUserId: input.profile.userId,
+          affiliateOfferId: input.offer?.id ?? null,
+          name: "Default share link",
+          slug,
+          destinationPath: "/sign-up",
+          affiliateGroupSlug: input.group?.slug ?? null,
+          utmSource: "affiliate",
+          utmMedium: "share",
+          utmCampaign: input.profile.code.toLowerCase(),
+          isDefault: true,
+        })
+        .returning();
+
+      if (inserted) {
+        return inserted;
+      }
+    } catch {
+      // Retry on slug collisions.
+    }
+  }
+
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Unable to create affiliate share link",
+  });
+}
+
+async function upsertPolarAffiliateOfferDiscount(input: {
+  polarDiscountId?: string | null;
+  code: string;
+  label: string;
+  basisPoints: number;
+}) {
+  const products = getBillingPlanDefinitions()
+    .map((plan) => plan.polarProductId)
+    .filter((value): value is string => Boolean(value));
+
+  if (products.length === 0) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Polar products are not configured",
+    });
+  }
+
+  const polar = getPolarClient();
+  if (input.polarDiscountId) {
+    return polar.discounts.update({
+      id: input.polarDiscountId,
+      discountUpdate: {
+        code: input.code,
+        name: input.label,
+        type: "percentage",
+        duration: "once",
+        basisPoints: input.basisPoints,
+        maxRedemptions: null,
+        products,
+      },
+    });
+  }
+
+  return polar.discounts.create({
+    duration: "once",
+    type: "percentage",
+    basisPoints: input.basisPoints,
+    name: input.label,
+    code: input.code,
+    maxRedemptions: null,
+    products,
+  });
+}
+
 async function ensureAffiliateProfileApproved(
   user: MinimalUser,
   approvedByUserId: string
 ) {
   const existing = await getAffiliateProfileRow(user.id);
   const referral = await ensureReferralProfile(user.id);
+  const publicProofDefaults = {
+    publicProof: {
+      badgeLabel: "Affiliate",
+      effectVariant: "gold-emerald",
+    },
+  };
 
   if (existing) {
     const [updated] = await db
@@ -368,6 +1090,17 @@ async function ensureAffiliateProfileApproved(
         isActive: true,
         approvedAt: new Date(),
         approvedByUserId,
+        metadata:
+          existing.metadata && typeof existing.metadata === "object"
+            ? {
+                ...(existing.metadata as Record<string, unknown>),
+                publicProof:
+                  (
+                    (existing.metadata as Record<string, unknown>)
+                      .publicProof as Record<string, unknown> | undefined
+                  ) ?? publicProofDefaults.publicProof,
+              }
+            : publicProofDefaults,
         updatedAt: new Date(),
       })
       .where(eq(affiliateProfile.id, existing.id))
@@ -391,6 +1124,7 @@ async function ensureAffiliateProfileApproved(
           isActive: true,
           approvedAt: new Date(),
           approvedByUserId,
+          metadata: publicProofDefaults,
         })
         .returning();
 
@@ -553,6 +1287,15 @@ export async function approveAffiliateApplication(input: {
     input.reviewedByUserId
   );
   const group = await ensureAffiliateGroupRow(approvedProfile.id, user);
+  const offer = await ensureAffiliateOfferRow(
+    approvedProfile,
+    input.reviewedByUserId
+  );
+  const trackingLink = await ensureAffiliateTrackingLinkRow({
+    profile: approvedProfile,
+    group,
+    offer,
+  });
 
   await db
     .update(referralProfile)
@@ -578,6 +1321,8 @@ export async function approveAffiliateApplication(input: {
     application: updatedApplication ?? application,
     profile: approvedProfile,
     group,
+    offer,
+    trackingLink,
   };
 }
 
@@ -781,6 +1526,10 @@ export async function buildAffiliateState(userId: string) {
     .from(affiliateGroup)
     .where(eq(affiliateGroup.affiliateProfileId, profile.id))
     .limit(1);
+  const offers = await getAffiliateOfferRows(userId);
+  const links = await getAffiliateTrackingLinkRows(userId);
+  const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+  const defaultLink = links.find((row) => row.isDefault) ?? links[0] ?? null;
 
   const attributions = await db
     .select()
@@ -800,7 +1549,24 @@ export async function buildAffiliateState(userId: string) {
     profile: {
       id: profile.id,
       code: profile.code,
-      shareUrl: buildAffiliateShareUrl(profile.code, group?.slug ?? null),
+      offerCode: defaultOffer?.code ?? null,
+      defaultOfferCode: defaultOffer?.code ?? null,
+      defaultTrackingLinkUrl: defaultLink
+        ? buildAffiliateShareUrl({
+            affiliateCode: profile.code,
+            groupSlug: defaultLink.affiliateGroupSlug ?? group?.slug ?? null,
+            offerCode: defaultOffer?.code ?? null,
+            trackingLinkSlug: defaultLink.slug,
+            destinationPath: defaultLink.destinationPath,
+          })
+        : null,
+      shareUrl: buildAffiliateShareUrl({
+        affiliateCode: profile.code,
+        groupSlug: defaultLink?.affiliateGroupSlug ?? group?.slug ?? null,
+        offerCode: defaultOffer?.code ?? null,
+        trackingLinkSlug: defaultLink?.slug ?? null,
+        destinationPath: defaultLink?.destinationPath ?? "/sign-up",
+      }),
     },
     group:
       group
@@ -809,7 +1575,13 @@ export async function buildAffiliateState(userId: string) {
             name: group.name,
             slug: group.slug,
             description: group.description,
-            inviteUrl: buildAffiliateShareUrl(profile.code, group.slug),
+            inviteUrl: buildAffiliateShareUrl({
+              affiliateCode: profile.code,
+              groupSlug: group.slug,
+              offerCode: defaultOffer?.code ?? null,
+              trackingLinkSlug: defaultLink?.slug ?? null,
+              destinationPath: defaultLink?.destinationPath ?? "/sign-up",
+            }),
           }
         : null,
     stats: {
@@ -834,6 +1606,10 @@ export async function buildAffiliateDashboard(userId: string) {
     .from(affiliateGroup)
     .where(eq(affiliateGroup.affiliateProfileId, profile.id))
     .limit(1);
+  const offers = await getAffiliateOfferRows(userId);
+  const links = await getAffiliateTrackingLinkRows(userId);
+  const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+  const defaultLink = links.find((row) => row.isDefault) ?? links[0] ?? null;
 
   const attributions = await db
     .select()
@@ -846,6 +1622,11 @@ export async function buildAffiliateDashboard(userId: string) {
     .from(affiliateCommissionEvent)
     .where(eq(affiliateCommissionEvent.affiliateUserId, userId))
     .orderBy(desc(affiliateCommissionEvent.occurredAt), desc(affiliateCommissionEvent.createdAt));
+  const touchEvents = await db
+    .select()
+    .from(affiliateTouchEvent)
+    .where(eq(affiliateTouchEvent.affiliateUserId, userId))
+    .orderBy(desc(affiliateTouchEvent.createdAt));
 
   const members = group
     ? await db
@@ -862,13 +1643,90 @@ export async function buildAffiliateDashboard(userId: string) {
         .where(eq(affiliateGroupMember.affiliateGroupId, group.id))
         .orderBy(desc(affiliateGroupMember.createdAt))
     : [];
+  const offerLookup = new Map(offers.map((row) => [row.id, row]));
+  const linkStats = links.map((link) => {
+    const signups = attributions.filter(
+      (row) => row.affiliateTrackingLinkId === link.id
+    );
+    const attributedIds = new Set(signups.map((row) => row.id));
+    const commissionAmount = commissionEvents.reduce((sum, row) => {
+      return attributedIds.has(row.affiliateAttributionId)
+        ? sum + (row.commissionAmount ?? 0)
+        : sum;
+    }, 0);
+
+    return {
+      id: link.id,
+      name: link.name,
+      slug: link.slug,
+      isDefault: link.isDefault,
+      destinationPath: link.destinationPath,
+      offerCode:
+        link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
+          ? offerLookup.get(link.affiliateOfferId)!.code
+          : null,
+      shareUrl: buildAffiliateShareUrl({
+        affiliateCode: profile.code,
+        groupSlug: link.affiliateGroupSlug ?? null,
+        offerCode:
+          link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
+            ? offerLookup.get(link.affiliateOfferId)!.code
+            : null,
+        trackingLinkSlug: link.slug,
+        destinationPath: link.destinationPath,
+      }),
+      touches: touchEvents.filter((row) => row.affiliateTrackingLinkId === link.id).length,
+      signups: signups.length,
+      paidCustomers: signups.filter((row) => row.firstPaidAt).length,
+      totalCommissionAmount: commissionAmount,
+      url: buildAffiliateShareUrl({
+        affiliateCode: profile.code,
+        groupSlug: link.affiliateGroupSlug ?? null,
+        offerCode:
+          link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
+            ? offerLookup.get(link.affiliateOfferId)!.code
+            : null,
+        trackingLinkSlug: link.slug,
+        destinationPath: link.destinationPath,
+      }),
+      clickCount: touchEvents.filter((row) => row.affiliateTrackingLinkId === link.id)
+        .length,
+      signupCount: signups.length,
+      paidCustomerCount: signups.filter((row) => row.firstPaidAt).length,
+    };
+  });
 
   return {
     profile: {
       id: profile.id,
       code: profile.code,
-      shareUrl: buildAffiliateShareUrl(profile.code, group?.slug ?? null),
+      offerCode: defaultOffer?.code ?? null,
+      defaultOfferCode: defaultOffer?.code ?? null,
+      defaultTrackingLinkUrl: defaultLink
+        ? buildAffiliateShareUrl({
+            affiliateCode: profile.code,
+            groupSlug: defaultLink.affiliateGroupSlug ?? group?.slug ?? null,
+            offerCode: defaultOffer?.code ?? null,
+            trackingLinkSlug: defaultLink.slug,
+            destinationPath: defaultLink.destinationPath,
+          })
+        : null,
+      shareUrl: buildAffiliateShareUrl({
+        affiliateCode: profile.code,
+        groupSlug: defaultLink?.affiliateGroupSlug ?? group?.slug ?? null,
+        offerCode: defaultOffer?.code ?? null,
+        trackingLinkSlug: defaultLink?.slug ?? null,
+        destinationPath: defaultLink?.destinationPath ?? "/sign-up",
+      }),
+      publicProof: buildAffiliatePublicProofMetadata(
+        (profile.metadata as Record<string, unknown> | null | undefined) ?? null
+      ),
     },
+    defaultOffer,
+    offers,
+    defaultLink,
+    links: linkStats,
+    trackingLinks: linkStats,
     group:
       group
         ? {
@@ -876,7 +1734,13 @@ export async function buildAffiliateDashboard(userId: string) {
             name: group.name,
             slug: group.slug,
             description: group.description,
-            inviteUrl: buildAffiliateShareUrl(profile.code, group.slug),
+            inviteUrl: buildAffiliateShareUrl({
+              affiliateCode: profile.code,
+              groupSlug: group.slug,
+              offerCode: defaultOffer?.code ?? null,
+              trackingLinkSlug: defaultLink?.slug ?? null,
+              destinationPath: defaultLink?.destinationPath ?? "/sign-up",
+            }),
             memberCount: members.length,
             members: members.map((row) => ({
               id: row.user.id,
@@ -896,6 +1760,7 @@ export async function buildAffiliateDashboard(userId: string) {
     },
     attributions,
     commissionEvents,
+    touchEvents,
   };
 }
 
@@ -911,16 +1776,49 @@ export async function getAffiliatePayoutSettings(userId: string) {
   const paymentMethods = await getAffiliatePaymentMethods(userId);
   const payouts = await getAffiliatePayoutRows(userId);
   const unpaidEvents = await getUnpaidAffiliateCommissionEvents(userId);
+  const providerAccount = await getAffiliateProviderAccountRow(userId);
+  const withdrawalRequests = await getAffiliateWithdrawalRequestRows(userId);
   const summary = buildAffiliatePayoutSummary({
     unpaidEvents,
     payouts,
   });
 
   return {
-    paymentMethods,
+    stripeConnect: providerAccount
+      ? {
+          id: providerAccount.id,
+          provider: providerAccount.provider,
+          accountId: providerAccount.providerAccountId,
+          accountLabel: "Stripe Express payout account",
+          statusLabel: buildStripeConnectStatusLabel(providerAccount),
+          onboardingStatus: providerAccount.onboardingStatus,
+          chargesEnabled: providerAccount.chargesEnabled,
+          payoutsEnabled: providerAccount.payoutsEnabled,
+          detailsSubmitted: providerAccount.detailsSubmitted,
+          lastSyncedAt: providerAccount.lastSyncedAt,
+          currency: providerAccount.currency,
+          country: providerAccount.country,
+        }
+      : null,
+    manualPaymentMethods: paymentMethods,
     summary,
-    payouts: payouts.map((row) => ({
-      ...row.payout,
+    withdrawalRequests: withdrawalRequests.map((row) => ({
+      ...row.request,
+      amountUsd: row.request.amount,
+      destinationLabel: buildWithdrawalDestinationLabel({
+        destinationType: row.request.destinationType,
+        paymentMethod: row.paymentMethod,
+        providerAccount: row.providerAccount,
+      }),
+      providerAccount: row.providerAccount
+        ? {
+            id: row.providerAccount.id,
+            provider: row.providerAccount.provider,
+            onboardingStatus: row.providerAccount.onboardingStatus,
+            payoutsEnabled: row.providerAccount.payoutsEnabled,
+            chargesEnabled: row.providerAccount.chargesEnabled,
+          }
+        : null,
       paymentMethod: row.paymentMethod
         ? {
             id: row.paymentMethod.id,
@@ -929,7 +1827,948 @@ export async function getAffiliatePayoutSettings(userId: string) {
           }
         : null,
     })),
+    payouts: payouts.map((row) => ({
+      ...row.payout,
+      amountUsd: row.payout.amount,
+      provider: row.providerAccount?.provider ?? null,
+      destinationLabel: buildWithdrawalDestinationLabel({
+        destinationType: row.payout.destinationType,
+        paymentMethod: row.paymentMethod,
+        providerAccount: row.providerAccount,
+      }),
+      paymentMethod: row.paymentMethod
+        ? {
+            id: row.paymentMethod.id,
+            label: row.paymentMethod.label,
+            methodType: row.paymentMethod.methodType,
+          }
+        : null,
+      providerAccount: row.providerAccount
+        ? {
+            id: row.providerAccount.id,
+            provider: row.providerAccount.provider,
+            providerAccountId: row.providerAccount.providerAccountId,
+          }
+        : null,
+      withdrawalRequest: row.withdrawalRequest
+        ? {
+            id: row.withdrawalRequest.id,
+            status: row.withdrawalRequest.status,
+            destinationType: row.withdrawalRequest.destinationType,
+          }
+        : null,
+    })),
   };
+}
+
+async function selectCommissionEventsForWithdrawal(input: {
+  affiliateUserId: string;
+  amountLimit: number;
+}) {
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId);
+  const selected: typeof unpaidEvents = [];
+  let runningAmount = 0;
+
+  for (const event of unpaidEvents) {
+    const eventAmount = event.commissionAmount ?? 0;
+    if (eventAmount <= 0) {
+      continue;
+    }
+
+    if (selected.length > 0 && runningAmount + eventAmount > input.amountLimit) {
+      continue;
+    }
+
+    if (selected.length === 0 && eventAmount > input.amountLimit) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Requested withdrawal amount is below the next payable commission event",
+      });
+    }
+
+    selected.push(event);
+    runningAmount += eventAmount;
+
+    if (runningAmount >= input.amountLimit) {
+      break;
+    }
+  }
+
+  if (selected.length === 0) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "No unpaid affiliate commission is available",
+    });
+  }
+
+  return {
+    selected,
+    amount: runningAmount,
+    currency: selected.find((row) => row.currency)?.currency ?? "USD",
+  };
+}
+
+async function claimCommissionEventsForPayout(input: {
+  affiliateUserId: string;
+  payoutId: string;
+  eventIds: string[];
+  paidAt: Date;
+}) {
+  return db
+    .update(affiliateCommissionEvent)
+    .set({
+      affiliatePayoutId: input.payoutId,
+      paidOutAt: input.paidAt,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(affiliateCommissionEvent.affiliateUserId, input.affiliateUserId),
+        isNull(affiliateCommissionEvent.affiliatePayoutId),
+        inArray(affiliateCommissionEvent.id, input.eventIds)
+      )
+    )
+    .returning();
+}
+
+async function releaseCommissionEventsFromPayout(payoutId: string) {
+  await db
+    .update(affiliateCommissionEvent)
+    .set({
+      affiliatePayoutId: null,
+      paidOutAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateCommissionEvent.affiliatePayoutId, payoutId));
+}
+
+export async function saveAffiliateOffer(input: {
+  affiliateUserId: string;
+  createdByUserId: string;
+  affiliateOfferId?: string | null;
+  code: string;
+  label: string;
+  description?: string | null;
+  discountBasisPoints: number;
+  isDefault?: boolean;
+}) {
+  const profile = await getApprovedAffiliateProfile(input.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Affiliate not found",
+    });
+  }
+
+  const normalizedCode = normalizeGrowthCode(input.code);
+  if (!normalizedCode) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Offer code is required",
+    });
+  }
+
+  const basisPoints = Math.max(100, Math.min(10000, Math.round(input.discountBasisPoints)));
+  let existing: typeof affiliateOffer.$inferSelect | null = null;
+
+  if (input.affiliateOfferId) {
+    const [row] = await db
+      .select()
+      .from(affiliateOffer)
+      .where(
+        and(
+          eq(affiliateOffer.id, input.affiliateOfferId),
+          eq(affiliateOffer.affiliateUserId, input.affiliateUserId)
+        )
+      )
+      .limit(1);
+
+    existing = row ?? null;
+    if (!existing) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Affiliate offer not found",
+      });
+    }
+  }
+
+  const polarDiscount = await upsertPolarAffiliateOfferDiscount({
+    polarDiscountId: existing?.polarDiscountId ?? null,
+    code: normalizedCode,
+    label: input.label.trim(),
+    basisPoints,
+  });
+
+  let savedOffer: typeof affiliateOffer.$inferSelect | null = null;
+  if (existing) {
+    const [updated] = await db
+      .update(affiliateOffer)
+      .set({
+        code: normalizedCode,
+        label: input.label.trim(),
+        description: input.description?.trim() || null,
+        polarDiscountId: polarDiscount.id,
+        discountBasisPoints: basisPoints,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(affiliateOffer.id, existing.id))
+      .returning();
+
+    savedOffer = updated ?? null;
+  } else {
+    const [inserted] = await db
+      .insert(affiliateOffer)
+      .values({
+        id: crypto.randomUUID(),
+        affiliateProfileId: profile.id,
+        affiliateUserId: input.affiliateUserId,
+        code: normalizedCode,
+        label: input.label.trim(),
+        description: input.description?.trim() || null,
+        polarDiscountId: polarDiscount.id,
+        discountBasisPoints: basisPoints,
+        isActive: true,
+        createdByUserId: input.createdByUserId,
+      })
+      .returning();
+
+    savedOffer = inserted ?? null;
+  }
+
+  if (!savedOffer) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unable to save affiliate offer",
+    });
+  }
+
+  const allOffers = await getAffiliateOfferRows(input.affiliateUserId);
+  const existingDefault = allOffers.find(
+    (row) => row.id !== savedOffer!.id && row.isDefault
+  );
+  const defaultOfferId =
+    input.isDefault || !existingDefault ? savedOffer.id : existingDefault.id;
+
+  await db
+    .update(affiliateOffer)
+    .set({
+      isDefault: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateOffer.affiliateUserId, input.affiliateUserId));
+
+  await db
+    .update(affiliateOffer)
+    .set({
+      isDefault: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateOffer.id, defaultOfferId));
+
+  const offers = await getAffiliateOfferRows(input.affiliateUserId);
+  return offers.find((row) => row.id === savedOffer.id) ?? savedOffer;
+}
+
+export async function saveAffiliateTrackingLink(input: {
+  affiliateUserId: string;
+  trackingLinkId?: string | null;
+  affiliateOfferId?: string | null;
+  name: string;
+  destinationPath?: string | null;
+  affiliateGroupSlug?: string | null;
+  isDefault?: boolean;
+}) {
+  const profile = await getApprovedAffiliateProfile(input.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Affiliate access required",
+    });
+  }
+
+  const [group] = await db
+    .select()
+    .from(affiliateGroup)
+    .where(eq(affiliateGroup.affiliateProfileId, profile.id))
+    .limit(1);
+  const offers = await getAffiliateOfferRows(input.affiliateUserId);
+  const selectedOffer =
+    (input.affiliateOfferId
+      ? offers.find((row) => row.id === input.affiliateOfferId)
+      : offers.find((row) => row.isDefault) ?? offers[0]) ?? null;
+
+  let existing: typeof affiliateTrackingLink.$inferSelect | null = null;
+  if (input.trackingLinkId) {
+    const [row] = await db
+      .select()
+      .from(affiliateTrackingLink)
+      .where(
+        and(
+          eq(affiliateTrackingLink.id, input.trackingLinkId),
+          eq(affiliateTrackingLink.affiliateUserId, input.affiliateUserId)
+        )
+      )
+      .limit(1);
+    existing = row ?? null;
+  }
+
+  let savedLink: typeof affiliateTrackingLink.$inferSelect | null = null;
+  if (existing) {
+    const [updated] = await db
+      .update(affiliateTrackingLink)
+      .set({
+        affiliateOfferId: selectedOffer?.id ?? null,
+        name: input.name.trim(),
+        destinationPath: normalizeDestinationPath(input.destinationPath),
+        affiliateGroupSlug: input.affiliateGroupSlug?.trim() || group?.slug || null,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(affiliateTrackingLink.id, existing.id))
+      .returning();
+    savedLink = updated ?? null;
+  } else {
+    const baseSlug = buildAffiliateTrackingLinkSlug(input.name);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const slug = attempt === 0 ? baseSlug : `${baseSlug}-${attempt + 1}`;
+      try {
+        const [inserted] = await db
+          .insert(affiliateTrackingLink)
+          .values({
+            id: crypto.randomUUID(),
+            affiliateProfileId: profile.id,
+            affiliateUserId: input.affiliateUserId,
+            affiliateOfferId: selectedOffer?.id ?? null,
+            name: input.name.trim(),
+            slug,
+            destinationPath: normalizeDestinationPath(input.destinationPath),
+            affiliateGroupSlug:
+              input.affiliateGroupSlug?.trim() || group?.slug || null,
+            utmSource: "affiliate",
+            utmMedium: "share",
+            utmCampaign: profile.code.toLowerCase(),
+          })
+          .returning();
+
+        savedLink = inserted ?? null;
+        if (savedLink) {
+          break;
+        }
+      } catch {
+        // Retry on slug collisions.
+      }
+    }
+  }
+
+  if (!savedLink) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unable to save affiliate link",
+    });
+  }
+
+  const allLinks = await getAffiliateTrackingLinkRows(input.affiliateUserId);
+  const existingDefault = allLinks.find(
+    (row) => row.id !== savedLink!.id && row.isDefault
+  );
+  const defaultLinkId =
+    input.isDefault || !existingDefault ? savedLink.id : existingDefault.id;
+
+  await db
+    .update(affiliateTrackingLink)
+    .set({
+      isDefault: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateTrackingLink.affiliateUserId, input.affiliateUserId));
+
+  await db
+    .update(affiliateTrackingLink)
+    .set({
+      isDefault: true,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateTrackingLink.id, defaultLinkId));
+
+  const links = await getAffiliateTrackingLinkRows(input.affiliateUserId);
+  return links.find((row) => row.id === savedLink.id) ?? savedLink;
+}
+
+export async function createAffiliateStripeConnectSession(input: {
+  affiliateUserId: string;
+  refreshUrl: string;
+  returnUrl: string;
+  mode?: "onboarding" | "dashboard";
+}) {
+  const profile = await getApprovedAffiliateProfile(input.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Affiliate access required",
+    });
+  }
+
+  const user = await getMinimalUser(input.affiliateUserId);
+  const existingAccount = await getAffiliateProviderAccountRow(input.affiliateUserId);
+  const stripeAccount = existingAccount?.providerAccountId
+    ? await retrieveStripeConnectedAccount(existingAccount.providerAccountId)
+    : await createStripeConnectedAccount({
+        affiliateUserId: input.affiliateUserId,
+        email: user.email,
+      });
+
+  const providerAccount = await upsertAffiliateProviderAccountFromStripe({
+    affiliateUserId: input.affiliateUserId,
+    account: stripeAccount,
+  });
+
+  if ((input.mode ?? "onboarding") === "dashboard") {
+    const link = await createStripeLoginLink(stripeAccount.id);
+    return {
+      url: link.url,
+      providerAccount,
+    };
+  }
+
+  const link = await createStripeOnboardingLink({
+    accountId: stripeAccount.id,
+    refreshUrl: input.refreshUrl,
+    returnUrl: input.returnUrl,
+  });
+
+  return {
+    url: link.url,
+    providerAccount,
+  };
+}
+
+export async function refreshAffiliateStripeConnectAccount(affiliateUserId: string) {
+  const profile = await getApprovedAffiliateProfile(affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Affiliate access required",
+    });
+  }
+
+  const providerAccount = await getAffiliateProviderAccountRow(affiliateUserId);
+  if (!providerAccount?.providerAccountId) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Stripe Connect account not found",
+    });
+  }
+
+  const stripeAccount = await retrieveStripeConnectedAccount(
+    providerAccount.providerAccountId
+  );
+  return upsertAffiliateProviderAccountFromStripe({
+    affiliateUserId,
+    account: stripeAccount,
+  });
+}
+
+export async function disconnectAffiliateStripeConnect(affiliateUserId: string) {
+  const profile = await getApprovedAffiliateProfile(affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Affiliate access required",
+    });
+  }
+
+  const providerAccount = await getAffiliateProviderAccountRow(affiliateUserId);
+  if (!providerAccount) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Stripe Connect account not found",
+    });
+  }
+
+  if (providerAccount.providerAccountId) {
+    try {
+      await deleteStripeConnectedAccount(providerAccount.providerAccountId);
+    } catch {
+      // Local disconnect still disables payouts even if remote deletion is rejected.
+    }
+  }
+
+  const [updated] = await db
+    .update(affiliateProviderAccount)
+    .set({
+      isActive: false,
+      onboardingStatus: "disconnected",
+      disconnectedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateProviderAccount.id, providerAccount.id))
+    .returning();
+
+  return updated ?? providerAccount;
+}
+
+export async function requestAffiliateWithdrawal(input: {
+  affiliateUserId: string;
+  amount?: number | null;
+  destinationType: "stripe_connect" | "manual";
+  paymentMethodId?: string | null;
+}) {
+  const profile = await getApprovedAffiliateProfile(input.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Affiliate access required",
+    });
+  }
+
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId);
+  const summary = buildAffiliatePayoutSummary({
+    unpaidEvents,
+    payouts: [],
+  });
+
+  if (summary.availableAmount <= 0) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "No affiliate commission is available to withdraw",
+    });
+  }
+
+  const requestedAmount =
+    input.amount && Number.isInteger(input.amount) ? input.amount : summary.availableAmount;
+  if (requestedAmount <= 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Withdrawal amount must be a positive integer",
+    });
+  }
+  if (requestedAmount > summary.availableAmount) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Requested amount exceeds available affiliate balance",
+    });
+  }
+
+  const providerAccount =
+    input.destinationType === "stripe_connect"
+      ? await getAffiliateProviderAccountRow(input.affiliateUserId)
+      : null;
+  if (input.destinationType === "stripe_connect") {
+    if (!providerAccount?.isActive || !providerAccount.payoutsEnabled) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Connect Stripe and finish onboarding before requesting payout",
+      });
+    }
+  }
+
+  const paymentMethods =
+    input.destinationType === "manual"
+      ? await getAffiliatePaymentMethods(input.affiliateUserId)
+      : [];
+  const paymentMethod =
+    input.destinationType === "manual"
+      ? input.paymentMethodId
+        ? paymentMethods.find((row) => row.id === input.paymentMethodId) ?? null
+        : paymentMethods.find((row) => row.isDefault) ?? paymentMethods[0] ?? null
+      : null;
+
+  if (input.destinationType === "manual" && !paymentMethod) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Choose a manual payout method before requesting withdrawal",
+    });
+  }
+
+  const [existingPending] = await db
+    .select()
+    .from(affiliateWithdrawalRequest)
+    .where(
+      and(
+        eq(affiliateWithdrawalRequest.affiliateUserId, input.affiliateUserId),
+        inArray(affiliateWithdrawalRequest.status, ["pending", "approved"])
+      )
+    )
+    .limit(1);
+  if (existingPending) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "A withdrawal request is already open",
+    });
+  }
+
+  const selection = await selectCommissionEventsForWithdrawal({
+    affiliateUserId: input.affiliateUserId,
+    amountLimit: requestedAmount,
+  });
+
+  const [request] = await db
+    .insert(affiliateWithdrawalRequest)
+    .values({
+      id: crypto.randomUUID(),
+      affiliateUserId: input.affiliateUserId,
+      destinationType: input.destinationType,
+      providerAccountId: providerAccount?.id ?? null,
+      paymentMethodId: paymentMethod?.id ?? null,
+      amount: selection.amount,
+      currency: selection.currency,
+      status: "pending",
+    })
+    .returning();
+
+  return request ?? null;
+}
+
+export async function cancelAffiliateWithdrawal(input: {
+  affiliateUserId: string;
+  withdrawalRequestId: string;
+}) {
+  const [request] = await db
+    .select()
+    .from(affiliateWithdrawalRequest)
+    .where(
+      and(
+        eq(affiliateWithdrawalRequest.id, input.withdrawalRequestId),
+        eq(affiliateWithdrawalRequest.affiliateUserId, input.affiliateUserId)
+      )
+    )
+    .limit(1);
+
+  if (!request) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Withdrawal request not found",
+    });
+  }
+
+  if (request.status !== "pending") {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Only pending withdrawal requests can be cancelled",
+    });
+  }
+
+  const [updated] = await db
+    .update(affiliateWithdrawalRequest)
+    .set({
+      status: "cancelled",
+      cancelledAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateWithdrawalRequest.id, request.id))
+    .returning();
+
+  return updated ?? request;
+}
+
+export async function approveAffiliateWithdrawal(input: {
+  withdrawalRequestId: string;
+  reviewedByUserId: string;
+  notes?: string | null;
+}) {
+  const [request] = await db
+    .select()
+    .from(affiliateWithdrawalRequest)
+    .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequestId))
+    .limit(1);
+
+  if (!request) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Withdrawal request not found",
+    });
+  }
+
+  if (request.status !== "pending") {
+    return request;
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(affiliateWithdrawalRequest)
+    .set({
+      status: "approved",
+      notes: input.notes?.trim() || request.notes,
+      approvedAt: now,
+      reviewedAt: now,
+      reviewedByUserId: input.reviewedByUserId,
+      updatedAt: now,
+    })
+    .where(eq(affiliateWithdrawalRequest.id, request.id))
+    .returning();
+
+  return updated ?? request;
+}
+
+export async function rejectAffiliateWithdrawal(input: {
+  withdrawalRequestId: string;
+  reviewedByUserId: string;
+  notes?: string | null;
+}) {
+  const [request] = await db
+    .select()
+    .from(affiliateWithdrawalRequest)
+    .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequestId))
+    .limit(1);
+
+  if (!request) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Withdrawal request not found",
+    });
+  }
+
+  if (request.status === "paid") {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Paid withdrawals cannot be rejected",
+    });
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(affiliateWithdrawalRequest)
+    .set({
+      status: "rejected",
+      notes: input.notes?.trim() || request.notes,
+      rejectedAt: now,
+      reviewedAt: now,
+      reviewedByUserId: input.reviewedByUserId,
+      updatedAt: now,
+    })
+    .where(eq(affiliateWithdrawalRequest.id, request.id))
+    .returning();
+
+  return updated ?? request;
+}
+
+async function finalizeAffiliateWithdrawalPayout(input: {
+  withdrawalRequest: typeof affiliateWithdrawalRequest.$inferSelect;
+  createdByUserId: string;
+  destinationType: "manual" | "stripe_connect";
+  paymentMethodId?: string | null;
+  providerAccountId?: string | null;
+  externalReference?: string | null;
+  notes?: string | null;
+  stripeTransferId?: string | null;
+  selection?: Awaited<ReturnType<typeof selectCommissionEventsForWithdrawal>>;
+}) {
+  const selection =
+    input.selection ??
+    (await selectCommissionEventsForWithdrawal({
+      affiliateUserId: input.withdrawalRequest.affiliateUserId,
+      amountLimit: input.withdrawalRequest.amount,
+    }));
+
+  const payoutId = crypto.randomUUID();
+  const paidAt = new Date();
+  const provisionalCurrency = selection.currency ?? input.withdrawalRequest.currency;
+
+  await db.insert(affiliatePayout).values({
+    id: payoutId,
+    affiliateUserId: input.withdrawalRequest.affiliateUserId,
+    withdrawalRequestId: input.withdrawalRequest.id,
+    destinationType: input.destinationType,
+    providerAccountId: input.providerAccountId ?? null,
+    paymentMethodId: input.paymentMethodId ?? null,
+    amount: 0,
+    currency: provisionalCurrency,
+    eventCount: 0,
+    status: "processing",
+    externalReference: input.externalReference ?? null,
+    stripeTransferId: input.stripeTransferId ?? null,
+    notes: input.notes ?? null,
+    createdByUserId: input.createdByUserId,
+    paidAt,
+  });
+
+  const claimedEvents = await claimCommissionEventsForPayout({
+    affiliateUserId: input.withdrawalRequest.affiliateUserId,
+    payoutId,
+    eventIds: selection.selected.map((row) => row.id),
+    paidAt,
+  });
+
+  if (claimedEvents.length !== selection.selected.length) {
+    await releaseCommissionEventsFromPayout(payoutId);
+    await db.delete(affiliatePayout).where(eq(affiliatePayout.id, payoutId));
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Affiliate balance changed before the payout could be settled",
+    });
+  }
+
+  const amount = selection.amount;
+  const currency = selection.currency ?? provisionalCurrency;
+
+  const [payout] = await db
+    .update(affiliatePayout)
+    .set({
+      amount,
+      currency,
+      eventCount: claimedEvents.length,
+      status: "paid",
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliatePayout.id, payoutId))
+    .returning();
+
+  const [updatedRequest] = await db
+    .update(affiliateWithdrawalRequest)
+    .set({
+      status: "paid",
+      externalReference: input.externalReference ?? input.withdrawalRequest.externalReference,
+      providerTransferId:
+        input.stripeTransferId ?? input.withdrawalRequest.providerTransferId,
+      notes: input.notes ?? input.withdrawalRequest.notes,
+      paidAt,
+      reviewedAt: paidAt,
+      reviewedByUserId: input.createdByUserId,
+      updatedAt: paidAt,
+    })
+    .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequest.id))
+    .returning();
+
+  return {
+    payout: payout ?? null,
+    withdrawalRequest: updatedRequest ?? input.withdrawalRequest,
+  };
+}
+
+export async function markAffiliateManualWithdrawalPaid(input: {
+  withdrawalRequestId: string;
+  reviewedByUserId: string;
+  paymentMethodId?: string | null;
+  externalReference?: string | null;
+  notes?: string | null;
+}) {
+  const [request] = await db
+    .select()
+    .from(affiliateWithdrawalRequest)
+    .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequestId))
+    .limit(1);
+
+  if (!request) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Withdrawal request not found",
+    });
+  }
+
+  if (!["pending", "approved"].includes(request.status)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Withdrawal request cannot be paid",
+    });
+  }
+
+  const paymentMethods = await getAffiliatePaymentMethods(request.affiliateUserId);
+  const selectedPaymentMethod = input.paymentMethodId
+    ? paymentMethods.find((row) => row.id === input.paymentMethodId) ?? null
+    : paymentMethods.find((row) => row.id === request.paymentMethodId) ??
+      paymentMethods.find((row) => row.isDefault) ??
+      paymentMethods[0] ??
+      null;
+
+  if (!selectedPaymentMethod) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Affiliate has no manual payout method on file",
+    });
+  }
+
+  return finalizeAffiliateWithdrawalPayout({
+    withdrawalRequest: request,
+    createdByUserId: input.reviewedByUserId,
+    destinationType: "manual",
+    paymentMethodId: selectedPaymentMethod.id,
+    externalReference: input.externalReference ?? null,
+    notes: input.notes ?? null,
+  });
+}
+
+export async function sendAffiliateStripeWithdrawal(input: {
+  withdrawalRequestId: string;
+  reviewedByUserId: string;
+  notes?: string | null;
+}) {
+  const [request] = await db
+    .select()
+    .from(affiliateWithdrawalRequest)
+    .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequestId))
+    .limit(1);
+
+  if (!request) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Withdrawal request not found",
+    });
+  }
+
+  if (!["pending", "approved"].includes(request.status)) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Withdrawal request cannot be paid",
+    });
+  }
+
+  const providerAccount = await getAffiliateProviderAccountRow(request.affiliateUserId);
+  if (!providerAccount?.providerAccountId || !providerAccount.payoutsEnabled) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Stripe Connect payouts are not enabled for this affiliate",
+    });
+  }
+
+  const selection = await selectCommissionEventsForWithdrawal({
+    affiliateUserId: request.affiliateUserId,
+    amountLimit: request.amount,
+  });
+
+  if (selection.amount !== request.amount) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Affiliate balance changed since this withdrawal was approved",
+    });
+  }
+
+  const transfer = await createStripeTransfer({
+    accountId: providerAccount.providerAccountId,
+    amount: selection.amount,
+    currency: selection.currency,
+    description: `Affiliate payout ${request.id}`,
+    metadata: {
+      affiliate_user_id: request.affiliateUserId,
+      withdrawal_request_id: request.id,
+    },
+  });
+
+  try {
+    return finalizeAffiliateWithdrawalPayout({
+      withdrawalRequest: request,
+      createdByUserId: input.reviewedByUserId,
+      destinationType: "stripe_connect",
+      providerAccountId: providerAccount.id,
+      stripeTransferId: transfer.id,
+      notes: input.notes ?? null,
+      selection,
+    });
+  } catch (error) {
+    // The transfer exists at this point, so preserve the request for manual reconciliation.
+    await db
+      .update(affiliateWithdrawalRequest)
+      .set({
+        status: "failed",
+        providerTransferId: transfer.id,
+        notes: input.notes?.trim() || request.notes,
+        reviewedAt: new Date(),
+        reviewedByUserId: input.reviewedByUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(affiliateWithdrawalRequest.id, request.id));
+    throw error;
+  }
 }
 
 export async function saveAffiliatePaymentMethod(input: {
@@ -1157,10 +2996,18 @@ export async function listAffiliatePayoutQueue() {
       const paymentMethods = await getAffiliatePaymentMethods(entry.user.id);
       const payouts = await getAffiliatePayoutRows(entry.user.id);
       const unpaidEvents = await getUnpaidAffiliateCommissionEvents(entry.user.id);
+      const providerAccount = await getAffiliateProviderAccountRow(entry.user.id);
+      const withdrawalRequests = await getAffiliateWithdrawalRequestRows(entry.user.id);
+      const offers = await getAffiliateOfferRows(entry.user.id);
+      const trackingLinks = await getAffiliateTrackingLinkRows(entry.user.id);
       const summary = buildAffiliatePayoutSummary({
         unpaidEvents,
         payouts,
       });
+      const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+      const defaultLink =
+        trackingLinks.find((row) => row.isDefault) ?? trackingLinks[0] ?? null;
+      const offerLookup = new Map(offers.map((row) => [row.id, row]));
 
       return {
         affiliate: {
@@ -1170,11 +3017,84 @@ export async function listAffiliatePayoutQueue() {
           code: entry.profile.code,
         },
         paymentMethods,
+        manualPaymentMethods: paymentMethods,
+        stripeConnect: providerAccount
+          ? {
+              id: providerAccount.id,
+              accountId: providerAccount.providerAccountId,
+              provider: providerAccount.provider,
+              onboardingStatus: providerAccount.onboardingStatus,
+              statusLabel: buildStripeConnectStatusLabel(providerAccount),
+              payoutsEnabled: providerAccount.payoutsEnabled,
+              chargesEnabled: providerAccount.chargesEnabled,
+            }
+          : null,
         defaultPaymentMethod:
           paymentMethods.find((row) => row.isDefault) ?? paymentMethods[0] ?? null,
+        defaultOffer,
+        offers,
+        defaultLink: defaultLink
+          ? {
+              ...defaultLink,
+              shareUrl: buildAffiliateShareUrl({
+                affiliateCode: entry.profile.code,
+                groupSlug: defaultLink.affiliateGroupSlug ?? null,
+                offerCode:
+                  defaultLink.affiliateOfferId &&
+                  offerLookup.get(defaultLink.affiliateOfferId)
+                    ? offerLookup.get(defaultLink.affiliateOfferId)!.code
+                    : null,
+                trackingLinkSlug: defaultLink.slug,
+                destinationPath: defaultLink.destinationPath,
+              }),
+            }
+          : null,
+        links: trackingLinks.map((link) => ({
+          ...link,
+          shareUrl: buildAffiliateShareUrl({
+            affiliateCode: entry.profile.code,
+            groupSlug: link.affiliateGroupSlug ?? null,
+            offerCode:
+              link.affiliateOfferId && offerLookup.get(link.affiliateOfferId)
+                ? offerLookup.get(link.affiliateOfferId)!.code
+                : null,
+            trackingLinkSlug: link.slug,
+            destinationPath: link.destinationPath,
+          }),
+        })),
         summary,
+        withdrawalRequests: withdrawalRequests.map((row) => ({
+          ...row.request,
+          amountUsd: row.request.amount,
+          destinationLabel: buildWithdrawalDestinationLabel({
+            destinationType: row.request.destinationType,
+            paymentMethod: row.paymentMethod,
+            providerAccount: row.providerAccount,
+          }),
+          providerAccount: row.providerAccount
+            ? {
+                id: row.providerAccount.id,
+                provider: row.providerAccount.provider,
+                onboardingStatus: row.providerAccount.onboardingStatus,
+                payoutsEnabled: row.providerAccount.payoutsEnabled,
+              }
+            : null,
+          paymentMethod: row.paymentMethod
+            ? {
+                id: row.paymentMethod.id,
+                label: row.paymentMethod.label,
+                methodType: row.paymentMethod.methodType,
+              }
+            : null,
+        })),
         recentPayouts: payouts.slice(0, 5).map((row) => ({
           ...row.payout,
+          amountUsd: row.payout.amount,
+          destinationLabel: buildWithdrawalDestinationLabel({
+            destinationType: row.payout.destinationType,
+            paymentMethod: row.paymentMethod,
+            providerAccount: row.providerAccount,
+          }),
           paymentMethod: row.paymentMethod
             ? {
                 id: row.paymentMethod.id,
@@ -1308,6 +3228,449 @@ export async function recordAffiliatePayout(input: {
   };
 }
 
+type ResolvedGrowthTouchTarget =
+  | {
+      touchType: "referral";
+      referralProfile: typeof referralProfile.$inferSelect;
+      referralCode: string;
+      affiliateProfile: null;
+      affiliateOffer: null;
+      trackingLink: null;
+      affiliateCode: null;
+      affiliateUserId: null;
+      affiliateGroupSlug: null;
+    }
+  | {
+      touchType: "affiliate";
+      referralProfile: null;
+      referralCode: null;
+      affiliateProfile: typeof affiliateProfile.$inferSelect;
+      affiliateOffer: typeof affiliateOffer.$inferSelect | null;
+      trackingLink: typeof affiliateTrackingLink.$inferSelect | null;
+      affiliateCode: string;
+      affiliateUserId: string;
+      affiliateGroupSlug: string | null;
+    };
+
+async function resolveGrowthTouchTarget(input: {
+  referralCode?: string | null;
+  affiliateCode?: string | null;
+  affiliateOfferCode?: string | null;
+  affiliateTrackingLinkSlug?: string | null;
+  affiliateGroupSlug?: string | null;
+}) {
+  const referralCode = input.referralCode
+    ? normalizeGrowthCode(input.referralCode)
+    : "";
+  const affiliateCode = input.affiliateCode
+    ? normalizeGrowthCode(input.affiliateCode)
+    : "";
+  const affiliateOfferCode = input.affiliateOfferCode
+    ? normalizeGrowthCode(input.affiliateOfferCode)
+    : "";
+
+  if (referralCode && (affiliateCode || affiliateOfferCode)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Use either a referral code or an affiliate code, not both",
+    });
+  }
+
+  if (referralCode) {
+    const [profile] = await db
+      .select()
+      .from(referralProfile)
+      .where(
+        and(eq(referralProfile.code, referralCode), eq(referralProfile.isActive, true))
+      )
+      .limit(1);
+
+    if (!profile) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid referral code",
+      });
+    }
+
+    return {
+      touchType: "referral" as const,
+      referralProfile: profile,
+      referralCode,
+      affiliateProfile: null,
+      affiliateOffer: null,
+      trackingLink: null,
+      affiliateCode: null,
+      affiliateUserId: null,
+      affiliateGroupSlug: null,
+    };
+  }
+
+  let offer: typeof affiliateOffer.$inferSelect | null = null;
+  if (affiliateOfferCode) {
+    offer = await getAffiliateOfferByCode(affiliateOfferCode);
+    if (!offer) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Invalid affiliate offer code",
+      });
+    }
+  }
+
+  let profile: typeof affiliateProfile.$inferSelect | null = null;
+  if (offer) {
+    const [row] = await db
+      .select()
+      .from(affiliateProfile)
+      .where(
+        and(
+          eq(affiliateProfile.id, offer.affiliateProfileId),
+          eq(affiliateProfile.isActive, true)
+        )
+      )
+      .limit(1);
+    profile = row ?? null;
+  } else if (affiliateCode) {
+    const [row] = await db
+      .select()
+      .from(affiliateProfile)
+      .where(and(eq(affiliateProfile.code, affiliateCode), eq(affiliateProfile.isActive, true)))
+      .limit(1);
+    profile = row ?? null;
+  }
+
+  const approvedProfile =
+    profile && profile.approvedAt && profile.isActive ? profile : null;
+  if (!approvedProfile) {
+    return null;
+  }
+
+  if (affiliateCode && approvedProfile.code !== affiliateCode) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Affiliate offer code does not match affiliate link",
+    });
+  }
+
+  let trackingLink: typeof affiliateTrackingLink.$inferSelect | null = null;
+  if (input.affiliateTrackingLinkSlug?.trim()) {
+    const [row] = await db
+      .select()
+      .from(affiliateTrackingLink)
+      .where(
+        and(
+          eq(affiliateTrackingLink.affiliateProfileId, approvedProfile.id),
+          eq(
+            affiliateTrackingLink.slug,
+            input.affiliateTrackingLinkSlug.trim().toLowerCase()
+          ),
+          eq(affiliateTrackingLink.isActive, true)
+        )
+      )
+      .limit(1);
+    trackingLink = row ?? null;
+  }
+
+  return {
+    touchType: "affiliate" as const,
+    referralProfile: null,
+    referralCode: null,
+    affiliateProfile: approvedProfile,
+    affiliateOffer:
+      offer ??
+      (trackingLink?.affiliateOfferId
+        ? (await db
+            .select()
+            .from(affiliateOffer)
+            .where(eq(affiliateOffer.id, trackingLink.affiliateOfferId))
+            .limit(1))[0] ?? null
+        : null),
+    trackingLink,
+    affiliateCode: approvedProfile.code,
+    affiliateUserId: approvedProfile.userId,
+    affiliateGroupSlug:
+      input.affiliateGroupSlug?.trim() || trackingLink?.affiliateGroupSlug || null,
+  };
+}
+
+export async function captureGrowthTouch(input: {
+  visitorToken: string;
+  sourcePath?: string | null;
+  referralCode?: string | null;
+  affiliateCode?: string | null;
+  affiliateOfferCode?: string | null;
+  affiliateTrackingLinkSlug?: string | null;
+  affiliateGroupSlug?: string | null;
+  referrerUrl?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  if (!input.visitorToken.trim()) {
+    return null;
+  }
+
+  const resolved = await resolveGrowthTouchTarget(input);
+  if (!resolved) {
+    return null;
+  }
+
+  const now = new Date();
+  await db.insert(affiliateTouchEvent).values({
+    id: crypto.randomUUID(),
+    visitorToken: input.visitorToken,
+    touchType: resolved.touchType,
+    affiliateProfileId: resolved.affiliateProfile?.id ?? null,
+    affiliateUserId: resolved.affiliateUserId,
+    referralProfileId: resolved.referralProfile?.id ?? null,
+    affiliateOfferId: resolved.affiliateOffer?.id ?? null,
+    affiliateTrackingLinkId: resolved.trackingLink?.id ?? null,
+    affiliateCode: resolved.affiliateCode,
+    referralCode: resolved.referralCode,
+    affiliateGroupSlug: resolved.affiliateGroupSlug,
+    sourcePath: normalizeDestinationPath(input.sourcePath),
+    referrerUrl: input.referrerUrl?.trim() || null,
+    metadata: input.metadata ?? null,
+    createdAt: now,
+  });
+
+  const [existingPending] = await db
+    .select()
+    .from(affiliatePendingAttribution)
+    .where(eq(affiliatePendingAttribution.visitorToken, input.visitorToken))
+    .limit(1);
+
+  if (
+    existingPending &&
+    existingPending.status === "pending" &&
+    existingPending.expiresAt.getTime() > now.getTime()
+  ) {
+    await db
+      .update(affiliatePendingAttribution)
+      .set({
+        lastTouchedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(affiliatePendingAttribution.id, existingPending.id));
+
+    return existingPending;
+  }
+
+  const pendingPayload = {
+    status: "pending",
+    touchType: resolved.touchType,
+    affiliateProfileId: resolved.affiliateProfile?.id ?? null,
+    affiliateUserId: resolved.affiliateUserId,
+    referralProfileId: resolved.referralProfile?.id ?? null,
+    affiliateOfferId: resolved.affiliateOffer?.id ?? null,
+    affiliateTrackingLinkId: resolved.trackingLink?.id ?? null,
+    affiliateCode: resolved.affiliateCode,
+    referralCode: resolved.referralCode,
+    affiliateGroupSlug: resolved.affiliateGroupSlug,
+    firstTouchedAt: now,
+    lastTouchedAt: now,
+    expiresAt: buildAttributionExpiryDate(now),
+    claimedUserId: null,
+    claimedAt: null,
+    metadata: input.metadata ?? null,
+    updatedAt: now,
+  };
+
+  if (existingPending) {
+    const [updated] = await db
+      .update(affiliatePendingAttribution)
+      .set(pendingPayload)
+      .where(eq(affiliatePendingAttribution.id, existingPending.id))
+      .returning();
+    return updated ?? existingPending;
+  }
+
+  const [inserted] = await db
+    .insert(affiliatePendingAttribution)
+    .values({
+      id: crypto.randomUUID(),
+      visitorToken: input.visitorToken,
+      ...pendingPayload,
+    })
+    .returning();
+
+  return inserted ?? null;
+}
+
+export async function claimPendingGrowthAttribution(input: {
+  userId: string;
+  visitorToken?: string | null;
+  source?: string | null;
+}) {
+  if (!input.visitorToken?.trim()) {
+    return {
+      referral: null,
+      affiliate: null,
+      pending: null,
+    };
+  }
+
+  const now = new Date();
+  const [pending] = await db
+    .select()
+    .from(affiliatePendingAttribution)
+    .where(eq(affiliatePendingAttribution.visitorToken, input.visitorToken.trim()))
+    .limit(1);
+
+  if (!pending || pending.expiresAt.getTime() <= now.getTime()) {
+    return {
+      referral: null,
+      affiliate: null,
+      pending: pending ?? null,
+    };
+  }
+
+  const [existingReferral] = await db
+    .select()
+    .from(referralConversion)
+    .where(eq(referralConversion.referredUserId, input.userId))
+    .limit(1);
+  const [existingAffiliate] = await db
+    .select()
+    .from(affiliateAttribution)
+    .where(eq(affiliateAttribution.referredUserId, input.userId))
+    .limit(1);
+
+  let referral: typeof referralConversion.$inferSelect | null =
+    existingReferral ?? null;
+  let affiliate: typeof affiliateAttribution.$inferSelect | null =
+    existingAffiliate ?? null;
+
+  if (!referral && !affiliate) {
+    if (pending.touchType === "referral" && pending.referralCode) {
+      referral = await attachReferralConversionToUser({
+        userId: input.userId,
+        referralCode: pending.referralCode,
+        source: input.source ?? "claim",
+      });
+    }
+
+    if (pending.touchType === "affiliate" && pending.affiliateCode) {
+      affiliate = await attachAffiliateAttributionToUser({
+        userId: input.userId,
+        affiliateCode: pending.affiliateCode,
+        affiliateGroupSlug: pending.affiliateGroupSlug,
+        affiliateOfferId: pending.affiliateOfferId ?? null,
+        affiliateTrackingLinkId: pending.affiliateTrackingLinkId ?? null,
+        source: input.source ?? "claim",
+      });
+    }
+  }
+
+  await db
+    .update(affiliatePendingAttribution)
+    .set({
+      status: "claimed",
+      claimedUserId: input.userId,
+      claimedAt: now,
+      updatedAt: now,
+    })
+    .where(eq(affiliatePendingAttribution.id, pending.id));
+
+  return {
+    referral,
+    affiliate,
+    pending,
+  };
+}
+
+export async function ensureAffiliateOfferForCheckout(input: {
+  userId: string;
+  affiliateOfferCode: string;
+}) {
+  const offer = await getAffiliateOfferByCode(input.affiliateOfferCode);
+  if (!offer) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Invalid affiliate discount code",
+    });
+  }
+
+  const profile = await getApprovedAffiliateProfile(offer.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Affiliate offer is not active",
+    });
+  }
+
+  const [existingReferral] = await db
+    .select()
+    .from(referralConversion)
+    .where(eq(referralConversion.referredUserId, input.userId))
+    .limit(1);
+  if (existingReferral) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "A referral is already attached to this account",
+    });
+  }
+
+  const [existingAffiliate] = await db
+    .select()
+    .from(affiliateAttribution)
+    .where(eq(affiliateAttribution.referredUserId, input.userId))
+    .limit(1);
+
+  if (existingAffiliate && existingAffiliate.affiliateUserId !== offer.affiliateUserId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "This account is already attributed to another affiliate",
+    });
+  }
+
+  const attribution =
+    existingAffiliate ??
+    (await attachAffiliateAttributionToUser({
+      userId: input.userId,
+      affiliateCode: profile.code,
+      affiliateOfferId: offer.id,
+      source: "checkout",
+    }));
+
+  return {
+    offer,
+    attribution,
+  };
+}
+
+export async function getAffiliateCheckoutAttribution(userId: string) {
+  const [attribution] = await db
+    .select()
+    .from(affiliateAttribution)
+    .where(eq(affiliateAttribution.referredUserId, userId))
+    .limit(1);
+
+  if (!attribution) {
+    return {
+      attribution: null,
+      offer: null,
+    };
+  }
+
+  const offer = attribution.affiliateOfferId
+    ? (
+        await db
+          .select()
+          .from(affiliateOffer)
+          .where(
+            and(
+              eq(affiliateOffer.id, attribution.affiliateOfferId),
+              eq(affiliateOffer.isActive, true)
+            )
+          )
+          .limit(1)
+      )[0] ?? null
+    : null;
+
+  return {
+    attribution,
+    offer,
+  };
+}
+
 export async function attachReferralConversionToUser(input: {
   userId: string;
   referralCode: string;
@@ -1413,6 +3776,8 @@ export async function attachAffiliateAttributionToUser(input: {
   userId: string;
   affiliateCode: string;
   affiliateGroupSlug?: string | null;
+  affiliateOfferId?: string | null;
+  affiliateTrackingLinkId?: string | null;
   source?: string | null;
 }) {
   const normalized = normalizeGrowthCode(input.affiliateCode);
@@ -1496,9 +3861,13 @@ export async function attachAffiliateAttributionToUser(input: {
       affiliateUserId: approvedProfile.userId,
       referredUserId: input.userId,
       affiliateCode: approvedProfile.code,
+      affiliateOfferId: input.affiliateOfferId ?? null,
+      affiliateTrackingLinkId: input.affiliateTrackingLinkId ?? null,
       affiliateGroupId: groupRow?.id ?? null,
       metadata: {
         source: input.source?.trim() || "app",
+        affiliateOfferId: input.affiliateOfferId ?? null,
+        affiliateTrackingLinkId: input.affiliateTrackingLinkId ?? null,
       },
     })
     .returning();
@@ -1868,17 +4237,82 @@ export async function recordAffiliateCommissionEvent(input: {
   referredUserId: string;
   polarOrderId: string;
   polarSubscriptionId?: string | null;
+  affiliateAttributionId?: string | null;
   orderAmount?: number | null;
+  subtotalAmount?: number | null;
+  discountAmount?: number | null;
+  taxAmount?: number | null;
   currency?: string | null;
+  commissionBps?: number | null;
+  metadata?: Record<string, unknown> | null;
   occurredAt?: Date | null;
 }) {
-  const rows = await db
-    .select()
-    .from(affiliateAttribution)
-    .where(eq(affiliateAttribution.referredUserId, input.referredUserId))
-    .limit(1);
+  const metadataAttributionId =
+    typeof input.metadata?.affiliate_attribution_id === "string"
+      ? input.metadata.affiliate_attribution_id
+      : null;
+  const metadataAffiliateCode =
+    typeof input.metadata?.affiliate_code === "string"
+      ? input.metadata.affiliate_code
+      : null;
+  const metadataOfferCode =
+    typeof input.metadata?.affiliate_offer_code === "string"
+      ? input.metadata.affiliate_offer_code
+      : null;
+  const metadataOfferId =
+    typeof input.metadata?.affiliate_offer_id === "string"
+      ? input.metadata.affiliate_offer_id
+      : null;
+  const metadataTrackingLinkId =
+    typeof input.metadata?.affiliate_tracking_link_id === "string"
+      ? input.metadata.affiliate_tracking_link_id
+      : null;
 
-  const attribution = rows[0];
+  const resolvedAttributionId =
+    input.affiliateAttributionId ?? metadataAttributionId ?? null;
+  const attributionRows = resolvedAttributionId
+    ? await db
+        .select()
+        .from(affiliateAttribution)
+        .where(eq(affiliateAttribution.id, resolvedAttributionId))
+        .limit(1)
+    : await db
+        .select()
+        .from(affiliateAttribution)
+        .where(eq(affiliateAttribution.referredUserId, input.referredUserId))
+        .limit(1);
+
+  let attribution: typeof affiliateAttribution.$inferSelect | null =
+    attributionRows[0] ?? null;
+  if (!attribution && (metadataAffiliateCode || metadataOfferCode || metadataOfferId)) {
+    const touchContext = await resolveAffiliateTouchContext(
+      {
+        affiliateCode: metadataAffiliateCode,
+        offerCode: metadataOfferCode,
+        affiliateOfferId: metadataOfferId,
+        affiliateTrackingLinkId: metadataTrackingLinkId,
+      },
+      { strict: false }
+    );
+
+    if (touchContext?.profile) {
+      try {
+        attribution = await attachAffiliateAttributionToUser({
+          userId: input.referredUserId,
+          affiliateCode: touchContext.profile.code,
+          affiliateGroupSlug: touchContext.group?.slug ?? null,
+          affiliateOfferId: touchContext.offer?.id ?? null,
+          affiliateTrackingLinkId: touchContext.trackingLink?.id ?? null,
+          source: "order_metadata",
+        });
+      } catch (error) {
+        if (!(error instanceof TRPCError) || error.code !== "BAD_REQUEST") {
+          throw error;
+        }
+      }
+    }
+  }
+
   if (!attribution) {
     return null;
   }
@@ -1893,9 +4327,15 @@ export async function recordAffiliateCommissionEvent(input: {
     return existingEvent[0];
   }
 
-  const commissionBps = getAffiliateCommissionBps();
+  const commissionBaseAmount =
+    input.subtotalAmount != null
+      ? Math.max(0, input.subtotalAmount - (input.discountAmount ?? 0))
+      : input.orderAmount != null && input.taxAmount != null
+      ? Math.max(0, input.orderAmount - input.taxAmount)
+      : input.orderAmount ?? 0;
+  const commissionBps = input.commissionBps ?? getAffiliateCommissionBps();
   const commissionAmount = Math.round(
-    ((input.orderAmount ?? 0) * commissionBps) / 10000
+    (commissionBaseAmount * commissionBps) / 10000
   );
   const occurredAt = input.occurredAt ?? new Date();
 
@@ -1908,11 +4348,12 @@ export async function recordAffiliateCommissionEvent(input: {
       referredUserId: attribution.referredUserId,
       polarOrderId: input.polarOrderId,
       polarSubscriptionId: input.polarSubscriptionId ?? null,
-      orderAmount: input.orderAmount ?? 0,
+      orderAmount: commissionBaseAmount,
       commissionBps,
       commissionAmount,
       currency: input.currency ?? null,
       occurredAt,
+      metadata: input.metadata ?? null,
     })
     .returning();
 

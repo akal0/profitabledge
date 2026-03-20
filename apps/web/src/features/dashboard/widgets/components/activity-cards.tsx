@@ -38,6 +38,7 @@ import {
   useDashboardTradeFilters,
 } from "@/features/dashboard/filters/dashboard-trade-filters";
 import { cn } from "@/lib/utils";
+import { ALL_ACCOUNTS_ID } from "@/stores/account";
 import { trpcOptions } from "@/utils/trpc";
 import {
   getTradeDirectionTone,
@@ -768,6 +769,7 @@ export function OpenTradesWidget({
   const { data: liveMetrics } = useQuery({
     ...trpcOptions.accounts.liveMetrics.queryOptions({
       accountId: accountId || "",
+      currencyCode: accountId === ALL_ACCOUNTS_ID ? currencyCode : undefined,
     }),
     enabled: !!accountId,
     refetchInterval: 5000,
@@ -929,7 +931,9 @@ export function OpenTradesWidget({
                                 <button
                                   type="button"
                                   className="flex h-5 min-h-5 items-center justify-center rounded-sm ring ring-white/5 bg-white/[0.03] px-1.5 text-[10px] font-medium text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white/70"
-                                  aria-label={`Swap ${formatSwapValue(trade.swap)}`}
+                                  aria-label={`Swap ${formatSwapValue(
+                                    trade.swap
+                                  )}`}
                                 >
                                   Sw
                                 </button>

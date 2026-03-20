@@ -19,6 +19,7 @@ import {
   clearStoredGrowthIntent,
   getStoredGrowthIntent,
 } from "@/features/growth/lib/access-intent";
+import { AffiliateOfferCodeInput } from "@/features/growth/components/affiliate-offer-code-input";
 import {
   clearStoredOnboardingStep,
   getStoredOnboardingStep,
@@ -27,12 +28,12 @@ import {
 } from "@/features/onboarding/lib/onboarding-step-storage";
 import {
   buildPostAuthContinuePath,
+  resolvePostOnboardingPath,
 } from "@/lib/post-auth-paths";
 import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
 const CHECKOUT_SYNC_RETRY_DELAYS_MS = [0, 1500, 3000, 5000] as const;
-const NEXT_ONBOARDING_STAGE_PATH = "/dashboard";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -50,6 +51,7 @@ function OnboardingPageContent() {
     null
   );
   const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
+  const [affiliateOfferCode, setAffiliateOfferCode] = useState("");
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,11 +61,15 @@ function OnboardingPageContent() {
   const bootstrappedStepState = useRef(false);
   const handledCheckoutState = useRef<string | null>(null);
   const isCompletingOnboardingRef = useRef(false);
+  const nextOnboardingStagePath = useMemo(
+    () => resolvePostOnboardingPath(searchParams?.get("returnTo")),
+    [searchParams]
+  );
 
   const isSessionReady = !isSessionPending && !!session;
   const checkoutContinuePath = useMemo(
-    () => buildPostAuthContinuePath(NEXT_ONBOARDING_STAGE_PATH),
-    []
+    () => buildPostAuthContinuePath(nextOnboardingStagePath),
+    [nextOnboardingStagePath]
   );
 
   const billingConfigQuery = useQuery(
@@ -76,9 +82,9 @@ function OnboardingPageContent() {
   const completeGrowthAccess = useMutation(
     trpcOptions.billing.completeGrowthAccess.mutationOptions()
   );
-  const createCheckout = useMutation(
-    trpcOptions.billing.createCheckout.mutationOptions()
-  );
+  const createCheckout = useMutation<any, unknown, any>({
+    mutationFn: (input) => (trpcClient.billing as any).createCheckout.mutate(input),
+  });
   const syncFromPolar = useMutation(
     trpcOptions.billing.syncFromPolar.mutationOptions()
   );
@@ -122,7 +128,7 @@ function OnboardingPageContent() {
         await trpcClient.billing.markOnboardingComplete.mutate();
         await refetchBillingState();
         clearStoredOnboardingStep(onboardingStorageUserId);
-        router.push(NEXT_ONBOARDING_STAGE_PATH);
+        router.push(nextOnboardingStagePath);
         return true;
       } catch {
         isCompletingOnboardingRef.current = false;
@@ -131,7 +137,13 @@ function OnboardingPageContent() {
         return false;
       }
     },
-    [isSessionReady, onboardingStorageUserId, refetchBillingState, router]
+    [
+      isSessionReady,
+      nextOnboardingStagePath,
+      onboardingStorageUserId,
+      refetchBillingState,
+      router,
+    ]
   );
 
   useEffect(() => {
@@ -351,8 +363,9 @@ function OnboardingPageContent() {
     }
 
     clearStoredOnboardingStep(onboardingStorageUserId);
-    router.replace(NEXT_ONBOARDING_STAGE_PATH);
+    router.replace(nextOnboardingStagePath);
   }, [
+    nextOnboardingStagePath,
     onboardingStorageUserId,
     router,
     shouldSkipOnboarding,
@@ -435,6 +448,7 @@ function OnboardingPageContent() {
       const result = await createCheckout.mutateAsync({
         planKey,
         returnPath: checkoutContinuePath,
+        affiliateOfferCode: affiliateOfferCode.trim() || undefined,
       });
 
       window.location.assign(result.url);
@@ -566,6 +580,13 @@ function OnboardingPageContent() {
             <div className="flex w-full flex-col items-center gap-8">
               {billingConfigQuery.data && !accessLocked ? (
                 <>
+                  <div className="w-full max-w-2xl">
+                    <AffiliateOfferCodeInput
+                      value={affiliateOfferCode}
+                      onChange={setAffiliateOfferCode}
+                      helperText="If an affiliate link already attached this account, a conflicting code will be rejected before checkout starts."
+                    />
+                  </div>
                   <Plans
                     plans={billingConfigQuery.data.plans}
                     activePlanKey={activePlanKey}

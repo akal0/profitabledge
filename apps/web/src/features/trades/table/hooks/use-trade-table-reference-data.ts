@@ -50,75 +50,25 @@ type UseTradeTableReferenceDataArgs = {
 const TRADE_REFERENCE_STALE_TIME = 60_000;
 const TRADE_LIVE_REFRESH_INTERVAL = 10_000;
 
-function queryKeyIncludesAccountId(
-  value: unknown,
-  accountId: string | null
-): boolean {
-  if (!accountId) {
-    return false;
-  }
-
-  if (value === accountId) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.some((item) => queryKeyIncludesAccountId(item, accountId));
-  }
-
-  if (value && typeof value === "object") {
-    return Object.values(value).some((item) =>
-      queryKeyIncludesAccountId(item, accountId)
-    );
-  }
-
-  return false;
-}
-
-function queryKeyIncludesSegment(value: unknown, segment: string): boolean {
-  if (value === segment) {
-    return true;
-  }
-
-  if (Array.isArray(value)) {
-    return value.some((item) => queryKeyIncludesSegment(item, segment));
-  }
-
-  if (value && typeof value === "object") {
-    return Object.values(value).some((item) =>
-      queryKeyIncludesSegment(item, segment)
-    );
-  }
-
-  return false;
-}
-
 export function useTradeTableReferenceData({
   accountId,
   filters,
 }: UseTradeTableReferenceDataArgs) {
   const advancedPrefsQuery =
     trpcOptions.users.getAdvancedMetricsPreferences.queryOptions();
-  const { data: advancedPrefsRaw, isLoading: isLoadingAdvancedPrefs } = useQuery({
-    ...advancedPrefsQuery,
-    staleTime: 5 * 60_000,
-    gcTime: 15 * 60_000,
-  });
+  const { data: advancedPrefsRaw, isLoading: isLoadingAdvancedPrefs } =
+    useQuery({
+      ...advancedPrefsQuery,
+      staleTime: 5 * 60_000,
+      gcTime: 15 * 60_000,
+    });
   const advancedPrefs = advancedPrefsRaw as
     | AdvancedMetricsPreferences
     | undefined;
   const disableSampleGating = advancedPrefs?.disableSampleGating;
-
-  React.useEffect(() => {
-    if (disableSampleGating === undefined || !accountId) return;
-
-    queryClient.invalidateQueries({
-      predicate: (query) =>
-        queryKeyIncludesSegment(query.queryKey, "trades") &&
-        queryKeyIncludesAccountId(query.queryKey, accountId),
-      refetchType: "active",
-    });
-  }, [accountId, disableSampleGating]);
+  const lastDisableSampleGatingRef = React.useRef<boolean | undefined>(
+    undefined
+  );
 
   const boundsOpts = trpcOptions.accounts.opensBounds.queryOptions({
     accountId: accountId || "",
@@ -161,11 +111,13 @@ export function useTradeTableReferenceData({
   const sessionTagsOpts = trpcOptions.trades.listSessionTags.queryOptions({
     accountId: accountId || "",
   });
-  const { data: allSessionTagsRaw, isLoading: isLoadingSessionTags } = useQuery({
-    ...sessionTagsOpts,
-    enabled: Boolean(accountId),
-    staleTime: TRADE_REFERENCE_STALE_TIME,
-  });
+  const { data: allSessionTagsRaw, isLoading: isLoadingSessionTags } = useQuery(
+    {
+      ...sessionTagsOpts,
+      enabled: Boolean(accountId),
+      staleTime: TRADE_REFERENCE_STALE_TIME,
+    }
+  );
   const allSessionTags = React.useMemo(
     () => (allSessionTagsRaw as NamedColorTag[] | undefined) ?? [],
     [allSessionTagsRaw]
@@ -200,7 +152,7 @@ export function useTradeTableReferenceData({
   const { data: liveMetrics } = useQuery({
     ...liveMetricsOpts,
     enabled: Boolean(accountId),
-    staleTime: 5_000,
+    staleTime: TRADE_LIVE_REFRESH_INTERVAL,
     refetchInterval: TRADE_LIVE_REFRESH_INTERVAL,
   });
   const liveOpenTrades = React.useMemo(
@@ -245,7 +197,10 @@ export function useTradeTableReferenceData({
   const liveTradeSignature = React.useMemo(
     () =>
       liveOpenTrades
-        .map((trade) => `${trade.accountId ?? ""}:${trade.ticket ?? trade.id ?? ""}`)
+        .map(
+          (trade) =>
+            `${trade.accountId ?? ""}:${trade.ticket ?? trade.id ?? ""}`
+        )
         .filter(Boolean)
         .sort()
         .join("|"),
@@ -253,36 +208,15 @@ export function useTradeTableReferenceData({
   );
   const lastLiveTradeSignatureRef = React.useRef<string | null>(null);
 
-  React.useEffect(() => {
-    if (!accountId) {
-      lastLiveTradeSignatureRef.current = null;
-      return;
-    }
-
-    const nextSignature = `${accountId}:${liveTradeSignature}`;
-    const previousSignature = lastLiveTradeSignatureRef.current;
-    lastLiveTradeSignatureRef.current = nextSignature;
-
-    if (previousSignature === null || previousSignature === nextSignature) {
-      return;
-    }
-
-    queryClient.invalidateQueries({
-      predicate: (query) =>
-        queryKeyIncludesSegment(query.queryKey, "trades") &&
-        queryKeyIncludesAccountId(query.queryKey, accountId),
-      refetchType: "active",
-    });
-  }, [accountId, liveTradeSignature]);
-
   const sampleGateOpts = trpcOptions.trades.getSampleGateStatus.queryOptions({
     accountId: accountId || "",
   });
-  const { data: sampleGateStatusRaw, isLoading: isLoadingSampleGate } = useQuery({
-    ...sampleGateOpts,
-    enabled: Boolean(accountId),
-    staleTime: TRADE_REFERENCE_STALE_TIME,
-  });
+  const { data: sampleGateStatusRaw, isLoading: isLoadingSampleGate } =
+    useQuery({
+      ...sampleGateOpts,
+      enabled: Boolean(accountId),
+      staleTime: TRADE_REFERENCE_STALE_TIME,
+    });
   const sampleGateStatus = sampleGateStatusRaw as
     | SampleGateStatusRow[]
     | undefined;
@@ -290,7 +224,9 @@ export function useTradeTableReferenceData({
   const infiniteOpts = trpcOptions.trades.listInfinite.infiniteQueryOptions(
     {
       accountId: accountId || "",
-      limit: filters.ids.length ? Math.min(Math.max(filters.ids.length, 50), 200) : 50,
+      limit: filters.ids.length
+        ? Math.min(Math.max(filters.ids.length, 50), 200)
+        : 50,
       q: filters.q || undefined,
       tradeDirection:
         filters.effectiveTradeDirection === "all"
@@ -300,7 +236,9 @@ export function useTradeTableReferenceData({
         filters.hasMergedFilterConflict || filters.onlyLiveOutcomeSelected
           ? [NO_RESULTS_FILTER_ID]
           : filters.ids,
-      symbols: filters.effectiveSymbols.length ? filters.effectiveSymbols : undefined,
+      symbols: filters.effectiveSymbols.length
+        ? filters.effectiveSymbols
+        : undefined,
       killzones: filters.killzones.length ? filters.killzones : undefined,
       sessionTags: filters.effectiveSessionTags.length
         ? filters.effectiveSessionTags
@@ -317,19 +255,23 @@ export function useTradeTableReferenceData({
       startISO: filters.mergedDateRange.start?.toISOString(),
       endISO: filters.mergedDateRange.end?.toISOString(),
       holdMin:
-        filters.effectiveHoldRange && Number.isFinite(filters.effectiveHoldRange[0])
+        filters.effectiveHoldRange &&
+        Number.isFinite(filters.effectiveHoldRange[0])
           ? filters.effectiveHoldRange[0]
           : undefined,
       holdMax:
-        filters.effectiveHoldRange && Number.isFinite(filters.effectiveHoldRange[1])
+        filters.effectiveHoldRange &&
+        Number.isFinite(filters.effectiveHoldRange[1])
           ? filters.effectiveHoldRange[1]
           : undefined,
       volumeMin:
-        filters.effectiveVolRange && Number.isFinite(filters.effectiveVolRange[0])
+        filters.effectiveVolRange &&
+        Number.isFinite(filters.effectiveVolRange[0])
           ? filters.effectiveVolRange[0]
           : undefined,
       volumeMax:
-        filters.effectiveVolRange && Number.isFinite(filters.effectiveVolRange[1])
+        filters.effectiveVolRange &&
+        Number.isFinite(filters.effectiveVolRange[1])
           ? filters.effectiveVolRange[1]
           : undefined,
       profitMin:
@@ -341,19 +283,23 @@ export function useTradeTableReferenceData({
           ? filters.effectivePlRange[1]
           : undefined,
       commissionsMin:
-        filters.effectiveComRange && Number.isFinite(filters.effectiveComRange[0])
+        filters.effectiveComRange &&
+        Number.isFinite(filters.effectiveComRange[0])
           ? filters.effectiveComRange[0]
           : undefined,
       commissionsMax:
-        filters.effectiveComRange && Number.isFinite(filters.effectiveComRange[1])
+        filters.effectiveComRange &&
+        Number.isFinite(filters.effectiveComRange[1])
           ? filters.effectiveComRange[1]
           : undefined,
       swapMin:
-        filters.effectiveSwapRange && Number.isFinite(filters.effectiveSwapRange[0])
+        filters.effectiveSwapRange &&
+        Number.isFinite(filters.effectiveSwapRange[0])
           ? filters.effectiveSwapRange[0]
           : undefined,
       swapMax:
-        filters.effectiveSwapRange && Number.isFinite(filters.effectiveSwapRange[1])
+        filters.effectiveSwapRange &&
+        Number.isFinite(filters.effectiveSwapRange[1])
           ? filters.effectiveSwapRange[1]
           : undefined,
       slMin:
@@ -381,19 +327,23 @@ export function useTradeTableReferenceData({
           ? filters.effectiveRrRange[1]
           : undefined,
       mfeMin:
-        filters.effectiveMfeRange && Number.isFinite(filters.effectiveMfeRange[0])
+        filters.effectiveMfeRange &&
+        Number.isFinite(filters.effectiveMfeRange[0])
           ? filters.effectiveMfeRange[0]
           : undefined,
       mfeMax:
-        filters.effectiveMfeRange && Number.isFinite(filters.effectiveMfeRange[1])
+        filters.effectiveMfeRange &&
+        Number.isFinite(filters.effectiveMfeRange[1])
           ? filters.effectiveMfeRange[1]
           : undefined,
       maeMin:
-        filters.effectiveMaeRange && Number.isFinite(filters.effectiveMaeRange[0])
+        filters.effectiveMaeRange &&
+        Number.isFinite(filters.effectiveMaeRange[0])
           ? filters.effectiveMaeRange[0]
           : undefined,
       maeMax:
-        filters.effectiveMaeRange && Number.isFinite(filters.effectiveMaeRange[1])
+        filters.effectiveMaeRange &&
+        Number.isFinite(filters.effectiveMaeRange[1])
           ? filters.effectiveMaeRange[1]
           : undefined,
       efficiencyMin:
@@ -409,17 +359,62 @@ export function useTradeTableReferenceData({
     },
     { getNextPageParam: (last: any) => last?.nextCursor }
   );
+  const infiniteTradesQueryKeyRef = React.useRef(infiniteOpts.queryKey);
 
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isLoading,
-  } = useInfiniteQuery({ ...infiniteOpts, enabled: Boolean(accountId) });
+  React.useEffect(() => {
+    infiniteTradesQueryKeyRef.current = infiniteOpts.queryKey;
+  }, [infiniteOpts.queryKey]);
+
+  React.useEffect(() => {
+    if (!accountId) {
+      lastDisableSampleGatingRef.current = disableSampleGating;
+      return;
+    }
+
+    if (disableSampleGating === undefined) {
+      return;
+    }
+
+    const previous = lastDisableSampleGatingRef.current;
+    lastDisableSampleGatingRef.current = disableSampleGating;
+
+    if (previous === undefined || previous === disableSampleGating) {
+      return;
+    }
+
+    queryClient.invalidateQueries({
+      queryKey: infiniteTradesQueryKeyRef.current,
+      refetchType: "active",
+    });
+  }, [accountId, disableSampleGating]);
+
+  React.useEffect(() => {
+    if (!accountId) {
+      lastLiveTradeSignatureRef.current = null;
+      return;
+    }
+
+    const nextSignature = `${accountId}:${liveTradeSignature}`;
+    const previousSignature = lastLiveTradeSignatureRef.current;
+    lastLiveTradeSignatureRef.current = nextSignature;
+
+    if (previousSignature === null || previousSignature === nextSignature) {
+      return;
+    }
+
+    queryClient.invalidateQueries({
+      queryKey: infiniteTradesQueryKeyRef.current,
+      refetchType: "active",
+    });
+  }, [accountId, liveTradeSignature]);
+
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery({ ...infiniteOpts, enabled: Boolean(accountId) });
 
   const rows = React.useMemo<TradeRow[]>(() => {
-    const pages = (data as any)?.pages as Array<{ items: TradeRow[] }> | undefined;
+    const pages = (data as any)?.pages as
+      | Array<{ items: TradeRow[] }>
+      | undefined;
     if (!pages) return [];
     return pages.flatMap((page) => page.items);
   }, [data]);
@@ -432,6 +427,7 @@ export function useTradeTableReferenceData({
       const holdSeconds = Number.isNaN(openMs)
         ? 0
         : Math.max(0, Math.floor((now - openMs) / 1000));
+      const liveNetProfit = (trade.profit ?? 0) + (trade.swap ?? 0);
       return {
         id: trade.id ?? "",
         ticket: trade.ticket ?? null,
@@ -440,7 +436,7 @@ export function useTradeTableReferenceData({
         symbolGroup: trade.symbol ?? "",
         tradeDirection: trade.tradeType === "short" ? "short" : "long",
         volume: trade.volume ?? 0,
-        profit: trade.profit ?? 0,
+        profit: liveNetProfit,
         commissions: trade.commission ?? 0,
         swap: trade.swap ?? 0,
         tp: trade.tp ?? 0,
@@ -477,21 +473,23 @@ export function useTradeTableReferenceData({
   );
 
   const totalTradesCount = React.useMemo(() => {
-    const pages = (data as any)?.pages as Array<{ totalTradesCount?: number }> | undefined;
+    const pages = (data as any)?.pages as
+      | Array<{ totalTradesCount?: number }>
+      | undefined;
     return pages?.[0]?.totalTradesCount ?? 0;
   }, [data]);
 
-  const isWorkspaceLoading = Boolean(accountId) && (
-    isLoadingAdvancedPrefs ||
-    isLoadingBounds ||
-    isLoadingSymbols ||
-    isLoadingKillzones ||
-    isLoadingSessionTags ||
-    isLoadingModelTags ||
-    isLoadingStats ||
-    isLoadingSampleGate ||
-    isLoading
-  );
+  const isWorkspaceLoading =
+    Boolean(accountId) &&
+    (isLoadingAdvancedPrefs ||
+      isLoadingBounds ||
+      isLoadingSymbols ||
+      isLoadingKillzones ||
+      isLoadingSessionTags ||
+      isLoadingModelTags ||
+      isLoadingStats ||
+      isLoadingSampleGate ||
+      isLoading);
 
   return {
     acctStats,

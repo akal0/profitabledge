@@ -259,8 +259,8 @@ export function TradeDetailSheet({
           type: "active",
         }),
         queryClient.invalidateQueries({
-          queryKey:
-            trpcOptions.accounts.aggregatedStats.queryOptions().queryKey,
+          queryKey: trpcOptions.accounts.aggregatedStats.queryOptions({})
+            .queryKey,
         }),
         ...(accountId
           ? [

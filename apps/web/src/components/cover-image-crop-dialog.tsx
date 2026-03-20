@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import Cropper from "react-easy-crop";
 import type { Area, Point } from "react-easy-crop";
 import {
@@ -14,10 +14,15 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ZoomIn, ZoomOut } from "lucide-react";
 
+export interface CoverFrameDimensions {
+  width: number;
+  height: number;
+}
+
 interface CoverImageCropDialogProps {
   open: boolean;
   imageSrc: string;
-  aspectRatio: number;
+  frameDimensions?: CoverFrameDimensions | null;
   onApply: (objectPosition: string) => void;
   onCancel: () => void;
 }
@@ -25,19 +30,40 @@ interface CoverImageCropDialogProps {
 export function CoverImageCropDialog({
   open,
   imageSrc,
-  aspectRatio,
+  frameDimensions,
   onApply,
   onCancel,
 }: CoverImageCropDialogProps) {
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedArea, setCroppedArea] = useState<Area>({ x: 0, y: 0, width: 100, height: 100 });
+  const aspectRatio = useMemo(() => {
+    if (
+      frameDimensions &&
+      frameDimensions.width > 0 &&
+      frameDimensions.height > 0
+    ) {
+      return frameDimensions.width / frameDimensions.height;
+    }
+
+    return 5;
+  }, [frameDimensions]);
 
   const onCropComplete = useCallback((areaPercent: Area, _pixels: Area) => {
     if (areaPercent.width > 0 && areaPercent.height > 0) {
       setCroppedArea(areaPercent);
     }
   }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    setCroppedArea({ x: 0, y: 0, width: 100, height: 100 });
+  }, [imageSrc, open]);
 
   const handleApply = () => {
     const cx = (croppedArea.x + croppedArea.width / 2).toFixed(2);

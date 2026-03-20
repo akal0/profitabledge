@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
 import { Clock, Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -103,14 +104,7 @@ export default function TimezonePage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col w-full">
-        <div className="px-6 sm:px-8 py-5 space-y-4">
-          <div className="h-8 w-48 bg-sidebar-accent animate-pulse rounded" />
-          <div className="h-64 w-full bg-sidebar-accent animate-pulse rounded" />
-        </div>
-      </div>
-    );
+    return <RouteLoadingFallback route="settingsTimezone" className="min-h-full" />;
   }
 
   const currentTzInfo = TIMEZONES.find((tz) => tz.value === selectedTz);

@@ -1,8 +1,8 @@
 "use client";
 
 import { useParams } from "next/navigation";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { trpc } from "@/utils/trpc";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   ShieldCheck,
   TrendingUp,
@@ -29,12 +29,10 @@ export default function VerifiedTrackRecordPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <div className="w-full max-w-xl space-y-4 p-6">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
+      <RouteLoadingFallback
+        route="verifiedTrackRecord"
+        className="min-h-screen bg-[#0a0a0a]"
+      />
     );
   }
 

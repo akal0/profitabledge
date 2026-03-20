@@ -11,6 +11,12 @@ export type JournalAICaptureEntryType =
   | "backtest";
 
 export type JournalAICapturePsychologyPatch = Partial<PsychologySnapshot>;
+export type JournalAICaptureOutcome =
+  | "win"
+  | "loss"
+  | "breakeven"
+  | "scratched"
+  | null;
 
 export interface JournalAICaptureResult {
   title: string;
@@ -19,5 +25,17 @@ export interface JournalAICaptureResult {
   entryType: JournalAICaptureEntryType | null;
   tradePhase: TradePhase | null;
   psychology: JournalAICapturePsychologyPatch | null;
+  plannedEntryPrice?: string | null;
+  plannedExitPrice?: string | null;
+  plannedStopLoss?: string | null;
+  plannedTakeProfit?: string | null;
+  plannedRiskReward?: string | null;
+  plannedNotes?: string | null;
+  actualOutcome?: JournalAICaptureOutcome;
+  actualPnl?: string | null;
+  actualPips?: string | null;
+  postTradeAnalysis?: string | null;
+  lessonsLearned?: string | null;
+  transcript?: string | null;
   contentBlocks: JournalBlock[];
 }

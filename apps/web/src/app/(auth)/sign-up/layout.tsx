@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 
 export const metadata: Metadata = {
   title: { absolute: "profitabledge - Sign up" },
@@ -12,5 +13,9 @@ export default function SignUpLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <Suspense>{children}</Suspense>;
+  return (
+    <Suspense fallback={<RouteLoadingFallback route="signUp" className="min-h-screen" />}>
+      {children}
+    </Suspense>
+  );
 }

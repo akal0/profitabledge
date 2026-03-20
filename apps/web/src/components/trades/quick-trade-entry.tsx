@@ -343,7 +343,12 @@ export function QuickTradeEntry({
 
   const estimatedProfit = useMemo(() => {
     if (!autoCalculateProfit) return null;
-    if (!effectiveSymbol || !parsedOpenPrice || !parsedClosePrice || !parsedVolume) {
+    if (
+      !effectiveSymbol ||
+      !parsedOpenPrice ||
+      !parsedClosePrice ||
+      !parsedVolume
+    ) {
       return null;
     }
 
@@ -539,7 +544,7 @@ export function QuickTradeEntry({
             .queryKey,
         }),
         queryClient.invalidateQueries({
-          queryKey: trpcOptions.accounts.aggregatedStats.queryOptions()
+          queryKey: trpcOptions.accounts.aggregatedStats.queryOptions({})
             .queryKey,
         }),
         queryClient.invalidateQueries({ queryKey: ["accounts"] }),
@@ -549,11 +554,14 @@ export function QuickTradeEntry({
       toast.success(
         mode === "continue"
           ? `Trade added. Ready for the next one: ${result.symbol}`
-          : `Trade added: ${result.symbol} ${formatCurrencyValue(result.profit, {
-              showPlus: true,
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}`
+          : `Trade added: ${result.symbol} ${formatCurrencyValue(
+              result.profit,
+              {
+                showPlus: true,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }
+            )}`
       );
 
       onTradeCreated?.({
@@ -698,8 +706,7 @@ export function QuickTradeEntry({
                   {formatSizingNumber(resolvedSizing.profile.defaultVolume)}{" "}
                   {resolvedSizing.profile.unitLabel}. Min{" "}
                   {formatSizingNumber(resolvedSizing.profile.minVolume)} and
-                  step{" "}
-                  {formatSizingNumber(resolvedSizing.profile.volumeStep)}.
+                  step {formatSizingNumber(resolvedSizing.profile.volumeStep)}.
                   Contract size{" "}
                   {formatSizingNumber(resolvedSizing.profile.contractSize)}.
                 </p>
@@ -822,7 +829,9 @@ export function QuickTradeEntry({
                 <p className="text-sm font-medium text-white/80">
                   {estimatedPips === null
                     ? "—"
-                    : `${estimatedPips > 0 ? "+" : ""}${estimatedPips.toFixed(1)}`}
+                    : `${estimatedPips > 0 ? "+" : ""}${estimatedPips.toFixed(
+                        1
+                      )}`}
                 </p>
               </div>
               <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-1 p-3")}>

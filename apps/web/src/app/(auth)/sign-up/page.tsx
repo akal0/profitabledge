@@ -1,10 +1,16 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { trackAlphaMilestone } from "@/lib/alpha-analytics";
+import { AuthSplitShell } from "@/components/auth/auth-split-shell";
+import { Button } from "@/components/ui/button";
 import {
   Form,
   FormControl,
@@ -13,24 +19,33 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-import { OverlapSeparator, Separator } from "@/components/ui/separator";
-import Link from "next/link";
-
-import Google from "@/public/icons/social-media/google.svg";
-import X from "@/public/icons/social-media/x.svg";
-import { cn } from "@/lib/utils";
-import PasswordInput from "./components/password-input";
 import { authClient } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
-import { trackAlphaMilestone } from "@/lib/alpha-analytics";
 import {
   storeAffiliateIntent,
   storeReferralIntent,
 } from "@/features/growth/lib/access-intent";
+import {
+  buildLoginPath,
+  buildPostAuthContinuePath,
+  resolvePostAuthPath,
+} from "@/lib/post-auth-paths";
+import Google from "@/public/icons/social-media/google.svg";
+import X from "@/public/icons/social-media/x.svg";
+
+import PasswordInput from "./components/password-input";
+
+const SOCIAL_BUTTON_CLASS =
+  "group h-max w-full justify-center rounded-sm ring ring-white/10 bg-sidebar px-4 text-sm font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white";
+
+const PRIMARY_BUTTON_CLASS =
+  "h-max py-3  w-full rounded-sm bg-sidebar text-xs font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white ring ring-white/10";
+
+const INPUT_CLASS =
+  "h-max rounded-2xl ring! ring-white/10! bg-sidebar! px-4 py-3 rounded-sm text-sm text-white shadow-none placeholder:text-white/28 hover:bg-sidebar-accent hover:brightness-120 focus-visible:ring-2 focus-visible:ring-white/15 border-none";
+
+const FIELD_LABEL_CLASS =
+  "text-xs font-medium tracking-[-0.01em] text-white/42";
 
 const FormSchema = z.object({
   email: z.string().email({
@@ -70,6 +85,10 @@ function deriveSignupName(email: string) {
 
 const SignupPage = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
+  const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
+  const loginPath = buildLoginPath(requestedReturnTo);
   const [socialProviderLoading, setSocialProviderLoading] = useState<
     "google" | "twitter" | null
   >(null);
@@ -94,6 +113,7 @@ const SignupPage = () => {
       password: "",
     },
   });
+  const isSubmitting = form.formState.isSubmitting;
 
   async function waitForConfirmedSession() {
     for (const delay of SESSION_CONFIRM_RETRY_DELAYS_MS) {
@@ -128,7 +148,7 @@ const SignupPage = () => {
           });
 
           await waitForConfirmedSession();
-          router.push("/onboarding");
+          router.push(postAuthContinuePath);
         },
         onError: (error) => {
           const message =
@@ -150,7 +170,7 @@ const SignupPage = () => {
     try {
       await authClient.signIn.social({
         provider,
-        callbackURL: `${window.location.origin}/onboarding`,
+        callbackURL: `${window.location.origin}${postAuthContinuePath}`,
       });
     } catch (error) {
       toast.error(
@@ -163,162 +183,128 @@ const SignupPage = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen w-screen relative bg-sidebar">
-      <div
-        className={cn(
-          "z-99 opacity-25 absolute size-106 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",
-          "before:content-[''] before:absolute before:-top-24 before:-left-24 before:size-[150%] before:rounded-full before:bg-[conic-gradient(rgba(255,255,255,0),rgba(255,255,255,0.35)_5%,rgba(229,231,235,0.3)_10%,#e5e7eb_15%,rgba(0,0,0,0)_15%)] before:animate-spin before:[animation-duration:10s] before:[animation-timing-function:cubic-bezier(0.95, 0.05, 0.795, 0.035)]",
-          "after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-[calc(100%-2px)] after:h-[calc(100%-2px)] after:rounded-3xl after:bg-sidebar"
-        )}
-      ></div>
-
-      <div
-        className={cn(
-          "z-98 opacity-25 absolute size-116 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",
-          "before:content-[''] before:absolute before:-top-24 before:-left-24 before:size-[140%] before:rounded-full before:bg-[conic-gradient(rgba(255,255,255,0),rgba(255,255,255,0.35)_5%,rgba(229,231,235,0.3)_10%,#e5e7eb_15%,rgba(0,0,0,0)_15%)] before:animate-spin before:[animation-duration:30s] before:[animation-timing-function:cubic-bezier(0.95, 0.05, 0.795, 0.035)]",
-          "after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-[calc(100%-2px)] after:h-[calc(100%-2px)] after:rounded-3xl after:bg-sidebar"
-        )}
-      ></div>
-
-      <div
-        className={cn(
-          "z-97 opacity-25 absolute size-126 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",
-          "before:content-[''] before:absolute before:-top-24 before:-left-24 before:size-[140%] before:rounded-full before:bg-[conic-gradient(rgba(255,255,255,0),rgba(255,255,255,0.35)_5%,rgba(229,231,235,0.3)_10%,#e5e7eb_15%,rgba(0,0,0,0)_15%)] before:animate-spin before:[animation-duration:35s] before:[animation-timing-function:cubic-bezier(0.95, 0.05, 0.795, 0.035)]",
-          "after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-[calc(100%-2px)] after:h-[calc(100%-2px)] after:rounded-3xl after:bg-sidebar"
-        )}
-      ></div>
-
-      <div
-        className={cn(
-          "z-96 opacity-25 absolute size-136 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",
-          "before:content-[''] before:absolute before:-top-28 before:-left-28 before:size-[150%] before:rounded-full before:bg-[conic-gradient(rgba(255,255,255,0),rgba(255,255,255,0.35)_5%,rgba(229,231,235,0.3)_10%,#e5e7eb_15%,rgba(0,0,0,0)_15%)] before:animate-spin before:[animation-duration:30s] before:[animation-timing-function:cubic-bezier(0.95, 0.05, 0.795, 0.035)]",
-          "after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-[calc(100%-3px)] after:h-[calc(100%-3px)] after:rounded-3xl after:bg-sidebar"
-        )}
-      ></div>
-
-      <div
-        className={cn(
-          "z-95 opacity-25 absolute size-146 rotate-45 shadow-upload-button overflow-hidden rounded-3xl",
-          "before:content-[''] before:absolute before:-top-32 before:-left-32 before:size-[150%] before:rounded-full before:bg-[conic-gradient(rgba(255,255,255,0),rgba(255,255,255,0.35)_5%,rgba(229,231,235,0.3)_10%,#e5e7eb_15%,rgba(0,0,0,0)_15%)] before:animate-spin before:[animation-duration:10s] before:[animation-timing-function:cubic-bezier(0.95, 0.05, 0.795, 0.035)]",
-          "after:content-[''] after:absolute after:top-1/2 after:left-1/2 after:-translate-x-1/2 after:-translate-y-1/2 after:w-[calc(100%-2px)] after:h-[calc(100%-2px)] after:rounded-3xl after:bg-sidebar"
-        )}
-      ></div>
-
-      <div className="flex flex-col items-center justify-center gap-8 h-full w-full relative z-100">
-        {/* Form */}
-        <div className="w-full max-w-md bg-sidebar rounded-3xl shadow-sidebar-button">
-          <div className="flex flex-col items-center justify-center gap-1 py-6">
-            <h1 className="text-lg font-medium"> Sign up</h1>
-            <p className="text-xs text-secondary">
-              Take the first step to profitability.
-            </p>
-          </div>
-
-          <Separator />
-
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="w-full space-y-6 py-6"
-            >
-              {/* Existing fields */}
-              <div className="p-10 py-0 space-y-5">
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem className="space-y-1">
-                      <FormLabel className="text-xs">Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="profitabletrader@gmail.com"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage className="text-xs" />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="space-y-8 flex flex-col items-end">
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem className="space-y-1 w-full">
-                        <FormLabel className="text-xs">Password</FormLabel>
-                        <FormControl>
-                          <PasswordInput {...field} />
-                        </FormControl>
-                        <FormMessage className="text-xs" />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="px-10 my-6 space-y-2">
-                <Button
-                  className="shadow-sidebar-button rounded-[6px] gap-2.5 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full"
-                  type="submit"
-                >
-                  Sign up
-                </Button>
-
-                <Link
-                  href="/"
-                  className="text-xs underline underline-offset-2 text-secondary hover:text-white transition-colors duration-250"
-                >
-                  Forgot your password?
-                </Link>
-              </div>
-
-              <OverlapSeparator> Or sign up with </OverlapSeparator>
-
-              <div className="flex items-center justify-center gap-2 px-10 py-2 pb-0">
-                <Button
-                  type="button"
-                  disabled={socialProviderLoading !== null}
-                  onClick={() => void handleSocialSignUp("google")}
-                  className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group"
-                >
-                  <Google className="stroke-none fill-muted-foreground group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
-                  <p className="text-xs text-muted-foreground group-hover:text-white duration-250">
-                    {socialProviderLoading === "google"
-                      ? "Redirecting..."
-                      : "Sign up with Google"}
-                  </p>
-                </Button>
-
-                <Button
-                  type="button"
-                  disabled={socialProviderLoading !== null}
-                  onClick={() => void handleSocialSignUp("twitter")}
-                  className="shadow-sidebar-button rounded-[6px] gap-2 h-max transition-all active:scale-95 bg-sidebar-accent hover:bg-sidebar-accent cursor-pointer text-white flex-1 text-xs hover:!brightness-120 duration-250 flex  items-center justify-center w-full group"
-                >
-                  <X className="stroke-none fill-muted-foreground group-hover:stroke-white group-hover:fill-white transition-colors duration-250" />
-                  <p className="text-xs text-muted-foreground group-hover:text-white duration-250">
-                    {socialProviderLoading === "twitter"
-                      ? "Redirecting..."
-                      : "Sign up with X"}
-                  </p>
-                </Button>
-              </div>
-
-              <Separator />
-
-              <p className="text-xs text-center text-muted-foreground font-medium">
-                Already have an account?{" "}
-                <Link href="/login" className="text-white font-medium">
-                  Login
-                </Link>
-              </p>
-            </form>
-          </Form>
+    <AuthSplitShell
+      heroTitle="Build the review process before the account pressure compounds."
+      heroDescription="One workspace for journaling, trade analysis, and prop-account discipline so the edge gets sharper as the data grows."
+    >
+      <div className="space-y-8">
+        <div className="space-y-3 text-center">
+          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50">
+            First time here?
+          </p>
+          <p className="text-sm leading-6 text-white/56">
+            You've come to the right place. All roads lead back to{" "}
+            <span className="text-white font-semibold">profitabledge...</span>
+          </p>
         </div>
+
+        <div className="space-y-3">
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={socialProviderLoading !== null}
+            onClick={() => void handleSocialSignUp("google")}
+            className={SOCIAL_BUTTON_CLASS}
+          >
+            <Google className="size-4 stroke-none fill-white/68 transition-colors group-hover:fill-white" />
+            <span>
+              {socialProviderLoading === "google"
+                ? "Redirecting..."
+                : "Sign up with Google"}
+            </span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={socialProviderLoading !== null}
+            onClick={() => void handleSocialSignUp("twitter")}
+            className={SOCIAL_BUTTON_CLASS}
+          >
+            <X className="size-4 stroke-none fill-white/68 transition-colors group-hover:fill-white" />
+            <span>
+              {socialProviderLoading === "twitter"
+                ? "Redirecting..."
+                : "Sign up with X"}
+            </span>
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="h-px flex-1 bg-white/10" />
+          <span className="text-xs font-medium tracking-[-0.04em] text-white/32">
+            Or sign in with your credentials
+          </span>
+          <div className="h-px flex-1 bg-white/10" />
+        </div>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <div className="space-y-5">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className={FIELD_LABEL_CLASS}>
+                      Email address
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="you@profitabledge.com"
+                        className={INPUT_CLASS}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel className={FIELD_LABEL_CLASS}>
+                      Password
+                    </FormLabel>
+                    <FormControl>
+                      <PasswordInput
+                        className={INPUT_CLASS}
+                        placeholder="Create a password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              variant="ghost"
+              disabled={isSubmitting || socialProviderLoading !== null}
+              className={PRIMARY_BUTTON_CLASS}
+            >
+              {isSubmitting ? "Creating account..." : "Sign up"}
+            </Button>
+          </form>
+        </Form>
+
+        <p className="text-sm text-white/46 text-center">
+          Already have an account?{" "}
+          <Link
+            href={loginPath}
+            className="font-medium text-white transition-colors hover:text-white/72"
+          >
+            Log in
+          </Link>
+        </p>
       </div>
-    </div>
+    </AuthSplitShell>
   );
 };
 

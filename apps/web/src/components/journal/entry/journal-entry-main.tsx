@@ -23,6 +23,7 @@ export function JournalEntryMain({
   existingEntryLoaded,
   coverImageUrl,
   coverPosition,
+  coverContainerRef,
   title,
   emoji,
   tradePhase,
@@ -46,8 +47,8 @@ export function JournalEntryMain({
   actualPips,
   postTradeAnalysis,
   lessonsLearned,
-  onCoverPositionChange,
   onCoverImageChange,
+  onEditCover,
   onOpenEmojiPicker,
   onRemoveCover,
   onTitleChange,
@@ -81,6 +82,7 @@ export function JournalEntryMain({
   existingEntryLoaded: boolean;
   coverImageUrl: string | null;
   coverPosition: number;
+  coverContainerRef: React.RefObject<HTMLDivElement | null>;
   title: string;
   emoji: string | null;
   tradePhase: TradePhase | null;
@@ -104,8 +106,8 @@ export function JournalEntryMain({
   actualPips: string;
   postTradeAnalysis: string;
   lessonsLearned: string;
-  onCoverPositionChange: (event: React.MouseEvent<HTMLDivElement>) => void;
   onCoverImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onEditCover: () => void;
   onOpenEmojiPicker: () => void;
   onRemoveCover: () => void;
   onTitleChange: (value: string) => void;
@@ -143,8 +145,9 @@ export function JournalEntryMain({
     <div className="flex-1 overflow-y-auto">
       {coverImageUrl ? (
         <div
-          className="group relative h-48 cursor-move bg-sidebar-accent md:h-64"
-          onClick={onCoverPositionChange}
+          ref={coverContainerRef}
+          className="group relative h-48 cursor-pointer bg-sidebar-accent md:h-64"
+          onClick={onEditCover}
         >
           <img
             src={coverImageUrl}
@@ -169,6 +172,16 @@ export function JournalEntryMain({
               className="border-white/10 bg-sidebar/90 text-white backdrop-blur-sm hover:bg-sidebar-accent"
               onClick={(event) => {
                 event.stopPropagation();
+                onEditCover();
+              }}
+            >
+              Edit cover
+            </Button>
+            <Button
+              size="sm"
+              className="border-white/10 bg-sidebar/90 text-white backdrop-blur-sm hover:bg-sidebar-accent"
+              onClick={(event) => {
+                event.stopPropagation();
                 onRemoveCover();
               }}
             >
@@ -176,7 +189,7 @@ export function JournalEntryMain({
             </Button>
           </div>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-xs text-white/40 opacity-0 transition-opacity group-hover:opacity-100">
-            Click to reposition
+            Click to adjust cover
           </div>
         </div>
       ) : (

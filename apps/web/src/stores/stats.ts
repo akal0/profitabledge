@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { StateCreator } from "zustand";
 import { queryClient, trpcOptions } from "@/utils/trpc";
+import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
 
 export type AccountStats = {
   totalProfit: number;
@@ -24,6 +25,7 @@ export type AccountStats = {
   brokerType?: string | null;
   lastSyncedAt?: string | null;
   isLiveDataFresh?: boolean;
+  currencyCode?: string | null;
 };
 
 type StatsState = {
@@ -46,12 +48,19 @@ const createStatsSlice: StateCreator<StatsState, [], [], StatsState> = (
     if (!accountId) return;
     // Avoid duplicate inflight
     if (get().loadingByAccount[accountId]) return;
+    const preferredCurrencyCode =
+      accountId === ALL_ACCOUNTS_ID
+        ? useAccountStore.getState().allAccountsPreferredCurrencyCode
+        : undefined;
     set((s) => ({
       loadingByAccount: { ...s.loadingByAccount, [accountId]: true },
     }));
     try {
       const data = await queryClient.fetchQuery({
-        ...trpcOptions.accounts.stats.queryOptions({ accountId }),
+        ...trpcOptions.accounts.stats.queryOptions({
+          accountId,
+          currencyCode: preferredCurrencyCode,
+        }),
         staleTime: 30_000,
       });
       set((s) => ({

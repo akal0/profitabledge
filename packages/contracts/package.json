@@ -7,6 +7,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./currency": "./src/currency.ts",
     "./uploadthing": "./src/uploadthing.ts",
     "./trpc": "./src/trpc.ts"
   }

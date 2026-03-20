@@ -1,8 +1,8 @@
 "use client";
 
 import { Label } from "@/components/ui/label";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { trpcClient } from "@/utils/trpc";
 import { useAccountStore, ALL_ACCOUNTS_ID } from "@/stores/account";
 import { Tag, Clock, FolderKanban, Layers3 } from "lucide-react";
@@ -49,6 +49,10 @@ export default function TagsSettingsPage() {
     };
   }, [accountId]);
 
+  if (loading) {
+    return <RouteLoadingFallback route="settingsTags" className="min-h-full" />;
+  }
+
   return (
     <div className="flex flex-col w-full">
       {/* Session Tags */}
@@ -65,12 +69,7 @@ export default function TagsSettingsPage() {
           </p>
         </div>
         <div className="space-y-2">
-          {loading ? (
-            <>
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </>
-          ) : sessionTags.length > 0 ? (
+          {sessionTags.length > 0 ? (
             sessionTags.map((tag) => (
               <div
                 key={tag.name}
@@ -107,12 +106,7 @@ export default function TagsSettingsPage() {
           </p>
         </div>
         <div className="space-y-2">
-          {loading ? (
-            <>
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </>
-          ) : customTradeTags.length > 0 ? (
+          {customTradeTags.length > 0 ? (
             customTradeTags.map((tag) => (
               <div
                 key={tag}
@@ -149,12 +143,7 @@ export default function TagsSettingsPage() {
           </p>
         </div>
         <div className="space-y-2">
-          {loading ? (
-            <>
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </>
-          ) : modelTags.length > 0 ? (
+          {modelTags.length > 0 ? (
             modelTags.map((tag) => (
               <div
                 key={tag.name}
@@ -190,12 +179,7 @@ export default function TagsSettingsPage() {
           </p>
         </div>
         <div className="space-y-2">
-          {loading ? (
-            <>
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </>
-          ) : accountTags.length > 0 ? (
+          {accountTags.length > 0 ? (
             accountTags.map((tag) => (
               <div
                 key={tag}

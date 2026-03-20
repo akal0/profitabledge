@@ -21,8 +21,11 @@ export function JournalListEmptyState({
         Start documenting your trading journey, reviewing trades, and tracking
         your progress
       </p>
-      <Button onClick={onCreateEntry} className={journalToolbarPrimaryButtonClassName}>
-        <Plus className="mr-1 h-4 w-4" />
+      <Button
+        onClick={onCreateEntry}
+        className={journalToolbarPrimaryButtonClassName}
+      >
+        <Plus className="size-3" />
         Create your first entry
       </Button>
     </div>

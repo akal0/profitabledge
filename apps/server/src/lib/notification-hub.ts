@@ -21,6 +21,7 @@ export type NotificationType =
   | "prop_violation"
   | "prop_journey"
   | "prop_phase_advanced"
+  | "journal_share_request"
   | "copier_signal"
   | "leaderboard_update"
   | "system_maintenance"
@@ -114,6 +115,7 @@ export function getNotificationCategory(
       return "news";
     case "leaderboard_update":
     case "copier_signal":
+    case "journal_share_request":
       return "social";
     default:
       return "system";
@@ -169,6 +171,7 @@ function isTypeEnabled(
       return prefs.alerts;
     case "leaderboard_update":
     case "copier_signal":
+    case "journal_share_request":
       return prefs.social;
     default:
       return prefs.system;

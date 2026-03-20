@@ -96,6 +96,8 @@ export async function listPublicProofLiveTrades(
   return rows
     .map<PublicProofLiveTradeRow>((row) => {
       const openMs = row.openTime.getTime();
+      const rawProfit = row.profit != null ? parseNumber(row.profit) : null;
+      const swap = row.swap != null ? parseNumber(row.swap) : null;
       return {
         id: row.id,
         symbol: row.symbol,
@@ -104,10 +106,10 @@ export async function listPublicProofLiveTrades(
         openPrice: row.openPrice != null ? parseNumber(row.openPrice) : null,
         closePrice:
           row.currentPrice != null ? parseNumber(row.currentPrice) : null,
-        profit: row.profit != null ? parseNumber(row.profit) : null,
+        profit: rawProfit != null ? rawProfit + (swap ?? 0) : null,
         commissions:
           row.commission != null ? parseNumber(row.commission) : null,
-        swap: row.swap != null ? parseNumber(row.swap) : null,
+        swap,
         rr: null,
         outcome: null,
         openTime: row.openTime,

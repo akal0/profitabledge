@@ -24,10 +24,12 @@ This section covers broker accounts, prop accounts, prop progression, and the re
 
 - the accounts route should stay a composition layer; section chrome, account cards, and prop-assignment flows belong under `apps/web/src/features/accounts/components`
 - broker and prop account cards now consolidate secondary actions such as track record, account tags, public proof, archive, and delete into a shared `Actions` menu instead of scattering icon buttons across each card header
+- users cannot delete their only remaining account; the delete flow now blocks both in the UI and on the server until at least one other account exists
 - the `/dashboard/prop-tracker` route shows an overview summary area above `Prop accounts`, followed by the prop-account card grid
 - the `/dashboard/prop-tracker` overview stat cards and the two command panels above `Prop accounts` now reuse the dashboard widget shell with the same rounded outer frame, inset inner ring, and tighter header/separator rhythm as the main dashboard surfaces
 - the `/dashboard/prop-tracker/[accountId]` route should stay a composition layer; assembled panels and shared display primitives belong under `apps/web/src/features/accounts/prop-tracker/...`
 - prop-account classification is separate from live-sync capability, so a prop account can still be manual or CSV-backed without live widgets or live-connection badges
+- when `All accounts` is selected on `/dashboard`, mixed-currency money widgets normalize balances/P&L/contribution into the selected dashboard currency instead of summing raw account currencies together
 
 ## Development rules for this area
 

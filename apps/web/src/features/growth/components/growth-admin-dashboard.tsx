@@ -2,18 +2,29 @@
 
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Banknote, BadgePercent, Copy, Shield, Users } from "lucide-react";
+import {
+  Banknote,
+  BadgePercent,
+  CheckCircle2,
+  Copy,
+  Shield,
+  Users,
+  Wallet,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
   GrowthCardShell,
   GrowthPageBody,
   GrowthPageShell,
 } from "@/features/growth/components/growth-page-primitives";
+import { getBillingV2Options } from "@/features/growth/lib/billing-v2";
 import { trpc, trpcOptions } from "@/utils/trpc";
 
 function formatDate(value?: string | Date | null) {
@@ -48,6 +59,13 @@ function formatPaymentMethodType(methodType?: string | null) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function formatDestinationType(destinationType?: string | null) {
+  if (!destinationType) return "Manual";
+  return destinationType === "stripe_connect"
+    ? "Stripe Connect"
+    : destinationType.replace(/_/g, " ").replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
 export function GrowthAdminDashboard() {
   const [betaForm, setBetaForm] = useState({
     label: "",
@@ -55,6 +73,10 @@ export function GrowthAdminDashboard() {
     code: "",
     maxRedemptions: "",
   });
+  const [offerDrafts, setOfferDrafts] = useState<
+    Record<string, { code: string; discountBasisPoints: string }>
+  >({});
+  const billingV2 = getBillingV2Options();
 
   const billingStateQuery = trpc.billing.getState.useQuery();
   const betaCodesQuery = useQuery({
@@ -126,6 +148,94 @@ export function GrowthAdminDashboard() {
       );
     },
   });
+  const saveAffiliateOffer = useMutation({
+    ...(billingV2.saveAffiliateOffer?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Affiliate offers are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutQueueQuery.refetch();
+      toast.success("Affiliate offer saved");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to save affiliate offer"
+      );
+    },
+  });
+  const approveAffiliateWithdrawal = useMutation({
+    ...(billingV2.approveAffiliateWithdrawal?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Withdrawal approvals are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutQueueQuery.refetch();
+      toast.success("Withdrawal approved");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to approve withdrawal"
+      );
+    },
+  });
+  const sendAffiliateStripeWithdrawal = useMutation({
+    ...(billingV2.sendAffiliateStripeWithdrawal?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Stripe withdrawals are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutQueueQuery.refetch();
+      toast.success("Stripe withdrawal sent");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to send Stripe withdrawal"
+      );
+    },
+  });
+  const markAffiliateManualWithdrawalPaid = useMutation({
+    ...(billingV2.markAffiliateManualWithdrawalPaid?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Manual withdrawal settlement is not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutQueueQuery.refetch();
+      toast.success("Manual withdrawal marked paid");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to mark manual withdrawal paid"
+      );
+    },
+  });
+  const rejectAffiliateWithdrawal = useMutation({
+    ...(billingV2.rejectAffiliateWithdrawal?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Withdrawal rejection is not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutQueueQuery.refetch();
+      toast.success("Withdrawal rejected");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to reject withdrawal"
+      );
+    },
+  });
 
   const copyToClipboard = async (value: string, message: string) => {
     try {
@@ -183,25 +293,55 @@ export function GrowthAdminDashboard() {
     });
   };
 
+  const getOfferDraft = (entry: any) =>
+    offerDrafts[entry.affiliate.id] ?? {
+      code: entry.defaultOffer?.code ?? `${entry.affiliate.code}10`,
+      discountBasisPoints: String(entry.defaultOffer?.discountBasisPoints ?? 1000),
+    };
+
+  const updateOfferDraft = (
+    affiliateUserId: string,
+    patch: Partial<{ code: string; discountBasisPoints: string }>
+  ) => {
+    setOfferDrafts((current) => ({
+      ...current,
+      [affiliateUserId]: {
+        ...(current[affiliateUserId] ?? { code: "", discountBasisPoints: "1000" }),
+        ...patch,
+      },
+    }));
+  };
+
+  const handleSaveAffiliateOffer = async (entry: any) => {
+    const draft = getOfferDraft(entry);
+    const discountBasisPoints = Number(draft.discountBasisPoints);
+
+    if (!draft.code.trim()) {
+      toast.error("Offer code is required");
+      return;
+    }
+
+    if (
+      !Number.isInteger(discountBasisPoints) ||
+      discountBasisPoints < 100 ||
+      discountBasisPoints > 10000
+    ) {
+      toast.error("Discount basis points must be between 100 and 10000");
+      return;
+    }
+
+    await saveAffiliateOffer.mutateAsync({
+      affiliateUserId: entry.affiliate.id,
+      affiliateOfferId: entry.defaultOffer?.id ?? undefined,
+      code: draft.code.trim().toUpperCase(),
+      label: `${entry.affiliate.name || entry.affiliate.code} Affiliate Offer`,
+      discountBasisPoints,
+      isDefault: true,
+    } as any);
+  };
+
   if (billingStateQuery.isLoading) {
-    return (
-      <GrowthPageShell
-        title="Growth admin"
-        description="Manage private beta access, affiliate approvals, waitlist review, and payouts"
-      >
-        <GrowthPageBody className="space-y-4">
-          <div className="h-36 animate-pulse rounded-sm bg-sidebar" />
-          <div className="grid gap-3 lg:grid-cols-2">
-            {[0, 1, 2, 3].map((index) => (
-              <div
-                key={index}
-                className="h-56 animate-pulse rounded-sm bg-sidebar"
-              />
-            ))}
-          </div>
-        </GrowthPageBody>
-      </GrowthPageShell>
-    );
+    return <RouteLoadingFallback route="growthAdmin" className="min-h-[calc(100vh-10rem)]" />;
   }
 
   if (billingStateQuery.data?.admin?.isAdmin !== true) {
@@ -393,13 +533,15 @@ export function GrowthAdminDashboard() {
         <GrowthCardShell>
           <div className="p-4">
             <div className="mb-4 flex items-center gap-2">
-              <Banknote className="size-3.5 text-emerald-300" />
-              <p className="text-xs font-medium text-white">Affiliate payouts</p>
+              <Wallet className="size-3.5 text-emerald-300" />
+              <p className="text-xs font-medium text-white">
+                Affiliate withdrawals and payouts
+              </p>
             </div>
 
             <div className="space-y-2">
               {affiliatePayoutQueueQuery.data?.length ? (
-                affiliatePayoutQueueQuery.data.map((entry) => {
+                (affiliatePayoutQueueQuery.data as any[]).map((entry) => {
                   const canRecordPayout =
                     entry.summary.availableAmount > 0 &&
                     Boolean(entry.defaultPaymentMethod);
@@ -407,6 +549,26 @@ export function GrowthAdminDashboard() {
                   const isRecordingThisPayout =
                     recordAffiliatePayout.isPending &&
                     recordAffiliatePayout.variables?.affiliateUserId ===
+                      entry.affiliate.id;
+                  const defaultOfferCode =
+                    entry.defaultOffer?.code ??
+                    entry.offers?.find((offer: any) => offer.isDefault)?.code ??
+                    null;
+                  const defaultLink =
+                    entry.defaultLink?.shareUrl ??
+                    entry.links?.find((link: any) => link.isDefault)?.shareUrl ??
+                    null;
+                  const offerDraft = getOfferDraft(entry);
+                  const withdrawalRequests = (
+                    entry.withdrawalRequests ?? []
+                  ) as any[];
+                  const activeRequests = withdrawalRequests.filter(
+                    (request) =>
+                      request.status === "pending" || request.status === "approved"
+                  );
+                  const isSavingOffer =
+                    saveAffiliateOffer.isPending &&
+                    (saveAffiliateOffer.variables as any)?.affiliateUserId ===
                       entry.affiliate.id;
 
                   return (
@@ -422,6 +584,18 @@ export function GrowthAdminDashboard() {
                           <p className="text-[10px] text-white/35">
                             {entry.affiliate.email} • Code {entry.affiliate.code}
                           </p>
+                          {(defaultOfferCode || defaultLink) && (
+                            <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-white/35">
+                              {defaultOfferCode ? (
+                                <span>Offer {defaultOfferCode}</span>
+                              ) : null}
+                              {defaultLink ? (
+                                <span className="max-w-[260px] truncate">
+                                  Link {defaultLink}
+                                </span>
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge className="ring ring-emerald-500/20 bg-emerald-900/30 text-[10px] text-emerald-300">
@@ -431,6 +605,12 @@ export function GrowthAdminDashboard() {
                             {entry.summary.availableEventCount} unpaid event
                             {entry.summary.availableEventCount === 1 ? "" : "s"}
                           </Badge>
+                          {activeRequests.length ? (
+                            <Badge className="ring ring-amber-500/20 bg-amber-900/30 text-[10px] text-amber-200">
+                              {activeRequests.length} open request
+                              {activeRequests.length === 1 ? "" : "s"}
+                            </Badge>
+                          ) : null}
                         </div>
                       </div>
 
@@ -467,13 +647,181 @@ export function GrowthAdminDashboard() {
                         </div>
                       </div>
 
+                      <div className="mt-3 rounded-sm border border-white/5 bg-sidebar/70 p-3">
+                        <p className="text-[10px] uppercase tracking-[0.18em] text-white/25">
+                          Default offer
+                        </p>
+                        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,1fr)_140px_auto]">
+                          <Input
+                            value={offerDraft.code}
+                            onChange={(event) =>
+                              updateOfferDraft(entry.affiliate.id, {
+                                code: event.target.value,
+                              })
+                            }
+                            placeholder="Offer code"
+                            className="h-9 ring-white/5 bg-sidebar text-xs"
+                          />
+                          <Input
+                            value={offerDraft.discountBasisPoints}
+                            onChange={(event) =>
+                              updateOfferDraft(entry.affiliate.id, {
+                                discountBasisPoints: event.target.value,
+                              })
+                            }
+                            placeholder="1000"
+                            className="h-9 ring-white/5 bg-sidebar text-xs"
+                          />
+                          <Button
+                            onClick={() => handleSaveAffiliateOffer(entry)}
+                            disabled={saveAffiliateOffer.isPending}
+                            className="h-9 rounded-sm bg-blue-600 px-3 text-[11px] text-white hover:brightness-110"
+                          >
+                            {isSavingOffer
+                              ? "Saving..."
+                              : entry.defaultOffer
+                              ? "Update offer"
+                              : "Create offer"}
+                          </Button>
+                        </div>
+                        <p className="mt-2 text-[10px] text-white/35">
+                          Basis points: 1000 = 10% off. This code is resolved in-app
+                          before checkout so attribution stays authoritative.
+                        </p>
+                      </div>
+
+                      {withdrawalRequests.length ? (
+                        <div className="mt-3 space-y-2">
+                          {withdrawalRequests.slice(0, 4).map((request) => {
+                            const isApproving =
+                              approveAffiliateWithdrawal.isPending &&
+                              (approveAffiliateWithdrawal.variables as any)
+                                ?.withdrawalRequestId === request.id;
+                            const isRejecting =
+                              rejectAffiliateWithdrawal.isPending &&
+                              (rejectAffiliateWithdrawal.variables as any)
+                                ?.withdrawalRequestId === request.id;
+                            const isSendingStripe =
+                              sendAffiliateStripeWithdrawal.isPending &&
+                              (sendAffiliateStripeWithdrawal.variables as any)
+                                ?.withdrawalRequestId === request.id;
+                            const isMarkingManual =
+                              markAffiliateManualWithdrawalPaid.isPending &&
+                              (markAffiliateManualWithdrawalPaid.variables as any)
+                                ?.withdrawalRequestId === request.id;
+
+                            return (
+                              <div
+                                key={request.id}
+                                className="rounded-sm border border-white/5 bg-sidebar/70 p-3"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <p className="text-xs font-medium text-white">
+                                        {formatCurrency(request.amountUsd)}
+                                      </p>
+                                      <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
+                                        {formatStatusLabel(request.status)}
+                                      </Badge>
+                                      <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/55">
+                                        {formatDestinationType(
+                                          request.destinationType
+                                        )}
+                                      </Badge>
+                                    </div>
+                                    <p className="mt-1 text-[10px] text-white/35">
+                                      Requested {formatDate(request.createdAt)}
+                                      {request.paymentMethod?.label
+                                        ? ` • ${request.paymentMethod.label}`
+                                        : request.providerAccount?.provider
+                                          ? ` • ${request.providerAccount.provider}`
+                                          : ""}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-2">
+                                    {request.status === "pending" ? (
+                                      <>
+                                        <Button
+                                          onClick={() =>
+                                            approveAffiliateWithdrawal.mutate({
+                                              withdrawalRequestId: request.id,
+                                            } as any)
+                                          }
+                                          disabled={approveAffiliateWithdrawal.isPending}
+                                          className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
+                                        >
+                                          <CheckCircle2 className="mr-1 size-3.5" />
+                                          {isApproving ? "Approving..." : "Approve"}
+                                        </Button>
+                                        <Button
+                                          onClick={() =>
+                                            rejectAffiliateWithdrawal.mutate({
+                                              withdrawalRequestId: request.id,
+                                            } as any)
+                                          }
+                                          disabled={rejectAffiliateWithdrawal.isPending}
+                                          className="h-8 rounded-sm bg-rose-600/90 px-3 text-[11px] text-white hover:brightness-110"
+                                        >
+                                          <XCircle className="mr-1 size-3.5" />
+                                          {isRejecting ? "Rejecting..." : "Reject"}
+                                        </Button>
+                                      </>
+                                    ) : null}
+
+                                    {request.status === "approved" &&
+                                    request.destinationType === "stripe_connect" ? (
+                                      <Button
+                                        onClick={() =>
+                                          sendAffiliateStripeWithdrawal.mutate({
+                                            withdrawalRequestId: request.id,
+                                          } as any)
+                                        }
+                                        disabled={sendAffiliateStripeWithdrawal.isPending}
+                                        className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
+                                      >
+                                        {isSendingStripe
+                                          ? "Sending..."
+                                          : "Send Stripe payout"}
+                                      </Button>
+                                    ) : null}
+
+                                    {request.status === "approved" &&
+                                    request.destinationType === "manual" ? (
+                                      <Button
+                                        onClick={() =>
+                                          markAffiliateManualWithdrawalPaid.mutate({
+                                            withdrawalRequestId: request.id,
+                                          } as any)
+                                        }
+                                        disabled={
+                                          markAffiliateManualWithdrawalPaid.isPending
+                                        }
+                                        className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
+                                      >
+                                        {isMarkingManual
+                                          ? "Marking..."
+                                          : "Mark manual payout paid"}
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+
                       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                         <p className="text-[11px] text-white/35">
-                          {canRecordPayout
-                            ? "Record the full currently unpaid commission as sent."
-                            : entry.defaultPaymentMethod
-                              ? "Nothing is available to pay out yet."
-                              : "This affiliate needs to add a payment method first."}
+                          {withdrawalRequests.length
+                            ? "Use the provider-aware actions above to settle approved withdrawal requests."
+                            : canRecordPayout
+                              ? "Legacy payout flow: record the full currently unpaid commission as sent."
+                              : entry.defaultPaymentMethod
+                                ? "Nothing is available to pay out yet."
+                                : "This affiliate needs to add a payment method first."}
                         </p>
 
                         <Button
@@ -481,7 +829,9 @@ export function GrowthAdminDashboard() {
                             handleRecordAffiliatePayout(entry.affiliate.id)
                           }
                           disabled={
-                            !canRecordPayout || recordAffiliatePayout.isPending
+                            withdrawalRequests.length > 0 ||
+                            !canRecordPayout ||
+                            recordAffiliatePayout.isPending
                           }
                           className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
                         >

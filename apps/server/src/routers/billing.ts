@@ -14,6 +14,7 @@ import { user as userTable } from "../db/schema/auth";
 import { activationMilestone } from "../db/schema/operations";
 import { tradingAccount } from "../db/schema/trading";
 import {
+  getAffiliateCommissionBps as getServerAffiliateCommissionBps,
   getBillingPlanDefinition,
   getBillingPlanDefinitions,
   getWebAppUrl,
@@ -39,9 +40,16 @@ import {
   attachReferralConversionToUser,
   buildAffiliateDashboard as buildAffiliateDashboardState,
   buildAffiliateState,
+  cancelAffiliateWithdrawal,
+  captureGrowthTouch,
+  claimPendingGrowthAttribution,
+  createAffiliateStripeConnectSession,
   deleteAffiliatePaymentMethod as deleteAffiliatePaymentMethodRecord,
   buildReferralState,
+  disconnectAffiliateStripeConnect,
+  ensureAffiliateOfferForCheckout,
   ensureReferralRewardsForUser,
+  getAffiliateCheckoutAttribution,
   getAffiliatePayoutSettings,
   getAvailableReferralFreeMonthGrantForPlan,
   getEffectiveBillingState,
@@ -50,14 +58,24 @@ import {
   listAffiliateApplications,
   listPrivateBetaWaitlistEntries,
   markAffiliateSubscriptionActive,
+  markAffiliateManualWithdrawalPaid,
   recordAffiliatePayout,
+  readGrowthTouchFromCookies,
+  readGrowthVisitorTokenFromCookies,
   markReferralConversionPaid,
   markReferralRewardGrantConsumed,
   recordAffiliateCommissionEvent,
+  refreshAffiliateStripeConnectAccount,
   rejectAffiliateApplication,
+  rejectAffiliateWithdrawal,
+  requestAffiliateWithdrawal,
+  saveAffiliateOffer,
   saveAffiliatePaymentMethod,
+  saveAffiliateTrackingLink,
+  sendAffiliateStripeWithdrawal,
   setDefaultAffiliatePaymentMethod,
   updatePrivateBetaWaitlistEntry,
+  approveAffiliateWithdrawal,
 } from "../lib/billing/growth";
 import { getUserEdgeCreditSnapshot } from "../lib/billing/edge-credits";
 import { getPolarClient } from "../lib/billing/polar";
@@ -124,6 +142,74 @@ function buildAppUrl(
   }
 
   return url.toString();
+}
+
+function getGrowthCookieContext(
+  ctx: {
+    req?: {
+      cookies: {
+        get(name: string):
+          | {
+              value: string;
+            }
+          | undefined;
+      };
+    };
+  }
+) {
+  return {
+    visitorToken: readGrowthVisitorTokenFromCookies(ctx.req?.cookies),
+    storedTouch: readGrowthTouchFromCookies(ctx.req?.cookies),
+  };
+}
+
+function normalizeBillingMetadata(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function parseAmountCents(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
+}
+
+function resolveCommissionableOrderAmount(input: {
+  subtotalAmount?: unknown;
+  discountAmount?: unknown;
+  totalAmount?: unknown;
+}) {
+  const subtotalAmount = parseAmountCents(input.subtotalAmount);
+  const discountAmount = parseAmountCents(input.discountAmount);
+
+  if (subtotalAmount !== null || discountAmount !== null) {
+    return Math.max((subtotalAmount ?? 0) - (discountAmount ?? 0), 0);
+  }
+
+  return Math.max(parseAmountCents(input.totalAmount) ?? 0, 0);
+}
+
+function extractAffiliateOrderMetadata(
+  metadata?: Record<string, unknown> | null
+) {
+  const parsedCommissionBps = Number(metadata?.affiliate_commission_bps);
+
+  return {
+    affiliateAttributionId:
+      typeof metadata?.affiliate_attribution_id === "string"
+        ? metadata.affiliate_attribution_id
+        : null,
+    rewardGrantId:
+      typeof metadata?.referral_reward_grant_id === "string"
+        ? metadata.referral_reward_grant_id
+        : null,
+    commissionBps:
+      Number.isFinite(parsedCommissionBps) && parsedCommissionBps > 0
+        ? Math.round(parsedCommissionBps)
+        : null,
+  };
 }
 
 async function getUserRow(userId: string) {
@@ -717,6 +803,77 @@ export const billingRouter = router({
       };
     }),
 
+  captureGrowthTouch: publicProcedure
+    .input(
+      z.object({
+        type: z.enum(["affiliate", "referral"]),
+        code: z.string().optional(),
+        offerCode: z.string().optional(),
+        trackingLinkSlug: z.string().optional(),
+        affiliateGroupSlug: z.string().optional(),
+        landingPath: z.string().optional(),
+        query: z.string().optional(),
+        visitorToken: z.string().optional(),
+        touchCookie: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const fallbackTouch =
+        input.touchCookie != null
+          ? readGrowthTouchFromCookies({
+              get(name: string) {
+                return name === "pe_growth_touch"
+                  ? {
+                      value: input.touchCookie!,
+                    }
+                  : undefined;
+              },
+            })
+          : null;
+      const visitorToken =
+        input.visitorToken?.trim() ||
+        fallbackTouch?.visitorToken ||
+        getGrowthCookieContext(ctx).visitorToken;
+
+      if (!visitorToken) {
+        return {
+          captured: false,
+          pending: null,
+        };
+      }
+
+      const pending = await captureGrowthTouch({
+        visitorToken,
+        referralCode: input.type === "referral" ? input.code ?? null : null,
+        affiliateCode: input.type === "affiliate" ? input.code ?? null : null,
+        affiliateOfferCode: input.offerCode ?? null,
+        affiliateTrackingLinkSlug: input.trackingLinkSlug ?? null,
+        affiliateGroupSlug: input.affiliateGroupSlug ?? null,
+        sourcePath: input.landingPath ?? null,
+        referrerUrl: ctx.req.headers.get("referer"),
+        metadata: input.query
+          ? {
+              query: input.query,
+            }
+          : null,
+      });
+
+      return {
+        captured: Boolean(pending),
+        pending,
+      };
+    }),
+
+  claimPendingGrowthAttribution: protectedProcedure.mutation(async ({ ctx }) => {
+    const { visitorToken, storedTouch } = getGrowthCookieContext(ctx);
+
+    return claimPendingGrowthAttribution({
+      userId: ctx.session.user.id,
+      visitorToken: visitorToken ?? storedTouch?.visitorToken ?? null,
+      source: "auth_claim",
+    });
+  }),
+
   completeGrowthAccess: protectedProcedure
     .input(completeGrowthAccessInput)
     .mutation(async ({ ctx, input }) => {
@@ -830,6 +987,92 @@ export const billingRouter = router({
     return getAffiliatePayoutSettings(ctx.session.user.id);
   }),
 
+  saveAffiliateOffer: protectedProcedure
+    .input(
+      z.object({
+        affiliateUserId: z.string(),
+        affiliateOfferId: z.string().optional(),
+        code: z.string().min(3).max(64),
+        label: z.string().min(2).max(80),
+        description: z.string().max(300).optional(),
+        discountBasisPoints: z.number().int().min(100).max(10000),
+        isDefault: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return saveAffiliateOffer({
+        affiliateUserId: input.affiliateUserId,
+        createdByUserId: user.id,
+        affiliateOfferId: input.affiliateOfferId ?? null,
+        code: input.code,
+        label: input.label,
+        description: input.description ?? null,
+        discountBasisPoints: input.discountBasisPoints,
+        isDefault: input.isDefault,
+      });
+    }),
+
+  saveAffiliateTrackingLink: protectedProcedure
+    .input(
+      z.object({
+        trackingLinkId: z.string().optional(),
+        affiliateOfferId: z.string().optional(),
+        name: z.string().min(2).max(80),
+        destinationPath: z.string().optional(),
+        affiliateGroupSlug: z.string().optional(),
+        isDefault: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return saveAffiliateTrackingLink({
+        affiliateUserId: ctx.session.user.id,
+        trackingLinkId: input.trackingLinkId ?? null,
+        affiliateOfferId: input.affiliateOfferId ?? null,
+        name: input.name,
+        destinationPath: input.destinationPath ?? null,
+        affiliateGroupSlug: input.affiliateGroupSlug ?? null,
+        isDefault: input.isDefault,
+      });
+    }),
+
+  createAffiliateStripeConnectSession: protectedProcedure
+    .input(
+      z.object({
+        mode: z.enum(["onboarding", "dashboard"]).optional(),
+        refreshPath: z.string().optional(),
+        returnPath: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const refreshPath = assertAppRelativePath(
+        input.refreshPath ?? "/dashboard/settings/billing/payment-methods"
+      );
+      const returnPath = assertAppRelativePath(
+        input.returnPath ?? "/dashboard/settings/billing/payment-methods"
+      );
+      return createAffiliateStripeConnectSession({
+        affiliateUserId: ctx.session.user.id,
+        mode: input.mode ?? "onboarding",
+        refreshUrl: buildAppUrl(refreshPath, { stripe: "refresh" }),
+        returnUrl: buildAppUrl(returnPath, { stripe: "connected" }),
+      });
+    }),
+
+  refreshAffiliateStripeConnectAccount: protectedProcedure.mutation(async ({
+    ctx,
+  }) => {
+    return refreshAffiliateStripeConnectAccount(ctx.session.user.id);
+  }),
+
+  disconnectAffiliateStripeConnect: protectedProcedure.mutation(async ({
+    ctx,
+  }) => {
+    return disconnectAffiliateStripeConnect(ctx.session.user.id);
+  }),
+
   saveAffiliatePaymentMethod: protectedProcedure
     .input(
       z.object({
@@ -850,6 +1093,36 @@ export const billingRouter = router({
         recipientName: input.recipientName ?? null,
         details: input.details,
         isDefault: input.isDefault,
+      });
+    }),
+
+  requestAffiliateWithdrawal: protectedProcedure
+    .input(
+      z.object({
+        amountUsd: z.number().int().positive().optional(),
+        destinationType: z.enum(["stripe_connect", "manual"]),
+        paymentMethodId: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return requestAffiliateWithdrawal({
+        affiliateUserId: ctx.session.user.id,
+        amount: input.amountUsd ?? null,
+        destinationType: input.destinationType,
+        paymentMethodId: input.paymentMethodId ?? null,
+      });
+    }),
+
+  cancelAffiliateWithdrawal: protectedProcedure
+    .input(
+      z.object({
+        withdrawalRequestId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return cancelAffiliateWithdrawal({
+        affiliateUserId: ctx.session.user.id,
+        withdrawalRequestId: input.withdrawalRequestId,
       });
     }),
 
@@ -901,6 +1174,7 @@ export const billingRouter = router({
       z.object({
         planKey: z.enum(["professional", "institutional"]),
         returnPath: z.string().optional(),
+        affiliateOfferCode: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -913,6 +1187,15 @@ export const billingRouter = router({
       }
 
       const user = await getUserRow(ctx.session.user.id);
+      const growthCookieContext = getGrowthCookieContext(ctx);
+      await claimPendingGrowthAttribution({
+        userId: user.id,
+        visitorToken:
+          growthCookieContext.visitorToken ??
+          growthCookieContext.storedTouch?.visitorToken ??
+          null,
+        source: "checkout",
+      });
       const access = await getAccessStatus(user.id, user.email);
       if (access.privateBetaRequired && !access.hasPrivateBetaAccess) {
         throw new TRPCError({
@@ -924,6 +1207,12 @@ export const billingRouter = router({
       const referralRewardGrant =
         await getAvailableReferralFreeMonthGrantForPlan(user.id, input.planKey);
       const billing = await getActiveBillingState(user.id);
+      const affiliateCheckout = input.affiliateOfferCode?.trim()
+        ? await ensureAffiliateOfferForCheckout({
+            userId: user.id,
+            affiliateOfferCode: input.affiliateOfferCode,
+          })
+        : await getAffiliateCheckoutAttribution(user.id);
       const upgradeOfferDiscount = referralRewardGrant
         ? null
         : await createUpgradeOfferDiscount({
@@ -931,7 +1220,17 @@ export const billingRouter = router({
             currentPlanKey: billing.activePlanKey,
             targetPlanKey: input.planKey,
           });
+      if (
+        affiliateCheckout.offer &&
+        (referralRewardGrant?.polarDiscountId || upgradeOfferDiscount?.id)
+      ) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Affiliate offer codes cannot be combined with other checkout discounts",
+        });
+      }
       const checkoutDiscountId =
+        affiliateCheckout.offer?.polarDiscountId ??
         referralRewardGrant?.polarDiscountId ??
         upgradeOfferDiscount?.id ??
         null;
@@ -951,18 +1250,44 @@ export const billingRouter = router({
         customerEmail: user.email,
         customerName: user.name,
         discountId: checkoutDiscountId,
-        allowDiscountCodes: checkoutDiscountId ? false : true,
+        allowDiscountCodes: false,
         successUrl,
         returnUrl: buildAppUrl(returnPath),
         metadata: {
           user_id: user.id,
           plan_key: plan.key,
+          ...(affiliateCheckout.attribution?.id
+            ? {
+                affiliate_attribution_id: affiliateCheckout.attribution.id,
+                affiliate_code: affiliateCheckout.attribution.affiliateCode,
+                affiliate_commission_bps: String(getServerAffiliateCommissionBps()),
+                ...(affiliateCheckout.offer?.id
+                  ? {
+                      affiliate_offer_id: affiliateCheckout.offer.id,
+                    }
+                  : {}),
+                ...(affiliateCheckout.offer?.code
+                  ? {
+                      affiliate_offer_code: affiliateCheckout.offer.code,
+                    }
+                  : {}),
+                ...(affiliateCheckout.attribution.affiliateTrackingLinkId
+                  ? {
+                      affiliate_tracking_link_id:
+                        affiliateCheckout.attribution.affiliateTrackingLinkId,
+                    }
+                  : {}),
+              }
+            : {}),
           ...(referralRewardGrant?.id
             ? { referral_reward_grant_id: referralRewardGrant.id }
             : {}),
         },
         customerMetadata: {
           user_id: user.id,
+          ...(affiliateCheckout.attribution?.affiliateCode
+            ? { affiliate_code: affiliateCheckout.attribution.affiliateCode }
+            : {}),
         },
       });
 
@@ -1072,6 +1397,10 @@ export const billingRouter = router({
       });
 
       for (const order of ordersPage.result.items) {
+        const orderMetadata = normalizeBillingMetadata(order.metadata);
+        const affiliateOrderMetadata =
+          extractAffiliateOrderMetadata(orderMetadata);
+
         await upsertBillingOrderFromPolar({
           userId: user.id,
           polarOrderId: order.id,
@@ -1087,15 +1416,10 @@ export const billingRouter = router({
           totalAmount: order.totalAmount ?? null,
           paid: order.status === "paid",
           paidAt: order.status === "paid" ? new Date(order.createdAt) : null,
-          metadata:
-            (order.metadata as Record<string, string | number | boolean>) ?? {},
+          metadata: orderMetadata ?? {},
         });
 
         if (order.status === "paid") {
-          const rewardGrantId =
-            (order.metadata?.referral_reward_grant_id as string | undefined) ??
-            null;
-
           await markReferralConversionPaid({
             referredUserId: user.id,
             orderId: order.id,
@@ -1107,13 +1431,23 @@ export const billingRouter = router({
             referredUserId: user.id,
             polarOrderId: order.id,
             polarSubscriptionId: order.subscriptionId ?? null,
-            orderAmount: order.totalAmount ?? 0,
+            affiliateAttributionId:
+              affiliateOrderMetadata.affiliateAttributionId,
+            orderAmount: resolveCommissionableOrderAmount({
+              subtotalAmount: order.subtotalAmount,
+              discountAmount: order.discountAmount,
+              totalAmount: order.totalAmount,
+            }),
             currency: order.currency ?? null,
+            commissionBps: affiliateOrderMetadata.commissionBps,
+            metadata: orderMetadata,
             occurredAt: new Date(order.createdAt),
           });
 
-          if (rewardGrantId) {
-            await markReferralRewardGrantConsumed(rewardGrantId);
+          if (affiliateOrderMetadata.rewardGrantId) {
+            await markReferralRewardGrantConsumed(
+              affiliateOrderMetadata.rewardGrantId
+            );
           }
         }
       }
@@ -1181,6 +1515,82 @@ export const billingRouter = router({
 
     return listAffiliatePayoutQueue();
   }),
+
+  approveAffiliateWithdrawal: protectedProcedure
+    .input(
+      z.object({
+        withdrawalRequestId: z.string(),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return approveAffiliateWithdrawal({
+        withdrawalRequestId: input.withdrawalRequestId,
+        reviewedByUserId: user.id,
+        notes: input.notes ?? null,
+      });
+    }),
+
+  rejectAffiliateWithdrawal: protectedProcedure
+    .input(
+      z.object({
+        withdrawalRequestId: z.string(),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return rejectAffiliateWithdrawal({
+        withdrawalRequestId: input.withdrawalRequestId,
+        reviewedByUserId: user.id,
+        notes: input.notes ?? null,
+      });
+    }),
+
+  sendAffiliateStripeWithdrawal: protectedProcedure
+    .input(
+      z.object({
+        withdrawalRequestId: z.string(),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return sendAffiliateStripeWithdrawal({
+        withdrawalRequestId: input.withdrawalRequestId,
+        reviewedByUserId: user.id,
+        notes: input.notes ?? null,
+      });
+    }),
+
+  markAffiliateManualWithdrawalPaid: protectedProcedure
+    .input(
+      z.object({
+        withdrawalRequestId: z.string(),
+        paymentMethodId: z.string().optional(),
+        externalReference: z.string().max(120).optional(),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return markAffiliateManualWithdrawalPaid({
+        withdrawalRequestId: input.withdrawalRequestId,
+        reviewedByUserId: user.id,
+        paymentMethodId: input.paymentMethodId ?? null,
+        externalReference: input.externalReference ?? null,
+        notes: input.notes ?? null,
+      });
+    }),
 
   recordAffiliatePayout: protectedProcedure
     .input(
@@ -1389,6 +1799,9 @@ export async function syncPolarWebhookEvent(event: any) {
       return;
     }
 
+    const orderMetadata = normalizeBillingMetadata(event.data.metadata);
+    const affiliateOrderMetadata = extractAffiliateOrderMetadata(orderMetadata);
+
     await upsertBillingCustomerFromPolar({
       userId,
       polarCustomerId: event.data.customer.id,
@@ -1414,7 +1827,7 @@ export async function syncPolarWebhookEvent(event: any) {
       totalAmount: event.data.totalAmount,
       paid: event.data.paid,
       paidAt: event.type === "order.paid" ? new Date(event.timestamp) : null,
-      metadata: event.data.metadata ?? {},
+      metadata: orderMetadata ?? {},
     });
 
     if (event.type === "order.paid") {
@@ -1429,16 +1842,22 @@ export async function syncPolarWebhookEvent(event: any) {
         referredUserId: userId,
         polarOrderId: event.data.id,
         polarSubscriptionId: event.data.subscriptionId ?? null,
-        orderAmount: event.data.totalAmount ?? 0,
+        affiliateAttributionId: affiliateOrderMetadata.affiliateAttributionId,
+        orderAmount: resolveCommissionableOrderAmount({
+          subtotalAmount: event.data.subtotalAmount,
+          discountAmount: event.data.discountAmount,
+          totalAmount: event.data.totalAmount,
+        }),
         currency: event.data.currency ?? null,
+        commissionBps: affiliateOrderMetadata.commissionBps,
+        metadata: orderMetadata,
         occurredAt: new Date(event.timestamp),
       });
 
-      const rewardGrantId =
-        (event.data.metadata?.referral_reward_grant_id as string | undefined) ??
-        null;
-      if (rewardGrantId) {
-        await markReferralRewardGrantConsumed(rewardGrantId);
+      if (affiliateOrderMetadata.rewardGrantId) {
+        await markReferralRewardGrantConsumed(
+          affiliateOrderMetadata.rewardGrantId
+        );
       }
     }
   }

@@ -2,6 +2,7 @@
 
 import { trpc } from "@/utils/trpc";
 import { Card } from "@/components/ui/card";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { cn } from "@/lib/utils";
 import { Trophy } from "lucide-react";
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
@@ -20,11 +21,7 @@ export default function AchievementsPage() {
   const { data, isLoading } = trpc.users.getAchievements.useQuery();
 
   if (isLoading) {
-    return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <div className="text-muted-foreground">Loading achievements...</div>
-      </div>
-    );
+    return <RouteLoadingFallback route="achievements" className="min-h-[calc(100vh-10rem)]" />;
   }
 
   const achievements = data?.achievements || [];

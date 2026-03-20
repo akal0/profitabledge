@@ -52,9 +52,28 @@ function DashboardPageContent() {
   );
   const { data: me } = useQuery(trpcOptions.users.me.queryOptions());
   const { data: accounts } = useQuery(trpcOptions.accounts.list.queryOptions());
-  const { data: rawConnections } = useQuery(
-    trpcOptions.connections.list.queryOptions()
-  );
+  const selectedAccount = accounts?.find(
+    (account) => account.id === accountId
+  ) as
+    | {
+        id: string;
+        name?: string | null;
+        broker?: string | null;
+        initialCurrency?: string | null;
+        isVerified?: number | boolean | null;
+        verificationLevel?: string | null;
+        lastSyncedAt?: string | Date | null;
+        lastImportedAt?: string | Date | null;
+      }
+    | undefined;
+  const shouldLoadConnections =
+    Boolean(accountId) &&
+    !isAllAccountsScope(accountId) &&
+    accountSupportsLiveSync(selectedAccount);
+  const { data: rawConnections } = useQuery({
+    ...trpcOptions.connections.list.queryOptions(),
+    enabled: shouldLoadConnections,
+  });
 
   const {
     widgets,
@@ -80,20 +99,6 @@ function DashboardPageContent() {
     applyCalendarPreset,
   } = useDashboardHomeLayout(me);
 
-  const selectedAccount = accounts?.find(
-    (account) => account.id === accountId
-  ) as
-    | {
-        id: string;
-        name?: string | null;
-        broker?: string | null;
-        initialCurrency?: string | null;
-        isVerified?: number | boolean | null;
-        verificationLevel?: string | null;
-        lastSyncedAt?: string | Date | null;
-        lastImportedAt?: string | Date | null;
-      }
-    | undefined;
   const connections =
     (rawConnections as DashboardPageConnection[] | undefined) ?? [];
   const selectedConnection =

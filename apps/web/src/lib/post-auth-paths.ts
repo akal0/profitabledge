@@ -65,3 +65,13 @@ export function buildLoginPath(returnTo?: string | null) {
   const params = new URLSearchParams({ returnTo: safeReturnTo });
   return `/login?${params.toString()}`;
 }
+
+export function buildSignUpPath(returnTo?: string | null) {
+  const safeReturnTo = resolvePostAuthPath(returnTo);
+  if (safeReturnTo === DEFAULT_POST_AUTH_PATH) {
+    return "/sign-up";
+  }
+
+  const params = new URLSearchParams({ returnTo: safeReturnTo });
+  return `/sign-up?${params.toString()}`;
+}

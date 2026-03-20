@@ -15,11 +15,13 @@ import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { trpcOptions, queryClient } from "@/utils/trpc";
+import { publicAlphaFlags } from "@/lib/alpha-flags";
 
 export default function NotificationsSettingsPage() {
   const { data: preferences } = useQuery(
     trpcOptions.notifications.getPreferences.queryOptions()
   );
+  const showSocialNotifications = publicAlphaFlags.community;
 
   const updatePreferences = useMutation({
     ...trpcOptions.notifications.updatePreferences.mutationOptions(),
@@ -242,13 +244,15 @@ export default function NotificationsSettingsPage() {
 
       <Separator />
 
-      {/* News & Social heading */}
+      {/* Market events heading */}
       <div className="px-6 sm:px-8 py-5">
         <h2 className="text-sm font-semibold text-white">
-          News & Social
+          {showSocialNotifications ? "Market Events & Social" : "Market Events"}
         </h2>
         <p className="text-xs text-white/40 mt-0.5">
-          Market news and social updates.
+          {showSocialNotifications
+            ? "Economic calendar alerts and optional social updates."
+            : "Economic calendar alerts and market-event reminders."}
         </p>
       </div>
 
@@ -261,7 +265,9 @@ export default function NotificationsSettingsPage() {
             <Newspaper className="size-4 text-blue-400" />
             <Label className="text-sm text-white/80 font-medium">Economic events</Label>
           </div>
-          <p className="text-xs text-white/40 mt-0.5">Today's news alerts.</p>
+          <p className="text-xs text-white/40 mt-0.5">
+            Upcoming economic-calendar alerts.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -273,28 +279,34 @@ export default function NotificationsSettingsPage() {
         </div>
       </div>
 
-      <Separator />
+      {showSocialNotifications ? (
+        <>
+          <Separator />
 
-      {/* Social */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <Users className="size-4 text-purple-400" />
-            <Label className="text-sm text-white/80 font-medium">Leaderboard & Copy</Label>
+          {/* Social */}
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <Users className="size-4 text-purple-400" />
+                <Label className="text-sm text-white/80 font-medium">Leaderboard & Copy</Label>
+              </div>
+              <p className="text-xs text-white/40 mt-0.5">Social updates.</p>
+            </div>
+            <div className="flex justify-end">
+              <Switch
+                checked={preferences?.social ?? false}
+                onCheckedChange={(next) => handleToggle("social", next)}
+                disabled={updatePreferences.isPending}
+                className="data-[state=checked]:bg-teal-600"
+              />
+            </div>
           </div>
-          <p className="text-xs text-white/40 mt-0.5">Social updates.</p>
-        </div>
-        <div className="flex justify-end">
-          <Switch
-            checked={preferences?.social ?? false}
-            onCheckedChange={(next) => handleToggle("social", next)}
-            disabled={updatePreferences.isPending}
-            className="data-[state=checked]:bg-teal-600"
-          />
-        </div>
-      </div>
 
-      <Separator />
+          <Separator />
+        </>
+      ) : (
+        <Separator />
+      )}
 
       {/* System heading */}
       <div className="px-6 sm:px-8 py-5">

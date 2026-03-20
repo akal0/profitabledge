@@ -11,20 +11,20 @@ import {
   Rocket,
   UserPlus,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  GrowthCardShell,
-  GrowthPageBody,
-  GrowthPageShell,
-  GrowthSectionLabel,
-} from "@/features/growth/components/growth-page-primitives";
+  GoalContentSeparator,
+  GoalPanel,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { trpc, trpcOptions } from "@/utils/trpc";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
@@ -75,9 +75,31 @@ function formatStatusLabel(status?: string | null) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <GoalSurface>
+      <div className="p-3.5">
+        <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-amber-300" />
+          <span className="text-xs text-white/50">{label}</span>
+        </div>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        <div className="text-2xl font-semibold text-white">{value}</div>
+      </div>
+    </GoalSurface>
+  );
+}
+
 export function ReferralsDashboard() {
-  const [affiliateApplicationMessage, setAffiliateApplicationMessage] =
-    useState("");
+  const [affiliateApplicationMessage, setAffiliateApplicationMessage] = useState("");
   const billingStateQuery = trpc.billing.getState.useQuery();
   const applyForAffiliate = useMutation({
     ...trpcOptions.billing.applyForAffiliate.mutationOptions(),
@@ -115,337 +137,251 @@ export function ReferralsDashboard() {
 
   if (billingStateQuery.isLoading) {
     return (
-      <GrowthPageShell
-        title="Referrals"
-        description="Share your referral link, track milestone rewards, and apply for affiliate access"
-      >
-        <GrowthPageBody className="space-y-4">
-          <div className="h-40 animate-pulse rounded-sm bg-sidebar" />
-          <div className="grid gap-3 sm:grid-cols-4">
-            {[0, 1, 2, 3].map((index) => (
-              <div
-                key={index}
-                className="h-28 animate-pulse rounded-sm bg-sidebar"
-              />
-            ))}
-          </div>
-        </GrowthPageBody>
-      </GrowthPageShell>
+      <RouteLoadingFallback
+        route="referrals"
+        className="min-h-[calc(100vh-10rem)]"
+      />
     );
   }
 
-  return (
-    <GrowthPageShell
-      title="Referrals"
-      description="Share your referral link, track milestone rewards, and apply for affiliate access"
-    >
-      <GrowthPageBody>
-        <GrowthCardShell className="overflow-hidden">
-          <div className="border-b border-white/5 bg-[radial-gradient(circle_at_top_left,rgba(250,204,21,0.12),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] p-6">
-            <Badge className="rounded-full bg-amber-500/10 text-[10px] text-amber-200 ring ring-amber-500/15">
-              Member referrals
-            </Badge>
-            <p className="mt-3 text-lg font-semibold tracking-[-0.04em] text-white">
-              Product rewards for member-driven growth
+  if (referral?.isHiddenBecauseAffiliate) {
+    return (
+      <main className="space-y-6 p-6 py-4">
+        <GoalPanel icon={BadgePercent} title="Referral program">
+          <div className="space-y-3">
+            <p className="text-sm leading-6 text-white/55">
+              This account is already an approved affiliate, so the standard
+              member referral program is hidden. Use the affiliate dashboard for
+              recurring commission tracking and your mentorship group.
             </p>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
-              Every member can share a referral link and earn product rewards.
-              Approved affiliates move onto the separate affiliate route with
-              commission tracking and mentorship-group ownership.
-            </p>
+            <Button
+              asChild
+              className="h-8 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white hover:bg-sidebar"
+            >
+              <Link href="/dashboard/affiliate">Open affiliate dashboard</Link>
+            </Button>
           </div>
+        </GoalPanel>
+      </main>
+    );
+  }
 
-          {referral?.isHiddenBecauseAffiliate ? (
-            <div className="p-6">
-              <div className="flex items-center gap-2">
-                <BadgePercent className="size-3.5 text-emerald-300" />
-                <p className="text-xs font-medium text-white">
-                  Referral program replaced by affiliate access
-                </p>
-              </div>
-              <p className="mt-3 max-w-xl text-sm leading-6 text-white/45">
-                This account is already an approved affiliate, so the standard
-                member referral program is hidden. Use the affiliate dashboard for
-                recurring commission tracking and your mentorship group.
+  const statCards = [
+    {
+      label: "Signups",
+      value: String(referral?.stats.signups ?? 0),
+      icon: UserPlus,
+    },
+    {
+      label: "Paid conversions",
+      value: String(referral?.stats.paidConversions ?? 0),
+      icon: Users,
+    },
+    {
+      label: "Next edge credits",
+      value: `${referral?.progress.nextEdgeCreditIn ?? 5} to go`,
+      icon: Gift,
+    },
+    {
+      label: "Next free month",
+      value: `${referral?.progress.nextFreeMonthIn ?? 20} to go`,
+      icon: Clock3,
+    },
+  ];
+
+  return (
+    <main className="space-y-6 p-6 py-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+        {statCards.map((stat) => (
+          <StatCard
+            key={stat.label}
+            label={stat.label}
+            value={stat.value}
+            icon={stat.icon}
+          />
+        ))}
+      </div>
+
+      <GoalPanel
+        icon={Gift}
+        title="Referral share link"
+        description="Referrals earn product rewards, not revenue share."
+      >
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            readOnly
+            value={referral?.profile?.shareUrl ?? ""}
+            className="flex-1 border-white/10 bg-sidebar text-xs"
+          />
+          <Button
+            onClick={() =>
+              referral?.profile?.shareUrl
+                ? copyToClipboard(referral.profile.shareUrl, "Referral link copied")
+                : toast.error("Referral link is not ready yet")
+            }
+            className="h-9 cursor-pointer gap-1.5 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white hover:bg-sidebar-accent"
+          >
+            <Copy className="size-3.5" />
+            Copy link
+          </Button>
+          <Button
+            onClick={() =>
+              referral?.profile?.code
+                ? copyToClipboard(referral.profile.code, "Referral code copied")
+                : toast.error("Referral code is not ready yet")
+            }
+            className="h-9 cursor-pointer gap-1.5 rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white hover:bg-sidebar-accent"
+          >
+            <Users className="size-3.5" />
+            Copy code
+          </Button>
+        </div>
+      </GoalPanel>
+
+      <GoalPanel icon={Rocket} title="Reward ladder">
+        <div className="grid gap-3 sm:grid-cols-3">
+          {[
+            {
+              title: `Every ${referral?.progress.edgeCreditThreshold ?? 5} paid referrals`,
+              detail: `${referral?.progress.edgeCreditAmount ?? 1000} Edge credits`,
+              remaining: referral?.progress.nextEdgeCreditIn ?? 5,
+            },
+            {
+              title: `Every ${referral?.progress.freeMonthThreshold ?? 20} paid referrals`,
+              detail: "Free month on your current paid plan",
+              remaining: referral?.progress.nextFreeMonthIn ?? 20,
+            },
+            {
+              title: `Every ${referral?.progress.upgradeTrialThreshold ?? 40} paid referrals`,
+              detail: "30-day next-plan upgrade when eligible",
+              remaining: referral?.progress.nextUpgradeTrialIn ?? 40,
+            },
+          ].map((milestone) => (
+            <div
+              key={milestone.title}
+              className="rounded-sm border border-white/5 bg-sidebar-accent p-3"
+            >
+              <p className="text-xs font-medium text-white">{milestone.title}</p>
+              <p className="mt-1 text-[11px] leading-5 text-white/35">
+                {milestone.detail}
               </p>
-              <Button
-                asChild
-                className="mt-4 h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar"
-              >
-                <Link href="/dashboard/affiliate">Open affiliate dashboard</Link>
-              </Button>
+              <Badge className="mt-3 bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+                {milestone.remaining} remaining
+              </Badge>
             </div>
-          ) : (
-            <div className="space-y-6 p-6">
-              <GrowthCardShell>
-              <div className="p-4 pb-0">
-                <div className="flex items-center gap-2">
-                  <Gift className="size-3.5 text-amber-300" />
-                  <p className="text-xs font-medium text-white">
-                    Referral share link
-                  </p>
-                </div>
-              </div>
-              <Separator className="mt-3" />
-              <div className="space-y-3 p-4 pt-3">
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    readOnly
-                    value={referral?.profile?.shareUrl ?? ""}
-                    className="flex-1 ring-white/5 bg-sidebar text-xs"
-                  />
-                  <Button
-                    onClick={() =>
-                      referral?.profile?.shareUrl
-                        ? copyToClipboard(
-                            referral.profile.shareUrl,
-                            "Referral link copied"
-                          )
-                        : toast.error("Referral link is not ready yet")
-                    }
-                    className="h-9 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar"
-                  >
-                    <Copy className="size-3.5" />
-                    Copy link
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      referral?.profile?.code
-                        ? copyToClipboard(
-                            referral.profile.code,
-                            "Referral code copied"
-                          )
-                        : toast.error("Referral code is not ready yet")
-                    }
-                    className="h-9 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar"
-                  >
-                    <Users className="size-3.5" />
-                    Copy code
-                  </Button>
-                </div>
-                <p className="text-[11px] text-white/35">
-                  Referrals earn product rewards, not revenue share.
-                </p>
-              </div>
-              </GrowthCardShell>
+          ))}
+        </div>
+      </GoalPanel>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                {
-                  label: "Signups",
-                  value: String(referral?.stats.signups ?? 0),
-                  icon: UserPlus,
-                },
-                {
-                  label: "Paid conversions",
-                  value: String(referral?.stats.paidConversions ?? 0),
-                  icon: Users,
-                },
-                {
-                  label: "Next edge credits",
-                  value: `${referral?.progress.nextEdgeCreditIn ?? 5} to go`,
-                  icon: Gift,
-                },
-                {
-                  label: "Next free month",
-                  value: `${referral?.progress.nextFreeMonthIn ?? 20} to go`,
-                  icon: Clock3,
-                },
-              ].map((stat) => (
-                <GrowthCardShell key={stat.label}>
-                  <div className="p-4 pb-0">
-                    <stat.icon className="size-3.5 text-emerald-300" />
-                    <GrowthSectionLabel>{stat.label}</GrowthSectionLabel>
-                  </div>
-                  <Separator className="mt-3" />
-                  <div className="p-4 pt-3">
-                    <p className="text-xl font-semibold text-white">
-                      {stat.value}
-                    </p>
-                  </div>
-                </GrowthCardShell>
-              ))}
-            </div>
-
-            <GrowthCardShell>
-              <div className="p-4 pb-0">
-                <div className="flex items-center gap-2">
-                  <Rocket className="size-3.5 text-blue-300" />
-                  <p className="text-xs font-medium text-white">
-                    Reward ladder
-                  </p>
-                </div>
-              </div>
-              <Separator className="mt-3" />
-              <div className="grid gap-3 p-4 pt-3 sm:grid-cols-3">
-                {[
-                  {
-                    title: `Every ${referral?.progress.edgeCreditThreshold ?? 5} paid referrals`,
-                    detail: `${referral?.progress.edgeCreditAmount ?? 1000} Edge credits`,
-                    remaining: referral?.progress.nextEdgeCreditIn ?? 5,
-                  },
-                  {
-                    title: `Every ${referral?.progress.freeMonthThreshold ?? 20} paid referrals`,
-                    detail: "Free month on your current paid plan",
-                    remaining: referral?.progress.nextFreeMonthIn ?? 20,
-                  },
-                  {
-                    title: `Every ${referral?.progress.upgradeTrialThreshold ?? 40} paid referrals`,
-                    detail: "30-day next-plan upgrade when eligible",
-                    remaining: referral?.progress.nextUpgradeTrialIn ?? 40,
-                  },
-                ].map((milestone) => (
-                  <div
-                    key={milestone.title}
-                    className="rounded-sm ring ring-white/5 bg-sidebar p-3"
-                  >
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <GoalPanel icon={Gift} title="Reward history">
+          <div className="space-y-2">
+            {referral?.grants.length ? (
+              referral.grants.map((grant) => (
+                <div
+                  key={grant.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent p-3"
+                >
+                  <div>
                     <p className="text-xs font-medium text-white">
-                      {milestone.title}
+                      {formatRewardType(grant.rewardType, grant.targetPlanKey)}
                     </p>
-                    <p className="mt-1 text-[11px] leading-5 text-white/35">
-                      {milestone.detail}
+                    <p className="text-[10px] text-white/35">
+                      Earned at {grant.conversionCount} paid referrals
                     </p>
-                    <Badge className="mt-3 ring ring-white/10 bg-white/5 text-[10px] text-white/65">
-                      {milestone.remaining} remaining
+                  </div>
+                  <div className="text-right">
+                    <Badge className="bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+                      {formatStatusLabel(grant.status)}
                     </Badge>
-                  </div>
-                ))}
-              </div>
-            </GrowthCardShell>
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-              <GrowthCardShell>
-                <div className="p-4 pb-0">
-                  <div className="flex items-center gap-2">
-                    <Gift className="size-3.5 text-amber-300" />
-                    <p className="text-xs font-medium text-white">
-                      Reward history
+                    <p className="mt-1 text-[10px] text-white/35">
+                      {formatDate(grant.grantedAt)}
                     </p>
                   </div>
                 </div>
-                <Separator className="mt-3" />
-                <div className="space-y-2 p-4 pt-3">
-                  {referral?.grants.length ? (
-                    referral.grants.map((grant) => (
-                      <div
-                        key={grant.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-sm ring ring-white/5 bg-sidebar p-3"
-                      >
-                        <div>
-                          <p className="text-xs font-medium text-white">
-                            {formatRewardType(grant.rewardType, grant.targetPlanKey)}
-                          </p>
-                          <p className="text-[10px] text-white/35">
-                            Earned at {grant.conversionCount} paid referrals
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
-                            {formatStatusLabel(grant.status)}
-                          </Badge>
-                          <p className="mt-1 text-[10px] text-white/35">
-                            {formatDate(grant.grantedAt)}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-sm ring ring-dashed ring-white/10 p-4 text-xs text-white/30">
-                      No referral rewards granted yet.
-                    </div>
-                  )}
-                </div>
-              </GrowthCardShell>
+              ))
+            ) : (
+              <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
+                No referral rewards granted yet.
+              </div>
+            )}
+          </div>
+        </GoalPanel>
 
-              <GrowthCardShell>
-                <div className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-medium text-white">
-                        Apply to become an affiliate
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-white/35">
-                        Approved affiliates get a separate dashboard, recurring
-                        commission tracking, and a mentorship group.
-                      </p>
-                    </div>
-                    {affiliate?.application ? (
-                      <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
-                        {formatStatusLabel(affiliate.application.status)}
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <Textarea
-                    value={affiliateApplicationMessage}
-                    onChange={(event) =>
-                      setAffiliateApplicationMessage(event.target.value)
-                    }
-                    placeholder="Tell us about your audience, trading experience, or why you'd be a strong affiliate partner."
-                    className="mt-4 min-h-28 ring-white/5 bg-sidebar text-xs"
-                  />
-                  <Button
-                    onClick={handleAffiliateApplication}
-                    disabled={applyForAffiliate.isPending}
-                    className="mt-4 h-9 rounded-sm bg-sidebar px-4 text-xs text-white ring ring-white/5 hover:bg-sidebar-accent"
-                  >
-                    {applyForAffiliate.isPending
-                      ? "Submitting..."
-                      : affiliate?.application
-                      ? "Update application"
-                      : "Apply for affiliate access"}
-                  </Button>
-                </div>
-              </GrowthCardShell>
-            </div>
+        <GoalPanel
+          icon={BadgePercent}
+          title="Apply for affiliate access"
+          action={
+            affiliate?.application ? (
+              <Badge className="bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+                {formatStatusLabel(affiliate.application.status)}
+              </Badge>
+            ) : undefined
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-xs leading-5 text-white/40">
+              Approved affiliates get a separate dashboard, recurring commission
+              tracking, and a mentorship group.
+            </p>
+            <Textarea
+              value={affiliateApplicationMessage}
+              onChange={(event) =>
+                setAffiliateApplicationMessage(event.target.value)
+              }
+              placeholder="Tell us about your audience, trading experience, or why you'd be a strong affiliate partner."
+              className="min-h-24 border-white/10 bg-sidebar text-xs"
+            />
+            <Button
+              onClick={handleAffiliateApplication}
+              disabled={applyForAffiliate.isPending}
+              className="h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar-accent"
+            >
+              {applyForAffiliate.isPending
+                ? "Submitting..."
+                : affiliate?.application
+                ? "Update application"
+                : "Apply for affiliate access"}
+            </Button>
+          </div>
+        </GoalPanel>
+      </div>
 
-            <GrowthCardShell>
-              <div className="p-4 pb-0">
-                <div className="flex items-center gap-2">
-                  <Users className="size-3.5 text-blue-300" />
+      <GoalPanel icon={Users} title="Recent referral activity">
+        <div className="space-y-2">
+          {referral?.conversions.length ? (
+            referral.conversions.map((conversion) => (
+              <div
+                key={conversion.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent p-3"
+              >
+                <div>
+                  <p className="text-xs font-medium capitalize text-white">
+                    {formatStatusLabel(conversion.status)}
+                  </p>
+                  <p className="text-[10px] text-white/35">
+                    Joined {formatDate(conversion.createdAt)}
+                  </p>
+                </div>
+                <div className="text-right">
                   <p className="text-xs font-medium text-white">
-                    Recent referral activity
+                    {conversion.referralCode}
+                  </p>
+                  <p className="text-[10px] text-white/35">
+                    {conversion.paidAt
+                      ? `Paid ${formatDate(conversion.paidAt)}`
+                      : "Awaiting first paid order"}
                   </p>
                 </div>
               </div>
-              <Separator className="mt-3" />
-              <div className="space-y-2 p-4 pt-3">
-                {referral?.conversions.length ? (
-                  referral.conversions.map((conversion) => (
-                    <div
-                      key={conversion.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-sm ring ring-white/5 bg-sidebar p-3"
-                    >
-                      <div>
-                        <p className="text-xs font-medium text-white capitalize">
-                          {formatStatusLabel(conversion.status)}
-                        </p>
-                        <p className="text-[10px] text-white/35">
-                          Joined {formatDate(conversion.createdAt)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xs font-medium text-white">
-                          {conversion.referralCode}
-                        </p>
-                        <p className="text-[10px] text-white/35">
-                          {conversion.paidAt
-                            ? `Paid ${formatDate(conversion.paidAt)}`
-                            : "Awaiting first paid order"}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-sm ring ring-dashed ring-white/10 p-4 text-xs text-white/30">
-                    No referrals yet. Share your code to start tracking signups.
-                  </div>
-                )}
-              </div>
-            </GrowthCardShell>
+            ))
+          ) : (
+            <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
+              No referrals yet. Share your code to start tracking signups.
             </div>
           )}
-        </GrowthCardShell>
-      </GrowthPageBody>
-    </GrowthPageShell>
+        </div>
+      </GoalPanel>
+    </main>
   );
 }

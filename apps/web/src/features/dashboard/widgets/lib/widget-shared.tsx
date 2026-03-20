@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 import { useDashboardTradeFilters } from "@/features/dashboard/filters/dashboard-trade-filters";
-import { isAllAccountsScope } from "@/stores/account";
+import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 
 export const chartConfig = {
   wins: {
@@ -291,18 +291,28 @@ export function useAccountStats(accountId?: string) {
   const getStats = useStatsStore((state) => state.getStats);
   const { accounts } = useAccountCatalog();
   const dashboardTradeFilters = useDashboardTradeFilters();
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
+  const isAllAccounts = isAllAccountsScope(accountId);
   const hasValidAccountScope = useMemo(() => {
     if (!accountId) return false;
-    if (isAllAccountsScope(accountId)) return true;
+    if (isAllAccounts) return true;
     return accounts.some((account) => account.id === accountId);
-  }, [accountId, accounts]);
+  }, [accountId, accounts, isAllAccounts]);
   const isLoading = useStatsStore((state) => state.isLoading(accountId));
 
   useEffect(() => {
     if (accountId && hasValidAccountScope) {
       fetchStats(accountId);
     }
-  }, [accountId, fetchStats, hasValidAccountScope]);
+  }, [
+    accountId,
+    allAccountsPreferredCurrencyCode,
+    fetchStats,
+    hasValidAccountScope,
+    isAllAccounts,
+  ]);
 
   return {
     data: (() => {

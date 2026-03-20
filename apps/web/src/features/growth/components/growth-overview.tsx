@@ -13,6 +13,7 @@ import {
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
   GrowthCardShell,
   GrowthPageBody,
@@ -25,32 +26,18 @@ export function GrowthOverview() {
 
   const affiliate = billingStateQuery.data?.affiliate;
   const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;
+  const growthDescription = isAdmin
+    ? "Manage referrals, affiliate access, and the related admin tooling"
+    : "Manage referrals, affiliate access, and your growth surfaces";
 
   if (billingStateQuery.isLoading) {
-    return (
-      <GrowthPageShell
-        title="Growth"
-        description="Manage referrals, affiliate access, and the related admin tooling"
-      >
-        <GrowthPageBody className="space-y-4">
-          <div className="h-40 animate-pulse rounded-sm bg-sidebar" />
-          <div className="grid gap-3 lg:grid-cols-2">
-            {[0, 1, 2, 3].map((index) => (
-              <div
-                key={index}
-                className="h-48 animate-pulse rounded-sm bg-sidebar"
-              />
-            ))}
-          </div>
-        </GrowthPageBody>
-      </GrowthPageShell>
-    );
+    return <RouteLoadingFallback route="growth" className="min-h-[calc(100vh-10rem)]" />;
   }
 
   return (
     <GrowthPageShell
       title="Growth"
-      description="Manage referrals, affiliate access, and the related admin tooling"
+      description={growthDescription}
     >
       <GrowthPageBody className="space-y-6">
         <GrowthCardShell className="overflow-hidden">
@@ -140,30 +127,26 @@ export function GrowthOverview() {
               </div>
             </GrowthCardShell>
 
-            <GrowthCardShell>
-              <div className="p-5">
-                <div className="flex items-center gap-2">
-                  <Shield className="size-3.5 text-teal-300" />
-                  <p className="text-xs font-medium text-white">Growth admin</p>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-white/45">
-                  Admins manage beta codes, affiliate approvals, waitlist review,
-                  and manual commission payouts from a dedicated route.
-                </p>
-                {isAdmin ? (
+            {isAdmin ? (
+              <GrowthCardShell>
+                <div className="p-5">
+                  <div className="flex items-center gap-2">
+                    <Shield className="size-3.5 text-teal-300" />
+                    <p className="text-xs font-medium text-white">Growth admin</p>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-white/45">
+                    Admins manage beta codes, affiliate approvals, waitlist review,
+                    and manual commission payouts from a dedicated route.
+                  </p>
                   <Button
                     asChild
                     className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar"
                   >
                     <Link href="/dashboard/growth-admin">Open growth admin</Link>
                   </Button>
-                ) : (
-                  <p className="mt-5 text-[11px] text-white/35">
-                    Growth admin is only available to allowlisted admin accounts.
-                  </p>
-                )}
-              </div>
-            </GrowthCardShell>
+                </div>
+              </GrowthCardShell>
+            ) : null}
           </div>
         </GrowthCardShell>
 

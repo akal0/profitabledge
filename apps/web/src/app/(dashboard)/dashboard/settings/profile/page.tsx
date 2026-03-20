@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { trpcOptions, queryClient } from "@/utils/trpc";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -20,7 +21,10 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { useUploadThing } from "@/utils/uploadthing";
-import { CoverImageCropDialog } from "@/components/cover-image-crop-dialog";
+import {
+  CoverImageCropDialog,
+  type CoverFrameDimensions,
+} from "@/components/cover-image-crop-dialog";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -72,7 +76,8 @@ export default function EditProfilePage() {
   // Crop dialog state
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [pendingBannerSrc, setPendingBannerSrc] = useState("");
-  const [coverAspectRatio, setCoverAspectRatio] = useState(5);
+  const [bannerDimensions, setBannerDimensions] =
+    useState<CoverFrameDimensions | null>(null);
 
   useEffect(() => {
     if (!user || formInitialized.current) return;
@@ -133,7 +138,9 @@ export default function EditProfilePage() {
     if (bannerContainerRef.current) {
       const { width, height } =
         bannerContainerRef.current.getBoundingClientRect();
-      if (width > 0 && height > 0) setCoverAspectRatio(width / height);
+      if (width > 0 && height > 0) {
+        setBannerDimensions({ width, height });
+      }
     }
     setPendingBannerSrc(src);
     setCropDialogOpen(true);
@@ -247,16 +254,7 @@ export default function EditProfilePage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col w-full">
-        <div className="h-52 bg-sidebar-accent animate-pulse" />
-        <div className="px-6 py-8 space-y-6">
-          <div className="h-6 w-48 bg-sidebar-accent animate-pulse rounded" />
-          <div className="h-10 w-full bg-sidebar-accent animate-pulse rounded" />
-          <div className="h-10 w-full bg-sidebar-accent animate-pulse rounded" />
-        </div>
-      </div>
-    );
+    return <RouteLoadingFallback route="settingsProfile" className="min-h-full" />;
   }
 
   return (
@@ -598,13 +596,13 @@ export default function EditProfilePage() {
       </div>
 
       {pendingBannerSrc && (
-        <CoverImageCropDialog
-          open={cropDialogOpen}
-          imageSrc={pendingBannerSrc}
-          aspectRatio={coverAspectRatio}
-          onApply={handleCropApply}
-          onCancel={handleCropCancel}
-        />
+      <CoverImageCropDialog
+        open={cropDialogOpen}
+        imageSrc={pendingBannerSrc}
+        frameDimensions={bannerDimensions}
+        onApply={handleCropApply}
+        onCancel={handleCropCancel}
+      />
       )}
     </div>
   );

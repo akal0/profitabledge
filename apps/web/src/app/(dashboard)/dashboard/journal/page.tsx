@@ -7,6 +7,8 @@ import { JournalList } from "@/components/journal/journal-list";
 import { JournalEntryPage } from "@/components/journal/journal-entry";
 import { JournalPrompts } from "@/components/journal/journal-prompts";
 import { TemplateBrowser } from "@/components/journal/template-browser";
+import { JournalReviewReadyPanel } from "@/components/journal/journal-review-ready-panel";
+import { JournalWorkflowStrip } from "@/components/journal/journal-workflow-strip";
 import {
   Tabs,
   TabsContent,
@@ -21,20 +23,18 @@ import { useAccountStore } from "@/stores/account";
 import type { JournalBlock } from "@/components/journal/types";
 import { JournalCalendarTab } from "@/components/journal/journal-calendar-tab";
 import { JournalInsightsTab } from "@/components/journal/journal-insights-tab";
-import { JournalWidgetFrame } from "@/components/journal/journal-widget-shell";
+import { JournalSharesTab } from "@/components/journal/share/shares-tab";
 import { trpcOptions, trpc } from "@/utils/trpc";
-import {
-  journalActionButtonClassName,
-  journalActionButtonMutedClassName,
-} from "@/components/journal/action-button-styles";
+import { journalActionButtonClassName } from "@/components/journal/action-button-styles";
 import { toast } from "sonner";
-import { ArrowRight, FileText, Sparkles } from "lucide-react";
+import { FileText } from "lucide-react";
 
 const JOURNAL_TABS = [
   "entries",
   "review-ready",
   "insights",
   "calendar",
+  "shares",
 ] as const;
 type JournalTab = (typeof JOURNAL_TABS)[number];
 interface ReviewQueueItem {
@@ -145,9 +145,7 @@ function JournalPageContent() {
   const shouldHoldInsightsTab =
     requestedTab === "insights" && !hasResolvedBillingState;
   const activeTab: JournalTab =
-    requestedTab === "insights" &&
-    hasResolvedBillingState &&
-    !canAccessInsights
+    requestedTab === "insights" && hasResolvedBillingState && !canAccessInsights
       ? "entries"
       : requestedTab;
   const { data: reviewQueue } = useQuery({
@@ -163,7 +161,8 @@ function JournalPageContent() {
     trpcOptions.journal.getPrompts.queryOptions()
   );
   const reviewItems = React.useMemo(
-    () => (reviewQueue as { items?: ReviewQueueItem[] } | undefined)?.items ?? [],
+    () =>
+      (reviewQueue as { items?: ReviewQueueItem[] } | undefined)?.items ?? [],
     [reviewQueue]
   );
   const pendingPrompts = React.useMemo(
@@ -220,7 +219,11 @@ function JournalPageContent() {
   }, [entryIdFromQuery]);
 
   React.useEffect(() => {
-    if (!hasResolvedBillingState || requestedTab !== "insights" || canAccessInsights) {
+    if (
+      !hasResolvedBillingState ||
+      requestedTab !== "insights" ||
+      canAccessInsights
+    ) {
       return;
     }
 
@@ -401,86 +404,25 @@ function JournalPageContent() {
             >
               Calendar
             </TabsTriggerUnderlined>
+            <TabsTriggerUnderlined
+              value="shares"
+              className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+            >
+              Shares
+            </TabsTriggerUnderlined>
           </TabsListUnderlined>
         </div>
         <Separator />
       </div>
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="shrink-0 border-b border-white/5 px-4 py-4 sm:px-6 lg:px-8">
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,0.95fr)_auto]">
-            <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3">
-              <div className="flex items-center gap-2 text-white/70">
-                <Sparkles className="size-4 text-teal-300" />
-                <span className="text-xs uppercase tracking-[0.18em]">
-                  Prompt inbox
-                </span>
-              </div>
-              <div className="mt-3 flex items-end gap-2">
-                <span className="text-2xl font-semibold text-white">
-                  {pendingPrompts.length}
-                </span>
-                <span className="pb-1 text-xs text-white/35">pending</span>
-              </div>
-              <p className="mt-2 text-xs text-white/45">
-                Reflection prompts generated from trade closes and journaling
-                patterns.
-              </p>
-            </div>
-
-            <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3">
-              <div className="flex items-center gap-2 text-white/70">
-                <FileText className="size-4 text-violet-300" />
-                <span className="text-xs uppercase tracking-[0.18em]">
-                  Review queue
-                </span>
-              </div>
-              <div className="mt-3 flex items-end gap-2">
-                <span className="text-2xl font-semibold text-white">
-                  {reviewItems.length}
-                </span>
-                <span className="pb-1 text-xs text-white/35">ready</span>
-              </div>
-              <p className="mt-2 text-xs text-white/45">
-                Auto-generated trade reviews waiting for your manual reflection.
-              </p>
-            </div>
-
-            <div className="rounded-sm border border-white/5 bg-white/[0.03] p-3 xl:min-w-[260px]">
-              <p className="text-xs uppercase tracking-[0.18em] text-white/35">
-                Quick actions
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <JournalPrompts
-                  triggerVariant="button"
-                  buttonLabel="Open inbox"
-                  onJournalFromPrompt={handleCreateFromPrompt}
-                />
-                {reviewItems.length > 0 ? (
-                  <Button
-                    size="sm"
-                    className={journalActionButtonMutedClassName}
-                    onClick={() =>
-                      setSelectedEntryId(reviewItems[0]?.id || null)
-                    }
-                  >
-                    Latest review
-                    <ArrowRight className="size-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    className={journalActionButtonMutedClassName}
-                    onClick={() => handleTabChange("review-ready")}
-                  >
-                    Review tab
-                    <ArrowRight className="size-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        {/*<JournalWorkflowStrip
+          pendingPromptCount={pendingPrompts.length}
+          reviewItems={reviewItems}
+          onCreateFromPrompt={handleCreateFromPrompt}
+          onOpenLatestReview={() => setSelectedEntryId(reviewItems[0]?.id || null)}
+          onOpenReviewTab={() => handleTabChange("review-ready")}
+        />*/}
 
         <TabsContent
           value="entries"
@@ -499,93 +441,11 @@ function JournalPageContent() {
           value="review-ready"
           className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
         >
-          <JournalWidgetFrame
-            className="min-h-full"
-            header={
-              <div className="p-3.5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-semibold text-white">
-                        Review ready
-                      </h2>
-                      <Badge className="bg-teal-500/15 text-teal-300 hover:bg-teal-500/15">
-                        {reviewItems.length}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-sm text-white/50">
-                      Auto-generated trade reviews waiting for your manual
-                      reflection.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      className={journalActionButtonClassName}
-                      onClick={handleCreateEntry}
-                    >
-                      New Entry
-                    </Button>
-                    {reviewItems.length > 0 ? (
-                      <Button
-                        size="sm"
-                        className={journalActionButtonMutedClassName}
-                        onClick={() =>
-                          setSelectedEntryId(reviewItems[0]?.id || null)
-                        }
-                      >
-                        Open Latest
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            }
-          >
-            {reviewItems.length > 0 ? (
-              <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
-                {reviewItems.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => setSelectedEntryId(entry.id)}
-                    className="rounded-sm border border-white/5 bg-white/[0.03] p-3 text-left transition-colors hover:bg-white/[0.05]"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs uppercase tracking-wide text-teal-300">
-                        Trade Review
-                      </span>
-                      <span className="text-[11px] text-white/35">
-                        {new Date(entry.updatedAt).toLocaleDateString("en-GB", {
-                          day: "numeric",
-                          month: "short",
-                        })}
-                      </span>
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-sm font-medium text-white">
-                      {entry.title}
-                    </p>
-                    <p className="mt-2 line-clamp-3 text-xs leading-5 text-white/45">
-                      {entry.preview ||
-                        "Open the review to inspect execution, context, and next-step corrections."}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="p-4">
-                <div className="rounded-sm border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
-                  <p className="text-sm font-medium text-white">
-                    No reviews waiting
-                  </p>
-                  <p className="mt-1 text-sm text-white/45">
-                    Auto-generated trade reviews will land here after qualifying
-                    trade-close events.
-                  </p>
-                </div>
-              </div>
-            )}
-          </JournalWidgetFrame>
+          <JournalReviewReadyPanel
+            reviewItems={reviewItems}
+            onCreateEntry={handleCreateEntry}
+            onSelectEntry={(id) => setSelectedEntryId(id)}
+          />
         </TabsContent>
 
         {canAccessInsights ? (
@@ -611,6 +471,13 @@ function JournalPageContent() {
             onSelectEntry={(id) => setSelectedEntryId(id)}
           />
         </TabsContent>
+
+        <TabsContent
+          value="shares"
+          className="mt-0 flex min-h-0 flex-1 overflow-hidden"
+        >
+          <JournalSharesTab accountId={accountId || undefined} />
+        </TabsContent>
       </main>
 
       {/* Template Browser Dialog */}
@@ -627,7 +494,12 @@ function JournalPageContent() {
 export default function JournalPage() {
   return (
     <React.Suspense
-      fallback={<RouteLoadingFallback route="journal" className="min-h-screen bg-background dark:bg-sidebar" />}
+      fallback={
+        <RouteLoadingFallback
+          route="journal"
+          className="min-h-screen bg-background dark:bg-sidebar"
+        />
+      }
     >
       <JournalPageContent />
     </React.Suspense>

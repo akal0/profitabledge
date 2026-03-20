@@ -5,6 +5,7 @@ import confetti from "canvas-confetti";
 import { useRouter } from "next/navigation";
 
 import { countRangeDays } from "@/components/dashboard/chart-comparison-utils";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
   PropTrackerAlertsPanel,
   PropTrackerChartSection,
@@ -12,7 +13,6 @@ import {
   PropTrackerCurrentPhaseRulesPanel,
   PropTrackerFundedBanner,
   PropTrackerHeaderCard,
-  PropTrackerLoadingState,
   PropTrackerNotFoundState,
   PropTrackerProbabilityPanel,
   PropTrackerRuleWatchPanel,
@@ -257,7 +257,7 @@ export default function PropTrackerPage({
   };
 
   if (isLoading) {
-    return <PropTrackerLoadingState />;
+    return <RouteLoadingFallback route="propTracker" className="min-h-[calc(100vh-10rem)]" />;
   }
 
   if (!dashboard) {

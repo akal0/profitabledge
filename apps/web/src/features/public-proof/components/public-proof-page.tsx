@@ -11,12 +11,11 @@ import {
   BarChart3,
   ChevronRight,
   Clock3,
-  Copy,
   ShieldCheck,
+  Sparkles,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   GoalContentSeparator,
@@ -39,6 +38,9 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import {
+  getAffiliateBadgeClassName,
+  getAffiliateBannerOverlayClassName,
+  getAffiliateHighlightClassName,
   getConnectionBadgeClassName,
   getOriginBadgeClassName,
 } from "@/features/public-proof/lib/public-proof-badges";
@@ -63,6 +65,11 @@ import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type PublicProofPageData = RouterOutputs["proof"]["getPublicPage"];
+type PublicProofAffiliate = {
+  isAffiliate?: boolean;
+  badgeLabel?: string | null;
+  effectVariant?: string | null;
+};
 
 function getMetricToneClasses(
   tone?: "positive" | "warning" | "neutral" | "info"
@@ -290,11 +297,6 @@ export function PublicProofPage({
     return pages?.flatMap((page) => page.items) ?? [];
   }, [tradesQuery.data]);
 
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(window.location.href);
-    toast.success("Proof link copied.");
-  };
-
   if (pageQuery.isLoading) {
     return (
       <div className="min-h-screen w-full bg-sidebar px-4 py-20 text-white md:px-6 lg:px-8">
@@ -345,6 +347,10 @@ export function PublicProofPage({
   }
 
   const page = pageQuery.data as PublicProofPageData;
+  const affiliate = (
+    page as PublicProofPageData & { affiliate?: PublicProofAffiliate }
+  ).affiliate;
+  const affiliateBadgeLabel = affiliate?.badgeLabel?.trim() || "Affiliate";
   const trustStartedAt = formatProofDate(page.proof.auditCoverageStartsAt);
   const lastSyncedLabel = page.proof.lastSyncedAt
     ? formatTimestamp(page.proof.lastSyncedAt)
@@ -409,6 +415,17 @@ export function PublicProofPage({
     <div className="min-h-screen h-full w-full bg-sidebar text-white">
       {/* Full-bleed banner */}
       <div className="relative h-52 md:h-64 bg-gradient-to-r from-teal-900/40 to-indigo-900/40">
+        {affiliate?.isAffiliate ? (
+          <>
+            <div
+              className={cn(
+                "absolute inset-0 opacity-90",
+                getAffiliateBannerOverlayClassName(affiliate.effectVariant)
+              )}
+            />
+            <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(251,191,36,0.09),transparent_34%,rgba(255,255,255,0.02)_54%,transparent_72%)]" />
+          </>
+        ) : null}
         {page.trader.profileBannerUrl && (
           <img
             src={page.trader.profileBannerUrl}
@@ -468,6 +485,16 @@ export function PublicProofPage({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {affiliate?.isAffiliate ? (
+                <Badge
+                  className={cn(
+                    "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
+                    getAffiliateBadgeClassName(affiliate.effectVariant)
+                  )}
+                >
+                  {affiliateBadgeLabel}
+                </Badge>
+              ) : null}
               <Badge
                 className={cn(
                   "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
@@ -499,6 +526,36 @@ export function PublicProofPage({
                 {page.trust.sourceBadges.length === 1 ? "" : "s"}
               </span>
             </div>
+            {affiliate?.isAffiliate ? (
+              <div
+                className={cn(
+                  "relative overflow-hidden rounded-sm border px-4 py-3",
+                  getAffiliateHighlightClassName(affiliate.effectVariant)
+                )}
+              >
+                <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.08),transparent_45%,rgba(255,255,255,0.02)_70%)]" />
+                <div className="relative flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="size-3.5" />
+                      <p className="text-xs font-medium uppercase tracking-[0.18em]">
+                        {affiliateBadgeLabel}
+                      </p>
+                    </div>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-current/80">
+                      This proof page belongs to an approved affiliate. Referral
+                      traffic, offers, and proof presentation are tied to the
+                      affiliate profile behind this account.
+                    </p>
+                  </div>
+                  <div className="rounded-sm border border-white/10 bg-black/20 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-current/80">
+                    {affiliate.effectVariant
+                      ? affiliate.effectVariant.replace(/_/g, " ")
+                      : "affiliate effect"}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">

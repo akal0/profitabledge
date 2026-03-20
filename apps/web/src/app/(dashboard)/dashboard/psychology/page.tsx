@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Skeleton } from "@/components/ui/skeleton";
 import { APP_RECHARTS_TOOLTIP_CONTENT_STYLE } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -192,21 +193,7 @@ export default function PsychologyPage() {
   }
 
   if (loadingProfile && loadingCorr && loadingOptimal && loadingViolations) {
-    return (
-      <div className="p-6 space-y-4">
-        <Skeleton className="h-8 w-72" />
-        <div className="grid gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Skeleton key={index} className="h-28 w-full" />
-          ))}
-        </div>
-        <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-          <Skeleton className="h-72 w-full" />
-          <Skeleton className="h-72 w-full" />
-        </div>
-        <Skeleton className="h-96 w-full" />
-      </div>
-    );
+    return <RouteLoadingFallback route="psychology" className="min-h-full" />;
   }
 
   const mentalScore = psychologyProfile?.mentalScore ?? null;

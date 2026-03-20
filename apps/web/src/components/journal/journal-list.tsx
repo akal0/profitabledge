@@ -251,6 +251,7 @@ export function JournalList({
         onSelectEntry={onSelectEntry}
         accountId={accountId}
       />
+
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 
 export const metadata: Metadata = {
   title: { absolute: "profitabledge - Continue" },
@@ -11,5 +12,11 @@ export default function ContinueLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <Suspense>{children}</Suspense>;
+  return (
+    <Suspense
+      fallback={<RouteLoadingFallback route="continue" className="min-h-screen" />}
+    >
+      {children}
+    </Suspense>
+  );
 }

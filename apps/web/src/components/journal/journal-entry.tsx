@@ -1,9 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Separator } from "../ui/separator";
+import {
+  CoverImageCropDialog,
+  type CoverFrameDimensions,
+} from "@/components/cover-image-crop-dialog";
 import type { JournalEditorHandle } from "@/components/journal/editor";
 import { JournalEntryDialogs } from "@/components/journal/entry/journal-entry-dialogs";
 import { JournalEntryHeader } from "@/components/journal/entry/journal-entry-header";
@@ -11,9 +15,116 @@ import { JournalEntryMain } from "@/components/journal/entry/journal-entry-main"
 import type { JournalEntryPageProps } from "@/components/journal/entry/entry-types";
 import { useJournalEntryPageState } from "@/components/journal/entry/use-journal-entry-page-state";
 
+function parseCoverPosition(objectPosition: string) {
+  const y = objectPosition.trim().split(/\s+/)[1] ?? "50%";
+  const nextPosition = Number.parseFloat(y.replace("%", ""));
+
+  if (!Number.isFinite(nextPosition)) {
+    return 50;
+  }
+
+  return Math.max(0, Math.min(100, Math.round(nextPosition)));
+}
+
 export function JournalEntryPage(props: JournalEntryPageProps) {
   const state = useJournalEntryPageState(props);
   const editorRef = useRef<JournalEditorHandle | null>(null);
+  const pageContainerRef = useRef<HTMLDivElement>(null);
+  const coverContainerRef = useRef<HTMLDivElement>(null);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [pendingCoverSrc, setPendingCoverSrc] = useState("");
+  const [coverFrameDimensions, setCoverFrameDimensions] =
+    useState<CoverFrameDimensions | null>(null);
+
+  const measureCoverFrame = useCallback(() => {
+    const coverRect = coverContainerRef.current?.getBoundingClientRect();
+    if (coverRect && coverRect.width > 0 && coverRect.height > 0) {
+      const nextDimensions = {
+        width: coverRect.width,
+        height: coverRect.height,
+      };
+      setCoverFrameDimensions(nextDimensions);
+      return nextDimensions;
+    }
+
+    const pageRect = pageContainerRef.current?.getBoundingClientRect();
+    if (pageRect && pageRect.width > 0) {
+      const nextDimensions = {
+        width: pageRect.width,
+        height: window.matchMedia("(min-width: 768px)").matches ? 256 : 192,
+      };
+      setCoverFrameDimensions(nextDimensions);
+      return nextDimensions;
+    }
+
+    return null;
+  }, []);
+
+  const openCoverCropDialog = useCallback((imageSrc: string) => {
+    measureCoverFrame();
+    setPendingCoverSrc(imageSrc);
+    setCropDialogOpen(true);
+  }, [measureCoverFrame]);
+
+  const handleCoverImageChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+
+      if (!file) {
+        return;
+      }
+
+      if (file.size > 8 * 1024 * 1024) {
+        toast.error("Image must be under 8MB");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const result = readerEvent.target?.result;
+        if (typeof result !== "string" || !result) {
+          toast.error("Failed to read cover image");
+          return;
+        }
+
+        openCoverCropDialog(result);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read cover image");
+      };
+      reader.readAsDataURL(file);
+    },
+    [openCoverCropDialog]
+  );
+
+  const handleEditCover = useCallback(() => {
+    if (!state.coverImageUrl) {
+      return;
+    }
+
+    openCoverCropDialog(state.coverImageUrl);
+  }, [openCoverCropDialog, state.coverImageUrl]);
+
+  const handleCropApply = useCallback(
+    (objectPosition: string) => {
+      if (!pendingCoverSrc) {
+        return;
+      }
+
+      state.setCoverImageUrl(pendingCoverSrc);
+      state.setCoverPosition(parseCoverPosition(objectPosition));
+      state.markChanged();
+      setPendingCoverSrc("");
+      setCropDialogOpen(false);
+    },
+    [pendingCoverSrc, state]
+  );
+
+  const handleCropCancel = useCallback(() => {
+    setPendingCoverSrc("");
+    setCropDialogOpen(false);
+  }, []);
 
   if (state.isLoadingEntry) {
     return (
@@ -24,7 +135,7 @@ export function JournalEntryPage(props: JournalEntryPageProps) {
   }
 
   return (
-    <div className="flex min-h-0 w-full flex-1 flex-col">
+    <div ref={pageContainerRef} className="flex min-h-0 w-full flex-1 flex-col">
       <JournalEntryHeader
         title={state.title}
         hasChanges={state.hasChanges}
@@ -43,6 +154,7 @@ export function JournalEntryPage(props: JournalEntryPageProps) {
         existingEntryLoaded={state.existingEntryLoaded}
         coverImageUrl={state.coverImageUrl}
         coverPosition={state.coverPosition}
+        coverContainerRef={coverContainerRef}
         title={state.title}
         emoji={state.emoji}
         tradePhase={state.tradePhase}
@@ -66,8 +178,8 @@ export function JournalEntryPage(props: JournalEntryPageProps) {
         actualPips={state.actualPips}
         postTradeAnalysis={state.postTradeAnalysis}
         lessonsLearned={state.lessonsLearned}
-        onCoverPositionChange={state.handleCoverPositionChange}
-        onCoverImageChange={state.handleCoverImageChange}
+        onCoverImageChange={handleCoverImageChange}
+        onEditCover={handleEditCover}
         onOpenEmojiPicker={() => state.setShowEmojiPicker(true)}
         onRemoveCover={() => {
           state.setCoverImageUrl(null);
@@ -143,6 +255,16 @@ export function JournalEntryPage(props: JournalEntryPageProps) {
         onApplyAICapture={state.applyAICapture}
         editorRef={editorRef}
       />
+
+      {pendingCoverSrc ? (
+        <CoverImageCropDialog
+          open={cropDialogOpen}
+          imageSrc={pendingCoverSrc}
+          frameDimensions={coverFrameDimensions}
+          onApply={handleCropApply}
+          onCancel={handleCropCancel}
+        />
+      ) : null}
 
       <JournalEntryDialogs
         showEmojiPicker={state.showEmojiPicker}

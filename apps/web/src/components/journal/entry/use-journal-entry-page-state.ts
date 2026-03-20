@@ -547,35 +547,6 @@ export function useJournalEntryPageState({
     sanitizeBlocks,
   ]);
 
-  const handleCoverImageChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (readerEvent) => {
-        const dataUrl = readerEvent.target?.result as string;
-        if (!dataUrl) return;
-        setCoverImageUrl(dataUrl);
-        setHasChanges(true);
-      };
-      reader.readAsDataURL(file);
-    },
-    []
-  );
-
-  const handleCoverPositionChange = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const position = Math.round(
-        ((event.clientY - rect.top) / rect.height) * 100
-      );
-      setCoverPosition(Math.max(0, Math.min(100, position)));
-      setHasChanges(true);
-    },
-    []
-  );
-
   const handleAddTag = useCallback(() => {
     const trimmed = newTag.trim();
     if (trimmed && !tags.includes(trimmed)) {
@@ -655,6 +626,50 @@ export function useJournalEntryPageState({
         }));
       }
 
+      if (capture.plannedEntryPrice !== undefined) {
+        setPlannedEntryPrice(capture.plannedEntryPrice || "");
+      }
+
+      if (capture.plannedExitPrice !== undefined) {
+        setPlannedExitPrice(capture.plannedExitPrice || "");
+      }
+
+      if (capture.plannedStopLoss !== undefined) {
+        setPlannedStopLoss(capture.plannedStopLoss || "");
+      }
+
+      if (capture.plannedTakeProfit !== undefined) {
+        setPlannedTakeProfit(capture.plannedTakeProfit || "");
+      }
+
+      if (capture.plannedRiskReward !== undefined) {
+        setPlannedRiskReward(capture.plannedRiskReward || "");
+      }
+
+      if (capture.plannedNotes !== undefined) {
+        setPlannedNotes(capture.plannedNotes || "");
+      }
+
+      if (capture.actualOutcome !== undefined) {
+        setActualOutcome(capture.actualOutcome);
+      }
+
+      if (capture.actualPnl !== undefined) {
+        setActualPnl(capture.actualPnl || "");
+      }
+
+      if (capture.actualPips !== undefined) {
+        setActualPips(capture.actualPips || "");
+      }
+
+      if (capture.postTradeAnalysis !== undefined) {
+        setPostTradeAnalysis(capture.postTradeAnalysis || "");
+      }
+
+      if (capture.lessonsLearned !== undefined) {
+        setLessonsLearned(capture.lessonsLearned || "");
+      }
+
       setHasChanges(true);
     },
     [sanitizeBlocks]
@@ -668,6 +683,7 @@ export function useJournalEntryPageState({
     coverImageUrl,
     setCoverImageUrl,
     coverPosition,
+    setCoverPosition,
     content,
     tags,
     entryType,
@@ -721,8 +737,6 @@ export function useJournalEntryPageState({
     existingEntryLoaded: !entryId || isEntryHydrated,
     handleContentChange,
     handleSave,
-    handleCoverImageChange,
-    handleCoverPositionChange,
     handleAddTag,
     handleRemoveTag,
     handleTagKeyDown,

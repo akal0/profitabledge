@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   CommandDialog,
   CommandEmpty,
@@ -31,12 +32,15 @@ import {
   LifeBuoy,
   Loader2,
   ArrowRight,
+  Gift,
+  TrendingUp,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 import Cmd from "@/public/graphics/cmd.svg";
-import { trpc } from "@/utils/trpc";
+import { trpc, trpcOptions } from "@/utils/trpc";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
 import { useAccountStore } from "@/stores/account";
 
@@ -74,7 +78,7 @@ type ResultItem = {
   iconBg: string;
 };
 
-const allResults: ResultItem[] = [
+const baseResults: ResultItem[] = [
   // Pages
   {
     icon: Home,
@@ -86,6 +90,16 @@ const allResults: ResultItem[] = [
     category: "pages",
     iconColor: "text-blue-400",
     iconBg: "bg-blue-500/10",
+  },
+  {
+    icon: BarChart3,
+    label: "Reports",
+    subtitle: "Pages  ·  Scorecards and performance breakdowns",
+    href: "/dashboard/reports",
+    key: "",
+    category: "pages",
+    iconColor: "text-cyan-400",
+    iconBg: "bg-cyan-500/10",
   },
   {
     icon: LineChart,
@@ -100,7 +114,7 @@ const allResults: ResultItem[] = [
   },
   {
     icon: Wallet,
-    label: "Accounts",
+    label: "Trading accounts",
     subtitle: "Pages  ·  Manage trading accounts",
     shortcut: "⌘A",
     href: "/dashboard/accounts",
@@ -119,6 +133,16 @@ const allResults: ResultItem[] = [
     category: "pages",
     iconColor: "text-amber-400",
     iconBg: "bg-amber-500/10",
+  },
+  {
+    icon: Brain,
+    label: "Psychology",
+    subtitle: "Pages  ·  Review behavior and mental patterns",
+    href: "/dashboard/psychology",
+    key: "",
+    category: "pages",
+    iconColor: "text-fuchsia-400",
+    iconBg: "bg-fuchsia-500/10",
   },
   ...(publicAlphaFlags.backtest
     ? [
@@ -144,6 +168,26 @@ const allResults: ResultItem[] = [
     category: "pages",
     iconColor: "text-yellow-400",
     iconBg: "bg-yellow-500/10",
+  },
+  {
+    icon: TrendingUp,
+    label: "Growth",
+    subtitle: "Pages  ·  Overview of referrals and affiliate access",
+    href: "/dashboard/growth",
+    key: "",
+    category: "pages",
+    iconColor: "text-teal-400",
+    iconBg: "bg-teal-500/10",
+  },
+  {
+    icon: Gift,
+    label: "Referrals",
+    subtitle: "Pages  ·  Referral rewards and invite tracking",
+    href: "/dashboard/referrals",
+    key: "",
+    category: "pages",
+    iconColor: "text-amber-400",
+    iconBg: "bg-amber-500/10",
   },
   // Tools
   {
@@ -305,6 +349,14 @@ export function CommandPalette({ className }: CommandPaletteProps) {
   } | null>(null);
   const router = useRouter();
   const { selectedAccountId } = useAccountStore();
+  const { data: billingState } = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const canViewAffiliateDashboard = Boolean(
+    billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
+  );
 
   const quickQuery = (trpc as any).ai.quickQuery.useMutation({
     onSuccess: (data: any) => {
@@ -318,6 +370,26 @@ export function CommandPalette({ className }: CommandPaletteProps) {
   });
 
   const showAiOption = looksLikeQuestion(searchValue) && !aiAnswer;
+  const allResults = React.useMemo<ResultItem[]>(
+    () => [
+      ...baseResults,
+      ...(canViewAffiliateDashboard
+        ? [
+            {
+              icon: Users,
+              label: "Affiliate",
+              subtitle: "Pages  ·  Commission and invite performance",
+              href: "/dashboard/affiliate",
+              key: "",
+              category: "pages" as const,
+              iconColor: "text-emerald-400",
+              iconBg: "bg-emerald-500/10",
+            },
+          ]
+        : []),
+    ],
+    [canViewAffiliateDashboard]
+  );
   const hasExactMatch = allResults.some(
     (r) => r.label.toLowerCase() === searchValue.toLowerCase().trim()
   );

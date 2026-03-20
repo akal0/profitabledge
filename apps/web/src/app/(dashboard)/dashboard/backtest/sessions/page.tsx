@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { cn } from "@/lib/utils";
-import { Plus, Loader2, ListOrdered, Trash2 } from "lucide-react";
+import { Plus, ListOrdered, Trash2 } from "lucide-react";
 import { trpcClient } from "@/utils/trpc";
 import { formatDistanceToNow } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -78,9 +79,7 @@ export default function BacktestSessionsPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-        </div>
+        <RouteLoadingFallback route="backtestSessions" className="min-h-[320px]" />
       ) : sessions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <ListOrdered className="size-12 text-muted-foreground/50" />

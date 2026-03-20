@@ -67,6 +67,8 @@ const journalBlockPropsSchema = z.object({
   videoCaption: z.string().optional(),
   videoAutoplay: z.boolean().optional(),
   videoMuted: z.boolean().optional(),
+  embedUrl: z.string().optional(),
+  embedType: z.enum(['youtube', 'twitter', 'generic']).optional(),
   calloutEmoji: z.string().optional(),
   calloutColor: z.string().optional(),
   calloutType: z.enum(['info', 'warning', 'success', 'error', 'note']).optional(),

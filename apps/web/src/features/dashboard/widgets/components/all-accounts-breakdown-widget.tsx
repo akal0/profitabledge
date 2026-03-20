@@ -37,14 +37,18 @@ export function AllAccountsBreakdownWidget({
   currencyCode,
 }: WidgetCardProps) {
   const [page, setPage] = useState(0);
-  const setSelectedAccountId = useAccountStore((state) => state.setSelectedAccountId);
+  const setSelectedAccountId = useAccountStore(
+    (state) => state.setSelectedAccountId
+  );
   const beginAccountTransition = useAccountTransitionStore(
     (state) => state.beginAccountTransition
   );
   const dashboardTradeFilters = useDashboardTradeFilters();
   const isAllAccounts = accountId === ALL_ACCOUNTS_ID;
   const { data: rawData, isLoading } = useQuery({
-    ...trpcOptions.accounts.aggregatedStats.queryOptions(),
+    ...trpcOptions.accounts.aggregatedStats.queryOptions({
+      currencyCode,
+    }),
     enabled: isAllAccounts,
     staleTime: 15_000,
   });
@@ -54,8 +58,8 @@ export function AllAccountsBreakdownWidget({
       return dashboardTradeFilters.accountBreakdown as AccountBreakdownRow[];
     }
 
-    return ((rawData as { accounts?: AccountBreakdownRow[] } | undefined)?.accounts ??
-      []) as AccountBreakdownRow[];
+    return ((rawData as { accounts?: AccountBreakdownRow[] } | undefined)
+      ?.accounts ?? []) as AccountBreakdownRow[];
   }, [
     dashboardTradeFilters?.accountBreakdown,
     dashboardTradeFilters?.hasActiveFilters,
@@ -63,7 +67,10 @@ export function AllAccountsBreakdownWidget({
   ]);
 
   const rankedAccounts = useMemo(
-    () => [...accountRows].sort((left, right) => right.totalProfit - left.totalProfit),
+    () =>
+      [...accountRows].sort(
+        (left, right) => right.totalProfit - left.totalProfit
+      ),
     [accountRows]
   );
 
@@ -73,7 +80,10 @@ export function AllAccountsBreakdownWidget({
     currentPage * PAGE_SIZE,
     currentPage * PAGE_SIZE + PAGE_SIZE
   );
-  const pageSlots = Array.from({ length: PAGE_SIZE }, (_, index) => pageItems[index] ?? null);
+  const pageSlots = Array.from(
+    { length: PAGE_SIZE },
+    (_, index) => pageItems[index] ?? null
+  );
 
   if (!isAllAccounts) {
     return null;
@@ -89,8 +99,10 @@ export function AllAccountsBreakdownWidget({
       headerRight={
         !isEditing ? (
           <span className="text-[10px] text-white/35">
-            {dashboardTradeFilters?.hasActiveFilters ? "Filtered" : "All accounts"} ·{" "}
-            {rankedAccounts.length}
+            {dashboardTradeFilters?.hasActiveFilters
+              ? "Filtered"
+              : "All accounts"}{" "}
+            · {rankedAccounts.length}
           </span>
         ) : null
       }
@@ -147,7 +159,8 @@ export function AllAccountsBreakdownWidget({
                           ) : null}
                         </div>
                         <p className="mt-1 text-[11px] text-white/40">
-                          {account.totalTrades} trades · {account.winRate.toFixed(1)}% WR
+                          {account.totalTrades} trades ·{" "}
+                          {account.winRate.toFixed(1)}% WR
                         </p>
                       </div>
 
@@ -165,18 +178,22 @@ export function AllAccountsBreakdownWidget({
                         <p
                           className={cn(
                             "text-xs font-semibold",
-                            account.totalProfit >= 0 ? "text-teal-300" : "text-rose-300"
+                            account.totalProfit >= 0
+                              ? "text-teal-300"
+                              : "text-rose-300"
                           )}
                         >
-                          {formatSignedCurrencyValue(account.totalProfit, currencyCode, {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 0,
-                            showPositiveSign: true,
-                          })}
+                          {formatSignedCurrencyValue(
+                            account.totalProfit,
+                            currencyCode,
+                            {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0,
+                              showPositiveSign: true,
+                            }
+                          )}
                         </p>
-                        <p className="mt-1 text-[11px] text-white/35">
-                          P&L
-                        </p>
+                        <p className="mt-1 text-[11px] text-white/35">P&L</p>
                       </div>
 
                       <ArrowRight className="size-3.5 shrink-0 text-white/20" />
@@ -200,7 +217,9 @@ export function AllAccountsBreakdownWidget({
                     size="icon"
                     variant="ghost"
                     className="h-7 w-7 rounded-sm text-white/45 hover:bg-white/[0.05] hover:text-white"
-                    onClick={() => setPage((previous) => Math.max(previous - 1, 0))}
+                    onClick={() =>
+                      setPage((previous) => Math.max(previous - 1, 0))
+                    }
                     disabled={currentPage === 0}
                   >
                     <ChevronLeft className="size-3.5" />
@@ -211,7 +230,9 @@ export function AllAccountsBreakdownWidget({
                     variant="ghost"
                     className="h-7 w-7 rounded-sm text-white/45 hover:bg-white/[0.05] hover:text-white"
                     onClick={() =>
-                      setPage((previous) => Math.min(previous + 1, totalPages - 1))
+                      setPage((previous) =>
+                        Math.min(previous + 1, totalPages - 1)
+                      )
                     }
                     disabled={currentPage >= totalPages - 1}
                   >

@@ -38,6 +38,10 @@ export function blocksToHtml(blocks: JournalBlock[]): string {
           return `<table class="journal-table"><tbody>${block.content}</tbody></table>`;
         case "image":
           return `<figure data-journal-image><img src="${block.props?.imageUrl || ""}" alt="${block.props?.imageAlt || ""}" /></figure>`;
+        case "video":
+          return `<figure data-journal-video data-src="${block.props?.videoUrl || ""}" data-thumbnail="${block.props?.videoThumbnail || ""}" data-caption="${block.props?.videoCaption || ""}" data-duration="${block.props?.videoDuration ?? ""}" data-autoplay="${block.props?.videoAutoplay ? "true" : "false"}" data-muted="${block.props?.videoMuted !== false ? "true" : "false"}"></figure>`;
+        case "embed":
+          return `<div data-embed-node data-embed-url="${block.props?.embedUrl || ""}" data-embed-type="${block.props?.embedType || "generic"}"></div>`;
         case "chart":
           return `<div data-chart-embed data-chart-type="${block.props?.chartType || ""}" data-account-id="${block.props?.accountId || ""}" data-height="${block.props?.chartConfig?.height || 400}" data-title="${block.props?.chartConfig?.title || ""}"></div>`;
         case "trade": {
@@ -193,6 +197,63 @@ export function htmlToBlocks(html: string): JournalBlock[] {
           props: {
             imageUrl: src,
             imageAlt: alt,
+          },
+        });
+      }
+      return;
+    }
+
+    if (element.hasAttribute("data-journal-video")) {
+      const videoUrl =
+        element.getAttribute("data-src") ||
+        element.querySelector("video")?.getAttribute("src") ||
+        "";
+      const videoThumbnail =
+        element.getAttribute("data-thumbnail") ||
+        element.querySelector("video")?.getAttribute("poster") ||
+        "";
+      const videoCaption = element.getAttribute("data-caption") || "";
+      const videoDuration = element.getAttribute("data-duration");
+      const videoAutoplay = element.getAttribute("data-autoplay") === "true";
+      const videoMuted = element.getAttribute("data-muted") !== "false";
+
+      if (videoUrl && (videoUrl.startsWith("data:") || videoUrl.startsWith("http"))) {
+        blocks.push({
+          id,
+          type: "video",
+          content: "",
+          props: {
+            videoUrl,
+            videoThumbnail: videoThumbnail || undefined,
+            videoCaption: videoCaption || undefined,
+            videoDuration: videoDuration ? parseFloat(videoDuration) : undefined,
+            videoAutoplay,
+            videoMuted,
+          },
+        });
+      }
+      return;
+    }
+
+    if (element.hasAttribute("data-embed-node")) {
+      const embedUrl =
+        element.getAttribute("data-embed-url") ||
+        element.getAttribute("data-url") ||
+        "";
+      const embedType = element.getAttribute("data-embed-type") as
+        | "youtube"
+        | "twitter"
+        | "generic"
+        | null;
+
+      if (embedUrl) {
+        blocks.push({
+          id,
+          type: "embed",
+          content: "",
+          props: {
+            embedUrl,
+            embedType: embedType || "generic",
           },
         });
       }

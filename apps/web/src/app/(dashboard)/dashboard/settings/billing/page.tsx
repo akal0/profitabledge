@@ -9,7 +9,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
+import { AffiliateOfferCodeInput } from "@/features/growth/components/affiliate-offer-code-input";
 import { InvoiceHistoryTable } from "@/features/settings/billing/components/invoice-history-table";
 import {
   formatLiveSyncSlots,
@@ -423,12 +425,13 @@ export default function BillingSettingsPage() {
       toast.error(e instanceof Error ? e.message : "Sync failed");
     },
   });
-  const createCheckout = useMutation(
-    trpcOptions.billing.createCheckout.mutationOptions()
-  );
+  const createCheckout = useMutation<any, unknown, any>({
+    mutationFn: (input) => (trpcClient.billing as any).createCheckout.mutate(input),
+  });
   const createCustomerPortalSession = useMutation(
     trpcOptions.billing.createCustomerPortalSession.mutationOptions()
   );
+  const [affiliateOfferCode, setAffiliateOfferCode] = useState("");
   const plans = billingConfigQuery.data?.plans ?? [];
   const activePlanKey =
     (billingStateQuery.data?.billing.activePlanKey as
@@ -450,6 +453,7 @@ export default function BillingSettingsPage() {
       const result = await createCheckout.mutateAsync({
         planKey,
         returnPath: "/dashboard/settings/billing",
+        affiliateOfferCode: affiliateOfferCode.trim() || undefined,
       });
       window.location.assign(result.url);
     } catch (e) {
@@ -469,19 +473,7 @@ export default function BillingSettingsPage() {
   };
 
   if (billingStateQuery.isLoading || billingConfigQuery.isLoading) {
-    return (
-      <div className="space-y-4 p-6 sm:p-8">
-        <div className="h-[160px] animate-pulse rounded-sm ring ring-white/5 bg-sidebar" />
-        <div className="grid gap-3 sm:grid-cols-3">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-56 animate-pulse rounded-sm ring ring-white/5 bg-sidebar"
-            />
-          ))}
-        </div>
-      </div>
-    );
+    return <RouteLoadingFallback route="settingsBilling" className="min-h-full" />;
   }
 
   return (
@@ -547,23 +539,31 @@ export default function BillingSettingsPage() {
 
       {/* ── Plans ── */}
       <div className="px-6 py-5 sm:px-8">
-        <div className="mb-4 flex items-center justify-between">
-          <SectionLabel>Plans</SectionLabel>
-          {access?.privateBetaRequired ? (
-            <Badge
-              className={cn(
-                "ring text-[10px]",
-                access.hasPrivateBetaAccess
-                  ? "ring-emerald-500/20 bg-emerald-900/30 text-emerald-300"
-                  : "ring-blue-500/20 bg-blue-900/30 text-blue-300"
-              )}
-            >
-              <Shield className="mr-1 size-2.5" />
-              {access.hasPrivateBetaAccess
-                ? "Beta access unlocked"
-                : "Beta access required"}
-            </Badge>
-          ) : null}
+        <div className="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <div className="flex items-center justify-between">
+            <SectionLabel>Plans</SectionLabel>
+            {access?.privateBetaRequired ? (
+              <Badge
+                className={cn(
+                  "ring text-[10px]",
+                  access.hasPrivateBetaAccess
+                    ? "ring-emerald-500/20 bg-emerald-900/30 text-emerald-300"
+                    : "ring-blue-500/20 bg-blue-900/30 text-blue-300"
+                )}
+              >
+                <Shield className="mr-1 size-2.5" />
+                {access.hasPrivateBetaAccess
+                  ? "Beta access unlocked"
+                  : "Beta access required"}
+              </Badge>
+            ) : null}
+          </div>
+
+          <AffiliateOfferCodeInput
+            value={affiliateOfferCode}
+            onChange={setAffiliateOfferCode}
+            helperText="This code is resolved before you leave for checkout so attribution and discounting stay in sync."
+          />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">

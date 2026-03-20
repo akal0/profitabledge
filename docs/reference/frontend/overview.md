@@ -67,7 +67,7 @@ Use these folders when adding frontend code:
 - `apps/web/src/features/dashboard-shell`
   - header, bootstrap, breadcrumbs, shell guards and helpers
 - `apps/web/src/features/navigation`
-  - sidebar sections and navigation components
+  - sidebar sections, growth-aware navigation config, and navigation components
 - `apps/web/src/features/growth`
   - referral or affiliate invite intent storage and other cross-route growth access helpers
 - `apps/web/src/features/trades`
@@ -103,6 +103,7 @@ Shared components live in:
 - keep alpha-gated surfaces behind both nav-level hiding and route-level lock screens so disabled features do not partially render
 - the accounts route should stay a composition layer; section chrome, account cards, and manual prop-flow assignment/builders belong in `apps/web/src/features/accounts/components`
 - the prop-tracker detail route should stay a composition layer; assembled panels live in `apps/web/src/features/accounts/prop-tracker/components`, shared display primitives live in `apps/web/src/features/accounts/prop-tracker/components/prop-tracker-detail-primitives.tsx`, and date/metric/status helpers live in `apps/web/src/features/accounts/prop-tracker/lib`
+- the all-accounts dashboard currency selector should normalize mixed-currency balances/P&L/contribution before they hit the widgets; do not sum raw USD/GBP/EUR account values together and only swap the display label
 - the replay route should stay a composition layer; market-state, remote-data, session-control, persistence, interaction, candle-loading, lifecycle/reset, and review hooks belong in `apps/web/src/features/backtest/replay/hooks`
 - the trades route should stay a composition layer; reference queries belong in `apps/web/src/features/trades/table/hooks/use-trade-table-reference-data.ts`, client-filter analytics belong in `apps/web/src/features/trades/table/hooks/use-trade-table-filtered-data.ts`, and saved-view / query / column-state helpers belong in `apps/web/src/features/trades/table/hooks` and `apps/web/src/features/trades/table/lib` rather than being reimplemented inside `apps/web/src/app/(dashboard)/dashboard/trades/...`
 - dashboard export/share affordances should stay on the shared `features/dashboard/widgets` PNG helper path, so single overview widgets, the full overview widget grid, chart cards, the full chart widget grid, and calendar surfaces can all reuse the same generously padded sidebar-canvas capture logic without route-local screenshot code in `apps/web/src/app/(dashboard)/dashboard/page.tsx`
@@ -225,8 +226,10 @@ At runtime, browser-side server origin resolution is intentionally stricter than
 - the server proxy strips upstream compression and transfer headers before returning proxied auth/tRPC responses, so browsers do not attempt to decode already-decoded bodies on split deployments
 - the assistant surface lives at `/assistant`, and the legacy `/ai` path is kept as a redirect so stale bundles or old navigation links do not 404 in production
 - unfinished community discovery surfaces are intentionally hidden from the sidebar, command palette, settings navigation, notification deep-links, and public-profile routing until feed, leaderboard, and public-profile paths are ready to ship
+- dashboard, referrals, and affiliate quick access should stay aligned between the shared sidebar config and the command palette, so Growth behaves like a first-class product area without reintroducing the admin-only route into everyday navigation
 - dashboard workspace warmup should only gate on the first account-critical data needed to paint the shell; slower queries like goals and asset-profitability breakdowns should warm in the background so `/dashboard` becomes interactive sooner
 - the trades table reference-data hook should treat symbols, tag catalogs, sample-gate metadata, and account bounds as warm cache rather than always-fresh data, and live open-trade refreshes should stay account-scoped instead of invalidating every trades query across the app
+- the Rules page should feel like a playbook workspace rather than a blank settings form, so starter checklist templates and replay/live rulebook setup should stay together in the same route
 
 ## When working on a new section
 

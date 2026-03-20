@@ -11,6 +11,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { ListFilterPlus, X } from "lucide-react";
+import { convertCurrencyAmount } from "@profitabledge/contracts/currency";
 
 import PickerComponent from "@/components/dashboard/calendar/picker";
 import { Button } from "@/components/ui/button";
@@ -26,9 +27,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import {
+  getAvailableDashboardCurrencyCodes,
+  resolveDashboardCurrencyCode,
+} from "@/features/dashboard/home/lib/dashboard-currency";
 import { formatTriggerLabel } from "@/features/trades/table-toolbar/lib/trades-toolbar-utils";
 import { tradesToolbarStyles } from "@/features/trades/table-toolbar/lib/trades-toolbar-styles";
 import { cn } from "@/lib/utils";
+import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import type { AccountStats } from "@/stores/stats";
 
@@ -152,7 +158,11 @@ function parseFilterDateValue(value: string) {
   const month = Number(monthRaw);
   const day = Number(dayRaw);
 
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
     return null;
   }
 
@@ -225,12 +235,18 @@ function deriveFilteredStats(trades: DashboardFilteredTrade[]) {
         ? rrValues.reduce((sum, value) => sum + value, 0) / rrValues.length
         : null,
     profitFactor:
-      grossLossAbs > 0 ? grossProfit / grossLossAbs : grossProfit > 0 ? null : 0,
+      grossLossAbs > 0
+        ? grossProfit / grossLossAbs
+        : grossProfit > 0
+        ? null
+        : 0,
     expectancy: totalTrades > 0 ? totalProfit / totalTrades : 0,
     winStreak,
     recentOutcomes: outcomeSequence.slice(0, 5),
     recentTrades: trades.slice(0, 5),
-  } satisfies Partial<AccountStats> & { recentTrades: DashboardFilteredTrade[] };
+  } satisfies Partial<AccountStats> & {
+    recentTrades: DashboardFilteredTrade[];
+  };
 }
 
 function calculateSessionLabel(trade: DashboardFilteredTrade) {
@@ -309,6 +325,41 @@ export function DashboardTradeFiltersProvider({
   });
 
   const { accounts } = useAccountCatalog({ enabled: Boolean(accountId) });
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
+  const availableCurrencyCodes = useMemo(
+    () => getAvailableDashboardCurrencyCodes(accounts),
+    [accounts]
+  );
+  const selectedAccountCurrency = useMemo(
+    () =>
+      accounts.find((account) => account.id === accountId)?.initialCurrency ??
+      null,
+    [accountId, accounts]
+  );
+  const currencyCode = useMemo(
+    () =>
+      resolveDashboardCurrencyCode({
+        isAllAccounts: isAllAccountsScope(accountId),
+        preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+        availableCurrencyCodes,
+        selectedAccountCurrency,
+      }),
+    [
+      accountId,
+      allAccountsPreferredCurrencyCode,
+      availableCurrencyCodes,
+      selectedAccountCurrency,
+    ]
+  );
+  const accountCurrencyById = useMemo(
+    () =>
+      new Map(
+        accounts.map((account) => [account.id, account.initialCurrency ?? null])
+      ),
+    [accounts]
+  );
 
   const symbols = useMemo(() => splitParam(symbolsParam), [symbolsParam]);
   const sessionTags = useMemo(
@@ -333,11 +384,13 @@ export function DashboardTradeFiltersProvider({
       customTags.length ||
       accountTags.length
   );
-  const shouldFetchTradeDataset = Boolean(accountId) &&
-    (fetchMode === "always" || hasActiveFilters);
+  const shouldFetchTradeDataset =
+    Boolean(accountId) && (fetchMode === "always" || hasActiveFilters);
 
   const symbolSuggestionsQuery = useQuery({
-    ...trpcOptions.trades.listSymbols.queryOptions({ accountId: accountId || "" }),
+    ...trpcOptions.trades.listSymbols.queryOptions({
+      accountId: accountId || "",
+    }),
     enabled: Boolean(accountId),
     staleTime: 30_000,
   });
@@ -427,16 +480,50 @@ export function DashboardTradeFiltersProvider({
     );
   }, [accountIdsBySelectedTag, shouldFetchTradeDataset, tradeQuery.data]);
 
+  const displayFilteredTrades = useMemo(() => {
+    if (!shouldFetchTradeDataset) {
+      return [] as DashboardFilteredTrade[];
+    }
+
+    if (!isAllAccountsScope(accountId) || !currencyCode) {
+      return filteredTrades;
+    }
+
+    return filteredTrades.map((trade) => {
+      if (trade.profit == null) {
+        return trade;
+      }
+
+      const convertedProfit = convertCurrencyAmount(
+        Number(trade.profit ?? 0),
+        accountCurrencyById.get(String(trade.accountId || "")),
+        currencyCode
+      );
+
+      if (convertedProfit === Number(trade.profit ?? 0)) {
+        return trade;
+      }
+
+      return {
+        ...trade,
+        profit: convertedProfit,
+      };
+    });
+  }, [
+    accountCurrencyById,
+    accountId,
+    currencyCode,
+    filteredTrades,
+    shouldFetchTradeDataset,
+  ]);
+
   const filteredStats = useMemo(() => {
     if (!shouldFetchTradeDataset) {
       return null;
     }
 
-    return deriveFilteredStats(filteredTrades);
-  }, [
-    filteredTrades,
-    shouldFetchTradeDataset,
-  ]);
+    return deriveFilteredStats(displayFilteredTrades);
+  }, [displayFilteredTrades, shouldFetchTradeDataset]);
 
   const accountBreakdown = useMemo(() => {
     if (!filteredStats) {
@@ -445,10 +532,16 @@ export function DashboardTradeFiltersProvider({
 
     const byAccount = new Map<
       string,
-      { name: string; isPropAccount?: boolean; trades: number; wins: number; totalProfit: number }
+      {
+        name: string;
+        isPropAccount?: boolean;
+        trades: number;
+        wins: number;
+        totalProfit: number;
+      }
     >();
 
-    for (const trade of filteredTrades) {
+    for (const trade of displayFilteredTrades) {
       const tradeAccountId = String(trade.accountId || "");
       if (!tradeAccountId) continue;
 
@@ -492,14 +585,14 @@ export function DashboardTradeFiltersProvider({
         contribution: (value.totalProfit / contributionDenominator) * 100,
       }))
       .sort((left, right) => right.totalProfit - left.totalProfit);
-  }, [accounts, filteredStats, filteredTrades]);
+  }, [accounts, displayFilteredTrades, filteredStats]);
 
   const value = useMemo<DashboardTradeFiltersContextValue>(
     () => ({
       accountId,
       hasActiveFilters,
       isLoading: shouldFetchTradeDataset && tradeQuery.isLoading,
-      filteredTrades,
+      filteredTrades: displayFilteredTrades,
       filteredStats,
       accountBreakdown,
       filters: {
@@ -513,12 +606,16 @@ export function DashboardTradeFiltersProvider({
       },
       suggestions: {
         symbols: (symbolSuggestionsQuery.data as string[] | undefined) ?? [],
-        sessionTags:
-          ((sessionTagSuggestionsQuery.data as Array<{ name: string }> | undefined) ??
-            []).map((tag) => tag.name),
-        modelTags:
-          ((modelTagSuggestionsQuery.data as Array<{ name: string }> | undefined) ??
-            []).map((tag) => tag.name),
+        sessionTags: (
+          (sessionTagSuggestionsQuery.data as
+            | Array<{ name: string }>
+            | undefined) ?? []
+        ).map((tag) => tag.name),
+        modelTags: (
+          (modelTagSuggestionsQuery.data as
+            | Array<{ name: string }>
+            | undefined) ?? []
+        ).map((tag) => tag.name),
         customTags:
           (customTagSuggestionsQuery.data as string[] | undefined) ?? [],
         accountTags:
@@ -552,7 +649,7 @@ export function DashboardTradeFiltersProvider({
       customTags,
       endDate,
       filteredStats,
-      filteredTrades,
+      displayFilteredTrades,
       hasActiveFilters,
       modelTagSuggestionsQuery.data,
       modelTags,
@@ -767,11 +864,13 @@ export function DashboardTradeFiltersBar({
     [filters.sessionTags, suggestions.sessionTags]
   );
   const availableModelTags = useMemo(
-    () => getSortedFilterValues([...suggestions.modelTags, ...filters.modelTags]),
+    () =>
+      getSortedFilterValues([...suggestions.modelTags, ...filters.modelTags]),
     [filters.modelTags, suggestions.modelTags]
   );
   const availableCustomTags = useMemo(
-    () => getSortedFilterValues([...suggestions.customTags, ...filters.customTags]),
+    () =>
+      getSortedFilterValues([...suggestions.customTags, ...filters.customTags]),
     [filters.customTags, suggestions.customTags]
   );
   const availableAccountTags = useMemo(
@@ -787,23 +886,33 @@ export function DashboardTradeFiltersBar({
       ? filters.startDate && filters.endDate
         ? `${filters.startDate} to ${filters.endDate}`
         : filters.startDate
-          ? `From ${filters.startDate}`
-          : `Until ${filters.endDate}`
+        ? `From ${filters.startDate}`
+        : `Until ${filters.endDate}`
       : null,
     filters.symbols.length > 0
-      ? `${filters.symbols.length} symbol${filters.symbols.length === 1 ? "" : "s"}`
+      ? `${filters.symbols.length} symbol${
+          filters.symbols.length === 1 ? "" : "s"
+        }`
       : null,
     filters.sessionTags.length > 0
-      ? `${filters.sessionTags.length} session tag${filters.sessionTags.length === 1 ? "" : "s"}`
+      ? `${filters.sessionTags.length} session tag${
+          filters.sessionTags.length === 1 ? "" : "s"
+        }`
       : null,
     filters.modelTags.length > 0
-      ? `${filters.modelTags.length} model tag${filters.modelTags.length === 1 ? "" : "s"}`
+      ? `${filters.modelTags.length} model tag${
+          filters.modelTags.length === 1 ? "" : "s"
+        }`
       : null,
     filters.customTags.length > 0
-      ? `${filters.customTags.length} trade tag${filters.customTags.length === 1 ? "" : "s"}`
+      ? `${filters.customTags.length} trade tag${
+          filters.customTags.length === 1 ? "" : "s"
+        }`
       : null,
     filters.accountTags.length > 0
-      ? `${filters.accountTags.length} account tag${filters.accountTags.length === 1 ? "" : "s"}`
+      ? `${filters.accountTags.length} account tag${
+          filters.accountTags.length === 1 ? "" : "s"
+        }`
       : null,
   ].filter((value): value is string => Boolean(value));
   const bounds =
@@ -844,7 +953,10 @@ export function DashboardTradeFiltersBar({
               end.setHours(0, 0, 0, 0);
               const start = new Date(end);
               start.setDate(end.getDate() - 6);
-              return { start: start < minDate ? new Date(minDate) : start, end };
+              return {
+                start: start < minDate ? new Date(minDate) : start,
+                end,
+              };
             },
           },
           {
@@ -854,7 +966,10 @@ export function DashboardTradeFiltersBar({
               end.setHours(0, 0, 0, 0);
               const start = new Date(end);
               start.setDate(end.getDate() - 29);
-              return { start: start < minDate ? new Date(minDate) : start, end };
+              return {
+                start: start < minDate ? new Date(minDate) : start,
+                end,
+              };
             },
           },
           {
@@ -991,10 +1106,7 @@ export function DashboardTradeFiltersBar({
         </div>
 
         <DashboardSelectionSubmenu
-          triggerLabel={formatTriggerLabel(
-            "Symbols",
-            filters.symbols.length
-          )}
+          triggerLabel={formatTriggerLabel("Symbols", filters.symbols.length)}
           label="Select symbols"
           items={availableSymbols}
           selectedValues={stagedSelections.symbols}
@@ -1199,12 +1311,14 @@ export function buildSessionPerformanceFromTrades(
     return null;
   }
 
-  const sessions: Record<string, { trades: number; profit: number; wins: number }> =
-    {
-      Asian: { trades: 0, profit: 0, wins: 0 },
-      London: { trades: 0, profit: 0, wins: 0 },
-      "New York": { trades: 0, profit: 0, wins: 0 },
-    };
+  const sessions: Record<
+    string,
+    { trades: number; profit: number; wins: number }
+  > = {
+    Asian: { trades: 0, profit: 0, wins: 0 },
+    London: { trades: 0, profit: 0, wins: 0 },
+    "New York": { trades: 0, profit: 0, wins: 0 },
+  };
 
   for (const trade of trades) {
     const session = calculateSessionLabel(trade);

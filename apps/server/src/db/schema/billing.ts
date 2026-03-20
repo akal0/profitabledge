@@ -394,6 +394,212 @@ export const affiliateGroupMember = pgTable(
   })
 );
 
+export const affiliateOffer = pgTable(
+  "affiliate_offer",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    affiliateProfileId: text("affiliate_profile_id")
+      .notNull()
+      .references(() => affiliateProfile.id, { onDelete: "cascade" }),
+    affiliateUserId: text("affiliate_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    code: varchar("code", { length: 64 }).notNull(),
+    label: text("label").notNull(),
+    description: text("description"),
+    polarDiscountId: varchar("polar_discount_id", { length: 120 }),
+    discountType: varchar("discount_type", { length: 24 })
+      .notNull()
+      .default("percentage"),
+    discountBasisPoints: integer("discount_basis_points").notNull().default(1000),
+    isDefault: boolean("is_default").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    metadata: jsonb("metadata"),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    codeUnique: uniqueIndex("affiliate_offer_code_idx").on(table.code),
+    profileIdx: index("affiliate_offer_profile_idx").on(
+      table.affiliateProfileId,
+      table.isActive,
+      table.createdAt
+    ),
+    affiliateDefaultIdx: index("affiliate_offer_affiliate_default_idx").on(
+      table.affiliateUserId,
+      table.isDefault
+    ),
+  })
+);
+
+export const affiliateTrackingLink = pgTable(
+  "affiliate_tracking_link",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    affiliateProfileId: text("affiliate_profile_id")
+      .notNull()
+      .references(() => affiliateProfile.id, { onDelete: "cascade" }),
+    affiliateUserId: text("affiliate_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    affiliateOfferId: text("affiliate_offer_id").references(() => affiliateOffer.id, {
+      onDelete: "set null",
+    }),
+    name: text("name").notNull(),
+    slug: varchar("slug", { length: 80 }).notNull(),
+    destinationPath: text("destination_path").notNull().default("/sign-up"),
+    affiliateGroupSlug: varchar("affiliate_group_slug", { length: 80 }),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    isDefault: boolean("is_default").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    affiliateSlugUnique: uniqueIndex("affiliate_tracking_link_affiliate_slug_idx").on(
+      table.affiliateProfileId,
+      table.slug
+    ),
+    affiliateDefaultIdx: index("affiliate_tracking_link_affiliate_default_idx").on(
+      table.affiliateUserId,
+      table.isDefault
+    ),
+    offerIdx: index("affiliate_tracking_link_offer_idx").on(table.affiliateOfferId),
+  })
+);
+
+export const affiliateTouchEvent = pgTable(
+  "affiliate_touch_event",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    visitorToken: varchar("visitor_token", { length: 120 }).notNull(),
+    touchType: varchar("touch_type", { length: 24 }).notNull(),
+    affiliateProfileId: text("affiliate_profile_id").references(
+      () => affiliateProfile.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    affiliateUserId: text("affiliate_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    referralProfileId: text("referral_profile_id").references(
+      () => referralProfile.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    affiliateOfferId: text("affiliate_offer_id").references(() => affiliateOffer.id, {
+      onDelete: "set null",
+    }),
+    affiliateTrackingLinkId: text("affiliate_tracking_link_id").references(
+      () => affiliateTrackingLink.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    affiliateCode: varchar("affiliate_code", { length: 64 }),
+    referralCode: varchar("referral_code", { length: 64 }),
+    affiliateGroupSlug: varchar("affiliate_group_slug", { length: 80 }),
+    sourcePath: text("source_path"),
+    referrerUrl: text("referrer_url"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    visitorIdx: index("affiliate_touch_event_visitor_idx").on(
+      table.visitorToken,
+      table.createdAt
+    ),
+    affiliateIdx: index("affiliate_touch_event_affiliate_idx").on(
+      table.affiliateUserId,
+      table.createdAt
+    ),
+    offerIdx: index("affiliate_touch_event_offer_idx").on(
+      table.affiliateOfferId,
+      table.createdAt
+    ),
+    linkIdx: index("affiliate_touch_event_link_idx").on(
+      table.affiliateTrackingLinkId,
+      table.createdAt
+    ),
+  })
+);
+
+export const affiliatePendingAttribution = pgTable(
+  "affiliate_pending_attribution",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    visitorToken: varchar("visitor_token", { length: 120 }).notNull(),
+    status: varchar("status", { length: 24 }).notNull().default("pending"),
+    touchType: varchar("touch_type", { length: 24 }).notNull(),
+    affiliateProfileId: text("affiliate_profile_id").references(
+      () => affiliateProfile.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    affiliateUserId: text("affiliate_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    referralProfileId: text("referral_profile_id").references(
+      () => referralProfile.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    affiliateOfferId: text("affiliate_offer_id").references(() => affiliateOffer.id, {
+      onDelete: "set null",
+    }),
+    affiliateTrackingLinkId: text("affiliate_tracking_link_id").references(
+      () => affiliateTrackingLink.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    affiliateCode: varchar("affiliate_code", { length: 64 }),
+    referralCode: varchar("referral_code", { length: 64 }),
+    affiliateGroupSlug: varchar("affiliate_group_slug", { length: 80 }),
+    firstTouchedAt: timestamp("first_touched_at").notNull().defaultNow(),
+    lastTouchedAt: timestamp("last_touched_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+    claimedUserId: text("claimed_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    claimedAt: timestamp("claimed_at"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    visitorUnique: uniqueIndex("affiliate_pending_attribution_visitor_idx").on(
+      table.visitorToken
+    ),
+    statusExpiryIdx: index("affiliate_pending_attribution_status_expiry_idx").on(
+      table.status,
+      table.expiresAt
+    ),
+    affiliateIdx: index("affiliate_pending_attribution_affiliate_idx").on(
+      table.affiliateUserId,
+      table.createdAt
+    ),
+  })
+);
+
 export const affiliateAttribution = pgTable(
   "affiliate_attribution",
   {
@@ -410,6 +616,15 @@ export const affiliateAttribution = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     affiliateCode: varchar("affiliate_code", { length: 64 }).notNull(),
+    affiliateOfferId: text("affiliate_offer_id").references(() => affiliateOffer.id, {
+      onDelete: "set null",
+    }),
+    affiliateTrackingLinkId: text("affiliate_tracking_link_id").references(
+      () => affiliateTrackingLink.id,
+      {
+        onDelete: "set null",
+      }
+    ),
     affiliateGroupId: text("affiliate_group_id").references(
       () => affiliateGroup.id,
       {
@@ -468,6 +683,100 @@ export const affiliatePaymentMethod = pgTable(
   })
 );
 
+export const affiliateProviderAccount = pgTable(
+  "affiliate_provider_account",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    affiliateUserId: text("affiliate_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    provider: varchar("provider", { length: 32 }).notNull().default("stripe_connect"),
+    providerAccountId: varchar("provider_account_id", { length: 120 }).notNull(),
+    country: varchar("country", { length: 8 }),
+    currency: varchar("currency", { length: 8 }),
+    email: text("email"),
+    onboardingStatus: varchar("onboarding_status", { length: 24 })
+      .notNull()
+      .default("pending"),
+    detailsSubmitted: boolean("details_submitted").notNull().default(false),
+    chargesEnabled: boolean("charges_enabled").notNull().default(false),
+    payoutsEnabled: boolean("payouts_enabled").notNull().default(false),
+    isActive: boolean("is_active").notNull().default(true),
+    disconnectedAt: timestamp("disconnected_at"),
+    lastSyncedAt: timestamp("last_synced_at"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    affiliateUnique: uniqueIndex("affiliate_provider_account_affiliate_idx").on(
+      table.affiliateUserId,
+      table.provider
+    ),
+    providerAccountUnique: uniqueIndex(
+      "affiliate_provider_account_provider_account_idx"
+    ).on(table.providerAccountId),
+  })
+);
+
+export const affiliateWithdrawalRequest = pgTable(
+  "affiliate_withdrawal_request",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    affiliateUserId: text("affiliate_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    destinationType: varchar("destination_type", { length: 32 }).notNull(),
+    providerAccountId: text("provider_account_id").references(
+      () => affiliateProviderAccount.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    paymentMethodId: text("payment_method_id").references(
+      () => affiliatePaymentMethod.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    amount: integer("amount").notNull().default(0),
+    currency: varchar("currency", { length: 10 }).notNull().default("USD"),
+    status: varchar("status", { length: 24 }).notNull().default("pending"),
+    externalReference: text("external_reference"),
+    providerTransferId: varchar("provider_transfer_id", { length: 120 }),
+    providerPayoutId: varchar("provider_payout_id", { length: 120 }),
+    notes: text("notes"),
+    requestedAt: timestamp("requested_at").notNull().defaultNow(),
+    approvedAt: timestamp("approved_at"),
+    rejectedAt: timestamp("rejected_at"),
+    cancelledAt: timestamp("cancelled_at"),
+    paidAt: timestamp("paid_at"),
+    reviewedByUserId: text("reviewed_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    affiliateRequestedIdx: index("affiliate_withdrawal_request_affiliate_idx").on(
+      table.affiliateUserId,
+      table.requestedAt
+    ),
+    statusIdx: index("affiliate_withdrawal_request_status_idx").on(
+      table.status,
+      table.requestedAt
+    ),
+    providerIdx: index("affiliate_withdrawal_request_provider_idx").on(
+      table.providerAccountId
+    ),
+  })
+);
+
 export const affiliatePayout = pgTable(
   "affiliate_payout",
   {
@@ -477,6 +786,21 @@ export const affiliatePayout = pgTable(
     affiliateUserId: text("affiliate_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    withdrawalRequestId: text("withdrawal_request_id").references(
+      () => affiliateWithdrawalRequest.id,
+      {
+        onDelete: "set null",
+      }
+    ),
+    destinationType: varchar("destination_type", { length: 32 })
+      .notNull()
+      .default("manual"),
+    providerAccountId: text("provider_account_id").references(
+      () => affiliateProviderAccount.id,
+      {
+        onDelete: "set null",
+      }
+    ),
     paymentMethodId: text("payment_method_id").references(
       () => affiliatePaymentMethod.id,
       {
@@ -488,6 +812,8 @@ export const affiliatePayout = pgTable(
     eventCount: integer("event_count").notNull().default(0),
     status: varchar("status", { length: 24 }).notNull().default("paid"),
     externalReference: text("external_reference"),
+    stripeTransferId: varchar("stripe_transfer_id", { length: 120 }),
+    stripePayoutId: varchar("stripe_payout_id", { length: 120 }),
     notes: text("notes"),
     createdByUserId: text("created_by_user_id").references(() => user.id, {
       onDelete: "set null",

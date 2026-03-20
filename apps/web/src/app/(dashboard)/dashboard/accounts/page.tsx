@@ -15,7 +15,7 @@ import {
   PropAccountCard,
   isCurrentPropStageAccount,
 } from "@/features/accounts/components/account-cards";
-import { WidgetLoading } from "@/components/dashboard/widget-wrapper";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { queryClient, trpcOptions } from "@/utils/trpc";
 import {
   Tabs,
@@ -62,12 +62,8 @@ export default function AccountsPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {[1, 2, 3].map((key) => (
-            <WidgetLoading key={key} />
-          ))}
-        </div>
+      <main className="flex min-h-0 flex-1">
+        <RouteLoadingFallback route="accounts" className="min-h-full" />
       </main>
     );
   }

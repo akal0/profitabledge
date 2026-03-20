@@ -201,9 +201,9 @@ export function DashboardShellHeader({
           <AddAccountSheet
             onAccountCreated={() => {}}
             trigger={
-              <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+              <Button className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3 gap-1">
                 <Plus className="size-3" />
-                <span>Add Account</span>
+                <span>Add account</span>
               </Button>
             }
           />

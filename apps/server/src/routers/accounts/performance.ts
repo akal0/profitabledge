@@ -1,6 +1,10 @@
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
+import {
+  convertCurrencyAmount,
+  normalizeCurrencyCode,
+} from "@profitabledge/contracts/currency";
 
 import { db } from "../../db";
 import { openTrade, trade, tradingAccount } from "../../db/schema/trading";
@@ -159,7 +163,12 @@ export const updateBrokerSettingsProcedure = protectedProcedure
   });
 
 export const liveMetricsProcedure = protectedProcedure
-  .input(z.object({ accountId: z.string().min(1) }))
+  .input(
+    z.object({
+      accountId: z.string().min(1),
+      currencyCode: z.string().trim().min(1).optional(),
+    })
+  )
   .query(async ({ input, ctx }) => {
     const cacheKey = cacheKeys.liveMetrics(input.accountId);
     const cached = cache.get(cacheKey);
@@ -183,6 +192,7 @@ export const liveMetricsProcedure = protectedProcedure
       accountIds.length === 1
         ? eq(tradingAccount.id, accountIds[0])
         : inArray(tradingAccount.id, accountIds);
+    const targetCurrencyCode = normalizeCurrencyCode(input.currencyCode);
 
     const accounts = await db
       .select({
@@ -198,6 +208,7 @@ export const liveMetricsProcedure = protectedProcedure
         liveFreeMargin: tradingAccount.liveFreeMargin,
         lastSyncedAt: tradingAccount.lastSyncedAt,
         initialBalance: tradingAccount.initialBalance,
+        initialCurrency: tradingAccount.initialCurrency,
       })
       .from(tradingAccount)
       .where(accountScope);
@@ -215,9 +226,21 @@ export const liveMetricsProcedure = protectedProcedure
       .where(buildAccountScopeCondition(openTrade.accountId, accountIds))
       .orderBy(desc(openTrade.openTime));
 
+    const accountCurrencyById = new Map(
+      accounts.map((account) => [
+        account.id,
+        normalizeCurrencyCode(account.initialCurrency),
+      ])
+    );
+
     const totalFloatingPL = openTrades.reduce(
       (sum, openPosition) =>
-        sum + Number(openPosition.profit || 0) + Number(openPosition.swap || 0),
+        sum +
+        convertCurrencyAmount(
+          Number(openPosition.profit || 0) + Number(openPosition.swap || 0),
+          accountCurrencyById.get(openPosition.accountId),
+          targetCurrencyCode
+        ),
       0
     );
 
@@ -233,31 +256,60 @@ export const liveMetricsProcedure = protectedProcedure
 
     const liveBalance = hasFullFreshCoverage
       ? freshAccounts.reduce(
-          (sum, account) => sum + Number(account.liveBalance || 0),
+          (sum, account) =>
+            sum +
+            convertCurrencyAmount(
+              Number(account.liveBalance || 0),
+              account.initialCurrency,
+              targetCurrencyCode
+            ),
           0
         )
       : null;
     const liveEquity = hasFullFreshCoverage
       ? freshAccounts.reduce(
           (sum, account) =>
-            sum + Number(account.liveEquity || account.liveBalance || 0),
+            sum +
+            convertCurrencyAmount(
+              Number(account.liveEquity || account.liveBalance || 0),
+              account.initialCurrency,
+              targetCurrencyCode
+            ),
           0
         )
       : null;
     const liveMargin = hasFullFreshCoverage
       ? freshAccounts.reduce(
-          (sum, account) => sum + Number(account.liveMargin || 0),
+          (sum, account) =>
+            sum +
+            convertCurrencyAmount(
+              Number(account.liveMargin || 0),
+              account.initialCurrency,
+              targetCurrencyCode
+            ),
           0
         )
       : null;
     const liveFreeMargin = hasFullFreshCoverage
       ? freshAccounts.reduce(
-          (sum, account) => sum + Number(account.liveFreeMargin || 0),
+          (sum, account) =>
+            sum +
+            convertCurrencyAmount(
+              Number(account.liveFreeMargin || 0),
+              account.initialCurrency,
+              targetCurrencyCode
+            ),
           0
         )
       : null;
     const initialBalance = accounts.reduce(
-      (sum, account) => sum + Number(account.initialBalance || 0),
+      (sum, account) =>
+        sum +
+        convertCurrencyAmount(
+          Number(account.initialBalance || 0),
+          account.initialCurrency,
+          targetCurrencyCode
+        ),
       0
     );
 
@@ -274,9 +326,21 @@ export const liveMetricsProcedure = protectedProcedure
       currentPrice: openPosition.currentPrice
         ? Number(openPosition.currentPrice)
         : null,
-      swap: Number(openPosition.swap || 0),
-      commission: Number(openPosition.commission || 0),
-      profit: Number(openPosition.profit || 0),
+      swap: convertCurrencyAmount(
+        Number(openPosition.swap || 0),
+        accountCurrencyById.get(openPosition.accountId),
+        targetCurrencyCode
+      ),
+      commission: convertCurrencyAmount(
+        Number(openPosition.commission || 0),
+        accountCurrencyById.get(openPosition.accountId),
+        targetCurrencyCode
+      ),
+      profit: convertCurrencyAmount(
+        Number(openPosition.profit || 0),
+        accountCurrencyById.get(openPosition.accountId),
+        targetCurrencyCode
+      ),
       sessionTag: openPosition.sessionTag ?? null,
       sessionTagColor: openPosition.sessionTagColor ?? null,
       slModCount: openPosition.slModCount ?? null,
@@ -327,6 +391,7 @@ export const liveMetricsProcedure = protectedProcedure
       openTrades: trades,
       totalFloatingPL,
       openTradesCount: trades.length,
+      currencyCode: targetCurrencyCode ?? null,
     };
 
     cache.set(cacheKey, result, 5000);

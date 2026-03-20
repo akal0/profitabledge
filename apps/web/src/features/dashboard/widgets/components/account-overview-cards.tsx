@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { useStatsStore } from "@/stores/stats";
+import { ALL_ACCOUNTS_ID } from "@/stores/account";
 
 import Bank from "@/public/icons/bank.svg";
 import CircleInfo from "@/public/icons/circle-info.svg";
@@ -60,6 +61,7 @@ export function AccountBalanceCard({
   const { data: liveMetrics } = useQuery({
     ...trpcOptions.accounts.liveMetrics.queryOptions({
       accountId: accountId || "",
+      currencyCode: accountId === ALL_ACCOUNTS_ID ? currencyCode : undefined,
     }),
     enabled: !!accountId,
     refetchInterval: 5000,
@@ -242,6 +244,7 @@ export function AccountEquityCard({
   const { data: liveMetrics } = useQuery({
     ...trpcOptions.accounts.liveMetrics.queryOptions({
       accountId: accountId || "",
+      currencyCode: accountId === ALL_ACCOUNTS_ID ? currencyCode : undefined,
     }),
     enabled: !!accountId,
     refetchInterval: 5000,

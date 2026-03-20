@@ -27,3 +27,36 @@ export function getOriginBadgeClassName(originType?: string | null) {
       return "ring-white/10 bg-white/5 text-white/55";
   }
 }
+
+export function getAffiliateBadgeClassName(effectVariant?: string | null) {
+  switch (effectVariant) {
+    case "emerald_aurora":
+      return "ring-emerald-500/30 bg-emerald-500/15 text-emerald-200";
+    case "teal_signal":
+      return "ring-teal-500/30 bg-teal-500/15 text-teal-200";
+    default:
+      return "ring-amber-500/30 bg-amber-500/15 text-amber-200";
+  }
+}
+
+export function getAffiliateBannerOverlayClassName(effectVariant?: string | null) {
+  switch (effectVariant) {
+    case "emerald_aurora":
+      return "bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.42),transparent_38%),radial-gradient(circle_at_top_right,rgba(45,212,191,0.22),transparent_32%)]";
+    case "teal_signal":
+      return "bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.34),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.18),transparent_34%)]";
+    default:
+      return "bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.4),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(16,185,129,0.18),transparent_30%)]";
+  }
+}
+
+export function getAffiliateHighlightClassName(effectVariant?: string | null) {
+  switch (effectVariant) {
+    case "emerald_aurora":
+      return "border-emerald-500/20 bg-[linear-gradient(135deg,rgba(16,185,129,0.2),rgba(15,23,42,0.6))] text-emerald-100";
+    case "teal_signal":
+      return "border-cyan-500/20 bg-[linear-gradient(135deg,rgba(45,212,191,0.18),rgba(8,47,73,0.65))] text-cyan-100";
+    default:
+      return "border-amber-500/20 bg-[linear-gradient(135deg,rgba(251,191,36,0.18),rgba(20,83,45,0.5))] text-amber-50";
+  }
+}

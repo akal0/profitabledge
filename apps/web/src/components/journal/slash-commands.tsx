@@ -15,6 +15,7 @@ import {
   Minus,
   Code,
   Image as ImageIcon,
+  Video,
   Link,
   LineChart,
   BarChart3,
@@ -57,6 +58,7 @@ interface SlashCommandsMenuProps {
   onInsertTrade: () => void;
   onInsertTradeComparison: () => void;
   onInsertImage: () => void;
+  onInsertVideo: () => void;
   onInsertLink: () => void;
   onInsertEmbed: () => void;
   onInsertPsychology: () => void;
@@ -76,6 +78,7 @@ export function SlashCommandsMenu({
   onInsertTrade,
   onInsertTradeComparison,
   onInsertImage,
+  onInsertVideo,
   onInsertLink,
   onInsertEmbed,
   onInsertPsychology,
@@ -218,6 +221,15 @@ export function SlashCommandsMenu({
       category: "media",
       keywords: ["picture", "photo", "upload"],
       action: onInsertImage,
+    },
+    {
+      id: "video",
+      label: "Video",
+      description: "Upload and embed a video",
+      icon: <Video className={iconClass} />,
+      category: "media",
+      keywords: ["video", "clip", "screen recording", "upload"],
+      action: onInsertVideo,
     },
     {
       id: "link",

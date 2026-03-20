@@ -48,6 +48,9 @@ export function EntryCard({
             src={entry.coverImageUrl}
             alt=""
             className="h-full w-full object-cover opacity-80"
+            style={{
+              objectPosition: `center ${entry.coverImagePosition ?? 50}%`,
+            }}
           />
         </div>
       ) : (

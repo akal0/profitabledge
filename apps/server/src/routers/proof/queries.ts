@@ -28,6 +28,7 @@ import {
 import { protectedProcedure, publicProcedure } from "../../lib/trpc";
 import {
   ensureOwnedProofAccount,
+  getPublicProofAffiliateState,
   getLatestOwnedPublicShare,
   getProofOwnerIdentity,
   resolveActivePublicShareOrThrow,
@@ -122,6 +123,7 @@ export const proofQueryProcedures = {
         liveTradeRows,
         editedSummary,
         removedSummary,
+        affiliate,
       ] = await Promise.all([
         db
           .select({
@@ -184,8 +186,10 @@ export const proofQueryProcedures = {
               sql`${tradeTrustEvent.createdAt} >= ${share.createdAt}`
             )
           ),
+        getPublicProofAffiliateState(share.userId),
       ]);
-      return buildPublicProofPageData({
+      return {
+        ...buildPublicProofPageData({
         share,
         username: input.username,
         publicAccountSlug: input.publicAccountSlug,
@@ -197,7 +201,9 @@ export const proofQueryProcedures = {
         liveTradeRows,
         editedTradesCount: Number(editedSummary[0]?.count ?? 0),
         removedTradesCount: Number(removedSummary[0]?.count ?? 0),
-      });
+        }),
+        affiliate,
+      };
     }),
 
   listPublicTradesInfinite: publicProcedure

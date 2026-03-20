@@ -36,6 +36,7 @@ import { EmbedNode } from "@/components/journal/extensions/embed-node";
 import { ImageNode } from "@/components/journal/extensions/image-node";
 import { PsychologyNode } from "@/components/journal/extensions/psychology-node";
 import { TradeComparisonNode } from "@/components/journal/extensions/trade-comparison-node";
+import { VideoNode } from "@/components/journal/extensions/video-node";
 import type { JournalAICaptureResult } from "@/components/journal/ai-capture-types";
 import { SlashCommandsMenu } from "./slash-commands";
 import type { JournalBlock } from "./types";
@@ -159,6 +160,7 @@ function JournalEditor({
       TradeNode,
       InlineTradeNode,
       ImageNode,
+      VideoNode,
       CalloutNode,
       EmbedNode,
       TradeComparisonNode,
@@ -200,6 +202,7 @@ function JournalEditor({
     handleInsertTrade,
     handleInsertTradeComparison,
     handleInsertImage,
+    handleInsertVideo,
     handleInsertLink,
     handleInsertEmbed,
     handleInsertPsychology,
@@ -279,6 +282,7 @@ function JournalEditor({
         onInsertTrade={handleInsertTrade}
         onInsertTradeComparison={handleInsertTradeComparison}
         onInsertImage={handleInsertImage}
+        onInsertVideo={handleInsertVideo}
         onInsertLink={handleInsertLink}
         onInsertEmbed={handleInsertEmbed}
         onInsertPsychology={handleInsertPsychology}

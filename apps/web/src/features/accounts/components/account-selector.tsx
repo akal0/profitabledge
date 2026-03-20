@@ -174,7 +174,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
   }, [items, setSelectedAccountId]);
 
   const { data: aggregatedStats } = useQuery({
-    ...trpcOptions.accounts.aggregatedStats.queryOptions(),
+    ...trpcOptions.accounts.aggregatedStats.queryOptions({}),
     enabled: dropdownOpen,
     staleTime: 30_000,
     refetchInterval: dropdownOpen ? 30_000 : false,
@@ -240,10 +240,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
       <SidebarMenuItem
         className={cn("h-full w-full", isCollapsed && "flex justify-center")}
       >
-        <DropdownMenu
-          open={dropdownOpen}
-          onOpenChange={setDropdownOpen}
-        >
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               data-onborda="account-selector"
@@ -295,7 +292,9 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
                   : null;
                 const aggregateText = isAggregate
                   ? aggregatedStats
-                    ? `${aggregatedStats.accounts?.length ?? items.length} accounts · ${
+                    ? `${
+                        aggregatedStats.accounts?.length ?? items.length
+                      } accounts · ${
                         aggregatedStats.accounts?.reduce(
                           (sum, current) => sum + (current.totalTrades ?? 0),
                           0
@@ -410,9 +409,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
             setAddAccountSheetOpen(open);
           }
         }}
-        contentClassName={
-          isTourDrivingAddAccountSheet ? "!z-[860]" : undefined
-        }
+        contentClassName={isTourDrivingAddAccountSheet ? "!z-[860]" : undefined}
         highlightedOption={
           isAddAccountSheetStep ? SHEET_OPTION_BY_STEP[currentStep] : undefined
         }

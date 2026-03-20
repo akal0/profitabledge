@@ -174,6 +174,69 @@ const THRESHOLD_GUARDRAILS: Array<{
   },
 ];
 
+const CHECKLIST_STARTERS = [
+  {
+    id: "trend-continuation",
+    name: "Trend continuation",
+    strategyTag: "Trend continuation",
+    description:
+      "Use for continuation setups where structure, momentum, and invalidation need to align before entry.",
+    items: [
+      { label: "Higher-timeframe trend is clearly intact", isRequired: true },
+      { label: "Pullback has tapped the intended structure zone", isRequired: true },
+      { label: "Entry trigger is confirmed on the execution timeframe", isRequired: true },
+      { label: "Stop-loss is beyond invalidation, not inside noise", isRequired: true },
+      { label: "Target offers at least planned minimum R:R", isRequired: true },
+      { label: "No scheduled catalyst is about to disrupt the setup", isRequired: false },
+    ],
+  },
+  {
+    id: "opening-breakout",
+    name: "Opening breakout",
+    strategyTag: "Opening breakout",
+    description:
+      "Designed for session-opening expansion trades that need clean structure and controlled risk.",
+    items: [
+      { label: "Opening range or key level is clearly defined", isRequired: true },
+      { label: "Breakout direction matches the higher-timeframe bias", isRequired: true },
+      { label: "Volume or momentum confirms expansion", isRequired: true },
+      { label: "Retest or invalidation level is mapped before entry", isRequired: true },
+      { label: "Risk is sized for opening volatility", isRequired: true },
+      { label: "News/event risk is checked for the next hour", isRequired: false },
+    ],
+  },
+  {
+    id: "mean-reversion",
+    name: "Mean reversion",
+    strategyTag: "Mean reversion",
+    description:
+      "Useful for exhaustion or snap-back setups where location and patience matter more than speed.",
+    items: [
+      { label: "Price is extended into a preplanned extreme", isRequired: true },
+      { label: "Reversal signal is confirmed before entry", isRequired: true },
+      { label: "Trade is not fighting fresh impulsive flow blindly", isRequired: true },
+      { label: "Stop-loss is placed beyond the true failure level", isRequired: true },
+      { label: "Target is defined back toward fair value or range mean", isRequired: true },
+      { label: "Execution is being taken from patience, not revenge/FOMO", isRequired: false },
+    ],
+  },
+  {
+    id: "scalp-execution",
+    name: "Scalp execution",
+    strategyTag: "Scalp",
+    description:
+      "Built for short-duration execution where spread, timing, and discipline around trade quality matter most.",
+    items: [
+      { label: "Session quality and liquidity are acceptable", isRequired: true },
+      { label: "Spread and slippage conditions are within plan", isRequired: true },
+      { label: "Setup matches a predefined scalp model", isRequired: true },
+      { label: "Stop-loss and take-profit are defined before clicking", isRequired: true },
+      { label: "Position size respects max daily risk and max setup risk", isRequired: true },
+      { label: "No impulse entry outside the scalp checklist", isRequired: false },
+    ],
+  },
+] as const;
+
 function parseChecklistItems(raw: string) {
   return raw
     .split("\n")
@@ -506,6 +569,17 @@ export default function RulesPage() {
         isRequired: item.isRequired,
       })),
     });
+  };
+
+  const handleApplyChecklistStarter = (starter: (typeof CHECKLIST_STARTERS)[number]) => {
+    setChecklistName(starter.name);
+    setChecklistStrategyTag(starter.strategyTag);
+    setChecklistDescription(starter.description);
+    setChecklistItems(
+      starter.items
+        .map((item) => `${item.isRequired ? "*" : ""}${item.label}`)
+        .join("\n")
+    );
   };
 
   return (
@@ -1138,6 +1212,58 @@ export default function RulesPage() {
             <Separator />
 
             <div className="p-4 space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
+                    Starter library
+                  </p>
+                  <p className="mt-1 text-xs text-white/40">
+                    Start from a playbook template, then customize it to match
+                    your actual setup rules.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {CHECKLIST_STARTERS.map((starter) => (
+                    <div
+                      key={starter.id}
+                      className="rounded-lg border border-white/8 bg-black/10 p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">
+                            {starter.name}
+                          </p>
+                          <p className="mt-1 text-xs text-white/45">
+                            {starter.description}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleApplyChecklistStarter(starter)}
+                        >
+                          Use starter
+                        </Button>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {starter.items.slice(0, 3).map((item) => (
+                          <span
+                            key={item.label}
+                            className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/55"
+                          >
+                            {item.isRequired ? "Required" : "Optional"} · {item.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="space-y-2">
                 <Label className="text-xs text-white/70">Template name</Label>
                 <Input

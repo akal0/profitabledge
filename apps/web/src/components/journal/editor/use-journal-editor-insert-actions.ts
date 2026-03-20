@@ -2,8 +2,10 @@
 
 import { useCallback } from "react";
 import type { Editor } from "@tiptap/react";
+import { toast } from "sonner";
 
 import type { ChartEmbedType } from "@/components/journal/types";
+import { useUploadThing } from "@/utils/uploadthing";
 
 interface UseJournalEditorInsertActionsOptions {
   editor: Editor | null;
@@ -16,6 +18,65 @@ export function useJournalEditorInsertActions({
   accountId,
   afterInsert,
 }: UseJournalEditorInsertActionsOptions) {
+  const { startUpload: startVideoUpload } = useUploadThing(
+    (router) => router.videoUploader
+  );
+
+  const generateVideoPreview = useCallback((file: File) => {
+    return new Promise<{
+      thumbnail: string | null;
+      duration: number | null;
+    }>((resolve) => {
+      const video = document.createElement("video");
+      const objectUrl = URL.createObjectURL(file);
+
+      video.preload = "metadata";
+      video.muted = true;
+      video.playsInline = true;
+
+      const cleanup = () => {
+        video.onloadedmetadata = null;
+        video.onseeked = null;
+        video.onerror = null;
+        URL.revokeObjectURL(objectUrl);
+      };
+
+      video.onloadedmetadata = () => {
+        const duration = Number.isFinite(video.duration) ? video.duration : null;
+        const seekTime = duration && duration > 0.2 ? Math.min(1, duration / 3) : null;
+
+        if (!seekTime) {
+          cleanup();
+          resolve({ thumbnail: null, duration });
+          return;
+        }
+
+        video.currentTime = seekTime;
+      };
+
+      video.onseeked = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext("2d");
+        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const duration = Number.isFinite(video.duration) ? video.duration : null;
+        cleanup();
+        resolve({
+          thumbnail: canvas.toDataURL("image/jpeg", 0.78),
+          duration,
+        });
+      };
+
+      video.onerror = () => {
+        cleanup();
+        resolve({ thumbnail: null, duration: null });
+      };
+
+      video.src = objectUrl;
+    });
+  }, []);
+
   const handleInsertBlock = useCallback(
     (type: string, props?: Record<string, unknown>) => {
       if (!editor) return;
@@ -183,6 +244,64 @@ export function useJournalEditorInsertActions({
     input.click();
   }, [afterInsert, editor]);
 
+  const handleInsertVideo = useCallback(() => {
+    if (!editor) return;
+
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "video/*";
+    input.onchange = async (event) => {
+      const file = (event.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith("video/")) {
+        toast.error("Please choose a video file");
+        return;
+      }
+
+      if (file.size > 64 * 1024 * 1024) {
+        toast.error("Video must be under 64MB");
+        return;
+      }
+
+      try {
+        const [preview, uploadResult] = await Promise.all([
+          generateVideoPreview(file),
+          startVideoUpload([file]),
+        ]);
+        const videoUrl = uploadResult?.[0]?.ufsUrl ?? uploadResult?.[0]?.url;
+        if (!videoUrl) {
+          throw new Error("Failed to upload video");
+        }
+
+        editor
+          .chain()
+          .focus()
+          .insertContent([
+            {
+              type: "journalVideo",
+              attrs: {
+                src: videoUrl,
+                thumbnail: preview.thumbnail,
+                duration: preview.duration,
+                caption: file.name,
+                autoplay: false,
+                muted: true,
+              },
+            },
+            { type: "paragraph" },
+          ])
+          .run();
+
+        afterInsert?.();
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : "Failed to upload video"
+        );
+      }
+    };
+    input.click();
+  }, [afterInsert, editor, generateVideoPreview, startVideoUpload]);
+
   const handleInsertLink = useCallback(() => {
     if (!editor) return;
 
@@ -245,6 +364,7 @@ export function useJournalEditorInsertActions({
     handleInsertTrade,
     handleInsertTradeComparison,
     handleInsertImage,
+    handleInsertVideo,
     handleInsertLink,
     handleInsertEmbed,
     handleInsertPsychology,

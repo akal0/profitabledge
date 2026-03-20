@@ -302,7 +302,10 @@ export const EmbedNode = Node.create({
           if (typeof dom === "string") return {};
           const element = dom as HTMLElement;
           return {
-            url: element.getAttribute("data-url") || "placeholder",
+            url:
+              element.getAttribute("data-url") ||
+              element.getAttribute("data-embed-url") ||
+              "placeholder",
             embedType: element.getAttribute("data-embed-type") || "generic",
           };
         },
@@ -316,6 +319,7 @@ export const EmbedNode = Node.create({
       mergeAttributes(HTMLAttributes, {
         "data-embed-node": "",
         "data-url": HTMLAttributes.url,
+        "data-embed-url": HTMLAttributes.url,
         "data-embed-type": HTMLAttributes.embedType,
       }),
     ];

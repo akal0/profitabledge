@@ -2,12 +2,9 @@
 
 import React, { useMemo, useState } from "react";
 import {
-  Gift,
   LifeBuoy,
   Plus,
   Settings,
-  TrendingUp,
-  Users,
 } from "lucide-react";
 
 import {
@@ -32,9 +29,8 @@ import { AddAccountSheet } from "@/features/accounts/components/add-account-shee
 import { getAccountImage } from "@/features/accounts/lib/account-metadata";
 import { Button } from "@/components/ui/button";
 import {
-  NAV_SECTIONS,
+  getNavSections,
   meetsRequirement,
-  type NavSection,
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
 import {
@@ -169,38 +165,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const sections = useMemo(
     () => {
-      const growthItems = [
-        {
-          title: "Growth",
-          url: "/dashboard/growth",
-          icon: TrendingUp,
-        },
-        {
-          title: "Referrals",
-          url: "/dashboard/referrals",
-          icon: Gift,
-        },
-        ...(canViewAffiliateDashboard
-          ? [
-              {
-                title: "Affiliate",
-                url: "/dashboard/affiliate",
-                icon: Users,
-              },
-            ]
-          : []),
-      ];
-      const dynamicSections: NavSection[] =
-        growthItems.length > 0
-          ? [
-              {
-                label: "Growth",
-                items: growthItems,
-              },
-            ]
-          : [];
-
-      return [...NAV_SECTIONS, ...dynamicSections].map((section) => ({
+      return getNavSections(canViewAffiliateDashboard).map((section) => ({
         ...section,
         items: section.items.map((item) => {
           const isActive = tourActiveUrl !== null

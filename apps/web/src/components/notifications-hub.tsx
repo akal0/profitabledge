@@ -6,6 +6,7 @@ import { Bell, Check, Dot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { publicAlphaFlags } from "@/lib/alpha-flags";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,6 +168,12 @@ const NOTIFICATION_TABS = [
   "system",
 ] as const satisfies readonly NotificationTab[];
 
+const SHOW_SOCIAL_NOTIFICATIONS = publicAlphaFlags.community;
+const VISIBLE_NOTIFICATION_TABS: readonly NotificationTab[] =
+  SHOW_SOCIAL_NOTIFICATIONS
+    ? NOTIFICATION_TABS
+    : NOTIFICATION_TABS.filter((tab) => tab !== "social");
+
 const knownNotificationTypes = [
   "trade_closed",
   "trade_opened",
@@ -195,7 +202,7 @@ const notificationTabLabels: Record<NotificationTab, string> = {
   "review-ready": "Review ready",
   goals: "Goals",
   alerts: "Alerts",
-  news: "News",
+  news: "Calendar",
   social: "Social",
   system: "System",
 };
@@ -210,7 +217,7 @@ const notificationTabEmptyStates: Record<NotificationTab, string> = {
     "No goal notifications. Goal milestones, achievements, and progress updates will land here.",
   alerts:
     "No alert notifications. Triggered alerts and prop-account violations will land here.",
-  news: "No news notifications. Economic calendar events and impact updates will land here.",
+  news: "No calendar notifications. Economic events and impact updates will land here.",
   social:
     "No social notifications. Copier signals and leaderboard activity will land here.",
   system:
@@ -391,7 +398,7 @@ function buildSettingsUpdatedUrl(metadata?: NotificationMetadata | null) {
 }
 
 function buildCalendarUrl(_metadata?: NotificationMetadata | null) {
-  return "/dashboard/settings/notifications";
+  return "/dashboard/news";
 }
 
 function buildNotificationUrl(item: NotificationItem) {
@@ -774,6 +781,12 @@ export default function NotificationsHub() {
   };
 
   useEffect(() => {
+    if (!SHOW_SOCIAL_NOTIFICATIONS && activeTab === "social") {
+      setActiveTab("all");
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     if (!canUsePushChannel) return;
     if (typeof Notification === "undefined") return;
     if (!open) return;
@@ -881,7 +894,7 @@ export default function NotificationsHub() {
           <Tabs
             value={activeTab}
             onValueChange={(value) => {
-              if (NOTIFICATION_TABS.includes(value as NotificationTab)) {
+              if (VISIBLE_NOTIFICATION_TABS.includes(value as NotificationTab)) {
                 setActiveTab(value as NotificationTab);
               }
             }}
@@ -890,7 +903,7 @@ export default function NotificationsHub() {
             <div className="shrink-0">
               <div className="overflow-x-auto px-4 overscroll-x-contain">
                 <TabsListUnderlined className="inline-flex h-auto min-w-max items-stretch gap-5 border-b-0 pr-4">
-                  {NOTIFICATION_TABS.map((tab) => {
+                  {VISIBLE_NOTIFICATION_TABS.map((tab) => {
                     const unread = unreadCounts[tab];
 
                     return (
@@ -919,7 +932,7 @@ export default function NotificationsHub() {
             </div>
 
             <div className="flex-1 overflow-auto min-h-[300px]">
-              {NOTIFICATION_TABS.map((tab) => (
+              {VISIBLE_NOTIFICATION_TABS.map((tab) => (
                 <NotificationTabPanel
                   key={tab}
                   value={tab}

@@ -3,6 +3,7 @@ export interface JournalListEntry {
   title: string;
   emoji?: string | null;
   coverImageUrl?: string | null;
+  coverImagePosition?: number | null;
   entryType: string | null;
   tags: string[] | null;
   journalDate?: Date | string | null;

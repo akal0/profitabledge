@@ -6,11 +6,7 @@ import { trpc } from "@/utils/trpc";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import {
   Search,
@@ -78,7 +74,7 @@ export function JournalSearch({
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Search journal..."
-          className="pl-9 pr-8 bg-sidebar-accent border-white/10 text-white placeholder:text-white/30"
+          className="pl-9 pr-8 bg-sidebar-accent ring-white/10 text-white placeholder:text-white/30"
         />
         {query && (
           <button
@@ -94,7 +90,7 @@ export function JournalSearch({
       </div>
 
       {isOpen && query.length >= 2 && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-sidebar border border-white/10 shadow-xl z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-sidebar ring ring-white/10 shadow-xl z-50 max-h-96 overflow-y-auto">
           {isLoading ? (
             <div className="p-4 space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -141,8 +137,11 @@ interface SearchResultProps {
 }
 
 function SearchResult({ result, query, onSelect }: SearchResultProps) {
-  const timeAgo = formatDistanceToNow(new Date(result.updatedAt), { addSuffix: true });
-  const displayText = result.highlightedText || result.aiSummary || result.plainTextContent;
+  const timeAgo = formatDistanceToNow(new Date(result.updatedAt), {
+    addSuffix: true,
+  });
+  const displayText =
+    result.highlightedText || result.aiSummary || result.plainTextContent;
 
   return (
     <button
@@ -159,9 +158,14 @@ function SearchResult({ result, query, onSelect }: SearchResultProps) {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-white truncate">{result.title}</p>
+            <p className="text-sm font-medium text-white truncate">
+              {result.title}
+            </p>
             {result.entryType && result.entryType !== "general" && (
-              <Badge variant="outline" className="text-xs border-white/10 text-white/40">
+              <Badge
+                variant="outline"
+                className="text-xs ring-white/10 text-white/40"
+              >
                 {result.entryType}
               </Badge>
             )}
@@ -242,20 +246,27 @@ export function JournalSearchDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-2xl"
+        className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-2xl"
       >
-        <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+        <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
           {/* Header */}
           <div className="flex items-start gap-3 px-5 py-4">
-            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
-              <Search className="h-3.5 w-3.5 text-white/60" />
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
+              <Search className="size-3 text-white/60 z-10 relative" />
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-medium text-white">Search Journal</div>
-              <p className="mt-1 text-xs leading-relaxed text-white/40">Search entries, insights, and patterns</p>
+              <div className="text-sm font-medium text-white">
+                Search journal
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">
+                Search entries, insights, and patterns
+              </p>
             </div>
             <DialogClose asChild>
-              <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">
+              <button
+                type="button"
+                className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm ring ring-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+              >
                 <X className="h-3.5 w-3.5" />
                 <span className="sr-only">Close</span>
               </button>
@@ -266,12 +277,12 @@ export function JournalSearchDialog({
           {/* Search input */}
           <div className="px-5 py-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/40" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3 text-white/40 z-10" />
               <Input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search entries, insights, patterns..."
-                className="pl-9 bg-sidebar-accent border-white/10 text-white placeholder:text-white/30"
+                className="pl-8 bg-sidebar-accent ring-white/10 text-white placeholder:text-white/30"
                 autoFocus
               />
             </div>
@@ -307,7 +318,9 @@ export function JournalSearchDialog({
             ) : (
               <div className="p-8 text-center">
                 <Search className="h-8 w-8 text-white/20 mx-auto mb-2" />
-                <p className="text-sm text-white/40">No results for "{query}"</p>
+                <p className="text-sm text-white/40">
+                  No results for "{query}"
+                </p>
               </div>
             )}
           </div>

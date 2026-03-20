@@ -35,28 +35,55 @@ interface AIAnalysisDisplayProps {
 }
 
 const SENTIMENT_CONFIG = {
-  positive: { color: "text-green-400", bg: "bg-green-400/10", icon: TrendingUp },
+  positive: {
+    color: "text-green-400",
+    bg: "bg-green-400/10",
+    icon: TrendingUp,
+  },
   negative: { color: "text-red-400", bg: "bg-red-400/10", icon: TrendingDown },
   neutral: { color: "text-white/60", bg: "bg-white/10", icon: Minus },
-  mixed: { color: "text-yellow-400", bg: "bg-yellow-400/10", icon: AlertTriangle },
+  mixed: {
+    color: "text-yellow-400",
+    bg: "bg-yellow-400/10",
+    icon: AlertTriangle,
+  },
 };
 
 const PATTERN_TYPE_CONFIG = {
   pattern: { color: "text-blue-400", bg: "bg-blue-400/10", icon: Brain },
-  strength: { color: "text-green-400", bg: "bg-green-400/10", icon: TrendingUp },
+  strength: {
+    color: "text-green-400",
+    bg: "bg-green-400/10",
+    icon: TrendingUp,
+  },
   weakness: { color: "text-red-400", bg: "bg-red-400/10", icon: TrendingDown },
-  recommendation: { color: "text-yellow-400", bg: "bg-yellow-400/10", icon: Lightbulb },
-  correlation: { color: "text-purple-400", bg: "bg-purple-400/10", icon: Target },
+  recommendation: {
+    color: "text-yellow-400",
+    bg: "bg-yellow-400/10",
+    icon: Lightbulb,
+  },
+  correlation: {
+    color: "text-purple-400",
+    bg: "bg-purple-400/10",
+    icon: Target,
+  },
 };
 
 function Minus(props: any) {
   return <span className="w-4 h-4 flex items-center justify-center">−</span>;
 }
 
-export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps) {
+export function AIAnalysisDisplay({
+  entryId,
+  className,
+}: AIAnalysisDisplayProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  const { data: entry, isLoading, refetch } = trpc.journal.get.useQuery({ id: entryId });
+  const {
+    data: entry,
+    isLoading,
+    refetch,
+  } = trpc.journal.get.useQuery({ id: entryId });
   const analyzeMutation = trpc.journal.analyzeEntry.useMutation();
 
   const handleAnalyze = async () => {
@@ -67,7 +94,9 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
     } catch (error) {
       if (!showAIErrorToast(error)) {
         toast.error(
-          error instanceof Error ? error.message : "Failed to analyze journal entry"
+          error instanceof Error
+            ? error.message
+            : "Failed to analyze journal entry"
         );
       }
     } finally {
@@ -88,7 +117,8 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
     );
   }
 
-  const hasAnalysis = entry?.aiSummary || entry?.aiKeyInsights || entry?.aiPatterns;
+  const hasAnalysis =
+    entry?.aiSummary || entry?.aiKeyInsights || entry?.aiPatterns;
 
   if (!hasAnalysis) {
     return (
@@ -102,9 +132,7 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
         <CardContent>
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <Brain className="h-10 w-10 text-white/20 mb-3" />
-            <p className="text-sm text-white/40 mb-4">
-              No AI analysis yet
-            </p>
+            <p className="text-sm text-white/40 mb-4">No AI analysis yet</p>
             <Button
               onClick={handleAnalyze}
               disabled={isAnalyzing}
@@ -128,7 +156,8 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
     );
   }
 
-  const sentiment = (entry?.aiSentiment as keyof typeof SENTIMENT_CONFIG) || "neutral";
+  const sentiment =
+    (entry?.aiSentiment as keyof typeof SENTIMENT_CONFIG) || "neutral";
   const sentimentConfig = SENTIMENT_CONFIG[sentiment];
   const SentimentIcon = sentimentConfig.icon;
 
@@ -166,32 +195,36 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
             <Badge
               variant="outline"
               className={cn(
-                "border-0",
+                "border-0 capitalize",
                 sentimentConfig.bg,
                 sentimentConfig.color
               )}
             >
-              <SentimentIcon className="h-3 w-3 mr-1" />
+              <SentimentIcon className="h-3 w-3" />
               {sentiment}
             </Badge>
           </div>
         )}
 
-        {entry?.aiKeyInsights && (entry.aiKeyInsights as string[]).length > 0 && (
-          <div className="space-y-2">
-            <h4 className="text-xs font-medium text-white/60 uppercase tracking-wider">
-              Key Insights
-            </h4>
-            <ul className="space-y-1.5">
-              {(entry.aiKeyInsights as string[]).map((insight, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm text-white/70">
-                  <Lightbulb className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                  {insight}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+        {entry?.aiKeyInsights &&
+          (entry.aiKeyInsights as string[]).length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-medium text-white/60 uppercase tracking-wider">
+                Key Insights
+              </h4>
+              <ul className="space-y-1.5">
+                {(entry.aiKeyInsights as string[]).map((insight, i) => (
+                  <li
+                    key={i}
+                    className="flex items-start gap-2 text-sm text-white/70"
+                  >
+                    <Lightbulb className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                    {insight}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
         {entry?.aiTopics && (entry.aiTopics as string[]).length > 0 && (
           <div className="space-y-2">
@@ -220,7 +253,10 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
             </h4>
             <div className="space-y-2">
               {(entry.aiPatterns as any[]).map((pattern, i) => {
-                const config = PATTERN_TYPE_CONFIG[pattern.type as keyof typeof PATTERN_TYPE_CONFIG] || PATTERN_TYPE_CONFIG.pattern;
+                const config =
+                  PATTERN_TYPE_CONFIG[
+                    pattern.type as keyof typeof PATTERN_TYPE_CONFIG
+                  ] || PATTERN_TYPE_CONFIG.pattern;
                 const Icon = config.icon;
                 return (
                   <div
@@ -256,7 +292,10 @@ export function AIAnalysisDisplay({ entryId, className }: AIAnalysisDisplayProps
 
         {entry?.aiAnalyzedAt && (
           <p className="text-xs text-white/30 pt-2">
-            Analyzed {formatDistanceToNow(new Date(entry.aiAnalyzedAt), { addSuffix: true })}
+            Analyzed{" "}
+            {formatDistanceToNow(new Date(entry.aiAnalyzedAt), {
+              addSuffix: true,
+            })}
           </p>
         )}
       </CardContent>
@@ -278,7 +317,9 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
     } catch (error) {
       if (!showAIErrorToast(error)) {
         toast.error(
-          error instanceof Error ? error.message : "Failed to query journal insights"
+          error instanceof Error
+            ? error.message
+            : "Failed to query journal insights"
         );
       }
     }
@@ -326,7 +367,8 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
           <div className="rounded-sm border border-dashed border-white/10 bg-sidebar/55 p-4 text-center">
             <p className="text-sm font-medium text-white">No answer yet</p>
             <p className="mt-1 text-xs text-white/40">
-              Ask about recurring mistakes, psychology, or what needs tightening next.
+              Ask about recurring mistakes, psychology, or what needs tightening
+              next.
             </p>
           </div>
         )}
@@ -407,7 +449,10 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
           className={journalActionIconButtonClassName}
         >
           <RefreshCw
-            className={cn("h-4 w-4", analyzePatternsMutation.isPending && "animate-spin")}
+            className={cn(
+              "h-4 w-4",
+              analyzePatternsMutation.isPending && "animate-spin"
+            )}
           />
         </Button>
       }
@@ -420,7 +465,8 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
               {errorMessage ?? "Not enough entries yet to extract patterns"}
             </p>
             <p className="mt-2 text-xs text-white/30">
-              Add at least three meaningful journal entries to build a reliable pattern set.
+              Add at least three meaningful journal entries to build a reliable
+              pattern set.
             </p>
           </div>
         ) : (
@@ -438,11 +484,18 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className={cn("rounded-sm border border-white/5 p-1.5", config.bg)}>
+                      <div
+                        className={cn(
+                          "rounded-sm border border-white/5 p-1.5",
+                          config.bg
+                        )}
+                      >
                         <Icon className={cn("h-4 w-4", config.color)} />
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-white">{pattern.title}</p>
+                        <p className="text-sm font-medium text-white">
+                          {pattern.title}
+                        </p>
                         <p className="line-clamp-1 text-xs text-white/40">
                           {pattern.description}
                         </p>

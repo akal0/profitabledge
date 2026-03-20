@@ -44,23 +44,6 @@ type UseTradeTableFilteredDataArgs = {
   hasMergedFilterConflict: boolean;
 };
 
-type ExcludedFilter =
-  | "ids"
-  | "direction"
-  | "symbols"
-  | "date"
-  | "hold"
-  | "vol"
-  | "pl"
-  | "com"
-  | "swap"
-  | "sl"
-  | "tp"
-  | "rr"
-  | "mfe"
-  | "mae"
-  | "eff";
-
 export function useTradeTableFilteredData({
   baseRows,
   ids,
@@ -119,213 +102,342 @@ export function useTradeTableFilteredData({
     [effectiveSymbols]
   );
 
-  const applyClientFilters = React.useCallback(
-    (
-      rowsToFilter: TradeRow[],
-      excluded: Set<ExcludedFilter> = new Set()
-    ) => {
-      if (hasMergedFilterConflict) return [] as TradeRow[];
+  const filteredArtifacts = React.useMemo(() => {
+    const emptyArtifacts = {
+      commissionsHistogram: [] as number[],
+      displayRows: [] as TradeRow[],
+      efficiencyHistogram: [] as number[],
+      holdHistogram: [] as Array<TradeRow["holdSeconds"]>,
+      maeHistogram: [] as number[],
+      mfeHistogram: [] as number[],
+      profitHistogram: [] as Array<TradeRow["profit"]>,
+      rrHistogram: [] as number[],
+      swapHistogram: [] as number[],
+      symbolCounts: {} as Record<string, number>,
+      symbolTotal: 0,
+      volumeHistogram: [] as Array<TradeRow["volume"]>,
+    };
 
-      return rowsToFilter.filter((row) => {
-        if (!excluded.has("ids") && idsSet.size > 0 && !idsSet.has(row.id)) return false;
-        if (
-          !excluded.has("direction") &&
-          effectiveTradeDirection !== "all" &&
-          row.tradeDirection !== effectiveTradeDirection
-        ) {
-          return false;
-        }
-        if (
-          !excluded.has("symbols") &&
-          symbolSet.size > 0 &&
-          row.isLive === true
-        ) {
-          const liveSymbolMatches = [
-            row.rawSymbol,
-            row.symbol,
-            row.symbolGroup,
-          ]
-            .filter((value): value is string => Boolean(value))
-            .some((value) => symbolSet.has(value));
+    if (hasMergedFilterConflict) {
+      return emptyArtifacts;
+    }
 
-          if (!liveSymbolMatches) {
-            return false;
-          }
-        }
-        if (killzoneSet.size > 0 && !killzoneSet.has(row.killzone || "")) return false;
-        if (sessionTagSet.size > 0 && !sessionTagSet.has(row.sessionTag || "")) return false;
-        if (modelTagSet.size > 0 && !modelTagSet.has(row.modelTag || "")) return false;
-        if (
-          protocolSet.size > 0 &&
-          !protocolSet.has((row.protocolAlignment || "") as any)
-        ) {
-          return false;
-        }
-        const rowOutcome = row.isLive ? "Live" : row.outcome || "";
-        if (outcomeSet.size > 0 && !outcomeSet.has(rowOutcome as any)) return false;
-        if (
-          !excluded.has("date") &&
-          !isTradeWithinDateRange(row, mergedDateRange.start, mergedDateRange.end)
-        ) {
-          return false;
-        }
-        if (
-          searchQueryTokens.length > 0 &&
-          !matchesTradeSearch(searchDocumentByTradeId.get(row.id), searchQueryTokens)
-        ) {
-          return false;
-        }
-        if (!excluded.has("hold") && !isValueInRange(row.holdSeconds, effectiveHoldRange)) {
-          return false;
-        }
-        if (!excluded.has("vol") && !isValueInRange(row.volume, effectiveVolRange)) {
-          return false;
-        }
-        if (!excluded.has("pl") && !isValueInRange(row.profit, effectivePlRange)) {
-          return false;
-        }
-        if (
-          !excluded.has("com") &&
-          !isValueInRange(Number(row.commissions || 0), effectiveComRange)
-        ) {
-          return false;
-        }
-        if (
-          !excluded.has("swap") &&
-          !isValueInRange(Number(row.swap || 0), effectiveSwapRange)
-        ) {
-          return false;
-        }
-        if (!excluded.has("sl") && !isValueInRange(row.sl, effectiveSlRange)) return false;
-        if (!excluded.has("tp") && !isValueInRange(row.tp, effectiveTpRange)) return false;
-        if (!excluded.has("rr") && !isValueInRange(row.realisedRR, effectiveRrRange)) {
-          return false;
-        }
-        if (!excluded.has("mfe") && !isValueInRange(row.mfePips, effectiveMfeRange)) {
-          return false;
-        }
-        if (!excluded.has("mae") && !isValueInRange(row.maePips, effectiveMaeRange)) {
-          return false;
-        }
-        if (
-          !excluded.has("eff") &&
-          !isValueInRange(row.rrCaptureEfficiency, effectiveEfficiencyRange)
-        ) {
-          return false;
-        }
-        return true;
-      });
-    },
-    [
-      effectiveComRange,
-      effectiveEfficiencyRange,
-      effectiveHoldRange,
-      effectiveMaeRange,
-      effectiveMfeRange,
-      effectivePlRange,
-      effectiveRrRange,
-      effectiveSlRange,
-      effectiveSwapRange,
-      effectiveTpRange,
-      effectiveTradeDirection,
-      effectiveVolRange,
-      hasMergedFilterConflict,
-      idsSet,
-      killzoneSet,
-      mergedDateRange.end,
-      mergedDateRange.start,
-      modelTagSet,
-      outcomeSet,
-      protocolSet,
-      searchDocumentByTradeId,
-      searchQueryTokens,
-      sessionTagSet,
-      symbolSet,
-    ]
-  );
+    const commissionsHistogram: number[] = [];
+    const displayRows: TradeRow[] = [];
+    const efficiencyHistogram: number[] = [];
+    const holdHistogram: Array<TradeRow["holdSeconds"]> = [];
+    const maeHistogram: number[] = [];
+    const mfeHistogram: number[] = [];
+    const profitHistogram: Array<TradeRow["profit"]> = [];
+    const rrHistogram: number[] = [];
+    const swapHistogram: number[] = [];
+    const symbolCounts: Record<string, number> = {};
+    let symbolTotal = 0;
+    const volumeHistogram: Array<TradeRow["volume"]> = [];
 
-  const displayRows = React.useMemo(
-    () => applyClientFilters(baseRows),
-    [applyClientFilters, baseRows]
-  );
+    for (const row of baseRows) {
+      const matchesIds = idsSet.size === 0 || idsSet.has(row.id);
+      const matchesDirection =
+        effectiveTradeDirection === "all" ||
+        row.tradeDirection === effectiveTradeDirection;
+      const matchesSymbols =
+        symbolSet.size === 0 ||
+        row.isLive !== true ||
+        [row.rawSymbol, row.symbol, row.symbolGroup]
+          .filter((value): value is string => Boolean(value))
+          .some((value) => symbolSet.has(value));
+      const matchesKillzone =
+        killzoneSet.size === 0 || killzoneSet.has(row.killzone || "");
+      const matchesSessionTag =
+        sessionTagSet.size === 0 || sessionTagSet.has(row.sessionTag || "");
+      const matchesModelTag =
+        modelTagSet.size === 0 || modelTagSet.has(row.modelTag || "");
+      const matchesProtocol =
+        protocolSet.size === 0 ||
+        protocolSet.has((row.protocolAlignment || "") as any);
+      const rowOutcome = row.isLive ? "Live" : row.outcome || "";
+      const matchesOutcome =
+        outcomeSet.size === 0 || outcomeSet.has(rowOutcome as any);
+      const matchesDate = isTradeWithinDateRange(
+        row,
+        mergedDateRange.start,
+        mergedDateRange.end
+      );
+      const matchesSearch =
+        searchQueryTokens.length === 0 ||
+        matchesTradeSearch(searchDocumentByTradeId.get(row.id), searchQueryTokens);
+      const matchesHold = isValueInRange(row.holdSeconds, effectiveHoldRange);
+      const matchesVolume = isValueInRange(row.volume, effectiveVolRange);
+      const matchesProfit = isValueInRange(row.profit, effectivePlRange);
+      const matchesCommissions = isValueInRange(
+        Number(row.commissions || 0),
+        effectiveComRange
+      );
+      const matchesSwap = isValueInRange(
+        Number(row.swap || 0),
+        effectiveSwapRange
+      );
+      const matchesSl = isValueInRange(row.sl, effectiveSlRange);
+      const matchesTp = isValueInRange(row.tp, effectiveTpRange);
+      const matchesRr = isValueInRange(row.realisedRR, effectiveRrRange);
+      const matchesMfe = isValueInRange(row.mfePips, effectiveMfeRange);
+      const matchesMae = isValueInRange(row.maePips, effectiveMaeRange);
+      const matchesEfficiency = isValueInRange(
+        row.rrCaptureEfficiency,
+        effectiveEfficiencyRange
+      );
+
+      const matchesStaticFilters =
+        matchesIds &&
+        matchesDirection &&
+        matchesKillzone &&
+        matchesSessionTag &&
+        matchesModelTag &&
+        matchesProtocol &&
+        matchesOutcome &&
+        matchesDate &&
+        matchesSearch;
+      const matchesNumericFilters =
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency;
+
+      if (matchesStaticFilters && matchesSymbols && matchesNumericFilters) {
+        displayRows.push(row);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency
+      ) {
+        holdHistogram.push(row.holdSeconds);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency
+      ) {
+        volumeHistogram.push(row.volume);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency
+      ) {
+        profitHistogram.push(row.profit);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency
+      ) {
+        commissionsHistogram.push(Number(row.commissions || 0));
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency
+      ) {
+        swapHistogram.push(Number(row.swap || 0));
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesMfe &&
+        matchesMae &&
+        matchesEfficiency &&
+        isFiniteNumber(row.realisedRR)
+      ) {
+        rrHistogram.push(row.realisedRR);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMae &&
+        matchesEfficiency &&
+        isFiniteNumber(row.mfePips)
+      ) {
+        mfeHistogram.push(row.mfePips);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesEfficiency &&
+        isFiniteNumber(row.maePips)
+      ) {
+        maeHistogram.push(row.maePips);
+      }
+
+      if (
+        matchesStaticFilters &&
+        matchesSymbols &&
+        matchesHold &&
+        matchesVolume &&
+        matchesProfit &&
+        matchesCommissions &&
+        matchesSwap &&
+        matchesSl &&
+        matchesTp &&
+        matchesRr &&
+        matchesMfe &&
+        matchesMae &&
+        isFiniteNumber(row.rrCaptureEfficiency)
+      ) {
+        efficiencyHistogram.push(row.rrCaptureEfficiency);
+      }
+
+      if (matchesStaticFilters && matchesNumericFilters) {
+        symbolCounts[row.symbol] = (symbolCounts[row.symbol] || 0) + 1;
+        symbolTotal += 1;
+      }
+    }
+
+    return {
+      commissionsHistogram,
+      displayRows,
+      efficiencyHistogram,
+      holdHistogram,
+      maeHistogram,
+      mfeHistogram,
+      profitHistogram,
+      rrHistogram,
+      swapHistogram,
+      symbolCounts,
+      symbolTotal,
+      volumeHistogram,
+    };
+  }, [
+    baseRows,
+    effectiveComRange,
+    effectiveEfficiencyRange,
+    effectiveHoldRange,
+    effectiveMaeRange,
+    effectiveMfeRange,
+    effectivePlRange,
+    effectiveRrRange,
+    effectiveSlRange,
+    effectiveSwapRange,
+    effectiveTpRange,
+    effectiveTradeDirection,
+    effectiveVolRange,
+    hasMergedFilterConflict,
+    idsSet,
+    killzoneSet,
+    mergedDateRange.end,
+    mergedDateRange.start,
+    modelTagSet,
+    outcomeSet,
+    protocolSet,
+    searchDocumentByTradeId,
+    searchQueryTokens,
+    sessionTagSet,
+    symbolSet,
+  ]);
+
+  const displayRows = filteredArtifacts.displayRows;
   const streakByTradeId = React.useMemo(
     () => buildTradeStreakMap(displayRows),
     [displayRows]
   );
-  const holdHistogram = React.useMemo(
-    () => applyClientFilters(baseRows, new Set(["hold"])).map((row) => row.holdSeconds),
-    [applyClientFilters, baseRows]
-  );
-  const volumeHistogram = React.useMemo(
-    () => applyClientFilters(baseRows, new Set(["vol"])).map((row) => row.volume),
-    [applyClientFilters, baseRows]
-  );
-  const profitHistogram = React.useMemo(
-    () => applyClientFilters(baseRows, new Set(["pl"])).map((row) => row.profit),
-    [applyClientFilters, baseRows]
-  );
-  const commissionsHistogram = React.useMemo(
-    () =>
-      applyClientFilters(baseRows, new Set(["com"])).map((row) => Number(row.commissions || 0)),
-    [applyClientFilters, baseRows]
-  );
-  const swapHistogram = React.useMemo(
-    () => applyClientFilters(baseRows, new Set(["swap"])).map((row) => Number(row.swap || 0)),
-    [applyClientFilters, baseRows]
-  );
-  const rrHistogram = React.useMemo(
-    () =>
-      applyClientFilters(baseRows, new Set(["rr"]))
-        .map((row) => row.realisedRR)
-        .filter(isFiniteNumber),
-    [applyClientFilters, baseRows]
-  );
-  const mfeHistogram = React.useMemo(
-    () =>
-      applyClientFilters(baseRows, new Set(["mfe"]))
-        .map((row) => row.mfePips)
-        .filter(isFiniteNumber),
-    [applyClientFilters, baseRows]
-  );
-  const maeHistogram = React.useMemo(
-    () =>
-      applyClientFilters(baseRows, new Set(["mae"]))
-        .map((row) => row.maePips)
-        .filter(isFiniteNumber),
-    [applyClientFilters, baseRows]
-  );
-  const efficiencyHistogram = React.useMemo(
-    () =>
-      applyClientFilters(baseRows, new Set(["eff"]))
-        .map((row) => row.rrCaptureEfficiency)
-        .filter(isFiniteNumber),
-    [applyClientFilters, baseRows]
-  );
-  const rowsForSymbolPreview = React.useMemo(
-    () => applyClientFilters(baseRows, new Set(["symbols"])),
-    [applyClientFilters, baseRows]
-  );
-  const symbolCounts = React.useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const row of rowsForSymbolPreview) {
-      counts[row.symbol] = (counts[row.symbol] || 0) + 1;
-    }
-    return counts;
-  }, [rowsForSymbolPreview]);
 
   return {
-    commissionsHistogram,
+    commissionsHistogram: filteredArtifacts.commissionsHistogram,
     displayRows,
-    efficiencyHistogram,
-    holdHistogram,
-    maeHistogram,
-    mfeHistogram,
-    profitHistogram,
-    rrHistogram,
+    efficiencyHistogram: filteredArtifacts.efficiencyHistogram,
+    holdHistogram: filteredArtifacts.holdHistogram,
+    maeHistogram: filteredArtifacts.maeHistogram,
+    mfeHistogram: filteredArtifacts.mfeHistogram,
+    profitHistogram: filteredArtifacts.profitHistogram,
+    rrHistogram: filteredArtifacts.rrHistogram,
     streakByTradeId,
-    swapHistogram,
-    symbolCounts,
-    symbolTotal: rowsForSymbolPreview.length,
-    volumeHistogram,
+    swapHistogram: filteredArtifacts.swapHistogram,
+    symbolCounts: filteredArtifacts.symbolCounts,
+    symbolTotal: filteredArtifacts.symbolTotal,
+    volumeHistogram: filteredArtifacts.volumeHistogram,
   };
 }

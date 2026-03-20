@@ -52,7 +52,8 @@ export type JournalBlockType =
   | 'tradeComparison'
   | 'statCard'
   | 'table'
-  | 'psychology';
+  | 'psychology'
+  | 'goal';
 
 export interface JournalBlock {
   id: string;
@@ -74,6 +75,8 @@ export interface JournalBlockProps {
   videoCaption?: string;
   videoAutoplay?: boolean;
   videoMuted?: boolean;
+  embedUrl?: string;
+  embedType?: 'youtube' | 'twitter' | 'generic';
   calloutEmoji?: string;
   calloutColor?: string;
   calloutType?: 'info' | 'warning' | 'success' | 'error' | 'note';

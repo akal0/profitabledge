@@ -57,7 +57,10 @@ function resolveDashboardAccountSelection(accounts: WarmupAccount[]) {
     return ALL_ACCOUNTS_ID;
   }
 
-  if (selectedAccountId && accounts.some((account) => account.id === selectedAccountId)) {
+  if (
+    selectedAccountId &&
+    accounts.some((account) => account.id === selectedAccountId)
+  ) {
     return selectedAccountId;
   }
 
@@ -190,7 +193,7 @@ export function hasPrefetchedDashboardWorkspace(targetPath: string) {
       limit: DASHBOARD_WIDGET_TRADE_LIMIT,
     }).queryKey,
     selectedAccountId === ALL_ACCOUNTS_ID
-      ? trpcOptions.accounts.aggregatedStats.queryOptions().queryKey
+      ? trpcOptions.accounts.aggregatedStats.queryOptions({}).queryKey
       : trpcOptions.accounts.liveMetrics.queryOptions({
           accountId: selectedAccountId,
         }).queryKey,
@@ -255,15 +258,14 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
     return;
   }
 
-  const bounds =
-    (await queryClient
-      .fetchQuery({
-        ...trpcOptions.accounts.opensBounds.queryOptions({
-          accountId: selectedAccountId,
-        }),
-        staleTime: 30_000,
-      })
-      .catch(() => null)) as OpenBounds | null;
+  const bounds = (await queryClient
+    .fetchQuery({
+      ...trpcOptions.accounts.opensBounds.queryOptions({
+        accountId: selectedAccountId,
+      }),
+      staleTime: 30_000,
+    })
+    .catch(() => null)) as OpenBounds | null;
 
   const rangeState = syncDashboardStores(selectedAccountId, bounds);
   const visibleRange = rangeState?.visibleRange;
@@ -272,7 +274,9 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
 
   const criticalWarmups = [
     queryClient.prefetchQuery({
-      ...trpcOptions.accounts.stats.queryOptions({ accountId: selectedAccountId }),
+      ...trpcOptions.accounts.stats.queryOptions({
+        accountId: selectedAccountId,
+      }),
       staleTime: 30_000,
     }),
     queryClient.prefetchQuery({
@@ -284,7 +288,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
     }),
     selectedAccountId === ALL_ACCOUNTS_ID
       ? queryClient.prefetchQuery({
-          ...trpcOptions.accounts.aggregatedStats.queryOptions(),
+          ...trpcOptions.accounts.aggregatedStats.queryOptions({}),
           staleTime: 15_000,
         })
       : queryClient.prefetchQuery({
@@ -331,7 +335,9 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
 
   await Promise.allSettled(criticalWarmups);
 
-  const backgroundWarmups: WarmupTask[] = [
+  const backgroundWarmups: WarmupTask[] = [];
+
+  const deferredWarmups: WarmupTask[] = [
     () =>
       queryClient.prefetchQuery({
         ...trpcOptions.trades.listSymbols.queryOptions({
@@ -363,6 +369,13 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
     () =>
       queryClient.prefetchQuery({
         ...trpcOptions.accounts.listTags.queryOptions(),
+        staleTime: 60_000,
+      }),
+    () =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.goals.list.queryOptions({
+          accountId: selectedAccountId || undefined,
+        }),
         staleTime: 60_000,
       }),
   ];
@@ -398,24 +411,6 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
           staleTime: 60_000,
         })
     );
-  }
-
-  const deferredWarmups: WarmupTask[] = [
-    () =>
-      queryClient.prefetchQuery({
-        ...trpcOptions.connections.list.queryOptions(),
-        staleTime: 15_000,
-      }),
-    () =>
-      queryClient.prefetchQuery({
-        ...trpcOptions.goals.list.queryOptions({
-          accountId: selectedAccountId || undefined,
-        }),
-        staleTime: 60_000,
-      }),
-  ];
-
-  if (hasScopedAccountSelection) {
     deferredWarmups.push(
       () =>
         queryClient.prefetchQuery({
@@ -435,16 +430,15 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
   }
 
   if (visibleRange && hasScopedAccountSelection) {
-    deferredWarmups.push(
-      () =>
-        queryClient.prefetchQuery({
-          ...trpcOptions.accounts.profitByAssetRange.queryOptions({
-            accountId: selectedAccountId,
-            startISO: visibleRange.start.toISOString(),
-            endISO: visibleRange.end.toISOString(),
-          }),
-          staleTime: 30_000,
-        })
+    deferredWarmups.push(() =>
+      queryClient.prefetchQuery({
+        ...trpcOptions.accounts.profitByAssetRange.queryOptions({
+          accountId: selectedAccountId,
+          startISO: visibleRange.start.toISOString(),
+          endISO: visibleRange.end.toISOString(),
+        }),
+        staleTime: 30_000,
+      })
     );
   }
 

@@ -31,6 +31,7 @@ export default function AuthContinuePage() {
   const hasStartedCheckoutFinalizeRef = useRef(false);
   const isMountedRef = useRef(true);
   const [checkoutSyncFailed, setCheckoutSyncFailed] = useState(false);
+  const [billingTimedOut, setBillingTimedOut] = useState(false);
   const requestedReturnTo = useMemo(
     () => resolvePostAuthPath(searchParams?.get("returnTo")),
     [searchParams]
@@ -55,10 +56,11 @@ export default function AuthContinuePage() {
   } = useConfirmedSession({
     retryDelays: CHECKOUT_SESSION_CONFIRM_RETRY_DELAYS_MS,
   });
-  const billingState = useQuery({
+  const billingQuery = useQuery({
     ...trpcOptions.billing.getState.queryOptions(),
     enabled: !isSessionPending && hasConfirmedSession,
-  }).data;
+  });
+  const billingState = billingQuery.data;
   const billingStateQueryKey = trpcOptions.billing.getState.queryOptions().queryKey;
 
   useEffect(() => {
@@ -66,8 +68,29 @@ export default function AuthContinuePage() {
       isMountedRef.current = false;
     };
   }, []);
+
+  // Safety net: if billing never resolves after session is confirmed, unblock the redirect.
+  useEffect(() => {
+    if (!hasConfirmedSession || isSessionPending || checkoutPlanKey || billingState) return;
+    const timer = setTimeout(() => setBillingTimedOut(true), 5000);
+    return () => clearTimeout(timer);
+  }, [hasConfirmedSession, isSessionPending, checkoutPlanKey, billingState]);
   const redirectTarget = useMemo(() => {
-    if (checkoutPlanKey || !billingState) {
+    if (checkoutPlanKey) {
+      return null;
+    }
+
+    // If billing failed or timed out, unblock the redirect with a safe fallback.
+    if (!billingState) {
+      if (billingQuery.isError || billingTimedOut) {
+        // Non-dashboard paths (e.g. journal share links) go directly.
+        if (!returnToAfterOnboarding.startsWith("/dashboard")) {
+          return returnToAfterOnboarding;
+        }
+        // Dashboard paths fall back to onboarding — safest for new sign-ups.
+        // Existing users who completed onboarding will be redirected through.
+        return buildOnboardingPath(returnToAfterOnboarding);
+      }
       return null;
     }
 
@@ -77,7 +100,9 @@ export default function AuthContinuePage() {
       ? requestedReturnTo
       : buildOnboardingPath(returnToAfterOnboarding);
   }, [
+    billingQuery.isError,
     billingState,
+    billingTimedOut,
     checkoutPlanKey,
     requestedReturnTo,
     returnToAfterOnboarding,

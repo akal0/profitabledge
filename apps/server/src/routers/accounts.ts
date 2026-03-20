@@ -7,6 +7,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { generateFeedEventForTrade } from "../lib/feed-event-generator";
 import {
+  convertCurrencyAmount,
+  normalizeCurrencyCode,
+} from "@profitabledge/contracts/currency";
+import {
   ALL_ACCOUNTS_ID,
   buildAccountScopeCondition,
   isAllAccountsScope,
@@ -37,9 +41,7 @@ import {
   provisionDemoWorkspaceAccount,
   seedSampleAccount,
 } from "./accounts/demo-sample";
-import {
-  resetDemoWorkspaceForUser,
-} from "./accounts/demo-workspace";
+import { resetDemoWorkspaceForUser } from "./accounts/demo-workspace";
 import {
   metricsProcedure,
   updateBrokerSettingsProcedure,
@@ -208,6 +210,20 @@ export const accountsRouter = router({
         });
       }
 
+      const [accountCountRow] = await db
+        .select({
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(tradingAccount)
+        .where(eq(tradingAccount.userId, ctx.session.user.id));
+
+      if (Number(accountCountRow?.count ?? 0) <= 1) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You can't delete your only account.",
+        });
+      }
+
       const currentPreferences = await getUserWidgetPreferences(
         ctx.session.user.id
       );
@@ -261,8 +277,7 @@ export const accountsRouter = router({
         ? db
             .select({
               accountId: trade.accountId,
-              totalProfit:
-                sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
+              totalProfit: sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
             })
             .from(trade)
             .where(
@@ -320,13 +335,19 @@ export const accountsRouter = router({
   }),
   metrics: metricsProcedure,
   stats: protectedProcedure
-    .input(z.object({ accountId: z.string().min(1) }))
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        currencyCode: z.string().trim().min(1).optional(),
+      })
+    )
     .query(async ({ input, ctx }) => {
       try {
         const accountIds = await resolveScopedAccountIds(
           ctx.session.user.id,
           input.accountId
         );
+        const targetCurrencyCode = normalizeCurrencyCode(input.currencyCode);
 
         if (accountIds.length === 0) {
           throw new TRPCError({
@@ -345,23 +366,25 @@ export const accountsRouter = router({
             : inArray(tradingAccount.id, accountIds);
 
         // Single aggregation query for all core stats (replaces 6 separate queries)
-        const [agg, recentRows, acctRows] = await Promise.all([
+        const [aggRows, recentRows, acctRows] = await Promise.all([
           db
             .select({
+              accountId: trade.accountId,
               totalProfit: sql<number>`COALESCE(SUM(CAST(${trade.profit} AS NUMERIC)), 0)`,
               grossProfit: sql<number>`COALESCE(SUM(CASE WHEN CAST(${trade.profit} AS NUMERIC) > 0 THEN CAST(${trade.profit} AS NUMERIC) ELSE 0 END), 0)`,
-              grossLoss: sql<number>`COALESCE(SUM(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN CAST(${trade.profit} AS NUMERIC) ELSE 0 END), 0)`,
+              grossLossAbs: sql<number>`COALESCE(SUM(ABS(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN CAST(${trade.profit} AS NUMERIC) ELSE 0 END)), 0)`,
               wins: sql<number>`COUNT(CASE WHEN ${trade.outcome} IN ('Win', 'PW') OR (${trade.outcome} IS NULL AND CAST(${trade.profit} AS NUMERIC) > 0) THEN 1 END)`,
               losses: sql<number>`COUNT(CASE WHEN ${trade.outcome} = 'Loss' OR (${trade.outcome} IS NULL AND CAST(${trade.profit} AS NUMERIC) < 0) THEN 1 END)`,
               breakeven: sql<number>`COUNT(CASE WHEN ${trade.outcome} = 'BE' OR (${trade.outcome} IS NULL AND CAST(${trade.profit} AS NUMERIC) = 0) THEN 1 END)`,
-              avgLossMagnitude: sql<number>`COALESCE(AVG(ABS(CASE WHEN CAST(${trade.profit} AS NUMERIC) < 0 THEN CAST(${trade.profit} AS NUMERIC) END)), 0)`,
               holdSumSec: sql<number>`COALESCE(SUM(CAST(NULLIF(${trade.tradeDurationSeconds}, '') AS NUMERIC)), 0)`,
               holdCountSec: sql<number>`COALESCE(COUNT(NULLIF(${trade.tradeDurationSeconds}, '')), 0)`,
             })
             .from(trade)
-            .where(tradeScope),
+            .where(tradeScope)
+            .groupBy(trade.accountId),
           db
             .select({
+              accountId: trade.accountId,
               profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
               outcome: trade.outcome,
               closeRaw: sql<string | null>`${trade.close}`,
@@ -376,9 +399,11 @@ export const accountsRouter = router({
             .limit(500),
           db
             .select({
+              id: tradingAccount.id,
               initialBalance: sql<
                 string | null
               >`${tradingAccount.initialBalance}`,
+              initialCurrency: tradingAccount.initialCurrency,
               isVerified: tradingAccount.isVerified,
               liveBalance: tradingAccount.liveBalance,
               liveEquity: tradingAccount.liveEquity,
@@ -389,13 +414,58 @@ export const accountsRouter = router({
             .where(accountScope),
         ]);
 
-        const totalProfit = Number(agg[0]?.totalProfit ?? 0);
-        const grossProfit = Number(agg[0]?.grossProfit ?? 0);
-        const grossLoss = Math.abs(Number(agg[0]?.grossLoss ?? 0));
+        const accountCurrencyById = new Map(
+          acctRows.map((row) => [
+            row.id,
+            normalizeCurrencyCode(row.initialCurrency),
+          ])
+        );
+
+        const totalProfit = aggRows.reduce((sum, row) => {
+          return (
+            sum +
+            convertCurrencyAmount(
+              Number(row.totalProfit ?? 0),
+              accountCurrencyById.get(row.accountId),
+              targetCurrencyCode
+            )
+          );
+        }, 0);
+        const grossProfit = aggRows.reduce((sum, row) => {
+          return (
+            sum +
+            convertCurrencyAmount(
+              Number(row.grossProfit ?? 0),
+              accountCurrencyById.get(row.accountId),
+              targetCurrencyCode
+            )
+          );
+        }, 0);
+        const grossLoss = aggRows.reduce((sum, row) => {
+          return (
+            sum +
+            Math.abs(
+              convertCurrencyAmount(
+                Number(row.grossLossAbs ?? 0),
+                accountCurrencyById.get(row.accountId),
+                targetCurrencyCode
+              )
+            )
+          );
+        }, 0);
         const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
-        const winsCount = Number(agg[0]?.wins ?? 0);
-        const lossesCount = Number(agg[0]?.losses ?? 0);
-        const breakevenCount = Number(agg[0]?.breakeven ?? 0);
+        const winsCount = aggRows.reduce(
+          (sum, row) => sum + Number(row.wins ?? 0),
+          0
+        );
+        const lossesCount = aggRows.reduce(
+          (sum, row) => sum + Number(row.losses ?? 0),
+          0
+        );
+        const breakevenCount = aggRows.reduce(
+          (sum, row) => sum + Number(row.breakeven ?? 0),
+          0
+        );
         const totalTrades = winsCount + lossesCount + breakevenCount;
         const winrate = totalTrades > 0 ? (winsCount / totalTrades) * 100 : 0;
 
@@ -405,8 +475,14 @@ export const accountsRouter = router({
         const lossPct = totalTrades > 0 ? lossesCount / totalTrades : 0;
         const expectancy = winPct * avgWin - lossPct * avgLossVal;
 
-        const holdSumSec = Number(agg[0]?.holdSumSec ?? 0);
-        const holdCountSec = Number(agg[0]?.holdCountSec ?? 0);
+        const holdSumSec = aggRows.reduce(
+          (sum, row) => sum + Number(row.holdSumSec ?? 0),
+          0
+        );
+        const holdCountSec = aggRows.reduce(
+          (sum, row) => sum + Number(row.holdCountSec ?? 0),
+          0
+        );
         const averageHoldSeconds =
           holdCountSec > 0 ? holdSumSec / holdCountSec : 0;
 
@@ -456,7 +532,11 @@ export const accountsRouter = router({
           .map((r) => ({
             symbol: r.symbol ?? null,
             tradeType: r.tradeType ?? null,
-            profit: r.profit,
+            profit: convertCurrencyAmount(
+              r.profit,
+              accountCurrencyById.get(r.accountId),
+              targetCurrencyCode
+            ),
             outcome: getOutcomeMark(r) as "W" | "L",
             closeTime: r.closeTime?.toISOString() ?? r.closeRaw ?? null,
           }));
@@ -468,13 +548,10 @@ export const accountsRouter = router({
         }
         const winStreak = streak;
 
-        // Approximate average R multiple using pre-computed avgLossMagnitude
+        // Approximate average R multiple from normalized portfolio totals.
         let averageRMultiple: number | null = null;
-        if (lossesCount > 0) {
-          const avgLossMag = Math.max(
-            1e-9,
-            Number(agg[0]?.avgLossMagnitude ?? 0)
-          );
+        if (lossesCount > 0 && grossLoss > 0) {
+          const avgLossMag = Math.max(1e-9, grossLoss / lossesCount);
           const expectancyPerTrade =
             totalTrades > 0 ? totalProfit / totalTrades : 0;
           averageRMultiple = expectancyPerTrade / avgLossMag;
@@ -482,7 +559,12 @@ export const accountsRouter = router({
 
         const initialBalanceNum = acctRows.reduce((sum, row) => {
           return (
-            sum + (row.initialBalance != null ? Number(row.initialBalance) : 0)
+            sum +
+            convertCurrencyAmount(
+              row.initialBalance != null ? Number(row.initialBalance) : 0,
+              row.initialCurrency,
+              targetCurrencyCode
+            )
           );
         }, 0);
 
@@ -504,26 +586,40 @@ export const accountsRouter = router({
         });
         const hasFullFreshLiveCoverage =
           acctRows.length > 0 && freshAccounts.length === acctRows.length;
-        const liveBalance = hasFullFreshLiveCoverage
-          ? freshAccounts.reduce(
-              (sum, row) => sum + Number(row.liveBalance || 0),
-              0
-            )
-          : null;
         const liveEquity = hasFullFreshLiveCoverage
           ? freshAccounts.reduce(
               (sum, row) =>
-                sum + Number(row.liveEquity || row.liveBalance || 0),
+                sum +
+                convertCurrencyAmount(
+                  Number(row.liveEquity || row.liveBalance || 0),
+                  row.initialCurrency,
+                  targetCurrencyCode
+                ),
+              0
+            )
+          : null;
+        const convertedLiveBalance = hasFullFreshLiveCoverage
+          ? freshAccounts.reduce(
+              (sum, row) =>
+                sum +
+                convertCurrencyAmount(
+                  Number(row.liveBalance || 0),
+                  row.initialCurrency,
+                  targetCurrencyCode
+                ),
               0
             )
           : null;
         const accountBalance =
-          hasFullFreshLiveCoverage && liveBalance != null
-            ? liveBalance
+          hasFullFreshLiveCoverage && convertedLiveBalance != null
+            ? convertedLiveBalance
             : initialBalanceNum + totalProfit;
         const isVerified = acctRows.some((row) => row.isVerified === 1);
         const isLiveDataFresh = hasFullFreshLiveCoverage;
-        const brokerType = acctRows.find((row) => row.isVerified === 1)?.brokerType ?? acctRows[0]?.brokerType ?? null;
+        const brokerType =
+          acctRows.find((row) => row.isVerified === 1)?.brokerType ??
+          acctRows[0]?.brokerType ??
+          null;
 
         return {
           totalProfit,
@@ -544,11 +640,12 @@ export const accountsRouter = router({
           expectancy,
           // Live metrics (only present for EA-synced accounts)
           isVerified,
-          liveBalance,
+          liveBalance: convertedLiveBalance,
           liveEquity,
           lastSyncedAt: freshestSyncedAt?.toISOString() || null,
           isLiveDataFresh,
           brokerType,
+          currencyCode: targetCurrencyCode ?? null,
           accountScope: isAllAccountsScope(input.accountId)
             ? ALL_ACCOUNTS_ID
             : input.accountId,
@@ -651,5 +748,5 @@ export const accountsRouter = router({
         accountId: input.accountId,
         provisionShell: false,
       });
-  }),
+    }),
 });

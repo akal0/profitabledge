@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 export const journalActionButtonClassName =
-  "cursor-pointer flex items-center justify-center gap-2 rounded-md ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none";
+  "cursor-pointer flex items-center justify-center gap-1 rounded-md ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none";
 
 export const journalActionButtonMutedClassName = cn(
   journalActionButtonClassName,

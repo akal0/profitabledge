@@ -15,9 +15,9 @@ import {
 } from "lucide-react";
 
 import {
-  WidgetLoading,
   WidgetWrapper,
 } from "@/components/dashboard/widget-wrapper";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
   PropAccountStatusBadges,
   getEffectivePropTrackerStatus,
@@ -680,41 +680,7 @@ export default function PropTrackerIndexPage() {
   }, [trackedAccounts]);
 
   if (isLoading) {
-    return (
-      <main className="space-y-6 p-6 py-4 min-h-screen">
-        <div className="flex justify-end">
-          <div className="h-9 w-36 animate-pulse rounded-sm ring ring-white/5 bg-sidebar" />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[1, 2, 3, 4].map((key) => (
-            <div
-              key={key}
-              className="rounded-sm ring ring-white/5 bg-sidebar p-1.5"
-            >
-              <div className="h-28 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
-            </div>
-          ))}
-        </div>
-
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          {[1, 2].map((key) => (
-            <div
-              key={key}
-              className="rounded-sm ring ring-white/5 bg-sidebar p-1.5"
-            >
-              <div className="h-56 animate-pulse rounded-sm bg-white ring ring-white/5 dark:bg-sidebar-accent" />
-            </div>
-          ))}
-        </div>
-
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {[1, 2, 3].map((key) => (
-            <WidgetLoading key={key} className="h-auto min-h-[280px]" />
-          ))}
-        </div>
-      </main>
-    );
+    return <RouteLoadingFallback route="propTracker" className="min-h-[calc(100vh-10rem)]" />;
   }
 
   return (

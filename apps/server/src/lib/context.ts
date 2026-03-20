@@ -64,6 +64,7 @@ export async function createContext(req: NextRequest) {
   if (!cacheKey) {
     return {
       session: null,
+      req,
     };
   }
 
@@ -71,6 +72,7 @@ export async function createContext(req: NextRequest) {
   if (cached && cached.freshUntil > now) {
     return {
       session: cached.session,
+      req,
     };
   }
 
@@ -102,6 +104,7 @@ export async function createContext(req: NextRequest) {
     if (cached && cached.staleUntil > now && isRetryableSessionStoreError(error)) {
       return {
         session: cached.session,
+        req,
       };
     }
     throw error;
@@ -120,6 +123,7 @@ export async function createContext(req: NextRequest) {
 
   return {
     session,
+    req,
   };
 }
 

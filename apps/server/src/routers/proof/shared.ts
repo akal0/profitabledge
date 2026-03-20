@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "../../db";
 import { user as userTable } from "../../db/schema/auth";
+import { affiliateProfile } from "../../db/schema/billing";
 import { publicAccountShare, tradingAccount } from "../../db/schema/trading";
 import {
   buildPublicAccountSlug,
@@ -173,4 +174,50 @@ export async function resolveActivePublicShareOrThrow(input: {
   }
 
   return share;
+}
+
+export async function getPublicProofAffiliateState(userId: string) {
+  const [profile] = await db
+    .select({
+      metadata: affiliateProfile.metadata,
+      approvedAt: affiliateProfile.approvedAt,
+    })
+    .from(affiliateProfile)
+    .where(
+      and(
+        eq(affiliateProfile.userId, userId),
+        eq(affiliateProfile.isActive, true)
+      )
+    )
+    .limit(1);
+
+  if (!profile?.approvedAt) {
+    return {
+      isAffiliate: false,
+      badgeLabel: null,
+      effectVariant: null,
+    };
+  }
+
+  const metadata =
+    profile.metadata && typeof profile.metadata === "object"
+      ? (profile.metadata as Record<string, unknown>)
+      : null;
+  const publicProof =
+    metadata?.publicProof && typeof metadata.publicProof === "object"
+      ? (metadata.publicProof as Record<string, unknown>)
+      : null;
+
+  return {
+    isAffiliate: true,
+    badgeLabel:
+      typeof publicProof?.badgeLabel === "string" && publicProof.badgeLabel.trim()
+        ? publicProof.badgeLabel.trim()
+        : "Affiliate",
+    effectVariant:
+      typeof publicProof?.effectVariant === "string" &&
+      publicProof.effectVariant.trim()
+        ? publicProof.effectVariant.trim()
+        : "gold-emerald",
+  };
 }

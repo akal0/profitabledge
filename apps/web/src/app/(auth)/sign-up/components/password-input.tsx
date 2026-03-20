@@ -4,7 +4,6 @@ import { useId, useMemo, useState, forwardRef } from "react";
 import { CheckIcon, EyeIcon, EyeOffIcon, XIcon } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 
 const PasswordInput = forwardRef<
   HTMLInputElement,
@@ -36,23 +35,15 @@ const PasswordInput = forwardRef<
   }, [strength]);
 
   const getStrengthColor = (score: number) => {
-    if (score === 0) return "bg-border";
-    if (score <= 1) return "bg-red-500";
-    if (score <= 2) return "bg-orange-500";
-    if (score === 3) return "bg-amber-500";
-    return "bg-emerald-500";
-  };
-
-  const getStrengthText = (score: number) => {
-    if (score === 0) return "Enter a password";
-    if (score <= 2) return "Weak password";
-    if (score === 3) return "Medium password";
-    return "Strong password";
+    if (score === 0) return "bg-white/10";
+    if (score <= 1) return "bg-rose-400";
+    if (score <= 2) return "bg-amber-400";
+    if (score === 3) return "bg-lime-300";
+    return "bg-emerald-300";
   };
 
   return (
     <div>
-      {/* Password input field with toggle visibility button */}
       <div className="*:not-first:mt-2">
         <div className="relative">
           <Input
@@ -67,7 +58,7 @@ const PasswordInput = forwardRef<
             {...rest}
           />
           <button
-            className="text-muted-foreground/80 hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md transition-[color,box-shadow] outline-none focus:z-10 focus-visible:ring-[3px] disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+            className="absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-md text-white/44 transition-colors outline-none hover:text-white focus:z-10 focus-visible:ring-[3px] focus-visible:ring-white/15 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
             type="button"
             onClick={toggleVisibility}
             aria-label={isVisible ? "Hide password" : "Show password"}
@@ -83,9 +74,8 @@ const PasswordInput = forwardRef<
         </div>
       </div>
 
-      {/* Password strength indicator */}
       <div
-        className="bg-border mt-2 mb-6 h-1 w-full overflow-hidden rounded-full"
+        className="mt-2 mb-6 h-1 w-full overflow-hidden rounded-full bg-white/10"
         role="progressbar"
         aria-valuenow={strengthScore}
         aria-valuemin={0}
@@ -100,9 +90,8 @@ const PasswordInput = forwardRef<
         ></div>
       </div>
 
-      {/* Password requirements list */}
       <ul
-        className="space-y-1.5 grid grid-cols-2 gap-y-0.5 gap-x-5 font-semibold"
+        className="grid gap-2 gap-x-5 text-left font-semibold sm:grid-cols-2"
         aria-label="Password requirements"
       >
         {strength.map((req, index) => (
@@ -110,15 +99,15 @@ const PasswordInput = forwardRef<
             {req.met ? (
               <CheckIcon
                 size={16}
-                className="text-emerald-500"
+                className="text-emerald-300"
                 aria-hidden="true"
               />
             ) : (
-              <XIcon size={16} className="text-secondary" aria-hidden="true" />
+              <XIcon size={16} className="text-white/26" aria-hidden="true" />
             )}
             <span
               className={`text-xs ${
-                req.met ? "text-emerald-600" : "text-secondary"
+                req.met ? "text-emerald-200" : "text-white/42"
               }`}
             >
               {req.text}

@@ -55,12 +55,18 @@ type LiveMetricsOpenTrade = {
   symbol?: string | null;
   openTime?: string | null;
   profit?: number | null;
+  swap?: number | null;
   accountName?: string | null;
 };
 
-function mapLiveTradePreviews(input: {
-  openTrades?: LiveMetricsOpenTrade[];
-} | null | undefined): TradePreview[] {
+function mapLiveTradePreviews(
+  input:
+    | {
+        openTrades?: LiveMetricsOpenTrade[];
+      }
+    | null
+    | undefined
+): TradePreview[] {
   return (input?.openTrades ?? [])
     .map((trade) => {
       const open = trade.openTime ? String(trade.openTime) : "";
@@ -74,7 +80,7 @@ function mapLiveTradePreviews(input: {
         id: String(trade.id ?? trade.ticket ?? ""),
         symbol: String(trade.symbol ?? "Unknown"),
         open,
-        profit: Number(trade.profit ?? 0),
+        profit: Number(trade.profit ?? 0) + Number(trade.swap ?? 0),
         holdSeconds,
         status: "live" as const,
         accountName:
@@ -117,9 +123,10 @@ export default function DashboardCalendar({
   const [days, setDays] = useState<DayRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<CalendarRange | null>(null);
-  const [bounds, setBounds] = useState<{ minISO: string; maxISO: string } | null>(
-    null
-  );
+  const [bounds, setBounds] = useState<{
+    minISO: string;
+    maxISO: string;
+  } | null>(null);
   const [initialBalance, setInitialBalance] = useState<number | null>(null);
   const [hoveredISO, setHoveredISO] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("month");
@@ -131,7 +138,9 @@ export default function DashboardCalendar({
   const [previews, setPreviews] = useState<CalendarPreviewState>({});
   const [liveTrades, setLiveTrades] = useState<TradePreview[]>([]);
   const router = useRouter();
-  const setSelectedAccountId = useAccountStore((state) => state.setSelectedAccountId);
+  const setSelectedAccountId = useAccountStore(
+    (state) => state.setSelectedAccountId
+  );
   const beginAccountTransition = useAccountTransitionStore(
     (state) => state.beginAccountTransition
   );
@@ -171,7 +180,9 @@ export default function DashboardCalendar({
   const monthGrid = useMemo(() => {
     if (!range) return [];
     if (viewMode === "week") {
-      return Array.from({ length: 7 }, (_, index) => addDays(range.start, index));
+      return Array.from({ length: 7 }, (_, index) =>
+        addDays(range.start, index)
+      );
     }
     return buildMonthGrid(startOfMonth(range.start));
   }, [range, viewMode]);
@@ -181,7 +192,9 @@ export default function DashboardCalendar({
     return Math.max(
       1,
       ...calendarDays.map((day) =>
-        Math.abs(day.count > 0 ? day.totalProfit : Number(day.liveTradeProfit || 0))
+        Math.abs(
+          day.count > 0 ? day.totalProfit : Number(day.liveTradeProfit || 0)
+        )
       )
     );
   }, [calendarDays]);
@@ -204,7 +217,9 @@ export default function DashboardCalendar({
     if (!range || !effectiveBounds) return false;
     const minDate = new Date(effectiveBounds.minISO);
     if (viewMode === "month") {
-      return startOfMonth(range.start).getTime() > startOfMonth(minDate).getTime();
+      return (
+        startOfMonth(range.start).getTime() > startOfMonth(minDate).getTime()
+      );
     }
     return startOfWeek(range.start).getTime() > startOfWeek(minDate).getTime();
   }, [effectiveBounds, range, viewMode]);
@@ -213,7 +228,9 @@ export default function DashboardCalendar({
     if (!range || !effectiveBounds) return false;
     const maxDate = new Date(effectiveBounds.maxISO);
     if (viewMode === "month") {
-      return startOfMonth(range.start).getTime() < startOfMonth(maxDate).getTime();
+      return (
+        startOfMonth(range.start).getTime() < startOfMonth(maxDate).getTime()
+      );
     }
     return startOfWeek(range.start).getTime() < startOfWeek(maxDate).getTime();
   }, [effectiveBounds, range, viewMode]);
@@ -359,19 +376,32 @@ export default function DashboardCalendar({
             (candidate) => candidate.id === accountId
           );
           const balance =
-            account?.initialBalance != null ? Number(account.initialBalance) : null;
+            account?.initialBalance != null
+              ? Number(account.initialBalance)
+              : null;
           setInitialBalance(Number.isFinite(balance) ? Number(balance) : null);
           setLiveTrades(nextLiveTrades);
         }
 
         const nextEffectiveBounds =
-          extendBoundsWithTradePreviews(nextBounds, nextLiveTrades) ?? nextBounds;
+          extendBoundsWithTradePreviews(nextBounds, nextLiveTrades) ??
+          nextBounds;
         const minDate = new Date(nextEffectiveBounds.minISO);
         const maxDate = new Date(nextEffectiveBounds.maxISO);
         const visibleRange =
           viewMode === "month"
-            ? clampRange(startOfMonth(maxDate), endOfMonth(maxDate), minDate, maxDate)
-            : clampRange(startOfWeek(maxDate), endOfWeek(maxDate), minDate, maxDate);
+            ? clampRange(
+                startOfMonth(maxDate),
+                endOfMonth(maxDate),
+                minDate,
+                maxDate
+              )
+            : clampRange(
+                startOfWeek(maxDate),
+                endOfWeek(maxDate),
+                minDate,
+                maxDate
+              );
         const fetchRange =
           viewMode === "month"
             ? {
@@ -383,10 +413,9 @@ export default function DashboardCalendar({
         if (mounted) {
           setBounds(nextBounds);
           setRange(visibleRange);
-          useDateRangeStore.getState().setRange(
-            visibleRange.start,
-            visibleRange.end
-          );
+          useDateRangeStore
+            .getState()
+            .setRange(visibleRange.start, visibleRange.end);
           useDateRangeStore.getState().setBounds(minDate, maxDate);
         }
 
@@ -494,7 +523,7 @@ export default function DashboardCalendar({
 
       const items =
         result && typeof result === "object" && "items" in result
-          ? ((result as { items?: Array<Record<string, unknown>> }).items ?? [])
+          ? (result as { items?: Array<Record<string, unknown>> }).items ?? []
           : [];
 
       setPreviews((current) => ({

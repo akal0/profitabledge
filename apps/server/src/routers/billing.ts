@@ -47,6 +47,7 @@ import {
   deleteAffiliatePaymentMethod as deleteAffiliatePaymentMethodRecord,
   buildReferralState,
   disconnectAffiliateStripeConnect,
+  getAffiliateCommissionBpsForUser,
   ensureAffiliateOfferForCheckout,
   ensureReferralRewardsForUser,
   getAffiliateCheckoutAttribution,
@@ -69,6 +70,7 @@ import {
   rejectAffiliateApplication,
   rejectAffiliateWithdrawal,
   requestAffiliateWithdrawal,
+  saveAffiliateCommissionSplit,
   saveAffiliateOffer,
   saveAffiliatePaymentMethod,
   saveAffiliateTrackingLink,
@@ -1027,6 +1029,23 @@ export const billingRouter = router({
       });
     }),
 
+  saveAffiliateCommissionSplit: protectedProcedure
+    .input(
+      z.object({
+        affiliateUserId: z.string(),
+        commissionBps: z.number().int().min(0).max(10000),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return saveAffiliateCommissionSplit({
+        affiliateUserId: input.affiliateUserId,
+        commissionBps: input.commissionBps,
+      });
+    }),
+
   saveAffiliateTrackingLink: protectedProcedure
     .input(
       z.object({
@@ -1240,6 +1259,11 @@ export const billingRouter = router({
             affiliateOfferCode: input.affiliateOfferCode,
           })
         : await getAffiliateCheckoutAttribution(user.id);
+      const affiliateCommissionBps = affiliateCheckout.attribution?.affiliateUserId
+        ? await getAffiliateCommissionBpsForUser(
+            affiliateCheckout.attribution.affiliateUserId
+          )
+        : null;
       const upgradeOfferDiscount = referralRewardGrant
         ? null
         : await createUpgradeOfferDiscount({
@@ -1287,7 +1311,9 @@ export const billingRouter = router({
             ? {
                 affiliate_attribution_id: affiliateCheckout.attribution.id,
                 affiliate_code: affiliateCheckout.attribution.affiliateCode,
-                affiliate_commission_bps: String(getServerAffiliateCommissionBps()),
+                affiliate_commission_bps: String(
+                  affiliateCommissionBps ?? getServerAffiliateCommissionBps()
+                ),
                 ...(affiliateCheckout.offer?.id
                   ? {
                       affiliate_offer_id: affiliateCheckout.offer.id,

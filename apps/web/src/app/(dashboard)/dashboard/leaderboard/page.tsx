@@ -3,6 +3,7 @@
 import * as React from "react";
 import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -283,14 +284,7 @@ export default function LeaderboardPage() {
 
       {/* Leaderboard Entries */}
       {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div
-              key={i}
-              className="h-32 rounded-lg bg-sidebar-accent/30 animate-pulse"
-            />
-          ))}
-        </div>
+        <RouteLoadingFallback route="leaderboard" className="min-h-[320px]" />
       ) : !leaderboardData || leaderboardData.length === 0 ? (
         <div className="text-center py-12">
           <Trophy className="size-12 text-white/20 mx-auto mb-3" />

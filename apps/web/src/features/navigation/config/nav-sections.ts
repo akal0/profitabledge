@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Gift,
   Users,
+  Clock,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 
@@ -63,6 +64,7 @@ export function getNavSections(
         { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
         { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },
         { title: "Goals", url: "/dashboard/goals", icon: Target },
+        { title: "Calendar", url: "/dashboard/news", icon: Clock },
       ] satisfies NavItem[],
     } satisfies NavSection,
     {

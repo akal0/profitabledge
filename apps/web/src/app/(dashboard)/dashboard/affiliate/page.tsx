@@ -230,6 +230,20 @@ export default function AffiliateDashboardPage() {
               </div>
             </div>
           ) : null}
+
+          {typeof profile?.commissionBps === "number" ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
+                Payout split
+              </p>
+              <div className="rounded-sm border border-white/5 bg-sidebar-accent p-3 text-xs text-white/55">
+                <span className="font-medium text-white">
+                  {(profile.commissionBps / 100).toFixed(2)}%
+                </span>{" "}
+                of the commissionable order amount
+              </div>
+            </div>
+          ) : null}
         </div>
 
       </GoalPanel>

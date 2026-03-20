@@ -74,7 +74,14 @@ export function GrowthAdminDashboard() {
     maxRedemptions: "",
   });
   const [offerDrafts, setOfferDrafts] = useState<
-    Record<string, { code: string; discountBasisPoints: string }>
+    Record<
+      string,
+      {
+        code: string;
+        discountBasisPoints: string;
+        commissionBps: string;
+      }
+    >
   >({});
   const billingV2 = getBillingV2Options();
 
@@ -161,6 +168,24 @@ export function GrowthAdminDashboard() {
     onError: (error: unknown) => {
       toast.error(
         error instanceof Error ? error.message : "Unable to save affiliate offer"
+      );
+    },
+  });
+  const saveAffiliateCommissionSplit = useMutation({
+    ...(billingV2.saveAffiliateCommissionSplit?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Affiliate commission splits are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutQueueQuery.refetch();
+      toast.success("Affiliate commission split saved");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to save affiliate commission split"
       );
     },
   });
@@ -297,16 +322,25 @@ export function GrowthAdminDashboard() {
     offerDrafts[entry.affiliate.id] ?? {
       code: entry.defaultOffer?.code ?? `${entry.affiliate.code}10`,
       discountBasisPoints: String(entry.defaultOffer?.discountBasisPoints ?? 1000),
+      commissionBps: String(entry.affiliate.commissionBps ?? 2000),
     };
 
   const updateOfferDraft = (
     affiliateUserId: string,
-    patch: Partial<{ code: string; discountBasisPoints: string }>
+    patch: Partial<{
+      code: string;
+      discountBasisPoints: string;
+      commissionBps: string;
+    }>
   ) => {
     setOfferDrafts((current) => ({
       ...current,
       [affiliateUserId]: {
-        ...(current[affiliateUserId] ?? { code: "", discountBasisPoints: "1000" }),
+        ...(current[affiliateUserId] ?? {
+          code: "",
+          discountBasisPoints: "1000",
+          commissionBps: "2000",
+        }),
         ...patch,
       },
     }));
@@ -337,6 +371,25 @@ export function GrowthAdminDashboard() {
       label: `${entry.affiliate.name || entry.affiliate.code} Affiliate Offer`,
       discountBasisPoints,
       isDefault: true,
+    } as any);
+  };
+
+  const handleSaveAffiliateCommissionSplit = async (entry: any) => {
+    const draft = getOfferDraft(entry);
+    const commissionBps = Number(draft.commissionBps);
+
+    if (
+      !Number.isInteger(commissionBps) ||
+      commissionBps < 0 ||
+      commissionBps > 10000
+    ) {
+      toast.error("Commission split basis points must be between 0 and 10000");
+      return;
+    }
+
+    await saveAffiliateCommissionSplit.mutateAsync({
+      affiliateUserId: entry.affiliate.id,
+      commissionBps,
     } as any);
   };
 
@@ -570,6 +623,10 @@ export function GrowthAdminDashboard() {
                     saveAffiliateOffer.isPending &&
                     (saveAffiliateOffer.variables as any)?.affiliateUserId ===
                       entry.affiliate.id;
+                  const isSavingCommissionSplit =
+                    saveAffiliateCommissionSplit.isPending &&
+                    (saveAffiliateCommissionSplit.variables as any)
+                      ?.affiliateUserId === entry.affiliate.id;
 
                   return (
                     <div
@@ -687,6 +744,33 @@ export function GrowthAdminDashboard() {
                         <p className="mt-2 text-[10px] text-white/35">
                           Basis points: 1000 = 10% off. This code is resolved in-app
                           before checkout so attribution stays authoritative.
+                        </p>
+                        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+                          <Input
+                            value={offerDraft.commissionBps}
+                            onChange={(event) =>
+                              updateOfferDraft(entry.affiliate.id, {
+                                commissionBps: event.target.value,
+                              })
+                            }
+                            placeholder="2000"
+                            className="h-9 ring-white/5 bg-sidebar text-xs"
+                          />
+                          <Button
+                            onClick={() =>
+                              handleSaveAffiliateCommissionSplit(entry)
+                            }
+                            disabled={saveAffiliateCommissionSplit.isPending}
+                            className="h-9 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
+                          >
+                            {isSavingCommissionSplit
+                              ? "Saving split..."
+                              : "Save payout split"}
+                          </Button>
+                        </div>
+                        <p className="mt-2 text-[10px] text-white/35">
+                          Affiliate payout split. 2000 = 20% of the commissionable
+                          order amount.
                         </p>
                       </div>
 

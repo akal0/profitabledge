@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { trpcClient } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   type ChartConfig,
@@ -31,7 +32,6 @@ import { APP_RECHARTS_TOOLTIP_CONTENT_STYLE } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
-  Loader2,
   TrendingUp,
   TrendingDown,
   Target,
@@ -81,11 +81,7 @@ export default function BacktestReviewPage() {
   }, [sessionId]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="size-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <RouteLoadingFallback route="backtestReview" className="min-h-full" />;
   }
 
   if (!data) {

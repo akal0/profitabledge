@@ -159,6 +159,7 @@ export const affiliateProfile = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     code: varchar("code", { length: 64 }).notNull(),
     displayName: text("display_name"),
+    commissionBps: integer("commission_bps").notNull().default(2000),
     isActive: boolean("is_active").notNull().default(true),
     approvedAt: timestamp("approved_at"),
     approvedByUserId: text("approved_by_user_id").references(() => user.id, {

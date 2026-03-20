@@ -45,6 +45,7 @@ Main dashboard pages currently include:
 - `/dashboard/growth-admin`
 - `/dashboard/referrals`
 - `/dashboard/trades`
+- `/dashboard/news`
 - `/dashboard/journal`
 - `/dashboard/psychology`
 - `/dashboard/goals`
@@ -141,6 +142,8 @@ Current example:
 - the login page now lands directly on `/dashboard`, and the dashboard shell no longer force-bounces signed-in members back to onboarding just because billing/onboarding state is incomplete
 - the onboarding account step now flips its footer CTA to `Go to dashboard` as soon as CSV import, demo workspace creation, or broker/EA setup intent makes the member ready to continue, instead of waiting on a stale account-list refresh
 - the dashboard sidebar now exposes a `Growth` section with `/dashboard/growth`, `/dashboard/referrals`, and `/dashboard/affiliate`, while `/dashboard/growth-admin` remains an admin-only direct route instead of a persistent sidebar item
+- the beta-visible economic calendar route at `/dashboard/news` is now back in sidebar and command-palette discovery as `Calendar`, while the other community routes remain hidden from discovery
+- the economic calendar API route keeps the current beta-safe provider posture for now: TradingEconomics remains the primary source, real TradingEconomics credentials can be supplied through `TRADING_ECONOMICS_API_KEY`, and the existing FairEconomy fallback stays in place until a fully licensed production calendar feed replaces the guest-tier path
 - the growth overview and growth-admin routes now live under a shared dashboard route-group layout that mounts a billing-style underlined admin tab strip directly beneath the header, while growth, referrals, affiliate, and growth-admin page bodies reuse the same shadowed settings-card shell language as Billing instead of bespoke route-local framing
 - the growth overview and growth admin surfaces now live on their own dashboard routes, while Billing keeps payout-method management inside Billing for approved affiliates
 - on localhost/non-production builds, the affiliate payment-method form exposes test preset buttons for PayPal, Wise, bank transfer, and crypto, but those presets still save the same production-compatible payout method types and fields

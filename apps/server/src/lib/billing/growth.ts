@@ -463,6 +463,11 @@ export async function getApprovedAffiliateProfile(userId: string) {
   return row;
 }
 
+export async function getAffiliateCommissionBpsForUser(affiliateUserId: string) {
+  const profile = await getAffiliateProfileRow(affiliateUserId);
+  return profile?.commissionBps ?? getAffiliateCommissionBps();
+}
+
 async function getReferralProfileByCode(code: string) {
   const normalized = normalizeGrowthCode(code);
   if (!normalized) {
@@ -1122,6 +1127,7 @@ async function ensureAffiliateProfileApproved(
       .set({
         code: existing.code || referral.code,
         displayName: existing.displayName || user.name,
+        commissionBps: existing.commissionBps ?? getAffiliateCommissionBps(),
         isActive: true,
         approvedAt: new Date(),
         approvedByUserId,
@@ -1156,6 +1162,7 @@ async function ensureAffiliateProfileApproved(
           userId: user.id,
           code,
           displayName: user.name,
+          commissionBps: getAffiliateCommissionBps(),
           isActive: true,
           approvedAt: new Date(),
           approvedByUserId,
@@ -1583,6 +1590,7 @@ export async function buildAffiliateState(userId: string) {
     profile: {
       id: profile.id,
       code: profile.code,
+      commissionBps: profile.commissionBps,
       offerCode: defaultOffer?.code ?? null,
       defaultOfferCode: defaultOffer?.code ?? null,
       shareUrl,
@@ -1657,6 +1665,7 @@ export async function buildAffiliateDashboard(userId: string) {
     profile: {
       id: profile.id,
       code: profile.code,
+      commissionBps: profile.commissionBps,
       offerCode: defaultOffer?.code ?? null,
       defaultOfferCode: defaultOffer?.code ?? null,
       shareUrl,
@@ -1702,6 +1711,7 @@ export async function getAffiliatePayoutSettings(userId: string) {
   });
 
   return {
+    commissionBps: profile.commissionBps,
     stripeConnect: providerAccount
       ? {
           id: providerAccount.id,
@@ -1986,6 +1996,31 @@ export async function saveAffiliateOffer(input: {
 
   const offers = await getAffiliateOfferRows(input.affiliateUserId);
   return offers.find((row) => row.id === savedOffer.id) ?? savedOffer;
+}
+
+export async function saveAffiliateCommissionSplit(input: {
+  affiliateUserId: string;
+  commissionBps: number;
+}) {
+  const profile = await getApprovedAffiliateProfile(input.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Affiliate not found",
+    });
+  }
+
+  const commissionBps = Math.max(0, Math.min(10000, Math.round(input.commissionBps)));
+  const [updated] = await db
+    .update(affiliateProfile)
+    .set({
+      commissionBps,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateProfile.id, profile.id))
+    .returning();
+
+  return updated ?? profile;
 }
 
 export async function saveAffiliateTrackingLink(input: {
@@ -2934,6 +2969,7 @@ export async function listAffiliatePayoutQueue() {
           name: entry.user.name,
           email: entry.user.email,
           code: entry.profile.code,
+          commissionBps: entry.profile.commissionBps,
         },
         paymentMethods,
         manualPaymentMethods: paymentMethods,
@@ -4215,7 +4251,16 @@ export async function recordAffiliateCommissionEvent(input: {
       : input.orderAmount != null && input.taxAmount != null
       ? Math.max(0, input.orderAmount - input.taxAmount)
       : input.orderAmount ?? 0;
-  const commissionBps = input.commissionBps ?? getAffiliateCommissionBps();
+  const [profile] = await db
+    .select({
+      commissionBps: affiliateProfile.commissionBps,
+    })
+    .from(affiliateProfile)
+    .where(eq(affiliateProfile.id, attribution.affiliateProfileId))
+    .limit(1);
+
+  const commissionBps =
+    input.commissionBps ?? profile?.commissionBps ?? getAffiliateCommissionBps();
   const commissionAmount = Math.round(
     (commissionBaseAmount * commissionBps) / 10000
   );

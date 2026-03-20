@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 const TE_BASE = "https://api.tradingeconomics.com/calendar/country/all";
 const FF_BASE = "https://nfs.faireconomy.media/ff_calendar_thisweek.json";
+const GUEST_TE_API_KEY = "guest:guest";
+const CALENDAR_REVALIDATE_SECONDS = 300;
 
 type TradingEconomicsItem = Record<string, unknown> & {
   Date?: string;
@@ -37,6 +39,12 @@ type CalendarEvent = {
   previous: string | number | null;
 };
 
+type CalendarFetchResult = {
+  ok: boolean;
+  events: CalendarEvent[];
+  status: number;
+};
+
 function parseDate(value: string | null, fallback: Date) {
   const parsed = value ? new Date(value) : fallback;
   return Number.isNaN(parsed.getTime()) ? fallback : parsed;
@@ -44,6 +52,18 @@ function parseDate(value: string | null, fallback: Date) {
 
 function formatDate(date: Date) {
   return date.toISOString().slice(0, 10);
+}
+
+function resolveTradingEconomicsApiKey() {
+  return (
+    process.env.TRADING_ECONOMICS_API_KEY?.trim() ||
+    process.env.TRADINGECONOMICS_API_KEY?.trim() ||
+    GUEST_TE_API_KEY
+  );
+}
+
+function hasConfiguredTradingEconomicsKey(apiKey: string) {
+  return apiKey !== GUEST_TE_API_KEY;
 }
 
 function mapTradingEconomics(
@@ -91,6 +111,17 @@ function mapTradingEconomics(
     .filter((item): item is CalendarEvent => item !== null);
 }
 
+function dedupeCalendarEvents(events: CalendarEvent[]) {
+  const seen = new Set<string>();
+
+  return events.filter((event) => {
+    const key = `${event.title}-${event.country}-${event.date}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function mapForexFactory(
   data: ForexFactoryItem[],
   startTime: number,
@@ -118,6 +149,80 @@ function mapForexFactory(
     .filter((item): item is CalendarEvent => item !== null);
 }
 
+async function fetchTradingEconomicsCalendar(
+  startISO: string,
+  endISO: string,
+  startTime: number,
+  endTime: number,
+  apiKey: string
+): Promise<CalendarFetchResult> {
+  const teUrl = `${TE_BASE}/${startISO}/${endISO}?c=${encodeURIComponent(apiKey)}`;
+  const response = await fetch(teUrl, {
+    headers: {
+      "User-Agent": "profitabledge/1.0",
+      Accept: "application/json",
+    },
+    next: { revalidate: CALENDAR_REVALIDATE_SECONDS },
+  });
+
+  if (!response.ok) {
+    return { ok: false, events: [], status: response.status };
+  }
+
+  const text = await response.text();
+  let parsed: unknown = [];
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = [];
+  }
+
+  return {
+    ok: true,
+    events: mapTradingEconomics(
+      Array.isArray(parsed) ? (parsed as TradingEconomicsItem[]) : [],
+      startTime,
+      endTime
+    ),
+    status: response.status,
+  };
+}
+
+async function fetchForexFactoryCalendar(
+  startTime: number,
+  endTime: number
+): Promise<CalendarFetchResult> {
+  const response = await fetch(FF_BASE, {
+    headers: {
+      "User-Agent": "profitabledge/1.0",
+      Accept: "application/json",
+    },
+    next: { revalidate: CALENDAR_REVALIDATE_SECONDS },
+  });
+
+  if (!response.ok) {
+    return { ok: false, events: [], status: response.status };
+  }
+
+  const text = await response.text();
+  let parsed: unknown = [];
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = [];
+  }
+
+  return {
+    ok: true,
+    events: mapForexFactory(
+      Array.isArray(parsed) ? (parsed as ForexFactoryItem[]) : [],
+      startTime,
+      endTime
+    ),
+    status: response.status,
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = request.nextUrl;
@@ -137,64 +242,56 @@ export async function GET(request: NextRequest) {
     const endISO = formatDate(endDate);
     const startTime = startDate.getTime();
     const endTime = endDate.getTime();
+    const tradingEconomicsApiKey = resolveTradingEconomicsApiKey();
 
-    const teUrl = `${TE_BASE}/${startISO}/${endISO}?c=guest:guest`;
+    // Prefer the official TradingEconomics feed when real credentials are
+    // configured. Keep the existing FairEconomy fallback in beta until we
+    // fully replace the guest-tier source with a licensed production feed.
+    if (hasConfiguredTradingEconomicsKey(tradingEconomicsApiKey)) {
+      const teResult = await fetchTradingEconomicsCalendar(
+        startISO,
+        endISO,
+        startTime,
+        endTime,
+        tradingEconomicsApiKey
+      );
 
-    const [teRes, ffRes] = await Promise.all([
-      fetch(teUrl, {
-        headers: {
-          "User-Agent": "profitabledge/1.0",
-          Accept: "application/json",
-        },
-        next: { revalidate: 300 },
-      }),
-      fetch(FF_BASE, {
-        headers: {
-          "User-Agent": "profitabledge/1.0",
-          Accept: "application/json",
-        },
-        next: { revalidate: 300 },
-      }),
-    ]);
+      if (teResult.ok) {
+        return NextResponse.json(dedupeCalendarEvents(teResult.events));
+      }
 
-    if (!teRes.ok && !ffRes.ok) {
+      const ffResult = await fetchForexFactoryCalendar(startTime, endTime);
+      if (ffResult.ok) {
+        return NextResponse.json(dedupeCalendarEvents(ffResult.events));
+      }
+
       return NextResponse.json(
         { error: "calendar_fetch_failed" },
-        { status: teRes.status || ffRes.status || 502 }
+        { status: teResult.status || ffResult.status || 502 }
       );
     }
 
-    const teText = teRes.ok ? await teRes.text() : "[]";
-    const ffText = ffRes.ok ? await ffRes.text() : "[]";
-    let teData: unknown = [];
-    let ffData: unknown = [];
-    try {
-      teData = JSON.parse(teText);
-    } catch {
-      teData = [];
+    const [teResult, ffResult] = await Promise.all([
+      fetchTradingEconomicsCalendar(
+        startISO,
+        endISO,
+        startTime,
+        endTime,
+        tradingEconomicsApiKey
+      ),
+      fetchForexFactoryCalendar(startTime, endTime),
+    ]);
+
+    if (!teResult.ok && !ffResult.ok) {
+      return NextResponse.json(
+        { error: "calendar_fetch_failed" },
+        { status: teResult.status || ffResult.status || 502 }
+      );
     }
-    try {
-      ffData = JSON.parse(ffText);
-    } catch {
-      ffData = [];
-    }
 
-    const teArray = Array.isArray(teData) ? (teData as TradingEconomicsItem[]) : [];
-    const ffArray = Array.isArray(ffData) ? (ffData as ForexFactoryItem[]) : [];
-
-    const teMapped = mapTradingEconomics(teArray, startTime, endTime);
-    const ffMapped = mapForexFactory(ffArray, startTime, endTime);
-
-    const merged = [...teMapped, ...ffMapped];
-    const seen = new Set<string>();
-    const deduped = merged.filter((event) => {
-      const key = `${event.title}-${event.country}-${event.date}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    return NextResponse.json(deduped);
+    return NextResponse.json(
+      dedupeCalendarEvents([...teResult.events, ...ffResult.events])
+    );
   } catch (error) {
     console.error("[economic-calendar]", error);
     return NextResponse.json(

@@ -1,0 +1,2 @@
+ALTER TABLE "affiliate_profile"
+  ADD COLUMN IF NOT EXISTS "commission_bps" INTEGER NOT NULL DEFAULT 2000;

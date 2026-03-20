@@ -144,6 +144,16 @@ const baseResults: ResultItem[] = [
     iconColor: "text-fuchsia-400",
     iconBg: "bg-fuchsia-500/10",
   },
+  {
+    icon: Clock,
+    label: "Calendar",
+    subtitle: "Pages  ·  Economic calendar & market events",
+    href: "/dashboard/news",
+    key: "",
+    category: "pages",
+    iconColor: "text-sky-400",
+    iconBg: "bg-sky-500/10",
+  },
   ...(publicAlphaFlags.backtest
     ? [
         {

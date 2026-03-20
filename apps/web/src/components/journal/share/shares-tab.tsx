@@ -180,6 +180,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
     [inviteInput]
   );
   const isCreateMode = !selectedShareId;
+  const ownerShareCount = ownerShares.length;
 
   useEffect(() => {
     if (
@@ -198,10 +199,10 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
   }, [ownerShareDetail]);
 
   useEffect(() => {
-    if (!isCreateMode || (ownerShares as any[]).length > 0) return;
+    if (!isCreateMode || ownerShareCount > 0) return;
     setDraftName("Mentor review share");
     setDraftEntryIds([]);
-  }, [isCreateMode, (ownerShares as any[]).length]);
+  }, [isCreateMode, ownerShareCount]);
 
   const handleToggleEntry = (entryId: string) => {
     setDraftEntryIds((current) =>

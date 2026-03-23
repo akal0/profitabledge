@@ -16,6 +16,7 @@ import { propFirmsRouter } from "./prop-firms";
 import { pnlCardsRouter } from "./pnl-cards";
 import { socialRouter } from "./social-redesign";
 import { journalRouter } from "./journal";
+import { edgesRouter } from "./edges";
 import { alertsRouter } from "./alerts";
 import { rulesRouter } from "./rules";
 import { marketDataRouter } from "./market-data";
@@ -27,6 +28,7 @@ import { operationsRouter } from "./operations";
 import { billingRouter } from "./billing";
 import { symbolMappingsRouter } from "./symbol-mappings";
 import { proofRouter } from "./proof";
+import { reportsRouter } from "./reports";
 
 export const appRouter = router({
   upload: uploadRouter,
@@ -45,6 +47,7 @@ export const appRouter = router({
   pnlCards: pnlCardsRouter,
   social: socialRouter,
   journal: journalRouter,
+  edges: edgesRouter,
   alerts: alertsRouter,
   rules: rulesRouter,
   marketData: marketDataRouter,
@@ -57,5 +60,6 @@ export const appRouter = router({
   billing: billingRouter,
   symbolMappings: symbolMappingsRouter,
   proof: proofRouter,
+  reports: reportsRouter,
 });
 export type AppRouter = typeof appRouter;

@@ -334,6 +334,7 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
       getRowId: (row) => row.id, // Use trade ID as row ID
       enableFilteringRowModel: false,
       enablePaginationRowModel: false,
+      enableColumnResizing: false,
     });
 
   // Update column visibility when view changes
@@ -769,6 +770,7 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
         onRowMouseEnter={dragSelect.handleMouseEnter}
         containerRef={dragSelect.containerRef}
         emptyState={emptyState}
+        enableMeasuredColumnSizing
         enableRowVirtualization
         rowVirtualizerOverscan={18}
         onRenderedRowIdsChange={setRenderedTradeIds}

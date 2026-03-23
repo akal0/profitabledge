@@ -299,7 +299,7 @@ export function DashboardTradeFiltersProvider({
   children,
 }: {
   accountId?: string;
-  fetchMode?: "filtered" | "always";
+  fetchMode?: "filtered" | "always" | "controls";
   children: ReactNode;
 }) {
   const [startDate, setStartDate] = useQueryState("dstart", {
@@ -385,7 +385,9 @@ export function DashboardTradeFiltersProvider({
       accountTags.length
   );
   const shouldFetchTradeDataset =
-    Boolean(accountId) && (fetchMode === "always" || hasActiveFilters);
+    Boolean(accountId) &&
+    fetchMode !== "controls" &&
+    (fetchMode === "always" || hasActiveFilters);
 
   const symbolSuggestionsQuery = useQuery({
     ...trpcOptions.trades.listSymbols.queryOptions({

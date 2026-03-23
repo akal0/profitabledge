@@ -358,32 +358,33 @@ export function PerformingAssetsBarChart({
       <CardHeader className="p-0">
         <CardTitle className={cn("flex items-center -mt-3", titleClassName)}>
           {bestWorst.best && bestWorst.worst ? (
-            <div className="flex flex-col gap-0.5 text-sm font-normal tracking-wide text-white/40">
-              <span className="block">
-                Most profitable asset:{" "}
-                <span className="font-medium text-teal-400">
-                  {bestWorst.best.symbol} (
-                  {formatSignedCurrency(
-                    bestWorst.best.v,
-                    0,
-                    resolvedCurrencyCode
-                  )}
-                  )
-                </span>
-              </span>
-              <span className="block">
-                Least profitable asset:{" "}
-                <span className="font-medium text-rose-400">
-                  {bestWorst.worst.symbol} (
-                  {formatSignedCurrency(
-                    bestWorst.worst.v,
-                    0,
-                    resolvedCurrencyCode
-                  )}
-                  )
-                </span>
-              </span>
-            </div>
+            // <div className="flex flex-col gap-0.5 text-sm font-normal tracking-wide text-white/40">
+            //   <span className="block">
+            //     Most profitable asset:{" "}
+            //     <span className="font-medium text-teal-400">
+            //       {bestWorst.best.symbol} (
+            //       {formatSignedCurrency(
+            //         bestWorst.best.v,
+            //         0,
+            //         resolvedCurrencyCode
+            //       )}
+            //       )
+            //     </span>
+            //   </span>
+            //   <span className="block">
+            //     Least profitable asset:{" "}
+            //     <span className="font-medium text-rose-400">
+            //       {bestWorst.worst.symbol} (
+            //       {formatSignedCurrency(
+            //         bestWorst.worst.v,
+            //         0,
+            //         resolvedCurrencyCode
+            //       )}
+            //       )
+            //     </span>
+            //   </span>
+            // </div>
+            <></>
           ) : (
             <p className="font-normal text-white/40 text-sm tracking-wide">
               Asset performance
@@ -511,7 +512,11 @@ export function PerformingAssetsBarChart({
                               item.name ??
                               (key === "profit" ? "Selected" : "Previous")
                             }
-                            value={formatSignedCurrency(v, 0, resolvedCurrencyCode)}
+                            value={formatSignedCurrency(
+                              v,
+                              0,
+                              resolvedCurrencyCode
+                            )}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
                             indicatorColor={

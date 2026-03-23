@@ -8,7 +8,8 @@ export type EntryType =
   | "trade_review"
   | "strategy"
   | "comparison"
-  | "backtest";
+  | "backtest"
+  | "edge";
 
 export interface JournalEntryData {
   id?: string;

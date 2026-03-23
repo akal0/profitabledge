@@ -241,6 +241,246 @@ export const trade = pgTable(
   })
 );
 
+export const edge = pgTable(
+  "edge",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sourceEdgeId: text("source_edge_id"),
+    name: varchar("name", { length: 120 }).notNull(),
+    normalizedName: varchar("normalized_name", { length: 160 }).notNull(),
+    description: text("description"),
+    contentBlocks: jsonb("content_blocks").$type<Record<string, unknown>[]>()
+      .notNull()
+      .default([]),
+    contentHtml: text("content_html"),
+    examplesBlocks: jsonb("examples_blocks").$type<Record<string, unknown>[]>()
+      .notNull()
+      .default([]),
+    examplesHtml: text("examples_html"),
+    coverImageUrl: text("cover_image_url"),
+    coverImagePosition: integer("cover_image_position").default(50),
+    color: varchar("color", { length: 7 }).notNull().default("#3B82F6"),
+    status: varchar("status", { length: 20 }).notNull().default("active"),
+    publicationMode: varchar("publication_mode", { length: 20 })
+      .notNull()
+      .default("private"),
+    publicStatsVisible: boolean("public_stats_visible")
+      .notNull()
+      .default(true),
+    isDemoSeeded: boolean("is_demo_seeded").notNull().default(false),
+    isFeatured: boolean("is_featured").notNull().default(false),
+    featuredAt: timestamp("featured_at"),
+    featuredByUserId: text("featured_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    ownerIdx: index("idx_edge_owner").on(table.ownerUserId, table.createdAt),
+    ownerNormalizedNameIdx: uniqueIndex("edge_owner_normalized_name_idx").on(
+      table.ownerUserId,
+      table.normalizedName
+    ),
+    publicationIdx: index("idx_edge_publication").on(
+      table.publicationMode,
+      table.isFeatured
+    ),
+    sourceIdx: index("idx_edge_source").on(table.sourceEdgeId),
+  })
+);
+
+export const edgeSection = pgTable(
+  "edge_section",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    edgeSortIdx: index("idx_edge_section_edge_sort").on(
+      table.edgeId,
+      table.sortOrder
+    ),
+  })
+);
+
+export const edgeRule = pgTable(
+  "edge_rule",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    sectionId: text("section_id")
+      .notNull()
+      .references(() => edgeSection.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    isActive: boolean("is_active").notNull().default(true),
+    appliesOutcomes: jsonb("applies_outcomes")
+      .$type<string[]>()
+      .notNull()
+      .default(["all"]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    edgeIdx: index("idx_edge_rule_edge").on(table.edgeId, table.sortOrder),
+    sectionIdx: index("idx_edge_rule_section").on(
+      table.sectionId,
+      table.sortOrder
+    ),
+  })
+);
+
+export const tradeEdgeAssignment = pgTable(
+  "trade_edge_assignment",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tradeId: text("trade_id")
+      .notNull()
+      .references(() => trade.id, { onDelete: "cascade" }),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    tradeUniqueIdx: uniqueIndex("trade_edge_assignment_trade_idx").on(
+      table.tradeId
+    ),
+    edgeIdx: index("idx_trade_edge_assignment_edge").on(
+      table.edgeId,
+      table.createdAt
+    ),
+    userIdx: index("idx_trade_edge_assignment_user").on(table.userId),
+  })
+);
+
+export const tradeEdgeRuleEvaluation = pgTable(
+  "trade_edge_rule_evaluation",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    tradeId: text("trade_id")
+      .notNull()
+      .references(() => trade.id, { onDelete: "cascade" }),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    ruleId: text("rule_id")
+      .notNull()
+      .references(() => edgeRule.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 })
+      .notNull()
+      .default("not_reviewed"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    tradeRuleUniqueIdx: uniqueIndex("trade_edge_rule_eval_trade_rule_idx").on(
+      table.tradeId,
+      table.ruleId
+    ),
+    edgeIdx: index("idx_trade_edge_rule_eval_edge").on(
+      table.edgeId,
+      table.status
+    ),
+    ruleIdx: index("idx_trade_edge_rule_eval_rule").on(table.ruleId),
+  })
+);
+
+export const edgeMissedTrade = pgTable(
+  "edge_missed_trade",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accountId: text("account_id").references(() => tradingAccount.id, {
+      onDelete: "set null",
+    }),
+    symbol: varchar("symbol", { length: 64 }).notNull(),
+    tradeType: varchar("trade_type", { length: 8 }),
+    sessionTag: text("session_tag"),
+    setupTime: timestamp("setup_time"),
+    reasonMissed: text("reason_missed"),
+    notes: text("notes"),
+    mediaUrls: jsonb("media_urls").$type<string[]>().notNull().default([]),
+    estimatedOutcome: varchar("estimated_outcome", { length: 20 }),
+    estimatedRR: numeric("estimated_rr"),
+    estimatedPnl: numeric("estimated_pnl"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    edgeIdx: index("idx_edge_missed_trade_edge").on(
+      table.edgeId,
+      table.createdAt
+    ),
+    userIdx: index("idx_edge_missed_trade_user").on(table.userId),
+    accountIdx: index("idx_edge_missed_trade_account").on(table.accountId),
+  })
+);
+
+export const edgeShareMember = pgTable(
+  "edge_share_member",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    invitedByUserId: text("invited_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    role: varchar("role", { length: 16 }).notNull().default("viewer"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    edgeUserUniqueIdx: uniqueIndex("edge_share_member_edge_user_idx").on(
+      table.edgeId,
+      table.userId
+    ),
+    userIdx: index("idx_edge_share_member_user").on(table.userId, table.role),
+    edgeIdx: index("idx_edge_share_member_edge").on(table.edgeId, table.role),
+  })
+);
+
 export const deletedImportedTrade = pgTable(
   "deleted_imported_trade",
   {
@@ -1042,7 +1282,121 @@ export const tradeRelations = relations(trade, ({ one, many }) => ({
     fields: [trade.accountId],
     references: [tradingAccount.id],
   }),
+  edgeAssignment: one(tradeEdgeAssignment, {
+    fields: [trade.id],
+    references: [tradeEdgeAssignment.tradeId],
+  }),
+  edgeRuleEvaluations: many(tradeEdgeRuleEvaluation),
 }));
+
+export const edgeRelations = relations(edge, ({ one, many }) => ({
+  owner: one(user, {
+    fields: [edge.ownerUserId],
+    references: [user.id],
+  }),
+  featuredBy: one(user, {
+    fields: [edge.featuredByUserId],
+    references: [user.id],
+  }),
+  sections: many(edgeSection),
+  rules: many(edgeRule),
+  tradeAssignments: many(tradeEdgeAssignment),
+  ruleEvaluations: many(tradeEdgeRuleEvaluation),
+  missedTrades: many(edgeMissedTrade),
+  shareMembers: many(edgeShareMember),
+}));
+
+export const edgeSectionRelations = relations(edgeSection, ({ one, many }) => ({
+  edge: one(edge, {
+    fields: [edgeSection.edgeId],
+    references: [edge.id],
+  }),
+  rules: many(edgeRule),
+}));
+
+export const edgeRuleRelations = relations(edgeRule, ({ one, many }) => ({
+  edge: one(edge, {
+    fields: [edgeRule.edgeId],
+    references: [edge.id],
+  }),
+  section: one(edgeSection, {
+    fields: [edgeRule.sectionId],
+    references: [edgeSection.id],
+  }),
+  evaluations: many(tradeEdgeRuleEvaluation),
+}));
+
+export const tradeEdgeAssignmentRelations = relations(
+  tradeEdgeAssignment,
+  ({ one }) => ({
+    trade: one(trade, {
+      fields: [tradeEdgeAssignment.tradeId],
+      references: [trade.id],
+    }),
+    edge: one(edge, {
+      fields: [tradeEdgeAssignment.edgeId],
+      references: [edge.id],
+    }),
+    user: one(user, {
+      fields: [tradeEdgeAssignment.userId],
+      references: [user.id],
+    }),
+  })
+);
+
+export const tradeEdgeRuleEvaluationRelations = relations(
+  tradeEdgeRuleEvaluation,
+  ({ one }) => ({
+    trade: one(trade, {
+      fields: [tradeEdgeRuleEvaluation.tradeId],
+      references: [trade.id],
+    }),
+    edge: one(edge, {
+      fields: [tradeEdgeRuleEvaluation.edgeId],
+      references: [edge.id],
+    }),
+    rule: one(edgeRule, {
+      fields: [tradeEdgeRuleEvaluation.ruleId],
+      references: [edgeRule.id],
+    }),
+  })
+);
+
+export const edgeMissedTradeRelations = relations(
+  edgeMissedTrade,
+  ({ one }) => ({
+    edge: one(edge, {
+      fields: [edgeMissedTrade.edgeId],
+      references: [edge.id],
+    }),
+    user: one(user, {
+      fields: [edgeMissedTrade.userId],
+      references: [user.id],
+    }),
+    account: one(tradingAccount, {
+      fields: [edgeMissedTrade.accountId],
+      references: [tradingAccount.id],
+    }),
+  })
+);
+
+export const edgeShareMemberRelations = relations(
+  edgeShareMember,
+  ({ one }) => ({
+    edge: one(edge, {
+      fields: [edgeShareMember.edgeId],
+      references: [edge.id],
+    }),
+    user: one(user, {
+      fields: [edgeShareMember.userId],
+      references: [user.id],
+    }),
+    invitedByUser: one(user, {
+      fields: [edgeShareMember.invitedByUserId],
+      references: [user.id],
+    }),
+  })
+);
 
 export const symbolMappingRelations = relations(symbolMapping, ({ one }) => ({
   user: one(user, {
@@ -1068,6 +1422,7 @@ export const tradingAccountRelations = relations(
     openTrades: many(openTrade),
     goals: many(goal),
     propChallengeStages: many(propChallengeStageAccount),
+    edgeMissedTrades: many(edgeMissedTrade),
   })
 );
 

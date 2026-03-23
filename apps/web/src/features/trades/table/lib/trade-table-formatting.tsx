@@ -14,7 +14,7 @@ const HEADER_TOOLTIPS: Record<string, string> = {
   symbol: "The name of what you traded.",
   tradeDirection: "Shows if you bought or sold.",
   sessionTag: "Shows the time window name for this trade.",
-  modelTag: "Shows the setup name you used.",
+  modelTag: "Shows the Edge attached to this trade.",
   customTags: "Shows the custom trade tags you added to this trade.",
   protocolAlignment: "Shows if you followed your rules.",
   outcome: "Shows if a trade is live, won, lost, broke even, or won part.",
@@ -76,8 +76,8 @@ export const withTradeTableHeaderTooltip = (
 ): ReactNode => (
   <Tooltip>
     <TooltipTrigger asChild>
-      <span className="inline-flex cursor-pointer items-center gap-1">
-        {label}
+      <span className="inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1 overflow-hidden">
+        <span className="min-w-0 max-w-full truncate">{label}</span>
       </span>
     </TooltipTrigger>
     <TooltipContent className="mb-0">

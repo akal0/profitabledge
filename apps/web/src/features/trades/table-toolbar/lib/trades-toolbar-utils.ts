@@ -337,7 +337,7 @@ export function buildAppliedFilters({
     modelTags.length > 0 && modelTags.length !== allModelTagsLength
       ? {
           key: "model-tags",
-          label: `Model: ${modelTags.slice(0, 2).join(", ")}${
+          label: `Edge: ${modelTags.slice(0, 2).join(", ")}${
             modelTags.length > 2 ? ` +${modelTags.length - 2}` : ""
           }`,
           onClear: onClearModelTags,

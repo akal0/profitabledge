@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../../db";
 import { equitySnapshot } from "../../db/schema/connections";
@@ -6,11 +6,21 @@ import {
   tradeChecklistResult,
   tradeChecklistTemplate,
 } from "../../db/schema/coaching";
-import { tradeMedia, tradeNote } from "../../db/schema/journal";
+import { journalEntry, tradeMedia, tradeNote } from "../../db/schema/journal";
 import { tradeAnnotation } from "../../db/schema/social-redesign";
-import { openTrade, trade, tradingAccount } from "../../db/schema/trading";
+import {
+  edge,
+  edgeRule,
+  edgeSection,
+  openTrade,
+  trade,
+  tradeEdgeAssignment,
+  tradingAccount,
+} from "../../db/schema/trading";
 import { calculateAllAdvancedMetrics } from "../../lib/advanced-metrics";
 import { createAutoTradeReviewEntry } from "../../lib/auto-journal";
+import { createEdgeRecord } from "../../lib/edges/compatibility";
+import { bulkAssignLegacyModelTagToTrades } from "../../lib/edges/service";
 import { generateFeedEventForTrade } from "../../lib/feed-event-generator";
 import { seedDemoBacktestSessions } from "./demo-backtest";
 import { seedDemoDigests } from "./demo-digests";
@@ -47,6 +57,475 @@ type DemoWorkspaceAccountSummary = {
 type DemoSeedAccountRow = typeof tradingAccount.$inferSelect;
 type DemoSeedTradeRow = typeof trade.$inferSelect;
 type DemoSeedOpenTradeRow = typeof openTrade.$inferSelect;
+type DemoSession = "London" | "New York" | "Asian";
+type DemoSymbol = "EURUSD" | "GBPUSD" | "USDJPY" | "AUDUSD" | "XAUUSD";
+type DemoDirection = "long" | "short";
+type DemoPhaseName =
+  | "foundation"
+  | "leak-cluster"
+  | "recovery"
+  | "refined-edge";
+type DemoEdgeArchetype =
+  | "reversal"
+  | "continuation"
+  | "breakout"
+  | "mean_reversion"
+  | "macro"
+  | "news"
+  | "midday";
+type DemoEdgeRuleTemplate = {
+  sectionTitle: "Entry rules" | "In position rules" | "Exit rules";
+  title: string;
+  description: string;
+  appliesOutcomes?: string[];
+};
+
+type DemoEdgeSeedProfile = {
+  archetype: DemoEdgeArchetype;
+  allowedDirections: DemoDirection[];
+  preferredSessions: DemoSession[];
+  preferredSymbols: DemoSymbol[];
+  disallowedSessions?: DemoSession[];
+  directionBias?: DemoDirection;
+};
+
+type DemoEdgeTemplate = {
+  name: string;
+  color: string;
+  description: string;
+  tradeSeed: boolean;
+  seedProfile?: DemoEdgeSeedProfile;
+  contentParagraphs: string[];
+  exampleParagraphs: string[];
+  rules: DemoEdgeRuleTemplate[];
+};
+
+const DEMO_EDGE_SECTION_DESCRIPTIONS: Record<
+  DemoEdgeRuleTemplate["sectionTitle"],
+  string
+> = {
+  "Entry rules":
+    "The pre-trade conditions that must be present before this Edge is valid.",
+  "In position rules":
+    "How the trade should be managed once the Edge is live and risk is on.",
+  "Exit rules":
+    "How profits are protected, partials are taken, or invalidation is handled.",
+};
+
+function buildDemoEdgeTemplate(input: {
+  name: string;
+  color: string;
+  description: string;
+  tradeSeed?: boolean;
+  seedProfile?: DemoEdgeSeedProfile;
+  contentParagraphs: string[];
+  exampleParagraphs: string[];
+  entryRule: string;
+  entryRuleDescription: string;
+  managementRule: string;
+  managementRuleDescription: string;
+  exitRule: string;
+  exitRuleDescription: string;
+}) {
+  return {
+    name: input.name,
+    color: input.color,
+    description: input.description,
+    tradeSeed: input.tradeSeed ?? false,
+    seedProfile: input.seedProfile,
+    contentParagraphs: input.contentParagraphs,
+    exampleParagraphs: input.exampleParagraphs,
+    rules: [
+      {
+        sectionTitle: "Entry rules",
+        title: input.entryRule,
+        description: input.entryRuleDescription,
+        appliesOutcomes: ["all"],
+      },
+      {
+        sectionTitle: "In position rules",
+        title: input.managementRule,
+        description: input.managementRuleDescription,
+        appliesOutcomes: ["all"],
+      },
+      {
+        sectionTitle: "Exit rules",
+        title: input.exitRule,
+        description: input.exitRuleDescription,
+        appliesOutcomes: ["winner", "partial_win", "breakeven", "loser"],
+      },
+    ],
+  } satisfies DemoEdgeTemplate;
+}
+
+const DEMO_EDGE_TEMPLATES: DemoEdgeTemplate[] = [
+  buildDemoEdgeTemplate({
+    name: "Liquidity Raid",
+    color: "#14B8A6",
+    description:
+      "Fade the sweep, then align with reclaim once the trap has fully shown its hand.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "reversal",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["EURUSD", "GBPUSD", "XAUUSD", "USDJPY"],
+    },
+    contentParagraphs: [
+      "This Edge is built around one-sided liquidity grabs that sweep an obvious high or low, fail to continue, and then reclaim back inside the dealing range.",
+      "The ideal version happens during London or the New York overlap when the sweep is obvious, displacement confirms intent, and the invalidation is clean enough to define risk without negotiation.",
+    ],
+    exampleParagraphs: [
+      "Best example: London sweeps the Asian high, rejects immediately, displaces back under the sweep, then offers a clean pullback into the reclaim candle.",
+      "Avoid forcing the setup when the sweep keeps accepting above the level or when the reclaim only happens after the move is already overextended.",
+    ],
+    entryRule: "Wait for a clear sweep and reclaim before committing risk",
+    entryRuleDescription:
+      "The sweep alone is not the setup. Price must reject the raid and reclaim back through the trigger area with intent.",
+    managementRule: "Protect the trade once displacement has fully held",
+    managementRuleDescription:
+      "If follow-through confirms, move to a structure-based protection plan instead of widening the idea.",
+    exitRule: "Scale or close into opposing liquidity pools",
+    exitRuleDescription:
+      "Pay yourself into the next draw on liquidity rather than assuming the move will trend indefinitely.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Breaker Block",
+    color: "#F59E0B",
+    description:
+      "Use a failed block or reclaimed candle body as the reaction point after structure shifts.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "continuation",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["EURUSD", "GBPUSD", "XAUUSD"],
+    },
+    contentParagraphs: [
+      "This Edge focuses on the first clean revisit into a breaker after market structure has already shifted.",
+      "The quality comes from context. The breaker should sit inside a clean dealing range, align with session intent, and offer asymmetric invalidation.",
+    ],
+    exampleParagraphs: [
+      "Best example: New York opens with displacement, breaks short-term structure, then retraces into the failed bearish candle before continuing higher.",
+      "Skip the setup when the breaker sits in the middle of noisy price or when the revisit happens after multiple reactions have already consumed the level.",
+    ],
+    entryRule: "Only take the first meaningful revisit into the breaker",
+    entryRuleDescription:
+      "The reaction should come from fresh structure, not from a level that has already been tested repeatedly.",
+    managementRule: "Hold only while the shift in structure remains intact",
+    managementRuleDescription:
+      "If price starts accepting back through the breaker, the original thesis is no longer clean.",
+    exitRule: "Exit when the next structure objective is filled",
+    exitRuleDescription:
+      "Treat opposing highs, lows, and intraday objectives as planned destinations for the move.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Supply Zone",
+    color: "#EF4444",
+    description:
+      "Fade into pre-defined premium zones when price arrives stretched and reaction quality is obvious.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "mean_reversion",
+      allowedDirections: ["short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["GBPUSD", "XAUUSD", "EURUSD"],
+      directionBias: "short",
+    },
+    contentParagraphs: [
+      "This Edge is a zone reaction model built for stretched moves into obvious premium or discount pockets.",
+      "It works best when the session is already extended, the level is clean on higher timeframes, and the reaction offers immediate rejection.",
+    ],
+    exampleParagraphs: [
+      "Best example: GBPUSD pushes into a marked supply shelf after a one-sided morning auction, tags the level, then rejects with immediate volume failure.",
+      "Avoid taking every touch. If price is grinding into the zone with acceptance, the level is already weakening.",
+    ],
+    entryRule: "Let price prove rejection inside the zone",
+    entryRuleDescription:
+      "A marked zone is context, not a blind entry. Rejection quality still matters.",
+    managementRule: "Do not babysit weak reactions",
+    managementRuleDescription:
+      "If the trade cannot leave the zone decisively, treat the idea as compromised rather than hoping.",
+    exitRule: "Reduce risk into mid-range or prior session equilibrium",
+    exitRuleDescription:
+      "Zone reactions often mean-revert first. Book partials where the auction is likely to rebalance.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Trend Continuation",
+    color: "#22C55E",
+    description:
+      "Participate with the dominant session move after a clean pullback into structure or value.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "continuation",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["EURUSD", "GBPUSD", "XAUUSD"],
+      directionBias: "long",
+    },
+    contentParagraphs: [
+      "This Edge is for continuation, not reversal. The trend should already be in force before the entry is even considered.",
+      "The cleanest versions come after early session displacement, a measured pullback, and then renewed expansion in the original direction.",
+    ],
+    exampleParagraphs: [
+      "Best example: EURUSD trends higher through London, pulls into a prior imbalance, holds above structure, and then resumes with fresh displacement.",
+      "Skip the trade when the pullback becomes a full structural failure or when the continuation leg would require chasing above obvious expansion.",
+    ],
+    entryRule: "Enter only after the pullback respects trend structure",
+    entryRuleDescription:
+      "Continuation needs a valid higher-low or lower-high sequence, not a deep retrace that destroys the trend map.",
+    managementRule: "Trail behind defended structure as the move extends",
+    managementRuleDescription:
+      "Let the market earn more room only when new structure is clearly being protected.",
+    exitRule: "Take profits before exhaustion becomes obvious",
+    exitRuleDescription:
+      "Continuation trades degrade fast once extension is obvious to everyone and momentum begins to flatten.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Opening Range Breakout",
+    color: "#3B82F6",
+    description:
+      "Trade the first clean expansion out of the opening range when volume and structure agree.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "breakout",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["EURUSD", "GBPUSD", "XAUUSD", "USDJPY"],
+    },
+    contentParagraphs: [
+      "This Edge looks for an honest break from the opening range rather than random first-move volatility.",
+      "The breakout should expand with intent, not just poke the edge of the range and stall immediately.",
+    ],
+    exampleParagraphs: [
+      "Best example: the first thirty minutes define a tight range, then price breaks with broad participation and never accepts back inside the base.",
+      "Avoid trading the setup late after the expansion is already extended or when the breakout comes directly into higher-timeframe opposition.",
+    ],
+    entryRule: "Demand acceptance outside the opening range",
+    entryRuleDescription:
+      "A wick through the range is not enough. Price needs to hold outside the base before it becomes actionable.",
+    managementRule: "Stay with the breakout while range lows or highs keep holding",
+    managementRuleDescription:
+      "Once the breakout starts failing back through its launch point, the clean expansion thesis has gone.",
+    exitRule: "Pay into the next session objective or measured move",
+    exitRuleDescription:
+      "Opening range trades work best when exits are planned around obvious range projections and session liquidity.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "VWAP Reclaim",
+    color: "#8B5CF6",
+    description:
+      "Use VWAP as a control line after price loses and then reclaims fair intraday value.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "continuation",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["New York", "London"],
+      preferredSymbols: ["XAUUSD", "USDJPY", "AUDUSD", "EURUSD"],
+      directionBias: "long",
+    },
+    contentParagraphs: [
+      "This Edge treats VWAP as a decision filter, not a magic line. The reclaim matters because it shows auction control shifting back through value.",
+      "The cleanest opportunities happen when price extends away from VWAP, fails to continue, then reclaims it with fresh structure in the direction of the reclaim.",
+    ],
+    exampleParagraphs: [
+      "Best example: price opens below VWAP, sweeps liquidity, reclaims back above value, then holds VWAP on the first pullback before trending.",
+      "Avoid using this Edge when VWAP is flat and price is just chopping around it with no directional intent.",
+    ],
+    entryRule: "Wait for reclaim plus a held retest of VWAP",
+    entryRuleDescription:
+      "The reclaim and hold matter more than the first touch. Value needs to flip cleanly.",
+    managementRule: "Abort if price loses value again without response",
+    managementRuleDescription:
+      "Once price re-accepts on the wrong side of VWAP, the reclaim thesis is no longer intact.",
+    exitRule: "Reduce size into extension away from value",
+    exitRuleDescription:
+      "This Edge often resolves in rotations. Pay yourself once the move becomes stretched relative to VWAP.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Session Sweep Reclaim",
+    color: "#06B6D4",
+    description:
+      "Capture the post-sweep reversal when one session runs the prior session’s extremes and immediately gives them back.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "reversal",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["EURUSD", "GBPUSD", "USDJPY", "XAUUSD"],
+    },
+    contentParagraphs: [
+      "This Edge is built around one session sweeping the prior session high or low and then failing to sustain the break.",
+      "The setup becomes stronger when the reclaim happens with urgency and the return path offers clean room back through the prior range.",
+    ],
+    exampleParagraphs: [
+      "Best example: New York runs London high, prints rejection, then collapses back through the prior session range with momentum.",
+      "Skip it when the sweep happens inside already balanced price or when the reclaim is too delayed to offer a clean invalidation.",
+    ],
+    entryRule: "Anchor the idea to the prior session extreme",
+    entryRuleDescription:
+      "The sweep must take something obvious before the reclaim has real informational value.",
+    managementRule: "Stay aggressive only while the prior range keeps accepting the reclaim",
+    managementRuleDescription:
+      "If price stalls right back at the range edge, the reversal is not yet proven.",
+    exitRule: "Target the opposite side of the prior session range",
+    exitRuleDescription:
+      "The range itself provides a clear framework for scaling and final distribution.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Macro Pullback",
+    color: "#84CC16",
+    description:
+      "Rejoin a higher-timeframe directional idea on an intraday retracement instead of chasing expansion.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "macro",
+      allowedDirections: ["long"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["EURUSD", "GBPUSD", "XAUUSD"],
+      directionBias: "long",
+    },
+    contentParagraphs: [
+      "This Edge is built for days where the higher-timeframe story is already directional and the intraday job is simply to enter efficiently.",
+      "The pullback should land in a meaningful area of value, not just any random pause after expansion.",
+    ],
+    exampleParagraphs: [
+      "Best example: a daily bullish bias is intact, the intraday retrace lands in discount, then lower-timeframe structure turns back with trend.",
+      "Avoid taking the trade if the pullback turns into full higher-timeframe invalidation or if the entry requires chasing after the retracement is already gone.",
+    ],
+    entryRule: "Use higher-timeframe bias plus intraday confirmation",
+    entryRuleDescription:
+      "Bias alone is not enough. The lower timeframe still needs to agree at the area of interest.",
+    managementRule: "Manage against the retracement low or high, not emotion",
+    managementRuleDescription:
+      "The pullback defines the risk. If that pivot fails, the macro idea is mistimed at minimum.",
+    exitRule: "Distribute into higher-timeframe objectives",
+    exitRuleDescription:
+      "This Edge should be paid into obvious daily or four-hour targets rather than scalped without a plan.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "Range Rotation",
+    color: "#F97316",
+    description:
+      "Trade responsive rotations from one side of a balanced range back toward the other.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "mean_reversion",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["Asian", "London"],
+      preferredSymbols: ["EURUSD", "USDJPY", "AUDUSD"],
+    },
+    contentParagraphs: [
+      "This Edge assumes the market is balanced first. It is designed for responsive trade location inside clear intraday or multi-session ranges.",
+      "The best trades come from the edges, not the middle. If the setup starts in the center of the range, there is usually no edge to claim.",
+    ],
+    exampleParagraphs: [
+      "Best example: price tags the upper edge of a two-day range, rejects, then rotates back toward the mid and opposite extreme.",
+      "Avoid range rotations on trend days where one side of the balance is already giving way with real acceptance.",
+    ],
+    entryRule: "Initiate from the range edge, not the midpoint",
+    entryRuleDescription:
+      "The edge of the range provides the asymmetry. Mid-range entries erase most of that advantage.",
+    managementRule: "Hold only while the balance thesis remains intact",
+    managementRuleDescription:
+      "If price starts accepting outside the range, the responsive trade becomes the wrong idea.",
+    exitRule: "Scale through the midpoint and opposite edge",
+    exitRuleDescription:
+      "The midpoint and far edge are the natural rotation checkpoints for this Edge.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "News Fade Continuation",
+    color: "#EC4899",
+    description:
+      "Let event volatility overreact, then align with the cleaner post-news continuation once the dust settles.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "news",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["New York"],
+      preferredSymbols: ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"],
+      disallowedSessions: ["Asian"],
+    },
+    contentParagraphs: [
+      "This Edge is for days where a news impulse creates emotional overextension, followed by a cleaner continuation once the reaction normalizes.",
+      "The idea is not to fight news blindly. It is to wait for the reactive crowd move to exhaust and then re-enter with better structure.",
+    ],
+    exampleParagraphs: [
+      "Best example: CPI spikes price violently into liquidity, the impulse retraces, then the underlying direction resumes from a cleaner location.",
+      "Skip this Edge when the event changes the higher-timeframe narrative completely or when spreads remain disorderly.",
+    ],
+    entryRule: "Wait until post-news spreads and structure normalize",
+    entryRuleDescription:
+      "The cleanup phase is part of the setup. If the tape is still disorderly, the edge is not ready.",
+    managementRule: "Stay with the continuation only while post-news structure holds",
+    managementRuleDescription:
+      "Once the normalized structure fails, the event-driven thesis is no longer behaving cleanly.",
+    exitRule: "Book into the next obvious expansion target",
+    exitRuleDescription:
+      "News continuation often moves quickly. Planned distribution matters because the move can finish abruptly.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "HTF Reversal Sweep",
+    color: "#A855F7",
+    description:
+      "Fade a higher-timeframe extreme only after the sweep shows exhaustion and structure rotates back.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "reversal",
+      allowedDirections: ["long", "short"],
+      preferredSessions: ["London", "New York"],
+      preferredSymbols: ["XAUUSD", "GBPUSD", "EURUSD"],
+    },
+    contentParagraphs: [
+      "This Edge is reserved for higher-timeframe extremes where the market reaches a premium or discount area that actually matters.",
+      "Because reversal trades can be expensive to force, the sweep has to show real exhaustion before capital is committed.",
+    ],
+    exampleParagraphs: [
+      "Best example: price runs a weekly high into a marked premium zone, fails to hold, and then breaks lower-timeframe structure back down.",
+      "Avoid catching falling knives or standing in front of acceleration. Higher-timeframe reversals need proof.",
+    ],
+    entryRule: "Require both the sweep and the structural failure",
+    entryRuleDescription:
+      "The level matters, but the failure to continue through it is what turns context into a valid reversal idea.",
+    managementRule: "Respect the higher-timeframe invalidation level",
+    managementRuleDescription:
+      "Reversal trades should not be given endless room. If the extreme keeps accepting, the thesis is wrong.",
+    exitRule: "De-risk into the first major counter-rotation objective",
+    exitRuleDescription:
+      "Higher-timeframe fades often snap hard at first, so distribution should begin into the nearest major rotation objective.",
+  }),
+  buildDemoEdgeTemplate({
+    name: "NY Midday Reclaim",
+    color: "#0EA5E9",
+    description:
+      "Use the midday reset to catch a cleaner reclaim after the opening impulse has already shown its hand.",
+    tradeSeed: true,
+    seedProfile: {
+      archetype: "midday",
+      allowedDirections: ["long"],
+      preferredSessions: ["New York"],
+      preferredSymbols: ["XAUUSD", "USDJPY", "AUDUSD"],
+      directionBias: "long",
+    },
+    contentParagraphs: [
+      "This Edge is designed for slower midday conditions where the open created the map and the reclaim offers the cleaner entry.",
+      "It works best when the morning move swept liquidity, overextended, and then left behind a clear reclaim level into the lunch reset.",
+    ],
+    exampleParagraphs: [
+      "Best example: the open runs hard, price compresses through midday, then reclaims a key intraday level and resumes with cleaner risk.",
+      "Avoid forcing this during dead lunch chop when there is no clear reclaim and no afternoon catalyst in sight.",
+    ],
+    entryRule: "Use the reclaim to define the afternoon thesis",
+    entryRuleDescription:
+      "The level being reclaimed should clearly separate the failed morning auction from the afternoon opportunity.",
+    managementRule: "Stay patient unless reclaim acceptance clearly fails",
+    managementRuleDescription:
+      "Midday trades can breathe more slowly, but they should still hold the reclaimed level with intent.",
+    exitRule: "Target the afternoon expansion or prior session liquidity",
+    exitRuleDescription:
+      "This Edge works best when the afternoon has a clean destination already mapped.",
+  }),
+];
 
 function makeDemoAccountNumber(input?: string | null) {
   if (input && input.trim().length > 0) {
@@ -98,6 +577,138 @@ async function runOptionalDemoSeedStep<T>(
     console.error(`[hydrateDemoWorkspace] ${label} failed`, error);
     return null;
   }
+}
+
+function escapeDemoHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildDemoBlocks(paragraphs: string[]) {
+  return paragraphs.map((content) => ({
+    id: crypto.randomUUID(),
+    type: "paragraph",
+    content,
+  }));
+}
+
+function buildDemoHtml(paragraphs: string[]) {
+  return paragraphs
+    .map((paragraph) => `<p>${escapeDemoHtml(paragraph)}</p>`)
+    .join("");
+}
+
+async function seedDemoEdgesForUser(userId: string) {
+  await db.delete(edge).where(
+    and(eq(edge.ownerUserId, userId), eq(edge.isDemoSeeded, true))
+  );
+
+  const createdEdges: Array<{
+    id: string;
+    name: string;
+    color: string;
+    tradeSeed: boolean;
+    seedProfile?: DemoEdgeSeedProfile;
+  }> = [];
+
+  for (const template of DEMO_EDGE_TEMPLATES) {
+    const createdEdge = await createEdgeRecord({
+      ownerUserId: userId,
+      name: template.name,
+      description: template.description,
+      color: template.color,
+      publicationMode: "private",
+      isDemoSeeded: true,
+    });
+
+    await db
+      .update(edge)
+      .set({
+        contentBlocks: buildDemoBlocks(template.contentParagraphs),
+        contentHtml: buildDemoHtml(template.contentParagraphs),
+        examplesBlocks: buildDemoBlocks(template.exampleParagraphs),
+        examplesHtml: buildDemoHtml(template.exampleParagraphs),
+        updatedAt: new Date(),
+      })
+      .where(eq(edge.id, createdEdge.id));
+
+    const sections = await db
+      .select({
+        id: edgeSection.id,
+        title: edgeSection.title,
+      })
+      .from(edgeSection)
+      .where(eq(edgeSection.edgeId, createdEdge.id))
+      .orderBy(asc(edgeSection.sortOrder), asc(edgeSection.title));
+
+    const sectionIdByTitle = new Map(
+      sections.map((sectionRow) => [sectionRow.title, sectionRow.id])
+    );
+
+    for (const sectionRow of sections) {
+      const nextDescription =
+        DEMO_EDGE_SECTION_DESCRIPTIONS[
+          sectionRow.title as keyof typeof DEMO_EDGE_SECTION_DESCRIPTIONS
+        ];
+
+      if (!nextDescription) continue;
+
+      await db
+        .update(edgeSection)
+        .set({
+          description: nextDescription,
+          updatedAt: new Date(),
+        })
+        .where(eq(edgeSection.id, sectionRow.id));
+    }
+
+    if (template.rules.length > 0) {
+      await db.insert(edgeRule).values(
+        template.rules
+          .map((rule, index) => {
+            const sectionId = sectionIdByTitle.get(rule.sectionTitle);
+            if (!sectionId) {
+              return null;
+            }
+
+            return {
+              edgeId: createdEdge.id,
+              sectionId,
+              title: rule.title,
+              description: rule.description,
+              sortOrder: index,
+              appliesOutcomes: rule.appliesOutcomes ?? ["all"],
+            };
+          })
+          .filter(
+            (
+              ruleRow
+            ): ruleRow is {
+              edgeId: string;
+              sectionId: string;
+              title: string;
+              description: string;
+              sortOrder: number;
+              appliesOutcomes: string[];
+            } => Boolean(ruleRow)
+          )
+      );
+    }
+
+    createdEdges.push({
+      id: createdEdge.id,
+      name: createdEdge.name,
+      color: createdEdge.color,
+      tradeSeed: template.tradeSeed,
+      seedProfile: template.seedProfile,
+    });
+  }
+
+  return createdEdges;
 }
 
 async function selectDemoWorkspaceAccount(
@@ -231,27 +842,24 @@ export async function seedSampleAccount(
   const tradeCount = 120;
   const openTradeCount = 5 + Math.floor(Math.random() * 9);
   const accountNumber = makeDemoAccountNumber(seededAccount.accountNumber);
+  const seededDemoEdges = await seedDemoEdgesForUser(userId);
 
   const symbols = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "XAUUSD"] as const;
   const sessions = ["London", "New York", "Asian"] as const;
-  const models = [
-    "Liquidity Raid",
-    "Breaker Block",
-    "Supply Zone",
-    "Trend Continuation",
-  ] as const;
   const alignments = ["aligned", "against", "discretionary"] as const;
+  const seededTradeEdges = seededDemoEdges.filter(
+    (demoEdge): demoEdge is (typeof seededDemoEdges)[number] & {
+      seedProfile: DemoEdgeSeedProfile;
+    } => Boolean(demoEdge.tradeSeed && demoEdge.seedProfile)
+  );
   const sessionColors: Record<(typeof sessions)[number], string> = {
     London: "#3B82F6",
     "New York": "#F97316",
     Asian: "#8B5CF6",
   };
-  const modelColors: Record<(typeof models)[number], string> = {
-    "Liquidity Raid": "#14B8A6",
-    "Breaker Block": "#F59E0B",
-    "Supply Zone": "#EF4444",
-    "Trend Continuation": "#22C55E",
-  };
+  const modelColors = Object.fromEntries(
+    seededDemoEdges.map((demoEdge) => [demoEdge.name, demoEdge.color])
+  ) as Record<string, string>;
   const basePrices: Record<(typeof symbols)[number], number> = {
     EURUSD: 1.085,
     GBPUSD: 1.27,
@@ -333,6 +941,27 @@ export async function seedSampleAccount(
     }
     return weighted[weighted.length - 1]!.item;
   };
+  const pickDirectionForEdge = (
+    seedProfile: DemoEdgeSeedProfile,
+    session: DemoSession
+  ): DemoDirection => {
+    if (seedProfile.allowedDirections.length === 1) {
+      return seedProfile.allowedDirections[0]!;
+    }
+
+    let longBias =
+      session === "London" ? 0.58 : session === "New York" ? 0.52 : 0.46;
+    if (seedProfile.directionBias === "long") {
+      longBias += 0.18;
+    }
+    if (seedProfile.directionBias === "short") {
+      longBias -= 0.18;
+    }
+
+    return Math.random() < clampNumber(longBias, 0.15, 0.85)
+      ? "long"
+      : "short";
+  };
   const createDemoTradeImage = ({
     symbol,
     title,
@@ -361,14 +990,14 @@ export async function seedSampleAccount(
       </svg>`
     )}`;
   type DemoPhase = {
-    name: "foundation" | "leak-cluster" | "recovery" | "refined-edge";
+    name: DemoPhaseName;
     endIndex: number;
     baseEdge: number;
     discipline: number;
     sameDayProbability: number;
     revengeRisk: number;
     sessionWeights: Record<(typeof sessions)[number], number>;
-    modelWeights: Record<(typeof models)[number], number>;
+    archetypeWeights: Record<DemoEdgeArchetype, number>;
     alignmentWeights: Record<(typeof alignments)[number], number>;
   };
   const sessionOrder: Record<(typeof sessions)[number], number> = {
@@ -393,11 +1022,14 @@ export async function seedSampleAccount(
       sameDayProbability: 0.78,
       revengeRisk: 0.24,
       sessionWeights: { London: 1.5, "New York": 1.1, Asian: 0.7 },
-      modelWeights: {
-        "Liquidity Raid": 1.45,
-        "Breaker Block": 1.2,
-        "Supply Zone": 0.9,
-        "Trend Continuation": 0.75,
+      archetypeWeights: {
+        reversal: 1.4,
+        continuation: 1.15,
+        breakout: 1.1,
+        mean_reversion: 0.95,
+        macro: 1.0,
+        news: 0.78,
+        midday: 0.72,
       },
       alignmentWeights: { aligned: 1.55, discretionary: 0.95, against: 0.55 },
     },
@@ -409,11 +1041,14 @@ export async function seedSampleAccount(
       sameDayProbability: 0.9,
       revengeRisk: 0.62,
       sessionWeights: { London: 0.9, "New York": 1.45, Asian: 1.2 },
-      modelWeights: {
-        "Liquidity Raid": 0.85,
-        "Breaker Block": 0.95,
-        "Supply Zone": 1.15,
-        "Trend Continuation": 1.45,
+      archetypeWeights: {
+        reversal: 0.92,
+        continuation: 1.25,
+        breakout: 1.05,
+        mean_reversion: 1.12,
+        macro: 0.88,
+        news: 1.22,
+        midday: 0.84,
       },
       alignmentWeights: { aligned: 0.7, discretionary: 1.2, against: 1.35 },
     },
@@ -425,11 +1060,14 @@ export async function seedSampleAccount(
       sameDayProbability: 0.72,
       revengeRisk: 0.14,
       sessionWeights: { London: 1.55, "New York": 1.0, Asian: 0.55 },
-      modelWeights: {
-        "Liquidity Raid": 1.5,
-        "Breaker Block": 1.15,
-        "Supply Zone": 0.9,
-        "Trend Continuation": 0.7,
+      archetypeWeights: {
+        reversal: 1.48,
+        continuation: 1.18,
+        breakout: 1.14,
+        mean_reversion: 0.94,
+        macro: 1.08,
+        news: 0.86,
+        midday: 0.8,
       },
       alignmentWeights: { aligned: 1.65, discretionary: 0.85, against: 0.45 },
     },
@@ -441,11 +1079,14 @@ export async function seedSampleAccount(
       sameDayProbability: 0.8,
       revengeRisk: 0.08,
       sessionWeights: { London: 1.65, "New York": 1.15, Asian: 0.4 },
-      modelWeights: {
-        "Liquidity Raid": 1.65,
-        "Breaker Block": 1.25,
-        "Supply Zone": 0.75,
-        "Trend Continuation": 0.6,
+      archetypeWeights: {
+        reversal: 1.55,
+        continuation: 1.3,
+        breakout: 1.25,
+        mean_reversion: 0.78,
+        macro: 1.16,
+        news: 0.9,
+        midday: 1.08,
       },
       alignmentWeights: { aligned: 1.8, discretionary: 0.75, against: 0.3 },
     },
@@ -518,16 +1159,43 @@ export async function seedSampleAccount(
       session = previousSession;
     }
 
-    const model = weightedPick(
-      models,
-      (candidate) => phase.modelWeights[candidate]
+    const selectedEdge = weightedPick(
+      seededTradeEdges,
+      (candidate) => {
+        let weight = phase.archetypeWeights[candidate.seedProfile.archetype] ?? 1;
+
+        if (candidate.seedProfile.preferredSessions.includes(session)) {
+          weight *= 1.65;
+        } else {
+          weight *= 0.72;
+        }
+
+        if (candidate.seedProfile.disallowedSessions?.includes(session)) {
+          weight *= 0.12;
+        }
+
+        if (
+          phase.name === "refined-edge" &&
+          candidate.seedProfile.preferredSessions.includes("New York")
+        ) {
+          weight *= 1.08;
+        }
+
+        return weight;
+      }
     );
+    const model = selectedEdge.name;
     const alignment = weightedPick(
       alignments,
       (candidate) => phase.alignmentWeights[candidate]
     );
     const symbol = weightedPick(symbols, (candidate) => {
       let weight = 1;
+      if (selectedEdge.seedProfile.preferredSymbols.includes(candidate)) {
+        weight += 1.35;
+      } else {
+        weight -= 0.08;
+      }
       if (
         session === "London" &&
         (candidate === "EURUSD" ||
@@ -556,12 +1224,20 @@ export async function seedSampleAccount(
       if (phase.name === "leak-cluster" && candidate === "GBPUSD") {
         weight += 0.45;
       }
-      return weight;
+      if (selectedEdge.name === "News Fade Continuation" && candidate === "XAUUSD") {
+        weight += 0.7;
+      }
+      if (selectedEdge.name === "NY Midday Reclaim" && candidate === "XAUUSD") {
+        weight += 0.55;
+      }
+      if (selectedEdge.name === "Macro Pullback" && candidate === "EURUSD") {
+        weight += 0.35;
+      }
+      return Math.max(0.1, weight);
     });
-    const longBias =
-      session === "London" ? 0.58 : session === "New York" ? 0.52 : 0.46;
-    const tradeDirection = Math.random() < longBias ? "long" : "short";
+    const tradeDirection = pickDirectionForEdge(selectedEdge.seedProfile, session);
     const directionFactor = tradeDirection === "long" ? 1 : -1;
+    const edgeArchetype = selectedEdge.seedProfile.archetype;
     const isGold = symbol === "XAUUSD";
     const pipSize = pipSizes[symbol];
     const pipValue = pipValuePerLot[symbol];
@@ -643,13 +1319,19 @@ export async function seedSampleAccount(
         ? -0.03
         : -0.18;
     edgeScore +=
-      model === "Liquidity Raid"
-        ? 0.1
-        : model === "Breaker Block"
+      edgeArchetype === "reversal"
+        ? 0.08
+        : edgeArchetype === "continuation"
         ? 0.05
-        : model === "Supply Zone"
+        : edgeArchetype === "breakout"
+        ? 0.03
+        : edgeArchetype === "macro"
+        ? 0.07
+        : edgeArchetype === "midday"
         ? -0.01
-        : -0.08;
+        : edgeArchetype === "news"
+        ? 0.01
+        : 0;
     if (
       session === "London" &&
       model === "Liquidity Raid" &&
@@ -666,6 +1348,24 @@ export async function seedSampleAccount(
     }
     if (session === "Asian" && model === "Trend Continuation") {
       edgeScore -= 0.2;
+    }
+    if (selectedEdge.name === "Supply Zone") {
+      edgeScore += symbol === "XAUUSD" || symbol === "GBPUSD" ? 0.05 : 0.01;
+    }
+    if (selectedEdge.name === "Macro Pullback" && tradeDirection === "long") {
+      edgeScore += 0.07;
+    }
+    if (selectedEdge.name === "Range Rotation" && session === "Asian") {
+      edgeScore += 0.06;
+    }
+    if (selectedEdge.name === "News Fade Continuation" && session === "New York") {
+      edgeScore += 0.11;
+    }
+    if (selectedEdge.name === "NY Midday Reclaim" && session === "New York") {
+      edgeScore += 0.12;
+    }
+    if (selectedEdge.name === "HTF Reversal Sweep" && symbol === "XAUUSD") {
+      edgeScore += 0.04;
     }
     if (
       session === "New York" &&
@@ -1209,6 +1909,37 @@ export async function seedSampleAccount(
   effectiveClosedTrades = existingSeedState.closedTrades;
   effectiveLiveOpenTrades = existingSeedState.liveOpenTrades;
 
+  const tradeIdsByModel = new Map<
+    string,
+    { tradeIds: string[]; color: string | null }
+  >();
+
+  for (const row of effectiveClosedTrades) {
+    const modelTag = String(row.modelTag ?? "").trim();
+    if (!modelTag) continue;
+
+    const existingGroup = tradeIdsByModel.get(modelTag) ?? {
+      tradeIds: [],
+      color: row.modelTagColor ?? modelColors[modelTag] ?? null,
+    };
+
+    existingGroup.tradeIds.push(row.id);
+    if (!existingGroup.color && row.modelTagColor) {
+      existingGroup.color = row.modelTagColor;
+    }
+
+    tradeIdsByModel.set(modelTag, existingGroup);
+  }
+
+  for (const [modelTag, assignment] of tradeIdsByModel) {
+    await bulkAssignLegacyModelTagToTrades({
+      tradeIds: assignment.tradeIds,
+      userId,
+      modelTag,
+      modelTagColor: assignment.color,
+    });
+  }
+
   const effectiveTotalFloatingPnl = effectiveLiveOpenTrades.reduce(
     (sum, row) => sum + Number(row.profit || 0),
     0
@@ -1631,6 +2362,32 @@ export async function seedSampleAccount(
         { tradeId, error }
       );
     });
+  });
+
+  const reviewTradeEdgeRows =
+    reviewTradeIds.length > 0
+      ? await db
+          .select({
+            tradeId: tradeEdgeAssignment.tradeId,
+            edgeId: tradeEdgeAssignment.edgeId,
+          })
+          .from(tradeEdgeAssignment)
+          .where(inArray(tradeEdgeAssignment.tradeId, reviewTradeIds))
+      : [];
+
+  await runInBatches(reviewTradeEdgeRows, async ({ tradeId, edgeId }) => {
+    await db
+      .update(journalEntry)
+      .set({
+        linkedEdgeId: edgeId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(journalEntry.userId, userId),
+          sql`${journalEntry.linkedTradeIds} @> ${JSON.stringify([tradeId])}::jsonb`
+        )
+      );
   });
 
   await runInBatches(feedTradeIds, async (tradeId) => {

@@ -5,7 +5,7 @@ import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
 import { trpcClient } from "@/utils/trpc";
 import { useAccountStore, ALL_ACCOUNTS_ID } from "@/stores/account";
-import { Tag, Clock, FolderKanban, Layers3 } from "lucide-react";
+import { Clock, FolderKanban, Layers3 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type NamedTag = { name: string; color: string };
@@ -15,7 +15,6 @@ export default function TagsSettingsPage() {
   const accountId = selectedAccountId || ALL_ACCOUNTS_ID;
 
   const [sessionTags, setSessionTags] = useState<NamedTag[]>([]);
-  const [modelTags, setModelTags] = useState<NamedTag[]>([]);
   const [customTradeTags, setCustomTradeTags] = useState<string[]>([]);
   const [accountTags, setAccountTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -26,14 +25,12 @@ export default function TagsSettingsPage() {
 
     Promise.all([
       trpcClient.trades.listSessionTags.query({ accountId }),
-      trpcClient.trades.listModelTags.query({ accountId }),
       trpcClient.trades.listCustomTags.query({ accountId }),
       trpcClient.accounts.listTags.query(),
     ])
-      .then(([sessions, models, customTags, accountTags]) => {
+      .then(([sessions, customTags, accountTags]) => {
         if (cancelled) return;
         setSessionTags((sessions ?? []) as NamedTag[]);
-        setModelTags((models ?? []) as NamedTag[]);
         setCustomTradeTags((customTags ?? []) as string[]);
         setAccountTags((accountTags ?? []) as string[]);
       })
@@ -126,46 +123,6 @@ export default function TagsSettingsPage() {
           )}
         </div>
       </div>
-
-      <Separator />
-
-      {/* Model Tags */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
-        <div className="max-w-[200px]">
-          <div className="flex items-center gap-2">
-            <Tag className="size-4 text-green-400" />
-            <Label className="text-sm text-white/80 font-medium">
-              Model Tags
-            </Label>
-          </div>
-          <p className="text-xs text-white/40 mt-0.5">
-            Assigned by strategy or setup.
-          </p>
-        </div>
-        <div className="space-y-2">
-          {modelTags.length > 0 ? (
-            modelTags.map((tag) => (
-              <div
-                key={tag.name}
-                className="flex items-center gap-3 p-3 bg-sidebar-accent border border-white/5 rounded-md"
-              >
-                <div
-                  className="w-4 h-4 rounded-sm shrink-0"
-                  style={{ backgroundColor: tag.color }}
-                />
-                <span className="text-white text-sm">{tag.name}</span>
-              </div>
-            ))
-          ) : (
-            <p className="text-xs text-white/40 py-4">
-              No model tags yet. Assign model tags to trades in the trade table.
-            </p>
-          )}
-        </div>
-      </div>
-
-      <Separator />
-
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div className="max-w-[200px]">
           <div className="flex items-center gap-2">

@@ -58,6 +58,19 @@ export async function createAutoTradeReviewEntry(input: {
       tradeType: trade.tradeType,
       sessionTag: trade.sessionTag,
       modelTag: trade.modelTag,
+      edgeId: sql<string | null>`(
+        SELECT "trade_edge_assignment"."edge_id"
+        FROM "trade_edge_assignment"
+        WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+        LIMIT 1
+      )`,
+      edgeName: sql<string | null>`(
+        SELECT "edge"."name"
+        FROM "trade_edge_assignment"
+        INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+        WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+        LIMIT 1
+      )`,
       protocolAlignment: trade.protocolAlignment,
       profit: trade.profit,
       pips: trade.pips,
@@ -202,8 +215,9 @@ export async function createAutoTradeReviewEntry(input: {
         "trade-review",
         "trade-close-auto",
         closedTrade.sessionTag || "untagged-session",
-        closedTrade.modelTag || "untagged-model",
+        closedTrade.edgeName || closedTrade.modelTag || "untagged-edge",
       ],
+      linkedEdgeId: closedTrade.edgeId ?? null,
       plainTextContent,
       journalDate: closeDate,
       wordCount,

@@ -26,7 +26,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { user } from "./auth";
-import { tradingAccount, trade, goal } from "./trading";
+import {
+  edge,
+  edgeMissedTrade,
+  goal,
+  trade,
+  tradingAccount,
+} from "./trading";
 
 // ============================================================================
 // Trade Phase Types
@@ -124,6 +130,13 @@ export const journalEntry = pgTable("journal_entry", {
   
   accountIds: jsonb("account_ids").$type<string[]>().default([]),
   linkedTradeIds: jsonb("linked_trade_ids").$type<string[]>().default([]),
+  linkedEdgeId: text("linked_edge_id").references(() => edge.id, {
+    onDelete: "set null",
+  }),
+  linkedMissedTradeId: text("linked_missed_trade_id").references(
+    () => edgeMissedTrade.id,
+    { onDelete: "set null" }
+  ),
   
   // NEW: Goal linking
   linkedGoalIds: jsonb("linked_goal_ids").$type<string[]>().default([]),
@@ -180,6 +193,11 @@ export const journalEntry = pgTable("journal_entry", {
   searchIdx: index("idx_journal_entry_search").on(table.userId, table.plainTextContent),
   // NEW: Goal linking index
   goalIdx: index("idx_journal_entry_goals").on(table.userId, table.linkedGoalIds),
+  edgeIdx: index("idx_journal_entry_edge").on(table.userId, table.linkedEdgeId),
+  missedTradeIdx: index("idx_journal_entry_missed_trade").on(
+    table.userId,
+    table.linkedMissedTradeId
+  ),
 }));
 
 // ============================================================================
@@ -802,6 +820,14 @@ export const journalEntryRelations = relations(journalEntry, ({ one, many }) => 
   user: one(user, {
     fields: [journalEntry.userId],
     references: [user.id],
+  }),
+  linkedEdge: one(edge, {
+    fields: [journalEntry.linkedEdgeId],
+    references: [edge.id],
+  }),
+  linkedMissedTrade: one(edgeMissedTrade, {
+    fields: [journalEntry.linkedMissedTradeId],
+    references: [edgeMissedTrade.id],
   }),
   images: many(journalImage),
   media: many(journalMedia),

@@ -42,6 +42,7 @@ type KnownNotificationType =
   | "prop_violation"
   | "prop_journey"
   | "prop_phase_advanced"
+  | "edge_invite"
   | "leaderboard_update"
   | "copier_signal"
   | "system_maintenance"
@@ -96,6 +97,7 @@ function getNotificationPriority(type?: string | null): NotificationPriority {
     case "trade_opened":
     case "post_exit_ready":
     case "goal_progress":
+    case "edge_invite":
       return "normal";
     default:
       return "low";
@@ -190,6 +192,7 @@ const knownNotificationTypes = [
   "prop_violation",
   "prop_journey",
   "prop_phase_advanced",
+  "edge_invite",
   "leaderboard_update",
   "copier_signal",
   "system_maintenance",
@@ -254,6 +257,7 @@ const notificationTypePrimaryTab: Record<
   prop_violation: "alerts",
   prop_journey: "alerts",
   prop_phase_advanced: "alerts",
+  edge_invite: "system",
   leaderboard_update: "social",
   copier_signal: "social",
   system_maintenance: "system",

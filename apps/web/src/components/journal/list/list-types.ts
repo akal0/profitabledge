@@ -32,6 +32,7 @@ export const entryTypeConfig = {
   strategy: { label: "Strategy", accent: "#facc15", icon: Sparkles },
   comparison: { label: "Comparison", accent: "#fb923c", icon: GitCompare },
   backtest: { label: "Backtest", accent: "#22d3ee", icon: Target },
+  edge: { label: "Edge entry", accent: "#14b8a6", icon: Sparkles },
 } as const;
 
 export function generatePatternSeed(title: string) {

@@ -18,6 +18,7 @@ const ROUTE_LOADING_COPY = {
   copier: "Syncing the copier routes and account links...",
   continue: "Confirming your plan and opening your workspace...",
   dashboard: "Tinkering with the widgets and calendars...",
+  edges: "Laying out your Edges, shared strategies, and rule sheets...",
   economicCalendar: "Pinning the key events onto the calendar...",
   feed: "Stacking the latest market notes and community signals...",
   goals: "Sharpening the targets and lining up the milestones...",
@@ -45,11 +46,12 @@ const ROUTE_LOADING_COPY = {
   settingsCompliance: "Reviewing the guardrails and paperwork...",
   settingsConnections: "Checking terminals, bridges, and live connections...",
   settingsEaSetup: "Wiring the EA and double-checking the handshake...",
+  settingsEdges: "Opening the Edge workspace and syncing Edges...",
   settingsMetrics: "Organizing scorecards and performance markers...",
   settingsNotifications: "Queueing pings, digests, and reminders...",
   settingsProfile: "Freshening up your profile and account details...",
   settingsRisk: "Measuring limits, buffers, and risk rules...",
-  settingsRules: "Arranging the playbook and rule checks...",
+  settingsRules: "Arranging the Edge and rule checks...",
   settingsSessions: "Reviewing devices, sessions, and sign-ins...",
   settingsSocial: "Hooking up profiles and community links...",
   settingsSymbolMapping: "Matching broker symbols and standardizing the map...",
@@ -74,6 +76,16 @@ type RouteLoadingFallbackProps = {
   animated?: boolean;
 };
 
+function normalizeFallbackClassName(className?: string) {
+  if (!className) {
+    return className;
+  }
+
+  return className
+    .replace(/\bmin-h-full\b/g, "min-h-[calc(100dvh-8rem)]")
+    .replace(/\bmin-h-0\b/g, "min-h-[calc(100dvh-8rem)]");
+}
+
 export function RouteLoadingFallback({
   route,
   className,
@@ -82,6 +94,7 @@ export function RouteLoadingFallback({
   animated = true,
 }: RouteLoadingFallbackProps) {
   const copy = message ?? ROUTE_LOADING_COPY[route];
+  const normalizedClassName = normalizeFallbackClassName(className);
   const textClasses = cn(
     "text-base font-medium leading-relaxed tracking-[-0.04em] text-balance",
     "sm:text-lg",
@@ -91,8 +104,8 @@ export function RouteLoadingFallback({
   return (
     <div
       className={cn(
-        "flex h-full min-h-full w-full flex-1 items-center justify-center px-6 py-10 text-center",
-        className
+        "flex h-full min-h-[calc(100dvh-8rem)] w-full flex-1 items-center justify-center px-6 py-10 text-center",
+        normalizedClassName
       )}
     >
       <div className="mx-auto flex w-full max-w-2xl items-center justify-center">

@@ -135,6 +135,7 @@ function JournalPageContent() {
       "strategy",
       "comparison",
       "backtest",
+      "edge",
     ].includes(entryTypeFromQuery)
       ? entryTypeFromQuery
       : undefined;

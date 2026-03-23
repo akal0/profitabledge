@@ -93,7 +93,7 @@ export function NewSessionDialog<TTimeframe extends string>({
             </div>
             <div className="min-w-0">
               <div className="text-sm font-medium text-white">New Backtest Session</div>
-              <p className="mt-1 text-xs leading-relaxed text-white/40">Build the scenario first: instrument, date range, risk model, and the playbook you want to train.</p>
+              <p className="mt-1 text-xs leading-relaxed text-white/40">Build the scenario first: instrument, date range, risk model, and the Edge you want to train.</p>
             </div>
             <DialogClose asChild>
               <button type="button" className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent text-white/50 transition-colors hover:bg-sidebar-accent hover:brightness-110 hover:text-white">

@@ -27,6 +27,7 @@ import {
   referralConversion,
   referralProfile,
   referralRewardGrant,
+  type AffiliateApplicationDetails,
 } from "../../db/schema/billing";
 import {
   getAffiliateCommissionBps,
@@ -1283,9 +1284,52 @@ export async function getLatestAffiliateApplication(userId: string) {
   return rows[0] ?? null;
 }
 
+function normalizeAffiliateApplicationText(value?: string | null) {
+  const normalized = value?.trim() ?? "";
+  return normalized || null;
+}
+
+function normalizeAffiliateApplicationNumber(value?: number | null) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function sanitizeAffiliateApplicationDetails(input: {
+  whyApply: string;
+  promotionPlan: string;
+  estimatedMonthlyReferrals: number;
+  audienceSize?: number | null;
+  twitter?: string | null;
+  discord?: string | null;
+  website?: string | null;
+  location?: string | null;
+  otherSocials?: string | null;
+}): AffiliateApplicationDetails {
+  return {
+    whyApply: input.whyApply.trim(),
+    promotionPlan: input.promotionPlan.trim(),
+    estimatedMonthlyReferrals: input.estimatedMonthlyReferrals,
+    audienceSize: normalizeAffiliateApplicationNumber(input.audienceSize),
+    twitter: normalizeAffiliateApplicationText(input.twitter),
+    discord: normalizeAffiliateApplicationText(input.discord),
+    website: normalizeAffiliateApplicationText(input.website),
+    location: normalizeAffiliateApplicationText(input.location),
+    otherSocials: normalizeAffiliateApplicationText(input.otherSocials),
+  };
+}
+
 export async function applyForAffiliate(input: {
   userId: string;
-  message?: string | null;
+  details: {
+    whyApply: string;
+    promotionPlan: string;
+    estimatedMonthlyReferrals: number;
+    audienceSize?: number | null;
+    twitter?: string | null;
+    discord?: string | null;
+    website?: string | null;
+    location?: string | null;
+    otherSocials?: string | null;
+  };
 }) {
   const profile = await getApprovedAffiliateProfile(input.userId);
   if (profile) {
@@ -1295,13 +1339,16 @@ export async function applyForAffiliate(input: {
     });
   }
 
+  const details = sanitizeAffiliateApplicationDetails(input.details);
+
   const existing = await getLatestAffiliateApplication(input.userId);
   if (existing) {
     const [updated] = await db
       .update(affiliateApplication)
       .set({
         status: "pending",
-        message: input.message?.trim() || null,
+        message: details.whyApply,
+        details,
         adminNotes: null,
         reviewedAt: null,
         reviewedByUserId: null,
@@ -1318,7 +1365,8 @@ export async function applyForAffiliate(input: {
     .values({
       id: crypto.randomUUID(),
       userId: input.userId,
-      message: input.message?.trim() || null,
+      message: details.whyApply,
+      details,
     })
     .returning();
 
@@ -1326,7 +1374,7 @@ export async function applyForAffiliate(input: {
 }
 
 export async function listAffiliateApplications() {
-  return db
+  const applications = await db
     .select({
       application: affiliateApplication,
       user: {
@@ -1334,6 +1382,10 @@ export async function listAffiliateApplications() {
         name: userTable.name,
         email: userTable.email,
         username: userTable.username,
+        twitter: userTable.twitter,
+        discord: userTable.discord,
+        website: userTable.website,
+        location: userTable.location,
       },
     })
     .from(affiliateApplication)
@@ -1342,6 +1394,38 @@ export async function listAffiliateApplications() {
       asc(affiliateApplication.status),
       desc(affiliateApplication.createdAt)
     );
+
+  if (!applications.length) {
+    return [];
+  }
+
+  const userIds = applications.map((entry) => entry.user.id);
+  const referralStats = await db
+    .select({
+      referrerUserId: referralConversion.referrerUserId,
+      signups: sql<number>`count(*)::int`,
+      paidConversions:
+        sql<number>`count(*) filter (where ${referralConversion.status} = 'paid')::int`,
+    })
+    .from(referralConversion)
+    .where(inArray(referralConversion.referrerUserId, userIds))
+    .groupBy(referralConversion.referrerUserId);
+
+  const statsByUserId = new Map(
+    referralStats.map((entry) => [entry.referrerUserId, entry])
+  );
+
+  return applications.map((entry) => {
+    const stats = statsByUserId.get(entry.user.id);
+
+    return {
+      ...entry,
+      referralStats: {
+        signups: stats?.signups ?? 0,
+        paidConversions: stats?.paidConversions ?? 0,
+      },
+    };
+  });
 }
 
 export async function approveAffiliateApplication(input: {

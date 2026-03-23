@@ -5,7 +5,13 @@ import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
 import { db } from "../../db";
 import { user } from "../../db/schema/auth";
-import { trade, tradingAccount } from "../../db/schema/trading";
+import {
+  edge,
+  tradeEdgeAssignment,
+  tradeEdgeRuleEvaluation,
+  trade,
+  tradingAccount,
+} from "../../db/schema/trading";
 import {
   calculateAllAdvancedMetrics,
   type TradeData,
@@ -22,6 +28,10 @@ import {
   enhancedCache,
 } from "../../lib/enhanced-cache";
 import { getSampleGateStatus as getTradeSampleGateStatus } from "../../lib/metric-registry";
+import {
+  backfillUserEdgesFromLegacy,
+  resolveOwnedEdgeIdsForLegacyNames,
+} from "../../lib/edges/compatibility";
 import {
   createSymbolResolver,
   expandCanonicalSymbolsToRawSymbols,
@@ -49,6 +59,8 @@ export const tradeQueryProcedures = {
   getById: protectedProcedure
     .input(z.object({ tradeId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await backfillUserEdgesFromLegacy(ctx.session.user.id);
+
       const result = await db
         .select({
           id: trade.id,
@@ -67,6 +79,27 @@ export const tradeQueryProcedures = {
           outcome: trade.outcome,
           sessionTag: trade.sessionTag,
           modelTag: trade.modelTag,
+          modelTagColor: trade.modelTagColor,
+          edgeId: sql<string | null>`(
+            SELECT "trade_edge_assignment"."edge_id"
+            FROM "trade_edge_assignment"
+            WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+            LIMIT 1
+          )`,
+          edgeName: sql<string | null>`(
+            SELECT "edge"."name"
+            FROM "trade_edge_assignment"
+            INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+            WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+            LIMIT 1
+          )`,
+          edgeColor: sql<string | null>`(
+            SELECT "edge"."color"
+            FROM "trade_edge_assignment"
+            INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+            WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+            LIMIT 1
+          )`,
           customTags: trade.customTags,
           entryPeakPrice: sql<
             number | null
@@ -105,6 +138,10 @@ export const tradeQueryProcedures = {
         symbol: result[0].symbol,
         rawSymbol: result[0].symbol,
         symbolGroup: resolvedSymbol.canonicalSymbol,
+        edgeId: result[0].edgeId,
+        edgeName: result[0].edgeName ?? result[0].modelTag ?? null,
+        edgeColor:
+          result[0].edgeColor ?? result[0].modelTagColor ?? null,
         brokerMeta: result[0].brokerMeta ?? null,
         openText: getMt5BrokerString(result[0].brokerMeta, "openText"),
         closeText: getMt5BrokerString(result[0].brokerMeta, "closeText"),
@@ -135,6 +172,7 @@ export const tradeQueryProcedures = {
         symbols: z.array(z.string()).optional(),
         killzones: z.array(z.string()).optional(),
         sessionTags: z.array(z.string()).optional(),
+        edgeIds: z.array(z.string()).optional(),
         modelTags: z.array(z.string()).optional(),
         customTags: z.array(z.string()).optional(),
         protocolAlignment: z
@@ -166,6 +204,8 @@ export const tradeQueryProcedures = {
       })
     )
     .query(async ({ input, ctx }) => {
+      await backfillUserEdgesFromLegacy(ctx.session.user.id);
+
       const { accountId, limit } = input;
       const scopedAccountIds = await resolveScopedAccountIds(
         ctx.session.user.id,
@@ -199,6 +239,15 @@ export const tradeQueryProcedures = {
 
       const whereClauses: SQL[] = [
         buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+      ];
+      const edgeFilterIds = [
+        ...(input.edgeIds ?? []),
+        ...(input.modelTags?.length
+          ? await resolveOwnedEdgeIdsForLegacyNames({
+              userId: ctx.session.user.id,
+              names: input.modelTags,
+            })
+          : []),
       ];
       const holdSecondsExpr = sql<
         number | null
@@ -266,12 +315,17 @@ export const tradeQueryProcedures = {
           )})`
         );
       }
-      if (input.modelTags?.length) {
+      if (edgeFilterIds.length) {
         whereClauses.push(
-          sql`(${sql.join(
-            input.modelTags.map((tag) => eq(trade.modelTag, tag)),
-            sql` OR `
-          )})`
+          sql`EXISTS (
+            SELECT 1
+            FROM ${tradeEdgeAssignment}
+            WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
+              AND ${tradeEdgeAssignment.edgeId} IN (${sql.join(
+                edgeFilterIds.map((edgeId) => sql`${edgeId}`),
+                sql`, `
+              )})
+          )`
         );
       }
       if (input.customTags?.length) {
@@ -467,6 +521,44 @@ export const tradeQueryProcedures = {
           >`CAST(${trade.alphaWeightedMpe} AS NUMERIC)`,
           sessionTag: trade.sessionTag,
           sessionTagColor: trade.sessionTagColor,
+          edgeId: sql<string | null>`(
+            SELECT "trade_edge_assignment"."edge_id"
+            FROM "trade_edge_assignment"
+            WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+            LIMIT 1
+          )`,
+          edgeName: sql<string | null>`(
+            SELECT "edge"."name"
+            FROM "trade_edge_assignment"
+            INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+            WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+            LIMIT 1
+          )`,
+          edgeColor: sql<string | null>`(
+            SELECT "edge"."color"
+            FROM "trade_edge_assignment"
+            INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+            WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+            LIMIT 1
+          )`,
+          reviewedEdgeRules: sql<number>`COALESCE((
+            SELECT COUNT(*)::int
+            FROM "trade_edge_rule_evaluation" AS tere
+            WHERE tere."trade_id" = "trade"."id"
+              AND tere."status" IN ('followed', 'broken')
+          ), 0)`,
+          followedEdgeRules: sql<number>`COALESCE((
+            SELECT COUNT(*)::int
+            FROM "trade_edge_rule_evaluation" AS tere
+            WHERE tere."trade_id" = "trade"."id"
+              AND tere."status" = 'followed'
+          ), 0)`,
+          brokenEdgeRules: sql<number>`COALESCE((
+            SELECT COUNT(*)::int
+            FROM "trade_edge_rule_evaluation" AS tere
+            WHERE tere."trade_id" = "trade"."id"
+              AND tere."status" = 'broken'
+          ), 0)`,
           modelTag: trade.modelTag,
           modelTagColor: trade.modelTagColor,
           customTags: trade.customTags,
@@ -644,6 +736,14 @@ export const tradeQueryProcedures = {
           killzoneColor: row.killzoneColor || null,
           sessionTag: row.sessionTag || null,
           sessionTagColor: row.sessionTagColor || null,
+          edgeId: row.edgeId || null,
+          edgeName: row.edgeName || row.modelTag || null,
+          edgeColor: row.edgeColor || row.modelTagColor || null,
+          edgeRuleReview: {
+            reviewedCount: Number(row.reviewedEdgeRules || 0),
+            followedCount: Number(row.followedEdgeRules || 0),
+            brokenCount: Number(row.brokenEdgeRules || 0),
+          },
           modelTag: row.modelTag || null,
           modelTagColor: row.modelTagColor || null,
           customTags: Array.isArray(row.customTags) ? row.customTags : [],
@@ -929,6 +1029,8 @@ export const tradeQueryProcedures = {
   listModelTags: protectedProcedure
     .input(z.object({ accountId: z.string().min(1) }))
     .query(async ({ input, ctx }) => {
+      await backfillUserEdgesFromLegacy(ctx.session.user.id);
+
       const cacheKey = `${cacheNamespaces.TRADES}:modelTags:${input.accountId}`;
       const cached = await enhancedCache.get<{ name: string; color: string }[]>(
         cacheKey
@@ -943,17 +1045,17 @@ export const tradeQueryProcedures = {
 
       const rows = await db
         .selectDistinct({
-          name: trade.modelTag,
-          color: sql<string>`COALESCE(${trade.modelTagColor}, '#3B82F6')`,
+          name: edge.name,
+          color: sql<string>`COALESCE(${edge.color}, '#3B82F6')`,
         })
-        .from(trade)
+        .from(edge)
         .where(
           and(
-            buildAccountScopeCondition(trade.accountId, scopedAccountIds),
-            sql`${trade.modelTag} IS NOT NULL`
+            eq(edge.ownerUserId, ctx.session.user.id),
+            eq(edge.status, "active")
           )
         )
-        .orderBy(trade.modelTag);
+        .orderBy(edge.name);
 
       const result = rows as { name: string; color: string }[];
       await enhancedCache.set(cacheKey, result, {

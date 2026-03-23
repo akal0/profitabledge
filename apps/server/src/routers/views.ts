@@ -21,6 +21,7 @@ import type { TradeViewConfig } from '../types/trade-view';
 const tradeViewConfigSchema = z.object({
   filters: z.object({
     sessionTags: z.array(z.string()).optional(),
+    edgeIds: z.array(z.string()).optional(),
     modelTags: z.array(z.string()).optional(),
     protocolAlignment: z
       .array(z.enum(['aligned', 'against', 'discretionary']))

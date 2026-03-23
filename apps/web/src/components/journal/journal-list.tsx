@@ -144,6 +144,8 @@ export function JournalList({
     trade_review: "Trade Review",
     strategy: "Strategy",
     comparison: "Comparison",
+    backtest: "Backtest",
+    edge: "Edge entry",
   };
 
   const handleSearchChange = (value: string) => {

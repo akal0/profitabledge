@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import { format } from "date-fns";
 import {
   CalendarDate,
@@ -86,8 +87,10 @@ export function TradeDateTimeField({
   onChange,
   triggerClassName,
 }: TradeDateTimeFieldProps) {
+  const containerRef = React.useRef<HTMLDivElement | null>(null);
+
   return (
-    <div className="space-y-2">
+    <div ref={containerRef} className="space-y-2">
       <Label className="text-xs text-white/50">{label}</Label>
       <div className="grid grid-cols-[1fr_6.75rem] gap-2">
         <DatePicker
@@ -113,6 +116,7 @@ export function TradeDateTimeField({
             </Group>
 
             <AriaButton
+              slot="button"
               aria-label={`Open ${label} date picker`}
               className="absolute inset-0 z-10 flex cursor-pointer items-center justify-end rounded-sm px-3 text-white/75 outline-none transition-[color,box-shadow,filter] duration-150 hover:text-white focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
@@ -123,6 +127,7 @@ export function TradeDateTimeField({
           <AriaPopover
             className="bg-sidebar text-popover-foreground data-entering:animate-in data-exiting:animate-out data-[entering]:fade-in-0 data-[exiting]:fade-out-0 data-[entering]:zoom-in-95 data-[exiting]:zoom-out-95 data-[placement=bottom]:slide-in-from-top-2 data-[placement=left]:slide-in-from-right-2 data-[placement=right]:slide-in-from-left-2 data-[placement=top]:slide-in-from-bottom-2 z-50 w-fit ring ring-white/5 outline-hidden rounded-sm"
             offset={4}
+            UNSTABLE_portalContainer={containerRef.current ?? undefined}
           >
             <Dialog className="max-h-[inherit] overflow-auto p-2">
               <Calendar className="w-fit" />

@@ -27,6 +27,10 @@ import {
   updateAccountPostExitPeaks,
 } from "../../lib/manipulation-calculator";
 import { syncPropAccountState } from "../../lib/prop-rule-monitor";
+import {
+  ensureEdgeFromLegacyModelTag,
+  replaceTradeEdgeAssignment,
+} from "../../lib/edges/compatibility";
 import { calculateTradeOutcome } from "../../lib/trades/trade-outcome";
 import { upsertPlainTextTradeNotes } from "../../lib/trades/trade-notes";
 import {
@@ -204,13 +208,19 @@ export const tradeMutationProcedures = {
         input.tradeId
       );
 
-      await db
-        .update(trade)
-        .set({
-          modelTag: input.modelTag,
-          modelTagColor: input.modelTagColor,
-        })
-        .where(eq(trade.id, input.tradeId));
+      const linkedEdge = input.modelTag
+        ? await ensureEdgeFromLegacyModelTag({
+            userId: ctx.session.user.id,
+            modelTag: input.modelTag,
+            modelTagColor: input.modelTagColor,
+          })
+        : null;
+
+      await replaceTradeEdgeAssignment({
+        userId: ctx.session.user.id,
+        tradeId: input.tradeId,
+        edgeId: linkedEdge?.id ?? null,
+      });
 
       await invalidateTradeScopeCaches([ownedTrade.accountId]);
 
@@ -322,13 +332,21 @@ export const tradeMutationProcedures = {
         input.tradeIds
       );
 
-      await db
-        .update(trade)
-        .set({
-          modelTag: input.modelTag,
-          modelTagColor: input.modelTagColor,
-        })
-        .where(inArray(trade.id, input.tradeIds));
+      const linkedEdge = input.modelTag
+        ? await ensureEdgeFromLegacyModelTag({
+            userId: ctx.session.user.id,
+            modelTag: input.modelTag,
+            modelTagColor: input.modelTagColor,
+          })
+        : null;
+
+      for (const tradeId of input.tradeIds) {
+        await replaceTradeEdgeAssignment({
+          userId: ctx.session.user.id,
+          tradeId,
+          edgeId: linkedEdge?.id ?? null,
+        });
+      }
 
       await invalidateTradeScopeCaches(accountIds);
 
@@ -508,6 +526,7 @@ export const tradeMutationProcedures = {
         commissions: z.number().optional(),
         swap: z.number().optional(),
         sessionTag: z.string().optional(),
+        edgeId: z.string().optional(),
         modelTag: z.string().optional(),
         customTags: z.array(z.string().trim().min(1)).optional(),
       })
@@ -621,6 +640,25 @@ export const tradeMutationProcedures = {
         }
       }
 
+      const createdEdge =
+        input.edgeId !== undefined
+          ? { id: input.edgeId }
+          : input.modelTag
+          ? await ensureEdgeFromLegacyModelTag({
+              userId: ctx.session.user.id,
+              modelTag: input.modelTag,
+              modelTagColor: null,
+            })
+          : null;
+
+      if (createdEdge || input.modelTag !== undefined || input.edgeId !== undefined) {
+        await replaceTradeEdgeAssignment({
+          userId: ctx.session.user.id,
+          tradeId,
+          edgeId: createdEdge?.id ?? null,
+        });
+      }
+
       await invalidateTradeScopeCaches([input.accountId]);
       await syncPropAccountState(input.accountId, { saveAlerts: true });
       void notifyEarnedAchievements({
@@ -657,6 +695,7 @@ export const tradeMutationProcedures = {
         commissions: z.number().optional(),
         swap: z.number().optional(),
         sessionTag: z.string().nullable().optional(),
+        edgeId: z.string().nullable().optional(),
         modelTag: z.string().nullable().optional(),
         customTags: z.array(z.string().trim().min(1)).optional(),
       })
@@ -767,6 +806,27 @@ export const tradeMutationProcedures = {
         .set(updates)
         .where(eq(trade.id, input.tradeId))
         .returning();
+
+      if (input.edgeId !== undefined || input.modelTag !== undefined) {
+        const resolvedEdge =
+          input.edgeId !== undefined
+            ? input.edgeId
+              ? { id: input.edgeId }
+              : null
+            : input.modelTag
+            ? await ensureEdgeFromLegacyModelTag({
+                userId: ctx.session.user.id,
+                modelTag: input.modelTag,
+                modelTagColor: null,
+              })
+            : null;
+
+        await replaceTradeEdgeAssignment({
+          userId: ctx.session.user.id,
+          tradeId: input.tradeId,
+          edgeId: resolvedEdge?.id ?? null,
+        });
+      }
 
       if (currentTrade) {
         const originType = resolveTradeOriginType({

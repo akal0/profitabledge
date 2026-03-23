@@ -13,6 +13,7 @@ import { trackAlphaMilestone } from "@/lib/alpha-analytics";
 import {
   AuthSplitShell,
   type AffiliateInfo,
+  type AuthHeroSlide,
 } from "@/components/auth/auth-split-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -51,6 +52,25 @@ const INPUT_CLASS =
 
 const FIELD_LABEL_CLASS =
   "text-xs font-medium tracking-[-0.01em] text-white/42";
+const AFFILIATE_CODE_TOAST_ID = "affiliate-code-status";
+
+const SIGN_UP_HERO_SLIDES: AuthHeroSlide[] = [
+  {
+    title: "Build the review process before the account pressure compounds.",
+    description:
+      "One workspace for journaling, trade analysis, and prop-account discipline so the edge gets sharper as the data grows.",
+  },
+  {
+    title: "Turn every session into data you can actually trust.",
+    description:
+      "Capture fills, notes, and routines in one place so your review process compounds instead of resetting every week.",
+  },
+  {
+    title: "Build a system that survives volatility, tilt, and prop rules.",
+    description:
+      "Spot the setups worth repeating and the habits that keep leaking edge before they cost another reset.",
+  },
+];
 
 const FormSchema = z.object({
   email: z.string().email({
@@ -103,6 +123,7 @@ const SignupPage = () => {
   const [affiliateCodeInput, setAffiliateCodeInput] = useState("");
   const [affiliateCodeResolved, setAffiliateCodeResolved] = useState(false);
   const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestAffiliateCodeRequestRef = useRef<string | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -131,28 +152,50 @@ const SignupPage = () => {
   const resolveAffiliateCode = useCallback((code: string) => {
     const trimmed = code.trim();
     if (!trimmed) {
+      latestAffiliateCodeRequestRef.current = null;
       setAffiliate(null);
       setAffiliateCodeResolved(false);
       storeAffiliateIntent("");
+      toast.dismiss(AFFILIATE_CODE_TOAST_ID);
       return;
     }
 
-    storeAffiliateIntent(trimmed);
+    latestAffiliateCodeRequestRef.current = trimmed;
 
     trpcClient.billing.getAffiliatePublicProfile
       .query({ code: trimmed })
       .then((profile) => {
+        if (latestAffiliateCodeRequestRef.current !== trimmed) {
+          return;
+        }
+
         if (profile) {
+          storeAffiliateIntent(trimmed);
           setAffiliate(profile);
           setAffiliateCodeResolved(true);
+          toast.success("Affiliate code will be applied at checkout.", {
+            id: AFFILIATE_CODE_TOAST_ID,
+          });
         } else {
+          storeAffiliateIntent("");
           setAffiliate(null);
           setAffiliateCodeResolved(false);
+          toast.error("Affiliate code doesn't exist.", {
+            id: AFFILIATE_CODE_TOAST_ID,
+          });
         }
       })
       .catch(() => {
+        if (latestAffiliateCodeRequestRef.current !== trimmed) {
+          return;
+        }
+
+        storeAffiliateIntent("");
         setAffiliate(null);
         setAffiliateCodeResolved(false);
+        toast.error("Affiliate code doesn't exist.", {
+          id: AFFILIATE_CODE_TOAST_ID,
+        });
       });
   }, []);
 
@@ -167,8 +210,10 @@ const SignupPage = () => {
 
       const trimmed = value.trim();
       if (!trimmed) {
+        latestAffiliateCodeRequestRef.current = null;
         setAffiliate(null);
         storeAffiliateIntent("");
+        toast.dismiss(AFFILIATE_CODE_TOAST_ID);
         return;
       }
 
@@ -256,17 +301,13 @@ const SignupPage = () => {
   }
 
   return (
-    <AuthSplitShell
-      heroTitle="Build the review process before the account pressure compounds."
-      heroDescription="One workspace for journaling, trade analysis, and prop-account discipline so the edge gets sharper as the data grows."
-      affiliate={affiliate}
-    >
+    <AuthSplitShell heroSlides={SIGN_UP_HERO_SLIDES} affiliate={affiliate}>
       <div className="space-y-8">
         <div className="space-y-3 text-center">
-          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50">
+          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
             First time here?
           </p>
-          <p className="text-sm leading-6 text-white/56">
+          <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
             You've come to the right place. All roads lead back to{" "}
             <span className="text-white font-semibold">profitabledge...</span>
           </p>
@@ -307,7 +348,7 @@ const SignupPage = () => {
         <div className="flex items-center gap-4">
           <div className="h-px flex-1 bg-white/10" />
           <span className="text-xs font-medium tracking-[-0.04em] text-white/32">
-            Or sign in with your credentials
+            Or sign up with your credentials
           </span>
           <div className="h-px flex-1 bg-white/10" />
         </div>
@@ -374,16 +415,14 @@ const SignupPage = () => {
               <button
                 type="button"
                 onClick={() => setShowAffiliateInput(true)}
-                className="mx-auto flex items-center gap-1.5 text-xs text-white/35 transition-colors hover:text-white/55"
+                className="mx-auto flex items-center gap-1.5 text-xs text-white/35 transition-colors hover:text-white/55 cursor-pointer"
               >
                 <BadgePercent className="size-3" />
                 Have an affiliate code?
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-center text-[11px] uppercase tracking-[0.14em] text-white/30">
-                  Affiliate code
-                </p>
+                <p className="text-white/30 text-xs">Affiliate code</p>
                 <div className="relative">
                   <Input
                     value={affiliateCodeInput}

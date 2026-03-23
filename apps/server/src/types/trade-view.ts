@@ -70,6 +70,7 @@ export interface TradeViewConfig {
   filters: {
     // Tag filters
     sessionTags?: string[];
+    edgeIds?: string[];
     modelTags?: string[];
     protocolAlignment?: ProtocolAlignment[];
     outcomes?: OutcomeFilter[];

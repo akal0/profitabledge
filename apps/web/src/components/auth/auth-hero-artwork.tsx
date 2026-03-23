@@ -6,6 +6,16 @@ import { cn } from "@/lib/utils";
 // 256×256 grayscale noise tile — rendered once, tiled cheaply
 const NOISE_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E\")";
+const CORNER_EDGE_FADE =
+  "radial-gradient(ellipse 78% 74% at 100% 0%, rgba(5,5,5,0.96) 0%, rgba(5,5,5,0.86) 18%, rgba(5,5,5,0.54) 34%, rgba(5,5,5,0.2) 50%, rgba(5,5,5,0.04) 62%, transparent 74%), radial-gradient(ellipse 78% 74% at 0% 100%, rgba(5,5,5,0.96) 0%, rgba(5,5,5,0.86) 18%, rgba(5,5,5,0.54) 34%, rgba(5,5,5,0.2) 50%, rgba(5,5,5,0.04) 62%, transparent 74%)";
+const ORB_BASE_STYLE = {
+  width: "60%",
+  height: "60%",
+  willChange: "transform" as const,
+  borderRadius: "9999px",
+  backgroundRepeat: "no-repeat" as const,
+  backgroundSize: "100% 100%",
+};
 
 export function AuthHeroArtwork({ className }: { className?: string }) {
   const reduced = useReducedMotion();
@@ -47,18 +57,16 @@ export function AuthHeroArtwork({ className }: { className?: string }) {
         <motion.div
           className="absolute"
           style={{
-            width: "60%",
-            height: "60%",
+            ...ORB_BASE_STYLE,
             left: "-10%",
             bottom: "-10%",
-            willChange: "transform",
             background:
-              "radial-gradient(ellipse at 32% 68%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.48) 18%, rgba(255,255,255,0.22) 36%, rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.010) 72%, rgba(255,255,255,0) 90%)",
+              "radial-gradient(ellipse at 32% 68%, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.5) 18%, rgba(255,255,255,0.24) 34%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 62%, rgba(255,255,255,0.008) 72%, rgba(255,255,255,0.001) 80%, rgba(255,255,255,0) 92%)",
           }}
           animate={
             reduced
               ? {}
-              : { x: ["0%", "14%", "-5%", "0%"], y: ["0%", "-18%", "5%", "0%"] }
+              : { x: ["0%", "8%", "-2%", "0%"], y: ["0%", "-10%", "3%", "0%"] }
           }
           transition={{
             duration: 11,
@@ -72,18 +80,16 @@ export function AuthHeroArtwork({ className }: { className?: string }) {
         <motion.div
           className="absolute"
           style={{
-            width: "60%",
-            height: "60%",
+            ...ORB_BASE_STYLE,
             right: "-10%",
             top: "-10%",
-            willChange: "transform",
             background:
-              "radial-gradient(ellipse at 68% 32%, rgba(255,255,255,0.75) 0%, rgba(255,255,255,0.48) 18%, rgba(255,255,255,0.22) 36%, rgba(255,255,255,0.06) 55%, rgba(255,255,255,0.010) 72%, rgba(255,255,255,0) 90%)",
+              "radial-gradient(ellipse at 68% 32%, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.5) 18%, rgba(255,255,255,0.24) 34%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 62%, rgba(255,255,255,0.008) 72%, rgba(255,255,255,0.001) 80%, rgba(255,255,255,0) 92%)",
           }}
           animate={
             reduced
               ? {}
-              : { x: ["0%", "-14%", "5%", "0%"], y: ["0%", "18%", "-5%", "0%"] }
+              : { x: ["0%", "-8%", "2%", "0%"], y: ["0%", "10%", "-3%", "0%"] }
           }
           transition={{
             duration: 11,
@@ -93,6 +99,13 @@ export function AuthHeroArtwork({ className }: { className?: string }) {
           }}
         />
       </div>
+
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: CORNER_EDGE_FADE,
+        }}
+      />
 
       {/* Ambient SVG layer — 5% always visible, sits above multiply so it's never killed */}
       <div className="absolute inset-0 bg-[url('/landing/hero-background.svg')] bg-cover [background-position:86%_4%] bg-no-repeat opacity-[0.01]" />

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { AuthEntryGate } from "@/components/auth/auth-entry-gate";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 
 export const metadata: Metadata = {
@@ -15,7 +16,7 @@ export default function LoginLayout({
 }) {
   return (
     <Suspense fallback={<RouteLoadingFallback route="login" className="min-h-screen" />}>
-      {children}
+      <AuthEntryGate>{children}</AuthEntryGate>
     </Suspense>
   );
 }

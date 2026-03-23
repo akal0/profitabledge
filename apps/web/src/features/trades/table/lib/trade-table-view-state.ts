@@ -7,6 +7,7 @@ export type NumericRange = [number, number];
 export type ViewNumericFilter = { min?: number; max?: number };
 export type TradeViewFilters = {
   sessionTags?: string[];
+  edgeIds?: string[];
   modelTags?: string[];
   protocolAlignment?: Array<"aligned" | "against" | "discretionary">;
   outcomes?: OutcomeFilterValue[];

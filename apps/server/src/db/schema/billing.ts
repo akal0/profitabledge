@@ -398,6 +398,18 @@ export const referralRewardGrant = pgTable(
   })
 );
 
+export type AffiliateApplicationDetails = {
+  whyApply: string;
+  promotionPlan: string;
+  estimatedMonthlyReferrals: number;
+  audienceSize?: number | null;
+  twitter?: string | null;
+  discord?: string | null;
+  website?: string | null;
+  location?: string | null;
+  otherSocials?: string | null;
+};
+
 export const affiliateApplication = pgTable(
   "affiliate_application",
   {
@@ -409,6 +421,7 @@ export const affiliateApplication = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     status: varchar("status", { length: 24 }).notNull().default("pending"),
     message: text("message"),
+    details: jsonb("details").$type<AffiliateApplicationDetails>(),
     adminNotes: text("admin_notes"),
     reviewedByUserId: text("reviewed_by_user_id").references(() => user.id, {
       onDelete: "set null",

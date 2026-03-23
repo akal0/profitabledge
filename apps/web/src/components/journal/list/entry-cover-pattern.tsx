@@ -1,13 +1,16 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { entryTypeConfig, generatePatternSeed } from "@/components/journal/list/list-types";
 
 export function EntryCoverPattern({
   entryType,
   title,
+  className,
 }: {
   entryType?: string;
   title: string;
+  className?: string;
 }) {
   const config =
     entryTypeConfig[entryType as keyof typeof entryTypeConfig] ??
@@ -23,7 +26,7 @@ export function EntryCoverPattern({
         : `diag-${seed}`;
 
   return (
-    <div className="relative h-20 overflow-hidden bg-sidebar-accent">
+    <div className={cn("relative h-20 overflow-hidden bg-sidebar-accent", className)}>
       <div
         className="absolute inset-0 opacity-[0.12]"
         style={{

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { AuthEntryGate } from "@/components/auth/auth-entry-gate";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 
 export async function generateMetadata({
@@ -26,7 +27,7 @@ export default function InviteLayout({
     <Suspense
       fallback={<RouteLoadingFallback route="signUp" className="min-h-screen" />}
     >
-      {children}
+      <AuthEntryGate>{children}</AuthEntryGate>
     </Suspense>
   );
 }

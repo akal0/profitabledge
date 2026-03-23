@@ -20,6 +20,8 @@ export interface UseDataTableOptions<TData> {
   columns: ColumnDef<TData, any>[];
   pageCount?: number;
   tableId?: string;
+  initialPageIndex?: number;
+  initialPageSize?: number;
   initialVisibility?: VisibilityState;
   initialSizing?: ColumnSizingState;
   meta?: any;
@@ -27,12 +29,15 @@ export interface UseDataTableOptions<TData> {
   getRowId?: (row: TData, index: number) => string;
   enableFilteringRowModel?: boolean;
   enablePaginationRowModel?: boolean;
+  enableColumnResizing?: boolean;
 }
 
 export function useDataTable<TData>({
   data,
   columns,
   tableId,
+  initialPageIndex,
+  initialPageSize,
   initialVisibility,
   initialSizing,
   meta,
@@ -40,6 +45,7 @@ export function useDataTable<TData>({
   getRowId,
   enableFilteringRowModel = true,
   enablePaginationRowModel = true,
+  enableColumnResizing = true,
 }: UseDataTableOptions<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -57,7 +63,9 @@ export function useDataTable<TData>({
   const lastPersistedSizingRef = React.useRef(
     JSON.stringify(initialSizing ?? {})
   );
+  const lastPersistedSortingRef = React.useRef(JSON.stringify([]));
   const persistSizingTimeoutRef = React.useRef<number | null>(null);
+  const persistSortingTimeoutRef = React.useRef<number | null>(null);
 
   // After mount: load from DB
   React.useEffect(() => {
@@ -102,6 +110,24 @@ export function useDataTable<TData>({
           }
 
           if (
+            Array.isArray(anyPref.sorting) &&
+            anyPref.sorting.every(
+              (item: unknown) =>
+                item &&
+                typeof item === "object" &&
+                "id" in item &&
+                typeof (item as { id?: unknown }).id === "string" &&
+                "desc" in item &&
+                typeof (item as { desc?: unknown }).desc === "boolean"
+            )
+          ) {
+            const nextSorting = anyPref.sorting as SortingState;
+            setSorting(nextSorting);
+            lastPersistedSortingRef.current = JSON.stringify(nextSorting);
+          }
+
+          if (
+            enableColumnResizing &&
             anyPref.columnSizing &&
             typeof anyPref.columnSizing === "object" &&
             !Array.isArray(anyPref.columnSizing)
@@ -115,6 +141,7 @@ export function useDataTable<TData>({
           }
         } else {
           lastPersistedSizingRef.current = JSON.stringify(initialSizing ?? {});
+          lastPersistedSortingRef.current = JSON.stringify([]);
         }
       } catch {}
       if (!cancelled) setDidLoadPrefs(true);
@@ -122,10 +149,47 @@ export function useDataTable<TData>({
     return () => {
       cancelled = true;
     };
-  }, [tableId, disablePreferences, columns, initialSizing]);
+  }, [
+    tableId,
+    disablePreferences,
+    columns,
+    initialSizing,
+    enableColumnResizing,
+  ]);
 
   React.useEffect(() => {
     if (!didLoadPrefs || !tableId) {
+      return;
+    }
+
+    const serializedSorting = JSON.stringify(sorting || []);
+    if (serializedSorting === lastPersistedSortingRef.current) {
+      return;
+    }
+
+    if (persistSortingTimeoutRef.current) {
+      window.clearTimeout(persistSortingTimeoutRef.current);
+    }
+
+    persistSortingTimeoutRef.current = window.setTimeout(async () => {
+      try {
+        await trpcClient.users.updateTablePreferences.mutate({
+          tableId,
+          preferences: { sorting },
+        });
+        lastPersistedSortingRef.current = JSON.stringify(sorting || []);
+      } catch {}
+    }, 250);
+
+    return () => {
+      if (persistSortingTimeoutRef.current) {
+        window.clearTimeout(persistSortingTimeoutRef.current);
+      }
+    };
+  }, [didLoadPrefs, sorting, tableId]);
+
+  React.useEffect(() => {
+    if (!didLoadPrefs || !tableId || !enableColumnResizing) {
       return;
     }
 
@@ -158,7 +222,7 @@ export function useDataTable<TData>({
         window.clearTimeout(persistSizingTimeoutRef.current);
       }
     };
-  }, [columnSizing, didLoadPrefs, tableId]);
+  }, [columnSizing, didLoadPrefs, tableId, enableColumnResizing]);
 
   const table = useReactTable({
     data,
@@ -170,13 +234,22 @@ export function useDataTable<TData>({
       minSize: 60,
       maxSize: 500,
     },
-    enableColumnResizing: true,
+    enableColumnResizing,
     columnResizeMode: "onEnd",
     // These tables render the full row model, so auto-resetting pagination
     // can schedule unnecessary state updates during mount in React dev.
     autoResetPageIndex: false,
     manualFiltering: !enableFilteringRowModel,
     manualPagination: !enablePaginationRowModel,
+    initialState:
+      initialPageIndex != null || initialPageSize != null
+        ? {
+            pagination: {
+              pageIndex: initialPageIndex ?? 0,
+              pageSize: initialPageSize ?? 10,
+            },
+          }
+        : undefined,
     state: {
       sorting,
       columnFilters,

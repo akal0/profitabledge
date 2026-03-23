@@ -9,6 +9,11 @@ export function JournalEditorStyles() {
         padding-bottom: 50vh;
       }
 
+      .journal-editor[data-compact="true"] .journal-editor-content {
+        min-height: 26rem;
+        padding-bottom: 10rem;
+      }
+
       .journal-editor-content p {
         margin: 0.5rem 0;
         line-height: 1.7;

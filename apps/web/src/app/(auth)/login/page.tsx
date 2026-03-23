@@ -8,7 +8,10 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { AuthSplitShell } from "@/components/auth/auth-split-shell";
+import {
+  AuthSplitShell,
+  type AuthHeroSlide,
+} from "@/components/auth/auth-split-shell";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -40,6 +43,24 @@ const INPUT_CLASS =
 
 const FIELD_LABEL_CLASS =
   "text-xs font-medium tracking-[-0.01em] text-white/42";
+
+const LOGIN_HERO_SLIDES: AuthHeroSlide[] = [
+  {
+    title: "See the edge before the same mistake repeats.",
+    description:
+      "Turn raw fills, journal notes, and prop-account pressure into a review loop that actually sharpens your next session.",
+  },
+  {
+    title: "Your cleanest trades already told you what to scale.",
+    description:
+      "Review execution, timing, and context in one workspace instead of piecing the lesson together after the damage is done.",
+  },
+  {
+    title: "Prop pressure feels smaller when the process is visible.",
+    description:
+      "Track discipline, rule risk, and recurring leaks before one emotional trade distorts the whole month.",
+  },
+];
 
 const FormSchema = z.object({
   email: z.string().email({
@@ -110,13 +131,13 @@ const LoginPage = () => {
   }
 
   return (
-    <AuthSplitShell>
+    <AuthSplitShell heroSlides={LOGIN_HERO_SLIDES}>
       <div className="space-y-8">
         <div className="space-y-3 text-center">
-          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50">
+          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
             Welcome back to profitabledge
           </p>
-          <p className="text-sm leading-6 text-white/56">
+          <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
             Are you ready to dive back into your profitable edge?
           </p>
         </div>

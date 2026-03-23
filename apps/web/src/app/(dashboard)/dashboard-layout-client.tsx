@@ -656,12 +656,54 @@ export default function DashboardLayoutClient({
     resolvedAccountId && resolvedAccountId !== ALL_ACCOUNTS_ID
       ? pickPreferredAccountConnection(connections, resolvedAccountId)
       : null;
+  const pathSegments = safePathname.split("/").filter(Boolean);
+  const rawEdgeDetailId =
+    pathSegments[0] === "dashboard" && pathSegments[1] === "edges"
+      ? pathSegments[2] === "my"
+        ? pathSegments[3] ?? null
+        : pathSegments[2] ?? null
+      : null;
+  const edgeDetailId =
+    rawEdgeDetailId &&
+    !["shared", "library", "featured", "my"].includes(rawEdgeDetailId)
+      ? rawEdgeDetailId
+      : null;
+  const edgeDetailQuery = useQuery({
+    ...trpcOptions.edges.getDetail.queryOptions({
+      edgeId: edgeDetailId ?? "",
+    }),
+    enabled: canLoadDashboardShellData && Boolean(edgeDetailId),
+    retry: false,
+  });
+  const edgeDetailName =
+    (
+      edgeDetailQuery.data as
+        | {
+            edge?: {
+              name?: string | null;
+            } | null;
+          }
+        | undefined
+    )?.edge?.name ?? null;
 
   const connectionBadge = getConnectionBadge(currentAccountConnection);
   const currentAccountIsDemo = currentAccount
     ? isDemoWorkspaceAccount(currentAccount)
     : false;
-  const breadcrumbs = getDashboardBreadcrumbs(safePathname);
+  const baseBreadcrumbs = getDashboardBreadcrumbs(safePathname);
+  const breadcrumbs =
+    edgeDetailId && baseBreadcrumbs.items.length > 0
+      ? {
+          items: baseBreadcrumbs.items.map((item, index) =>
+            index === baseBreadcrumbs.items.length - 1
+              ? {
+                  ...item,
+                  label: edgeDetailName ?? "Edge detail",
+                }
+              : item
+          ),
+        }
+      : baseBreadcrumbs;
   const hasAdminAccess = billingState?.admin?.isAdmin === true;
   const hasAffiliateAccess = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin

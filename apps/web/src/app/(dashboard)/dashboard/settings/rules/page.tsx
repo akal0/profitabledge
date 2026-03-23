@@ -1218,7 +1218,7 @@ export default function RulesPage() {
                     Starter library
                   </p>
                   <p className="mt-1 text-xs text-white/40">
-                    Start from a playbook template, then customize it to match
+                    Start from an Edge template, then customize it to match
                     your actual setup rules.
                   </p>
                 </div>

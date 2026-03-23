@@ -59,7 +59,7 @@ const AVAILABLE_COLUMNS = [
   // Tagging
   { id: "killzone", label: "Session (legacy)", category: "Tags" },
   { id: "sessionTag", label: "Session tag", category: "Tags" },
-  { id: "modelTag", label: "Model tag", category: "Tags" },
+  { id: "modelTag", label: "Edge", category: "Tags" },
   { id: "customTags", label: "Trade tags", category: "Tags" },
   { id: "protocolAlignment", label: "Protocol", category: "Tags" },
   { id: "outcome", label: "Outcome", category: "Tags" },
@@ -108,7 +108,7 @@ const COLUMN_TOOLTIPS: Record<string, string> = {
   holdSeconds: "How long the trade was open.",
   killzone: "Legacy session tag for the trade.",
   sessionTag: "Session or time window tag.",
-  modelTag: "Strategy or model label.",
+  modelTag: "Edge label.",
   customTags: "Custom trade tags attached to the trade.",
   protocolAlignment: "Whether rules were followed.",
   outcome: "Win, loss, break-even, or partial win.",

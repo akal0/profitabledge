@@ -387,7 +387,7 @@ export function ReplayReviewTab({
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-white/5 bg-sidebar px-3 py-4 text-sm text-white/45">
               {ruleSets.length
-                ? "Select a rule set to score the replay against your own playbook."
+                ? "Select a rule set to score the replay against your own Edge."
                 : "No rule sets found yet. Create one in settings to unlock rulebook coaching."}
             </div>
           )}

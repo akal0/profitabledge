@@ -105,6 +105,13 @@ function formatPercentInput(value?: number | null) {
   return percentage.toFixed(2).replace(/\.?0+$/, "");
 }
 
+function formatCompactNumber(value?: number | null) {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value ?? 0);
+}
+
 function parsePercentToBasisPoints(
   value: string,
   { min = 0, max = 100 }: { min?: number; max?: number } = {}
@@ -1296,7 +1303,7 @@ export function GrowthAdminDashboard() {
                     {[
                       "Username",
                       "Email",
-                      "Description",
+                      "Application",
                       "Status",
                       "Actions",
                     ].map((column) => (
@@ -1322,6 +1329,16 @@ export function GrowthAdminDashboard() {
                     const username =
                       entry.user.username ??
                       (entry.user.email ? entry.user.email.split("@")[0] : "—");
+                    const applicationDetails =
+                      entry.application.details &&
+                      typeof entry.application.details === "object"
+                        ? entry.application.details
+                        : null;
+                    const socialLinks = [
+                      applicationDetails?.twitter ?? entry.user.twitter,
+                      applicationDetails?.discord ?? entry.user.discord,
+                      applicationDetails?.website ?? entry.user.website,
+                    ].filter(Boolean);
 
                     return (
                       <tr
@@ -1335,7 +1352,52 @@ export function GrowthAdminDashboard() {
                           {entry.user.email}
                         </td>
                         <td className="px-4 py-3 text-sm text-white/75">
-                          {entry.application.message || "No application note"}
+                          <div className="space-y-2">
+                            <p className="text-sm leading-6 text-white/75">
+                              {applicationDetails?.whyApply ||
+                                entry.application.message ||
+                                "No application note"}
+                            </p>
+                            {applicationDetails?.promotionPlan ? (
+                              <p className="text-xs leading-5 text-white/45">
+                                Promotion plan: {applicationDetails.promotionPlan}
+                              </p>
+                            ) : null}
+                            <div className="flex flex-wrap gap-2 text-[11px] text-white/38">
+                              <span className="rounded-sm border border-white/8 bg-white/[0.03] px-2 py-1">
+                                Program signups: {entry.referralStats?.signups ?? 0}
+                              </span>
+                              <span className="rounded-sm border border-white/8 bg-white/[0.03] px-2 py-1">
+                                Paid referrals: {entry.referralStats?.paidConversions ?? 0}
+                              </span>
+                              <span className="rounded-sm border border-white/8 bg-white/[0.03] px-2 py-1">
+                                Est. monthly referrals:{" "}
+                                {applicationDetails?.estimatedMonthlyReferrals ?? 0}
+                              </span>
+                              {(applicationDetails?.audienceSize ?? null) !== null ? (
+                                <span className="rounded-sm border border-white/8 bg-white/[0.03] px-2 py-1">
+                                  Audience:{" "}
+                                  {formatCompactNumber(applicationDetails?.audienceSize)}
+                                </span>
+                              ) : null}
+                            </div>
+                            {socialLinks.length ? (
+                              <p className="text-xs leading-5 text-white/42">
+                                Socials: {socialLinks.join(" · ")}
+                              </p>
+                            ) : null}
+                            {applicationDetails?.otherSocials ? (
+                              <p className="text-xs leading-5 text-white/42">
+                                Other socials: {applicationDetails.otherSocials}
+                              </p>
+                            ) : null}
+                            {applicationDetails?.location ?? entry.user.location ? (
+                              <p className="text-xs leading-5 text-white/34">
+                                Location:{" "}
+                                {applicationDetails?.location ?? entry.user.location}
+                              </p>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <Badge className="bg-white/5 text-[10px] text-white/65 ring ring-white/10">

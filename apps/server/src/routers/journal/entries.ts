@@ -60,6 +60,8 @@ export const journalEntryProcedures = {
       search: z.string().optional(),
       tags: z.array(z.string()).optional(),
       accountId: z.string().optional(),
+      linkedEdgeId: z.string().optional(),
+      linkedMissedTradeId: z.string().optional(),
       isPinned: z.boolean().optional(),
       isArchived: z.boolean().optional(),
       tradePhase: z.enum(['pre-trade', 'during-trade', 'post-trade']).optional(),
@@ -73,6 +75,8 @@ export const journalEntryProcedures = {
         search,
         tags,
         accountId,
+        linkedEdgeId,
+        linkedMissedTradeId,
         isPinned,
         isArchived = false,
         tradePhase,
@@ -95,6 +99,14 @@ export const journalEntryProcedures = {
 
       if (search) {
         conditions.push(ilike(journalEntry.title, `%${search}%`));
+      }
+
+      if (linkedEdgeId) {
+        conditions.push(eq(journalEntry.linkedEdgeId, linkedEdgeId));
+      }
+
+      if (linkedMissedTradeId) {
+        conditions.push(eq(journalEntry.linkedMissedTradeId, linkedMissedTradeId));
       }
 
       if (tradePhase) {
@@ -153,6 +165,8 @@ export const journalEntryProcedures = {
           isPinned: journalEntry.isPinned,
           wordCount: journalEntry.wordCount,
           readTimeMinutes: journalEntry.readTimeMinutes,
+          linkedEdgeId: journalEntry.linkedEdgeId,
+          linkedMissedTradeId: journalEntry.linkedMissedTradeId,
           createdAt: journalEntry.createdAt,
           updatedAt: journalEntry.updatedAt,
           content: journalEntry.content,
@@ -242,6 +256,8 @@ export const journalEntryProcedures = {
       content: z.array(journalBlockSchema).optional(),
       accountIds: z.array(z.string()).optional(),
       linkedTradeIds: z.array(z.string()).optional(),
+      linkedEdgeId: z.string().optional(),
+      linkedMissedTradeId: z.string().optional(),
       entryType: journalEntryTypeSchema.optional(),
       tags: z.array(z.string()).optional(),
       journalDate: z.string().optional(),
@@ -301,6 +317,8 @@ export const journalEntryProcedures = {
           content: content as any,
           accountIds: input.accountIds ?? [],
           linkedTradeIds: input.linkedTradeIds ?? [],
+          linkedEdgeId: input.linkedEdgeId ?? null,
+          linkedMissedTradeId: input.linkedMissedTradeId ?? null,
           entryType: input.entryType ?? 'general',
           tags: input.tags ?? [],
           journalDate: input.journalDate ? new Date(input.journalDate) : null,
@@ -385,6 +403,8 @@ export const journalEntryProcedures = {
       content: z.array(journalBlockSchema).optional(),
       accountIds: z.array(z.string()).optional(),
       linkedTradeIds: z.array(z.string()).optional(),
+      linkedEdgeId: z.string().nullable().optional(),
+      linkedMissedTradeId: z.string().nullable().optional(),
       entryType: journalEntryTypeSchema.optional(),
       tags: z.array(z.string()).optional(),
       journalDate: z.string().nullable().optional(),
@@ -490,6 +510,8 @@ export const journalEntryProcedures = {
           content: original.content,
           accountIds: original.accountIds,
           linkedTradeIds: original.linkedTradeIds,
+          linkedEdgeId: original.linkedEdgeId,
+          linkedMissedTradeId: original.linkedMissedTradeId,
           entryType: original.entryType,
           tags: original.tags,
           journalDate: original.journalDate,

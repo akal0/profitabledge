@@ -70,8 +70,16 @@ export type TradeRow = {
   killzoneColor?: string | null;
   sessionTag?: string | null;
   sessionTagColor?: string | null;
+  edgeId?: string | null;
+  edgeName?: string | null;
+  edgeColor?: string | null;
   modelTag?: string | null;
   modelTagColor?: string | null;
+  edgeRuleReview?: {
+    reviewedCount: number;
+    followedCount: number;
+    brokenCount: number;
+  };
   customTags?: string[];
   protocolAlignment?: "aligned" | "against" | "discretionary" | null;
   outcome?: "Win" | "Loss" | "BE" | "PW";

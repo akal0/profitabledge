@@ -186,16 +186,19 @@ export function SessionTagCell({
           {sessionTag && sessionTagColor ? (
             <Badge
               style={getTradeIdentifierColorStyle(sessionTagColor)}
-              className={cn(TRADE_IDENTIFIER_PILL_CLASS, "hover:opacity-90")}
+              className={cn(
+                TRADE_IDENTIFIER_PILL_CLASS,
+                "max-w-full hover:opacity-90"
+              )}
             >
               <TagIcon size={12} />
-              <span className="max-w-[12rem] truncate">{sessionTag}</span>
+              <span className="min-w-0 max-w-full truncate">{sessionTag}</span>
             </Badge>
           ) : (
             <Button
               variant="ghost"
               size="sm"
-              className={tradeTagEditorStyles.addButtonClass}
+              className={cn(tradeTagEditorStyles.addButtonClass, "max-w-full")}
             >
               <Plus className="mb-0.5 size-3" />
               Add session

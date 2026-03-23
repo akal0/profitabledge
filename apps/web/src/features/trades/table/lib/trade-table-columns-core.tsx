@@ -133,6 +133,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         />
       );
     },
+    size: 112,
+    minSize: 104,
   },
   {
     accessorKey: "sessionTag",
@@ -151,10 +153,12 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         />
       );
     },
+    size: 152,
+    minSize: 136,
   },
   {
     accessorKey: "modelTag",
-    header: () => withTradeTableHeaderTooltip("modelTag", "Model"),
+    header: () => withTradeTableHeaderTooltip("modelTag", "Edge"),
     cell: ({ row, table }) => {
       const meta = getTradeTableMeta(table.options.meta);
 
@@ -162,13 +166,19 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         <ModelTagCell
           tradeId={row.original.id}
           accountId={row.original.accountId}
+          edgeId={row.original.edgeId}
+          edgeName={row.original.edgeName}
+          edgeColor={row.original.edgeColor}
           modelTag={row.original.modelTag}
           modelTagColor={row.original.modelTagColor}
+          outcome={row.original.outcome}
           allModelTags={meta.modelTags}
           isLive={row.original.isLive}
         />
       );
     },
+    size: 172,
+    minSize: 156,
   },
   {
     accessorKey: "customTags",
@@ -187,8 +197,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
       );
     },
     enableSorting: false,
-    size: 180,
-    minSize: 140,
+    size: 220,
+    minSize: 180,
   },
   {
     accessorKey: "protocolAlignment",
@@ -200,6 +210,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         isLive={row.original.isLive}
       />
     ),
+    size: 148,
+    minSize: 132,
   },
   {
     accessorKey: "outcome",
@@ -241,6 +253,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         </span>
       );
     },
+    size: 118,
+    minSize: 104,
   },
   {
     accessorKey: "complianceStatus",
@@ -278,6 +292,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         </Tooltip>
       );
     },
+    size: 118,
+    minSize: 104,
   },
   {
     id: "streak",

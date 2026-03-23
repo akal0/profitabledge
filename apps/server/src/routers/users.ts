@@ -5,6 +5,13 @@ import { tradingAccount, trade } from "../db/schema/trading";
 import { and, eq, ne, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import {
+  REPORT_CHART_TYPES,
+  REPORT_DIMENSION_IDS,
+  REPORT_LENS_IDS,
+  REPORT_METRIC_IDS,
+  REPORT_PANEL_IDS,
+} from "@profitabledge/contracts/reports";
 import { createNotification } from "../lib/notifications";
 
 const DASHBOARD_WIDGET_IDS = [
@@ -542,6 +549,87 @@ export const usersRouter = router({
         .set({
           widgetPreferences: nextWidgetPrefs,
           chartWidgetPreferences: nextChartPrefs,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      return { ok: true } as const;
+    }),
+
+  updateReportsPreferences: protectedProcedure
+    .input(
+      z.object({
+        lens: z.enum(REPORT_LENS_IDS),
+        activePanels: z.array(z.enum(REPORT_PANEL_IDS)).max(8).optional(),
+        panelSpans: z
+          .record(
+            z.enum(REPORT_PANEL_IDS),
+            z.number().int().min(1).max(2).optional()
+          )
+          .optional(),
+        heroDimension: z.enum(REPORT_DIMENSION_IDS).optional(),
+        heroMetrics: z.array(z.enum(REPORT_METRIC_IDS)).max(3).optional(),
+        heroChartType: z.enum(REPORT_CHART_TYPES).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({ widgetPreferences: userTable.widgetPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const current = (rows[0]?.widgetPreferences as any) || {};
+      const currentReports = current.reportsV1 && typeof current.reportsV1 === "object"
+        ? current.reportsV1
+        : {};
+      const currentLensPrefs =
+        currentReports[input.lens] && typeof currentReports[input.lens] === "object"
+          ? currentReports[input.lens]
+          : {};
+
+      const nextLensPrefs = { ...currentLensPrefs };
+
+      if (input.activePanels !== undefined) {
+        nextLensPrefs.activePanels = Array.from(new Set(input.activePanels));
+      }
+
+      if (input.panelSpans !== undefined) {
+        nextLensPrefs.panelSpans = Object.fromEntries(
+          Object.entries(input.panelSpans).filter(
+            ([, value]) => typeof value === "number" && Number.isFinite(value)
+          )
+        );
+      }
+
+      if (input.heroDimension !== undefined) {
+        nextLensPrefs.heroDimension = input.heroDimension;
+      }
+
+      if (input.heroMetrics !== undefined) {
+        nextLensPrefs.heroMetrics = Array.from(new Set(input.heroMetrics)).slice(
+          0,
+          3
+        );
+      }
+
+      if (input.heroChartType !== undefined) {
+        nextLensPrefs.heroChartType = input.heroChartType;
+      }
+
+      const next = {
+        ...current,
+        reportsV1: {
+          ...currentReports,
+          [input.lens]: nextLensPrefs,
+        },
+      };
+
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: next,
           updatedAt: new Date(),
         })
         .where(eq(userTable.id, userId));

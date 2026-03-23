@@ -250,7 +250,7 @@ export function TradeTagsCell({
           onPointerDown={(event) => event.stopPropagation()}
         >
           {displayedTags.length > 0 ? (
-            <div className="flex max-w-[14rem] flex-wrap gap-1.5">
+            <div className="flex max-w-full flex-wrap gap-1.5">
               {visibleTags.map((tag) => (
                 <span
                   key={tag}
@@ -262,7 +262,7 @@ export function TradeTagsCell({
                   title={tag}
                 >
                   <TagIcon className="size-3 shrink-0" />
-                  <span className="max-w-[10rem] truncate">{tag}</span>
+                  <span className="min-w-0 max-w-full truncate">{tag}</span>
                 </span>
               ))}
               {hiddenTagCount > 0 ? (
@@ -281,7 +281,7 @@ export function TradeTagsCell({
             <Button
               variant="ghost"
               size="sm"
-              className={tradeTagEditorStyles.addButtonClass}
+              className={cn(tradeTagEditorStyles.addButtonClass, "max-w-full")}
             >
               <Plus className="mb-0.5 size-3" />
               Add trade tags

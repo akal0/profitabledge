@@ -2,22 +2,22 @@ import type { CSSProperties } from "react";
 import Color from "color";
 
 export const TRADE_IDENTIFIER_PILL_CLASS =
-  "inline-flex min-h-7 w-max max-w-full items-center gap-1.5 rounded-sm ring-1 px-2.5 py-1 text-[11px] font-medium leading-none tracking-wide whitespace-nowrap transition-colors";
+  "inline-flex min-h-7 min-w-0 max-w-full shrink items-center gap-1.5 overflow-hidden rounded-md ring-1 px-2.5 py-1 text-[11px] font-medium leading-none tracking-wide whitespace-nowrap transition-colors";
 
 export const TRADE_IDENTIFIER_BUTTON_CLASS =
-  "h-7 rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-2.5 text-[11px] font-medium text-white/60 hover:bg-white/[0.06] hover:text-white";
+  "h-7 overflow-hidden rounded-md ring-1 ring-white/8 bg-white/[0.03] px-2.5 text-[11px] font-medium text-white/60 hover:bg-white/[0.06] hover:text-white";
 
 export const TRADE_ACTION_BUTTON_CLASS =
-  "h-8 rounded-sm ring-1 ring-white/8 bg-white/[0.03] px-3 text-xs font-medium text-white/70 hover:bg-white/[0.06] hover:text-white disabled:opacity-50 disabled:hover:bg-white/[0.03]";
+  "h-8 overflow-hidden rounded-md ring-1 ring-white/8 bg-white/[0.03] px-3 text-xs font-medium text-white/70 hover:bg-white/[0.06] hover:text-white disabled:opacity-50 disabled:hover:bg-white/[0.03]";
 
 export const TRADE_ACTION_BUTTON_PRIMARY_CLASS =
-  "h-8 rounded-sm ring-1 ring-white/10 bg-white/[0.08] px-3 text-xs font-medium text-white hover:bg-white/[0.12] disabled:opacity-50 disabled:hover:bg-white/[0.08]";
+  "h-8 overflow-hidden rounded-md ring-1 ring-white/10 bg-white/[0.08] px-3 text-xs font-medium text-white hover:bg-white/[0.12] disabled:opacity-50 disabled:hover:bg-white/[0.08]";
 
 export const TRADE_ACTION_ICON_BUTTON_CLASS =
-  "rounded-sm ring-1 ring-white/10 bg-black/45 text-white/80 hover:bg-black/60 hover:text-white disabled:opacity-50";
+  "overflow-hidden rounded-md ring-1 ring-white/10 bg-black/45 text-white/80 hover:bg-black/60 hover:text-white disabled:opacity-50";
 
 export const TRADE_SURFACE_CARD_CLASS =
-  "rounded-sm ring ring-white/8 bg-white/[0.03] border-none";
+  "overflow-hidden rounded-md ring ring-white/8 bg-white/[0.03] border-none";
 
 export const TRADE_IDENTIFIER_TONES = {
   subdued: "ring-white/0 bg-white/[0.025] text-white/45",

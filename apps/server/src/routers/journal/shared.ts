@@ -51,6 +51,7 @@ const journalEntryTypeValues = [
   'strategy',
   'comparison',
   'backtest',
+  'edge',
 ] as const;
 
 export const journalEntryTypeSchema = z.enum(journalEntryTypeValues);

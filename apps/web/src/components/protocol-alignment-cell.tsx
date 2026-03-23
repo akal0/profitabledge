@@ -98,12 +98,15 @@ export function ProtocolAlignmentCell({
         variant="outline"
         className={cn(
           TRADE_IDENTIFIER_PILL_CLASS,
+          "max-w-full",
           state.color,
           updateMutation.isPending && "opacity-50 cursor-wait"
         )}
       >
         <Icon size={12} />
-        <span className="text-xs">{state.label}</span>
+        <span className="min-w-0 max-w-full truncate text-xs">
+          {state.label}
+        </span>
       </Badge>
     </div>
   );

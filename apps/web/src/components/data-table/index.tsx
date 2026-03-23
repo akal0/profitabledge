@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 
 const AUTO_COLUMN_CONTENT_BUFFER_PX = 8;
 const DEFAULT_ROW_VIRTUALIZER_OVERSCAN = 14;
+const DATA_TABLE_CELL_HORIZONTAL_PADDING_PX = 48;
+const DATA_TABLE_HEADER_CONTENT_MAX_WIDTH_PX = 220;
 
 type DataRowRenderItem<TData> = {
   key: string;
@@ -44,6 +46,7 @@ export function DataTable<TData>({
   fitColumnsToContent,
   enableMeasuredColumnSizing,
   enableRowVirtualization,
+  usePaginationRows,
   rowVirtualizerOverscan = DEFAULT_ROW_VIRTUALIZER_OVERSCAN,
 }: {
   table: Table<TData>;
@@ -67,6 +70,7 @@ export function DataTable<TData>({
   fitColumnsToContent?: boolean;
   enableMeasuredColumnSizing?: boolean;
   enableRowVirtualization?: boolean;
+  usePaginationRows?: boolean;
   rowVirtualizerOverscan?: number;
 }) {
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -97,7 +101,9 @@ export function DataTable<TData>({
   const [collapsedGroupKeys, setCollapsedGroupKeys] = React.useState<
     Set<string>
   >(new Set());
-  const tableRows = table.getPrePaginationRowModel().rows;
+  const tableRows = usePaginationRows
+    ? table.getRowModel().rows
+    : table.getPrePaginationRowModel().rows;
   const rowCount = tableRows.length;
   const visibleColumnCount = Math.max(table.getVisibleLeafColumns().length, 1);
   const hasRowInteraction = Boolean(
@@ -739,7 +745,13 @@ export function DataTable<TData>({
             >
               <div
                 data-column-content
-                className="flex min-w-0 max-w-full items-center"
+                className="flex min-w-0 w-full max-w-full items-center overflow-hidden"
+                style={{
+                  maxWidth: Math.max(
+                    0,
+                    cell.column.getSize() - DATA_TABLE_CELL_HORIZONTAL_PADDING_PX
+                  ),
+                }}
               >
                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
               </div>
@@ -862,12 +874,22 @@ export function DataTable<TData>({
                         shouldMeasureColumns ? true : undefined
                       }
                       className={cn(
-                        "relative inline-flex min-w-max items-center",
+                        "relative inline-flex min-w-0 max-w-full items-center overflow-hidden",
                         canReorderColumn(h.column.id) && "cursor-grab",
                         draggedColumnId === h.column.id && "opacity-50",
                         dragOverColumnId === h.column.id &&
                           "text-white after:absolute after:inset-x-3 after:bottom-1 after:h-px after:bg-teal-400"
                       )}
+                      style={{
+                        maxWidth: Math.min(
+                          DATA_TABLE_HEADER_CONTENT_MAX_WIDTH_PX,
+                          Math.max(
+                            0,
+                            h.column.getSize() -
+                              DATA_TABLE_CELL_HORIZONTAL_PADDING_PX
+                          )
+                        ),
+                      }}
                     >
                       {h.isPlaceholder
                         ? null

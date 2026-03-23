@@ -11,6 +11,7 @@ import {
   Gift,
   Users,
   Clock,
+  Layers3,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 
@@ -62,6 +63,7 @@ export function getNavSections(
         { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
         { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
         { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
+        { title: "Edges", url: "/dashboard/edges", icon: Layers3 },
         { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },
         { title: "Goals", url: "/dashboard/goals", icon: Target },
         { title: "Calendar", url: "/dashboard/news", icon: Clock },

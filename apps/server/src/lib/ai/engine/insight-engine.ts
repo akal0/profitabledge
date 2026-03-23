@@ -680,7 +680,7 @@ function generateTradeSpecificInsights(
         title: "Leak pattern — expected loss",
         message: `This trade matched one of your weakest patterns. Historically, ${leakDescription} win only ${formatPct(leak.winRate)} of the time (${leak.trades} trades).`,
         recommendation:
-          "Review whether this setup belongs in your playbook at all, or if it needs tighter filters.",
+          "Review whether this setup belongs in your Edge at all, or if it needs tighter filters.",
         data: { leak, profit },
       });
       break;

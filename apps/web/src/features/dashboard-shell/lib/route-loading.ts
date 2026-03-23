@@ -3,6 +3,7 @@ import { isHeldBackDashboardRoute } from "@/features/navigation/lib/held-back-ro
 
 export function resolveRouteLoadingVariant(pathname: string): RouteLoadingVariant {
   if (pathname.startsWith("/assistant")) return "assistant";
+  if (pathname.startsWith("/dashboard/edges")) return "edges";
   if (pathname.startsWith("/dashboard/trades")) return "trades";
   if (pathname.startsWith("/dashboard/journal")) return "journal";
   if (pathname.startsWith("/dashboard/goals")) return "goals";
@@ -27,6 +28,7 @@ export function resolveRouteLoadingVariant(pathname: string): RouteLoadingVarian
   if (pathname.startsWith("/dashboard/settings/compliance")) return "settingsCompliance";
   if (pathname.startsWith("/dashboard/settings/connections")) return "settingsConnections";
   if (pathname.startsWith("/dashboard/settings/ea-setup")) return "settingsEaSetup";
+  if (pathname.startsWith("/dashboard/settings/edges")) return "settingsEdges";
   if (pathname.startsWith("/dashboard/settings/metrics")) return "settingsMetrics";
   if (pathname.startsWith("/dashboard/settings/notifications")) return "settingsNotifications";
   if (pathname.startsWith("/dashboard/settings/risk")) return "settingsRisk";
@@ -51,6 +53,7 @@ export function isAccountScopedRoute(pathname: string): boolean {
   return (
     pathname === "/dashboard" ||
     pathname.startsWith("/assistant") ||
+    pathname.startsWith("/dashboard/edges") ||
     pathname.startsWith("/dashboard/trades") ||
     pathname.startsWith("/dashboard/journal") ||
     pathname.startsWith("/dashboard/goals") ||
@@ -61,6 +64,7 @@ export function isAccountScopedRoute(pathname: string): boolean {
     pathname.startsWith("/dashboard/settings/alerts") ||
     pathname.startsWith("/dashboard/settings/billing") ||
     pathname.startsWith("/dashboard/settings/broker") ||
+    pathname.startsWith("/dashboard/settings/edges") ||
     pathname.startsWith("/dashboard/settings/connections") ||
     pathname.startsWith("/dashboard/settings/rules") ||
     pathname.startsWith("/dashboard/settings/tags")

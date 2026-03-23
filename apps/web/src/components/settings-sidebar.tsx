@@ -20,7 +20,6 @@ import {
   Database,
   TrendingUp,
   Key,
-  Tag,
   Shield,
   Bell,
   Plug,
@@ -32,6 +31,7 @@ import {
   CreditCard,
   Sparkles,
   Waypoints,
+  Layers3,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 
@@ -67,7 +67,7 @@ const settingsNavSections: NavSection[] = [
   {
     label: "Trading",
     items: [
-      { title: "Tags & labels", href: "/dashboard/settings/tags", icon: Tag },
+      { title: "Edges", href: "/dashboard/settings/edges", icon: Layers3 },
       {
         title: "Symbol mapping",
         href: "/dashboard/settings/symbol-mapping",

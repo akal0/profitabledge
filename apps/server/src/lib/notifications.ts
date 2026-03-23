@@ -20,6 +20,7 @@ export type NotificationType =
   | "prop_violation"
   | "prop_journey"
   | "prop_phase_advanced"
+  | "edge_invite"
   | "journal_share_request"
   | "leaderboard_update"
   | "copier_signal"
@@ -85,6 +86,8 @@ function isTypeEnabled(prefs: NotificationPreferences, type: NotificationType) {
     case "copier_signal":
     case "journal_share_request":
       return prefs.social;
+    case "edge_invite":
+      return prefs.system;
     case "trade_imported":
     case "api_key":
     case "settings_updated":

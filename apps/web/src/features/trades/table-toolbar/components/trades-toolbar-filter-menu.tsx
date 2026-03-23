@@ -561,8 +561,8 @@ export function TradesToolbarFilterMenu({
         />
 
         <SelectionSubmenu
-          triggerLabel={formatTriggerLabel("Model tag", stagedModelTags.length)}
-          label="Select model tags"
+          triggerLabel={formatTriggerLabel("Edge", stagedModelTags.length)}
+          label="Select Edges"
           items={(allModelTags || []).map((option) => option.name)}
           selectedValues={stagedModelTags}
           onSelectedValuesChange={setStagedModelTags}

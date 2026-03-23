@@ -50,6 +50,7 @@ interface JournalEditorProps {
   placeholder?: string;
   autoFocus?: boolean;
   className?: string;
+  compact?: boolean;
   accountId?: string;
   onApplyAICapture?: (
     capture: JournalAICaptureResult,
@@ -73,6 +74,7 @@ function JournalEditor({
   placeholder = "Start writing, or press '/' for commands...",
   autoFocus = false,
   className,
+  compact = false,
   accountId,
   onApplyAICapture,
 }: JournalEditorProps, ref) {
@@ -256,12 +258,26 @@ function JournalEditor({
 
   if (!editor) {
     return (
-      <div className={cn("min-h-screen animate-pulse bg-sidebar-accent", className)} />
+      <div
+        className={cn(
+          compact ? "min-h-[28rem]" : "min-h-screen",
+          "animate-pulse bg-sidebar-accent",
+          className
+        )}
+      />
     );
   }
 
   return (
-    <div ref={editorRef} className={cn("journal-editor relative min-h-screen", className)}>
+    <div
+      ref={editorRef}
+      data-compact={compact ? "true" : undefined}
+      className={cn(
+        "journal-editor relative",
+        compact ? "min-h-[28rem]" : "min-h-screen",
+        className
+      )}
+    >
       <JournalEditorStyles />
       <JournalEditorBubbleMenu editor={editor} />
       <EditorContent editor={editor} />

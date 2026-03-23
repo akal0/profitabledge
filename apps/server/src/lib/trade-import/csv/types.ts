@@ -33,6 +33,7 @@ export interface NormalizedImportedTrade {
   swap: number | null;
   commissions: number | null;
   pips: number | null;
+  tradeDurationSeconds: string | null;
   comment: string | null;
   brokerMeta?: Record<string, unknown> | null;
 }

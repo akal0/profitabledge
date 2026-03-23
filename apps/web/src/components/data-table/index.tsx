@@ -1,11 +1,32 @@
 "use client";
 
 import * as React from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import type { Row, Table } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { cn } from "@/lib/utils";
 
 const AUTO_COLUMN_CONTENT_BUFFER_PX = 8;
+const DEFAULT_ROW_VIRTUALIZER_OVERSCAN = 14;
+
+type DataRowRenderItem<TData> = {
+  key: string;
+  kind: "row";
+  row: Row<TData>;
+  className?: string;
+};
+
+type GroupHeaderRenderItem<TData> = {
+  key: string;
+  kind: "group-header";
+  groupKey: string;
+  rows: Row<TData>[];
+  isCollapsed: boolean;
+};
+
+type BodyRenderItem<TData> =
+  | DataRowRenderItem<TData>
+  | GroupHeaderRenderItem<TData>;
 
 export function DataTable<TData>({
   table,
@@ -17,9 +38,13 @@ export function DataTable<TData>({
   onRowMouseEnter,
   containerRef,
   className,
+  onRenderedRowIdsChange,
   getRowGroupKey,
   renderRowGroupHeader,
   fitColumnsToContent,
+  enableMeasuredColumnSizing,
+  enableRowVirtualization,
+  rowVirtualizerOverscan = DEFAULT_ROW_VIRTUALIZER_OVERSCAN,
 }: {
   table: Table<TData>;
   children?: React.ReactNode;
@@ -30,6 +55,7 @@ export function DataTable<TData>({
   onRowMouseEnter?: (rowId: string) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   className?: string;
+  onRenderedRowIdsChange?: (rowIds: string[]) => void;
   getRowGroupKey?: (row: Row<TData>) => string | null;
   renderRowGroupHeader?: (group: {
     groupKey: string;
@@ -39,12 +65,16 @@ export function DataTable<TData>({
     onToggleCollapsed: () => void;
   }) => React.ReactNode;
   fitColumnsToContent?: boolean;
+  enableMeasuredColumnSizing?: boolean;
+  enableRowVirtualization?: boolean;
+  rowVirtualizerOverscan?: number;
 }) {
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const resizeGuideRef = React.useRef<HTMLDivElement | null>(null);
   const measurementSandboxRef = React.useRef<HTMLDivElement | null>(null);
   const measurementFrameRef = React.useRef<number | null>(null);
   const measuredColumnMinWidthsRef = React.useRef<Record<string, number>>({});
+  const lastRenderedRowIdsSignatureRef = React.useRef<string>("");
   const resizeSessionRef = React.useRef<{
     columnId: string;
     startX: number;
@@ -53,6 +83,7 @@ export function DataTable<TData>({
     maxWidth: number;
     baseLineX: number;
   } | null>(null);
+  const [tableOffsetTop, setTableOffsetTop] = React.useState(0);
   const visibleColumnIds = table
     .getVisibleLeafColumns()
     .map((column) => column.id)
@@ -66,12 +97,14 @@ export function DataTable<TData>({
   const [collapsedGroupKeys, setCollapsedGroupKeys] = React.useState<
     Set<string>
   >(new Set());
-  const rowCount = table.getPrePaginationRowModel().rows.length;
   const tableRows = table.getPrePaginationRowModel().rows;
+  const rowCount = tableRows.length;
   const visibleColumnCount = Math.max(table.getVisibleLeafColumns().length, 1);
   const hasRowInteraction = Boolean(
     onRowClick || onRowDoubleClick || onRowMouseDown || onRowMouseEnter
   );
+  const shouldMeasureColumns =
+    enableMeasuredColumnSizing ?? Boolean(fitColumnsToContent);
 
   const isInteractiveTarget = React.useCallback((target: HTMLElement) => {
     return Boolean(
@@ -317,6 +350,10 @@ export function DataTable<TData>({
   }, [fitColumnsToContent, measureIntrinsicContentWidth, table]);
 
   const scheduleMeasuredColumnWidths = React.useCallback(() => {
+    if (!shouldMeasureColumns) {
+      return;
+    }
+
     if (measurementFrameRef.current != null) {
       window.cancelAnimationFrame(measurementFrameRef.current);
     }
@@ -325,9 +362,13 @@ export function DataTable<TData>({
       measurementFrameRef.current = null;
       syncMeasuredColumnWidths();
     });
-  }, [syncMeasuredColumnWidths]);
+  }, [shouldMeasureColumns, syncMeasuredColumnWidths]);
 
   React.useLayoutEffect(() => {
+    if (!shouldMeasureColumns) {
+      return;
+    }
+
     scheduleMeasuredColumnWidths();
 
     const root = scrollContainerRef.current;
@@ -340,8 +381,6 @@ export function DataTable<TData>({
       };
     }
 
-    // Re-measure when cell content mutates so chips like Swap / Protocol can
-    // grow their columns after inline edits or refreshed trade data.
     const mutationObserver = new MutationObserver((records) => {
       const sandbox = measurementSandboxRef.current;
       const shouldRecalculate = records.some(
@@ -365,7 +404,12 @@ export function DataTable<TData>({
         measurementFrameRef.current = null;
       }
     };
-  }, [rowCount, scheduleMeasuredColumnWidths, visibleColumnIds]);
+  }, [
+    rowCount,
+    scheduleMeasuredColumnWidths,
+    shouldMeasureColumns,
+    visibleColumnIds,
+  ]);
 
   const reorderColumn = React.useCallback(
     (sourceColumnId: string, targetColumnId: string) => {
@@ -422,6 +466,43 @@ export function DataTable<TData>({
     [handleResizePointerMove, handleResizePointerUp, hideResizeGuide]
   );
 
+  React.useLayoutEffect(() => {
+    if (!enableRowVirtualization) {
+      return;
+    }
+
+    const updateTableOffsetTop = () => {
+      const node = scrollContainerRef.current;
+      if (!node) {
+        return;
+      }
+
+      const rect = node.getBoundingClientRect();
+      setTableOffsetTop(rect.top + window.scrollY);
+    };
+
+    updateTableOffsetTop();
+
+    const containerNode = scrollContainerRef.current;
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" && containerNode
+        ? new ResizeObserver(() => {
+            updateTableOffsetTop();
+          })
+        : null;
+
+    if (containerNode && resizeObserver) {
+      resizeObserver.observe(containerNode);
+    }
+
+    window.addEventListener("resize", updateTableOffsetTop);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", updateTableOffsetTop);
+    };
+  }, [enableRowVirtualization, rowCount, visibleColumnIds]);
+
   const groupedRows = React.useMemo(() => {
     if (!getRowGroupKey || !renderRowGroupHeader) {
       return null;
@@ -477,54 +558,196 @@ export function DataTable<TData>({
     });
   }, [collapsedGroupKeys.size, groupedRows]);
 
-  const renderDataRow = React.useCallback(
-    (row: Row<TData>, className?: string) => (
-      <tr
-        key={row.id}
-        className={cn(
-          "border-b border-white/5 transition duration-250",
-          hasRowInteraction && "cursor-pointer",
-          row.getIsSelected() ? "bg-sidebar-accent" : "hover:bg-sidebar-accent",
-          className
-        )}
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (isInteractiveTarget(target)) {
-            return;
-          }
-          onRowClick?.(row.original);
-        }}
-        onDoubleClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (isInteractiveTarget(target)) {
-            return;
-          }
-          onRowDoubleClick?.(row.original);
-        }}
-        onMouseDown={(e) => {
-          onRowMouseDown?.(e, row.id);
-        }}
-        onMouseEnter={() => {
-          onRowMouseEnter?.(row.id);
-        }}
-      >
-        {row.getVisibleCells().map((cell) => (
-          <td
-            key={cell.id}
-            data-column-id={cell.column.id}
-            className="overflow-hidden px-6 py-6 select-none whitespace-nowrap"
-            style={{ width: cell.column.getSize() }}
+  const bodyItems = React.useMemo<BodyRenderItem<TData>[]>(() => {
+    if (!groupedRows) {
+      return tableRows.map((row) => ({
+        key: row.id,
+        kind: "row",
+        row,
+      }));
+    }
+
+    const nextItems: BodyRenderItem<TData>[] = [];
+
+    groupedRows.forEach((group) => {
+      const isCollapsed = collapsedGroupKeys.has(group.groupKey);
+      nextItems.push({
+        key: `group:${group.groupKey}`,
+        kind: "group-header",
+        groupKey: group.groupKey,
+        rows: group.rows,
+        isCollapsed,
+      });
+
+      if (!isCollapsed) {
+        group.rows.forEach((row) => {
+          nextItems.push({
+            key: row.id,
+            kind: "row",
+            row,
+            className: "animate-in fade-in-0 slide-in-from-top-1 duration-200",
+          });
+        });
+      }
+    });
+
+    return nextItems;
+  }, [collapsedGroupKeys, groupedRows, tableRows]);
+
+  const windowVirtualizer = useWindowVirtualizer<HTMLTableRowElement>({
+    count: bodyItems.length,
+    enabled: Boolean(enableRowVirtualization && bodyItems.length > 0),
+    estimateSize: (index) =>
+      bodyItems[index]?.kind === "group-header" ? 58 : 72,
+    overscan: rowVirtualizerOverscan,
+    scrollMargin: tableOffsetTop,
+    getItemKey: (index) => bodyItems[index]?.key ?? index,
+  });
+
+  const virtualRows = React.useMemo(
+    () =>
+      enableRowVirtualization && bodyItems.length > 0
+        ? windowVirtualizer.getVirtualItems()
+        : [],
+    [bodyItems, enableRowVirtualization, windowVirtualizer]
+  );
+  const totalVirtualHeight = enableRowVirtualization
+    ? windowVirtualizer.getTotalSize()
+    : 0;
+  const virtualPaddingTop =
+    enableRowVirtualization && virtualRows.length > 0
+      ? Math.max(virtualRows[0]!.start - tableOffsetTop, 0)
+      : 0;
+  const virtualPaddingBottom =
+    enableRowVirtualization && virtualRows.length > 0
+      ? Math.max(
+          totalVirtualHeight -
+            (virtualRows[virtualRows.length - 1]!.end - tableOffsetTop),
+          0
+        )
+      : 0;
+  const renderedRowIds = React.useMemo(() => {
+    if (rowCount === 0) {
+      return [] as string[];
+    }
+
+    if (enableRowVirtualization) {
+      return virtualRows
+        .map((virtualRow) => bodyItems[virtualRow.index])
+        .filter(
+          (item): item is DataRowRenderItem<TData> =>
+            Boolean(item) && item.kind === "row"
+        )
+        .map((item) => item.row.id);
+    }
+
+    return bodyItems
+      .filter((item): item is DataRowRenderItem<TData> => item.kind === "row")
+      .map((item) => item.row.id);
+  }, [bodyItems, enableRowVirtualization, rowCount, virtualRows]);
+
+  React.useEffect(() => {
+    if (!onRenderedRowIdsChange) {
+      return;
+    }
+
+    const nextSignature = renderedRowIds.join("|");
+    if (lastRenderedRowIdsSignatureRef.current === nextSignature) {
+      return;
+    }
+
+    lastRenderedRowIdsSignatureRef.current = nextSignature;
+    onRenderedRowIdsChange(renderedRowIds);
+  }, [onRenderedRowIdsChange, renderedRowIds]);
+
+  const renderBodyItem = React.useCallback(
+    (
+      item: BodyRenderItem<TData>,
+      options?: { measureRef?: (node: HTMLTableRowElement | null) => void }
+    ) => {
+      if (item.kind === "group-header") {
+        return (
+          <tr
+            key={item.key}
+            ref={options?.measureRef}
+            className="border-b border-white/5 bg-sidebar"
           >
-            <div
-              data-column-content
-              className="flex min-w-0 max-w-full items-center"
+            <td colSpan={visibleColumnCount} className="p-0">
+              {renderRowGroupHeader?.({
+                groupKey: item.groupKey,
+                rows: item.rows,
+                table,
+                isCollapsed: item.isCollapsed,
+                onToggleCollapsed: () => {
+                  setCollapsedGroupKeys((current) => {
+                    const next = new Set(current);
+                    if (next.has(item.groupKey)) {
+                      next.delete(item.groupKey);
+                    } else {
+                      next.add(item.groupKey);
+                    }
+                    return next;
+                  });
+                },
+              })}
+            </td>
+          </tr>
+        );
+      }
+
+      const row = item.row;
+
+      return (
+        <tr
+          key={item.key}
+          ref={options?.measureRef}
+          className={cn(
+            "border-b border-white/5 transition duration-250",
+            hasRowInteraction && "cursor-pointer",
+            row.getIsSelected()
+              ? "bg-sidebar-accent"
+              : "hover:bg-sidebar-accent",
+            item.className
+          )}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            if (isInteractiveTarget(target)) {
+              return;
+            }
+            onRowClick?.(row.original);
+          }}
+          onDoubleClick={(e) => {
+            const target = e.target as HTMLElement;
+            if (isInteractiveTarget(target)) {
+              return;
+            }
+            onRowDoubleClick?.(row.original);
+          }}
+          onMouseDown={(e) => {
+            onRowMouseDown?.(e, row.id);
+          }}
+          onMouseEnter={() => {
+            onRowMouseEnter?.(row.id);
+          }}
+        >
+          {row.getVisibleCells().map((cell) => (
+            <td
+              key={cell.id}
+              data-column-id={cell.column.id}
+              className="overflow-hidden px-6 py-6 select-none whitespace-nowrap"
+              style={{ width: cell.column.getSize() }}
             >
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </div>
-          </td>
-        ))}
-      </tr>
-    ),
+              <div
+                data-column-content
+                className="flex min-w-0 max-w-full items-center"
+              >
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </div>
+            </td>
+          ))}
+        </tr>
+      );
+    },
     [
       hasRowInteraction,
       isInteractiveTarget,
@@ -532,20 +755,25 @@ export function DataTable<TData>({
       onRowDoubleClick,
       onRowMouseDown,
       onRowMouseEnter,
+      renderRowGroupHeader,
+      table,
+      visibleColumnCount,
     ]
   );
 
   return (
     <div
       ref={containerRef}
-      className={cn("w-full border border-white/5 overflow-hidden", className)}
+      className={cn("w-full overflow-hidden border border-white/5", className)}
     >
       <div ref={scrollContainerRef} className="relative overflow-x-auto">
-        <div
-          ref={measurementSandboxRef}
-          aria-hidden="true"
-          className="pointer-events-none absolute left-0 top-0 -z-10 h-0 w-0 overflow-hidden opacity-0"
-        />
+        {shouldMeasureColumns ? (
+          <div
+            ref={measurementSandboxRef}
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 top-0 -z-10 h-0 w-0 overflow-hidden opacity-0"
+          />
+        ) : null}
         <div
           ref={resizeGuideRef}
           aria-hidden="true"
@@ -630,7 +858,9 @@ export function DataTable<TData>({
                     }}
                   >
                     <div
-                      data-column-content
+                      data-column-content={
+                        shouldMeasureColumns ? true : undefined
+                      }
                       className={cn(
                         "relative inline-flex min-w-max items-center",
                         canReorderColumn(h.column.id) && "cursor-grab",
@@ -653,7 +883,7 @@ export function DataTable<TData>({
                         data-column-resizer="true"
                         className={cn(
                           "absolute -right-1.5 top-0 z-10 h-full w-3 cursor-col-resize select-none touch-none",
-                          "after:absolute after:left-1/2 after:top-0 after:bottom-0 after:w-px after:-translate-x-1/2 after:bg-white/3 hover:after:bg-white/20"
+                          "after:absolute after:bottom-0 after:left-1/2 after:top-0 after:w-px after:-translate-x-1/2 after:bg-white/3 hover:after:bg-white/20"
                         )}
                       />
                     ) : null}
@@ -674,42 +904,38 @@ export function DataTable<TData>({
                   )}
                 </td>
               </tr>
-            ) : groupedRows ? (
-              groupedRows.map((group) => (
-                <React.Fragment key={group.groupKey}>
-                  <tr className="border-b border-white/5 bg-sidebar">
-                    <td colSpan={visibleColumnCount} className="p-0">
-                      {renderRowGroupHeader?.({
-                        groupKey: group.groupKey,
-                        rows: group.rows,
-                        table,
-                        isCollapsed: collapsedGroupKeys.has(group.groupKey),
-                        onToggleCollapsed: () => {
-                          setCollapsedGroupKeys((current) => {
-                            const next = new Set(current);
-                            if (next.has(group.groupKey)) {
-                              next.delete(group.groupKey);
-                            } else {
-                              next.add(group.groupKey);
-                            }
-                            return next;
-                          });
-                        },
-                      })}
-                    </td>
+            ) : enableRowVirtualization ? (
+              <>
+                {virtualPaddingTop > 0 ? (
+                  <tr aria-hidden="true">
+                    <td
+                      colSpan={visibleColumnCount}
+                      className="p-0"
+                      style={{ height: virtualPaddingTop }}
+                    />
                   </tr>
-                  {collapsedGroupKeys.has(group.groupKey)
-                    ? null
-                    : group.rows.map((row) =>
-                        renderDataRow(
-                          row,
-                          "animate-in fade-in-0 slide-in-from-top-1 duration-200"
-                        )
-                      )}
-                </React.Fragment>
-              ))
+                ) : null}
+                {virtualRows.map((virtualRow) =>
+                  renderBodyItem(bodyItems[virtualRow.index]!, {
+                    measureRef: (node) => {
+                      if (node) {
+                        windowVirtualizer.measureElement(node);
+                      }
+                    },
+                  })
+                )}
+                {virtualPaddingBottom > 0 ? (
+                  <tr aria-hidden="true">
+                    <td
+                      colSpan={visibleColumnCount}
+                      className="p-0"
+                      style={{ height: virtualPaddingBottom }}
+                    />
+                  </tr>
+                ) : null}
+              </>
             ) : (
-              tableRows.map((row) => renderDataRow(row))
+              bodyItems.map((item) => renderBodyItem(item))
             )}
           </tbody>
         </table>

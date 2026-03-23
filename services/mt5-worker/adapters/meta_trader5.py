@@ -1938,5 +1938,9 @@ class MetaTrader5Adapter(MtAdapter):
         self.active_login = None
         self.active_server = None
 
+    def release_connection(self, connection_id: str) -> None:
+        if self.active_connection_id == connection_id:
+            self._reset_terminal_session()
+
     def close(self) -> None:
         self._reset_terminal_session()

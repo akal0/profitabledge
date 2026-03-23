@@ -27,7 +27,8 @@ function formatDate(value?: string | Date | null) {
   });
 }
 
-function formatInvoiceReference(orderId: string) {
+function formatInvoiceReference(orderId?: string | null) {
+  if (!orderId) return "—";
   if (orderId.length <= 12) return orderId;
   return `${orderId.slice(0, 8)}...${orderId.slice(-4)}`;
 }
@@ -62,7 +63,7 @@ export function InvoiceHistoryTable() {
           Invoice history
         </p>
         <p className="mt-1 text-xs text-white/35">
-          Recent Polar orders mirrored to your account history
+          Recent billing invoices mirrored to your account history
         </p>
       </div>
 
@@ -104,12 +105,12 @@ export function InvoiceHistoryTable() {
                         <div className="space-y-1">
                           <p
                             className="font-medium text-white"
-                            title={invoice.polarOrderId}
+                            title={invoice.referenceId ?? undefined}
                           >
-                            {formatInvoiceReference(invoice.polarOrderId)}
+                            {formatInvoiceReference(invoice.referenceId)}
                           </p>
                           <p className="text-[11px] text-white/30">
-                            {invoice.polarOrderId}
+                            {invoice.referenceId}
                           </p>
                         </div>
                       </td>
@@ -149,7 +150,7 @@ export function InvoiceHistoryTable() {
             <div className="p-4">
               <div className="rounded-sm ring ring-dashed ring-white/10 p-4 text-xs text-white/30">
                 No invoices recorded yet. Paid checkout history will appear here
-                after your first Polar order sync
+                after your first successful payment
               </div>
             </div>
           )}

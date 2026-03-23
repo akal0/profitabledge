@@ -24,6 +24,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartTrades } from "./use-chart-trades";
 
@@ -48,12 +49,13 @@ export function BellCurveChart({ accountId }: { accountId?: string }) {
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const chartData = useMemo(() => {
     if (trades.length < 5) return null;
 
     const profits = trades.map((trade) =>
-      parseFloat(trade.profit?.toString() || "0")
+      parseFloat((trade.netPnl ?? trade.profit ?? 0).toString())
     );
     const mean = profits.reduce((sum, value) => sum + value, 0) / profits.length;
     const variance =
@@ -92,7 +94,7 @@ export function BellCurveChart({ accountId }: { accountId?: string }) {
         x: midpoint,
         count,
         normal: parseFloat(normalHeight.toFixed(2)),
-        label: formatSignedCurrency(midpoint, 0),
+        label: formatSignedCurrency(midpoint, 0, resolvedCurrencyCode),
         lower,
         upper,
       });
@@ -117,7 +119,7 @@ export function BellCurveChart({ accountId }: { accountId?: string }) {
             ) / profits.length - 3
           : 0,
     };
-  }, [trades]);
+  }, [resolvedCurrencyCode, trades]);
 
   if (isLoading) {
     return <Skeleton className="h-full w-full" />;
@@ -142,14 +144,14 @@ export function BellCurveChart({ accountId }: { accountId?: string }) {
               chartData.mean >= 0 ? "text-teal-400" : "text-rose-400"
             )}
           >
-            {formatSignedCurrency(chartData.mean, 2)}
+            {formatSignedCurrency(chartData.mean, 2, resolvedCurrencyCode)}
           </span>
           .
         </span>
         <span>
           Std dev{" "}
           <span className="font-medium tracking-normal text-white/80">
-            {formatSignedCurrency(chartData.stdDev, 2)}
+            {formatSignedCurrency(chartData.stdDev, 2, resolvedCurrencyCode)}
           </span>
           .
         </span>
@@ -193,9 +195,10 @@ export function BellCurveChart({ accountId }: { accountId?: string }) {
                 const item = payload[0].payload;
                 return (
                   <DashboardChartTooltipFrame
-                    title={`${formatSignedCurrency(item.lower, 0)} to ${formatSignedCurrency(
+                    title={`${formatSignedCurrency(item.lower, 0, resolvedCurrencyCode)} to ${formatSignedCurrency(
                       item.upper,
-                      0
+                      0,
+                      resolvedCurrencyCode
                     )}`}
                   >
                     <DashboardChartTooltipRow
@@ -212,7 +215,7 @@ export function BellCurveChart({ accountId }: { accountId?: string }) {
               }}
             />
             <ReferenceLine
-              x={formatSignedCurrency(chartData.mean, 0)}
+              x={formatSignedCurrency(chartData.mean, 0, resolvedCurrencyCode)}
               stroke="rgba(255,255,255,0.2)"
               strokeDasharray="5 5"
             />

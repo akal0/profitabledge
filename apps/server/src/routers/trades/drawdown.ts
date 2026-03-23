@@ -1,6 +1,6 @@
 import { protectedProcedure } from "../../lib/trpc";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { getHistoricalRates } from "dukascopy-node";
 
 import { db } from "../../db";
@@ -10,7 +10,48 @@ import {
   getPipSizeForSymbol,
   mapToDukascopyInstrument,
 } from "../../lib/dukascopy";
+import {
+  resolveTradeDrawdown,
+  resolveTradeDrawdowns,
+  type TradeDrawdownSourceRow,
+} from "../../lib/trades/drawdown";
 import { parseNaiveAsUTC } from "./shared";
+
+const tradeDrawdownSelect = {
+  id: trade.id,
+  accountId: trade.accountId,
+  useBrokerData: trade.useBrokerData,
+  createdAt: trade.createdAt,
+  openRaw: sql<string | null>`(${trade.open})`,
+  closeRaw: sql<string | null>`(${trade.close})`,
+  symbol: trade.symbol,
+  tradeType: trade.tradeType,
+  volume: sql<number | null>`CAST(${trade.volume} AS NUMERIC)`,
+  openPrice: sql<number | null>`CAST(${trade.openPrice} AS NUMERIC)`,
+  sl: sql<number | null>`CAST(${trade.sl} AS NUMERIC)`,
+  tp: sql<number | null>`CAST(${trade.tp} AS NUMERIC)`,
+  durationSecRaw: sql<string | null>`(${trade.tradeDurationSeconds})`,
+  closePrice: sql<number | null>`CAST(${trade.closePrice} AS NUMERIC)`,
+  profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
+  commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
+  swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
+  manipulationHigh: sql<
+    number | null
+  >`CAST(${trade.manipulationHigh} AS NUMERIC)`,
+  manipulationLow: sql<
+    number | null
+  >`CAST(${trade.manipulationLow} AS NUMERIC)`,
+  manipulationPips: sql<
+    number | null
+  >`CAST(${trade.manipulationPips} AS NUMERIC)`,
+} as const;
+
+async function getTradeDrawdownRows(tradeIds: string[]) {
+  return db
+    .select(tradeDrawdownSelect)
+    .from(trade)
+    .where(inArray(trade.id, tradeIds));
+}
 
 export const tradeDrawdownProcedures = {
   drawdownForTrade: protectedProcedure
@@ -32,13 +73,23 @@ export const tradeDrawdownProcedures = {
             sl: sql<number | null>`CAST(${trade.sl} AS NUMERIC)`,
             tp: sql<number | null>`CAST(${trade.tp} AS NUMERIC)`,
             durationSecRaw: sql<string | null>`(${trade.tradeDurationSeconds})`,
-            closePrice: sql<number | null>`CAST(${trade.closePrice} AS NUMERIC)`,
+            closePrice: sql<
+              number | null
+            >`CAST(${trade.closePrice} AS NUMERIC)`,
             profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
-            commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
+            commissions: sql<
+              number | null
+            >`CAST(${trade.commissions} AS NUMERIC)`,
             swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
-            manipulationHigh: sql<number | null>`CAST(${trade.manipulationHigh} AS NUMERIC)`,
-            manipulationLow: sql<number | null>`CAST(${trade.manipulationLow} AS NUMERIC)`,
-            manipulationPips: sql<number | null>`CAST(${trade.manipulationPips} AS NUMERIC)`,
+            manipulationHigh: sql<
+              number | null
+            >`CAST(${trade.manipulationHigh} AS NUMERIC)`,
+            manipulationLow: sql<
+              number | null
+            >`CAST(${trade.manipulationLow} AS NUMERIC)`,
+            manipulationPips: sql<
+              number | null
+            >`CAST(${trade.manipulationPips} AS NUMERIC)`,
           })
           .from(trade)
           .where(eq(trade.id, input.id))
@@ -63,10 +114,16 @@ export const tradeDrawdownProcedures = {
             ? Number(currentTrade.tp)
             : null;
         const closePx =
-          currentTrade.closePrice != null ? Number(currentTrade.closePrice) : null;
+          currentTrade.closePrice != null
+            ? Number(currentTrade.closePrice)
+            : null;
         const direction =
-          String(currentTrade.tradeType || "").toLowerCase().includes("short") ||
-          String(currentTrade.tradeType || "").toLowerCase().includes("sell")
+          String(currentTrade.tradeType || "")
+            .toLowerCase()
+            .includes("short") ||
+          String(currentTrade.tradeType || "")
+            .toLowerCase()
+            .includes("sell")
             ? "short"
             : "long";
 
@@ -128,7 +185,9 @@ export const tradeDrawdownProcedures = {
                 : 0;
 
             const slHit =
-              direction === "long" ? manipLow <= sl + tolPx : manipHigh >= sl - tolPx;
+              direction === "long"
+                ? manipLow <= sl + tolPx
+                : manipHigh >= sl - tolPx;
 
             if (slHit) {
               const beCandidate =
@@ -159,7 +218,9 @@ export const tradeDrawdownProcedures = {
           : Number.NaN;
 
         if (Number.isFinite(parsedDuration) && parsedDuration > 0) {
-          closeAt = new Date(openAt.getTime() + Math.floor(parsedDuration) * 1000);
+          closeAt = new Date(
+            openAt.getTime() + Math.floor(parsedDuration) * 1000
+          );
         }
 
         const minTo = new Date(openAt.getTime() + 60_000);
@@ -191,7 +252,11 @@ export const tradeDrawdownProcedures = {
           }
         }
 
-        if (currentTrade.profit != null && Number(currentTrade.profit) < 0 && closePx != null) {
+        if (
+          currentTrade.profit != null &&
+          Number(currentTrade.profit) < 0 &&
+          closePx != null
+        ) {
           const adversePips = Math.abs(closePx - entry) / pipSize;
           const profitValue = Math.abs(Number(currentTrade.profit));
           const dollarPerPip =
@@ -339,8 +404,12 @@ export const tradeDrawdownProcedures = {
           let minLow = entry;
 
           for (const point of priceData) {
-            const low = Number((point as any).low ?? (point as any).min ?? (point as any).l);
-            const high = Number((point as any).high ?? (point as any).max ?? (point as any).h);
+            const low = Number(
+              (point as any).low ?? (point as any).min ?? (point as any).l
+            );
+            const high = Number(
+              (point as any).high ?? (point as any).max ?? (point as any).h
+            );
 
             if (Number.isFinite(low)) minLow = Math.min(minLow, low);
 
@@ -403,7 +472,8 @@ export const tradeDrawdownProcedures = {
                   return {
                     id: currentTrade.id,
                     adversePips: Math.round(distToSlPips * 100) / 100,
-                    adverseUsd: Math.round(distToSlPips * dollarPerPip * 100) / 100,
+                    adverseUsd:
+                      Math.round(distToSlPips * dollarPerPip * 100) / 100,
                     pctToSL: 100,
                     hit: (beCandidate ? "BE" : "SL") as "BE" | "SL",
                     dataSource: "dukascopy",
@@ -425,7 +495,9 @@ export const tradeDrawdownProcedures = {
               if (sl != null && Number.isFinite(sl) && sl > 0) {
                 const distToSlPips = Math.abs(sl - entry) / pipSize;
                 pctToSL =
-                  distToSlPips > 0 ? clamp01(adversePips / distToSlPips) * 100 : 0;
+                  distToSlPips > 0
+                    ? clamp01(adversePips / distToSlPips) * 100
+                    : 0;
               }
             }
           }
@@ -445,8 +517,12 @@ export const tradeDrawdownProcedures = {
         let maxHigh = entry;
 
         for (const point of priceData) {
-          const high = Number((point as any).high ?? (point as any).max ?? (point as any).h);
-          const low = Number((point as any).low ?? (point as any).min ?? (point as any).l);
+          const high = Number(
+            (point as any).high ?? (point as any).max ?? (point as any).h
+          );
+          const low = Number(
+            (point as any).low ?? (point as any).min ?? (point as any).l
+          );
 
           if (Number.isFinite(high)) maxHigh = Math.max(maxHigh, high);
 
@@ -509,7 +585,8 @@ export const tradeDrawdownProcedures = {
                 return {
                   id: currentTrade.id,
                   adversePips: Math.round(distToSlPips * 100) / 100,
-                  adverseUsd: Math.round(distToSlPips * dollarPerPip * 100) / 100,
+                  adverseUsd:
+                    Math.round(distToSlPips * dollarPerPip * 100) / 100,
                   pctToSL: 100,
                   hit: (beCandidate ? "BE" : "SL") as "BE" | "SL",
                   dataSource: "dukascopy",
@@ -531,7 +608,9 @@ export const tradeDrawdownProcedures = {
             if (sl != null && Number.isFinite(sl) && sl > 0) {
               const distToSlPips = Math.abs(sl - entry) / pipSize;
               pctToSL =
-                distToSlPips > 0 ? clamp01(adversePips / distToSlPips) * 100 : 0;
+                distToSlPips > 0
+                  ? clamp01(adversePips / distToSlPips) * 100
+                  : 0;
             }
           }
         }
@@ -557,5 +636,33 @@ export const tradeDrawdownProcedures = {
           error: String(error?.message || error),
         } as const;
       }
+    }),
+  drawdownForTrades: protectedProcedure
+    .input(
+      z.object({
+        tradeIds: z.array(z.string().min(1)).min(1).max(1000),
+        debug: z.boolean().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      const rows = (await getTradeDrawdownRows(
+        input.tradeIds
+      )) as TradeDrawdownSourceRow[];
+      if (!rows.length) {
+        return {
+          results: [] as Array<
+            Awaited<ReturnType<typeof resolveTradeDrawdown>>
+          >,
+        };
+      }
+
+      const rowById = new Map(rows.map((row) => [row.id, row]));
+      const orderedRows = input.tradeIds
+        .map((id) => rowById.get(id))
+        .filter((row): row is TradeDrawdownSourceRow => Boolean(row));
+
+      const results = await resolveTradeDrawdowns(orderedRows, input.debug);
+
+      return { results };
     }),
 };

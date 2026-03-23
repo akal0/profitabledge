@@ -30,10 +30,10 @@ export function formatWeekdayLabel(date: Date) {
     j === 1 && k !== 11
       ? "st"
       : j === 2 && k !== 12
-        ? "nd"
-        : j === 3 && k !== 13
-          ? "rd"
-          : "th";
+      ? "nd"
+      : j === 3 && k !== 13
+      ? "rd"
+      : "th";
   return `${weekday} ${day}${suffix}`;
 }
 
@@ -54,6 +54,25 @@ export function getCurrencyLabel(code?: string) {
   const trimmed = code.trim().toUpperCase();
   const flag = CURRENCY_FLAGS[trimmed];
   return flag ? `${flag} ${trimmed}` : trimmed;
+}
+
+export function formatCalendarDayKey(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function parseCalendarDayKey(dayKey: string) {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    !Number.isFinite(day)
+  ) {
+    return new Date(dayKey);
+  }
+  return new Date(year, month - 1, day);
 }
 
 export function startOfDay(date: Date) {

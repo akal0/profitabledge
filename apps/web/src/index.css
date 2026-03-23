@@ -795,6 +795,64 @@ html.dark body {
   }
 }
 
+@keyframes name-sparkle-particle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: scale(0.35) rotate(45deg);
+  }
+  18% {
+    opacity: 0;
+    transform: scale(0.5) rotate(45deg);
+  }
+  36% {
+    opacity: 0.95;
+    transform: scale(1) rotate(45deg);
+  }
+  52% {
+    opacity: 0.3;
+    transform: scale(0.72) rotate(45deg);
+  }
+  68% {
+    opacity: 1;
+    transform: scale(1.08) rotate(45deg);
+  }
+  84% {
+    opacity: 0;
+    transform: scale(0.45) rotate(45deg);
+  }
+}
+
+.name-sparkle-particle {
+  color: var(--name-sparkle-color, rgba(255, 255, 255, 0.9));
+  filter: drop-shadow(0 0 6px var(--name-sparkle-glow, rgba(255, 255, 255, 0.35)));
+  opacity: 0;
+  transform: rotate(45deg);
+  transform-origin: center;
+  animation: name-sparkle-particle 2.8s ease-in-out infinite;
+}
+
+.name-sparkle-particle::before,
+.name-sparkle-particle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 9999px;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+}
+
+.name-sparkle-particle::before {
+  width: 22%;
+  height: 100%;
+}
+
+.name-sparkle-particle::after {
+  width: 100%;
+  height: 22%;
+}
+
 @keyframes pfp-electric {
   0%,
   100% {

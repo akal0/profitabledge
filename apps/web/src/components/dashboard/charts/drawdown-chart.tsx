@@ -34,6 +34,7 @@ import {
   DashboardChartTooltipRow,
   formatSignedCurrency,
   formatSignedPercent,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import {
   buildRelativeAxisTicks,
@@ -95,14 +96,16 @@ function buildDrawdownSeries(
   ];
 
   const sortedTrades = [...trades]
-    .filter((trade) => trade.close && trade.profit != null)
+    .filter(
+      (trade) => trade.close && (trade.netPnl != null || trade.profit != null)
+    )
     .sort(
       (a, b) =>
         new Date(a.close || 0).getTime() - new Date(b.close || 0).getTime()
     );
 
   sortedTrades.forEach((trade) => {
-    runningEquity += Number(trade.profit ?? 0);
+    runningEquity += Number(trade.netPnl ?? trade.profit ?? 0);
     if (runningEquity > peakEquity) {
       peakEquity = runningEquity;
     }
@@ -154,6 +157,7 @@ export function DrawdownChart({
   const renderMode = useChartRenderMode();
   const comparisons = useComparisonStore((state) => state.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const resolvedRange = React.useMemo(() => {
     const minDate = min ? new Date(min) : undefined;
@@ -366,7 +370,7 @@ export function DrawdownChart({
             <span className="font-medium text-rose-400">
               {formatSignedPercent(-maxDrawdownPercent)}
             </span>
-            {" "}({formatSignedCurrency(-maxDrawdown, 2)}).
+            {" "}({formatSignedCurrency(-maxDrawdown, 2, resolvedCurrencyCode)}).
           </p>
         </CardTitle>
       </CardHeader>

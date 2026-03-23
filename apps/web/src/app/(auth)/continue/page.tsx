@@ -185,7 +185,7 @@ export default function AuthContinuePage() {
         }
 
         try {
-          await trpcClient.billing.syncFromPolar.mutate();
+          await trpcClient.billing.syncBillingState.mutate();
         } catch {
           // Webhook reconciliation can lag behind checkout completion.
         }
@@ -270,8 +270,8 @@ export default function AuthContinuePage() {
             We couldn't confirm your plan yet.
           </p>
           <p className="text-sm text-muted-foreground">
-            Your checkout may still be syncing from Polar. Refresh this page in a
-            moment, or open billing to verify your subscription.
+            Your checkout may still be syncing. Refresh this page in a moment,
+            or open billing to verify your subscription.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
             <Button

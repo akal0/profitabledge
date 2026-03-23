@@ -16,7 +16,7 @@ param(
   [string]$HostTags = "",
 
   [int]$Children = 2,
-  [int]$PollSeconds = 2,
+  [int]$PollSeconds = 30,
   [int]$HeartbeatSeconds = 5,
   [int]$HttpTimeoutSeconds = 30,
   [int]$HttpRetryCount = 4,

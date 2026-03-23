@@ -1,7 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import {
+  useSuspenseInfiniteQuery,
+  useSuspenseQuery,
+} from "@tanstack/react-query";
 
 import { queryClient, trpcOptions } from "@/utils/trpc";
 
@@ -43,7 +46,7 @@ type ServerFilterArgs = {
 };
 
 type UseTradeTableReferenceDataArgs = {
-  accountId: string | null;
+  accountId: string;
   filters: ServerFilterArgs;
 };
 
@@ -56,12 +59,11 @@ export function useTradeTableReferenceData({
 }: UseTradeTableReferenceDataArgs) {
   const advancedPrefsQuery =
     trpcOptions.users.getAdvancedMetricsPreferences.queryOptions();
-  const { data: advancedPrefsRaw, isLoading: isLoadingAdvancedPrefs } =
-    useQuery({
-      ...advancedPrefsQuery,
-      staleTime: 5 * 60_000,
-      gcTime: 15 * 60_000,
-    });
+  const { data: advancedPrefsRaw } = useSuspenseQuery({
+    ...advancedPrefsQuery,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+  });
   const advancedPrefs = advancedPrefsRaw as
     | AdvancedMetricsPreferences
     | undefined;
@@ -71,11 +73,10 @@ export function useTradeTableReferenceData({
   );
 
   const boundsOpts = trpcOptions.accounts.opensBounds.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: boundsRaw, isLoading: isLoadingBounds } = useQuery({
+  const { data: boundsRaw } = useSuspenseQuery({
     ...boundsOpts,
-    enabled: Boolean(accountId),
     staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const bounds = boundsRaw as AccountOpenBounds | undefined;
@@ -83,11 +84,10 @@ export function useTradeTableReferenceData({
   const maxBound = bounds?.maxISO ? new Date(bounds.maxISO) : undefined;
 
   const symbolsOpts = trpcOptions.trades.listSymbols.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: allSymbolsRaw, isLoading: isLoadingSymbols } = useQuery({
+  const { data: allSymbolsRaw } = useSuspenseQuery({
     ...symbolsOpts,
-    enabled: Boolean(accountId),
     staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allSymbols = React.useMemo(
@@ -96,11 +96,10 @@ export function useTradeTableReferenceData({
   );
 
   const killzonesOpts = trpcOptions.trades.listKillzones.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: allKillzonesRaw, isLoading: isLoadingKillzones } = useQuery({
+  const { data: allKillzonesRaw } = useSuspenseQuery({
     ...killzonesOpts,
-    enabled: Boolean(accountId),
     staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allKillzones = React.useMemo(
@@ -109,26 +108,22 @@ export function useTradeTableReferenceData({
   );
 
   const sessionTagsOpts = trpcOptions.trades.listSessionTags.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: allSessionTagsRaw, isLoading: isLoadingSessionTags } = useQuery(
-    {
-      ...sessionTagsOpts,
-      enabled: Boolean(accountId),
-      staleTime: TRADE_REFERENCE_STALE_TIME,
-    }
-  );
+  const { data: allSessionTagsRaw } = useSuspenseQuery({
+    ...sessionTagsOpts,
+    staleTime: TRADE_REFERENCE_STALE_TIME,
+  });
   const allSessionTags = React.useMemo(
     () => (allSessionTagsRaw as NamedColorTag[] | undefined) ?? [],
     [allSessionTagsRaw]
   );
 
   const modelTagsOpts = trpcOptions.trades.listModelTags.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: allModelTagsRaw, isLoading: isLoadingModelTags } = useQuery({
+  const { data: allModelTagsRaw } = useSuspenseQuery({
     ...modelTagsOpts,
-    enabled: Boolean(accountId),
     staleTime: TRADE_REFERENCE_STALE_TIME,
   });
   const allModelTags = React.useMemo(
@@ -136,22 +131,32 @@ export function useTradeTableReferenceData({
     [allModelTagsRaw]
   );
 
-  const statsOpts = trpcOptions.accounts.stats.queryOptions({
-    accountId: accountId || "",
+  const customTagsOpts = trpcOptions.trades.listCustomTags.queryOptions({
+    accountId,
   });
-  const { data: acctStatsRaw, isLoading: isLoadingStats } = useQuery({
+  const { data: allCustomTagsRaw } = useSuspenseQuery({
+    ...customTagsOpts,
+    staleTime: TRADE_REFERENCE_STALE_TIME,
+  });
+  const allCustomTags = React.useMemo(
+    () => (allCustomTagsRaw as string[] | undefined) ?? [],
+    [allCustomTagsRaw]
+  );
+
+  const statsOpts = trpcOptions.accounts.stats.queryOptions({
+    accountId,
+  });
+  const { data: acctStatsRaw } = useSuspenseQuery({
     ...statsOpts,
-    enabled: Boolean(accountId),
     staleTime: 30_000,
   });
   const acctStats = acctStatsRaw as AccountStatsSummary | undefined;
 
   const liveMetricsOpts = trpcOptions.accounts.liveMetrics.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: liveMetrics } = useQuery({
+  const { data: liveMetrics } = useSuspenseQuery({
     ...liveMetricsOpts,
-    enabled: Boolean(accountId),
     staleTime: TRADE_LIVE_REFRESH_INTERVAL,
     refetchInterval: TRADE_LIVE_REFRESH_INTERVAL,
   });
@@ -194,36 +199,20 @@ export function useTradeTableReferenceData({
     [liveMetrics]
   );
 
-  const liveTradeSignature = React.useMemo(
-    () =>
-      liveOpenTrades
-        .map(
-          (trade) =>
-            `${trade.accountId ?? ""}:${trade.ticket ?? trade.id ?? ""}`
-        )
-        .filter(Boolean)
-        .sort()
-        .join("|"),
-    [liveOpenTrades]
-  );
-  const lastLiveTradeSignatureRef = React.useRef<string | null>(null);
-
   const sampleGateOpts = trpcOptions.trades.getSampleGateStatus.queryOptions({
-    accountId: accountId || "",
+    accountId,
   });
-  const { data: sampleGateStatusRaw, isLoading: isLoadingSampleGate } =
-    useQuery({
-      ...sampleGateOpts,
-      enabled: Boolean(accountId),
-      staleTime: TRADE_REFERENCE_STALE_TIME,
-    });
+  const { data: sampleGateStatusRaw } = useSuspenseQuery({
+    ...sampleGateOpts,
+    staleTime: TRADE_REFERENCE_STALE_TIME,
+  });
   const sampleGateStatus = sampleGateStatusRaw as
     | SampleGateStatusRow[]
     | undefined;
 
   const infiniteOpts = trpcOptions.trades.listInfinite.infiniteQueryOptions(
     {
-      accountId: accountId || "",
+      accountId,
       limit: filters.ids.length
         ? Math.min(Math.max(filters.ids.length, 50), 200)
         : 50,
@@ -366,11 +355,6 @@ export function useTradeTableReferenceData({
   }, [infiniteOpts.queryKey]);
 
   React.useEffect(() => {
-    if (!accountId) {
-      lastDisableSampleGatingRef.current = disableSampleGating;
-      return;
-    }
-
     if (disableSampleGating === undefined) {
       return;
     }
@@ -388,28 +372,10 @@ export function useTradeTableReferenceData({
     });
   }, [accountId, disableSampleGating]);
 
-  React.useEffect(() => {
-    if (!accountId) {
-      lastLiveTradeSignatureRef.current = null;
-      return;
-    }
-
-    const nextSignature = `${accountId}:${liveTradeSignature}`;
-    const previousSignature = lastLiveTradeSignatureRef.current;
-    lastLiveTradeSignatureRef.current = nextSignature;
-
-    if (previousSignature === null || previousSignature === nextSignature) {
-      return;
-    }
-
-    queryClient.invalidateQueries({
-      queryKey: infiniteTradesQueryKeyRef.current,
-      refetchType: "active",
-    });
-  }, [accountId, liveTradeSignature]);
-
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
-    useInfiniteQuery({ ...infiniteOpts, enabled: Boolean(accountId) });
+    useSuspenseInfiniteQuery({
+      ...infiniteOpts,
+    });
 
   const rows = React.useMemo<TradeRow[]>(() => {
     const pages = (data as any)?.pages as
@@ -429,6 +395,7 @@ export function useTradeTableReferenceData({
         : Math.max(0, Math.floor((now - openMs) / 1000));
       const liveNetProfit = (trade.profit ?? 0) + (trade.swap ?? 0);
       return {
+        accountId,
         id: trade.id ?? "",
         ticket: trade.ticket ?? null,
         symbol: trade.symbol ?? "",
@@ -465,7 +432,7 @@ export function useTradeTableReferenceData({
         isLive: true,
       };
     });
-  }, [liveOpenTrades]);
+  }, [accountId, liveOpenTrades]);
 
   const baseRows = React.useMemo<TradeRow[]>(
     () => [...liveRows, ...rows],
@@ -479,21 +446,10 @@ export function useTradeTableReferenceData({
     return pages?.[0]?.totalTradesCount ?? 0;
   }, [data]);
 
-  const isWorkspaceLoading =
-    Boolean(accountId) &&
-    (isLoadingAdvancedPrefs ||
-      isLoadingBounds ||
-      isLoadingSymbols ||
-      isLoadingKillzones ||
-      isLoadingSessionTags ||
-      isLoadingModelTags ||
-      isLoadingStats ||
-      isLoadingSampleGate ||
-      isLoading);
-
   return {
     acctStats,
     allKillzones,
+    allCustomTags,
     allModelTags,
     allSessionTags,
     allSymbols,
@@ -503,7 +459,6 @@ export function useTradeTableReferenceData({
     hasNextPage,
     isFetchingNextPage,
     isLoading,
-    isWorkspaceLoading,
     maxBound,
     minBound,
     sampleGateStatus,

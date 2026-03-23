@@ -34,6 +34,7 @@ import {
   DashboardChartTooltipRow,
   formatSignedCurrency,
   formatSignedPercent,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import {
   buildRelativeAxisTicks,
@@ -84,14 +85,16 @@ function buildEquitySeries(
   ];
 
   const sortedTrades = [...trades]
-    .filter((trade) => trade.close && trade.profit != null)
+    .filter(
+      (trade) => trade.close && (trade.netPnl != null || trade.profit != null)
+    )
     .sort(
       (a, b) =>
         new Date(a.close || 0).getTime() - new Date(b.close || 0).getTime()
     );
 
   sortedTrades.forEach((trade) => {
-    runningEquity += Number(trade.profit ?? 0);
+    runningEquity += Number(trade.netPnl ?? trade.profit ?? 0);
     points.push({
       equity: runningEquity,
       relativeMs: clampRelativeMs(new Date(trade.close || 0).getTime(), range),
@@ -121,6 +124,7 @@ export function EquityCurveChart({
   const renderMode = useChartRenderMode();
   const comparisons = useComparisonStore((state) => state.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const resolvedRange = React.useMemo(() => {
     const minDate = min ? new Date(min) : undefined;
@@ -344,7 +348,7 @@ export function EquityCurveChart({
             >
               {formatSignedPercent(netChangePercent)}
             </span>
-            {" "}({formatSignedCurrency(netChange, 2)}).
+            {" "}({formatSignedCurrency(netChange, 2, resolvedCurrencyCode)}).
           </p>
         </CardTitle>
       </CardHeader>
@@ -384,7 +388,9 @@ export function EquityCurveChart({
               tickMargin={6}
               width={20}
               tick={{ fill: "rgba(255,255,255,0.4)" }}
-              tickFormatter={(value) => formatSignedCurrency(value, 0)}
+              tickFormatter={(value) =>
+                formatSignedCurrency(value, 0, resolvedCurrencyCode)
+              }
             />
             <ChartTooltip
               cursor={false}
@@ -414,7 +420,11 @@ export function EquityCurveChart({
                         <DashboardChartTooltipRow
                           key={key}
                           label={label}
-                          value={formatSignedCurrency(value, 2)}
+                          value={formatSignedCurrency(
+                            value,
+                            2,
+                            resolvedCurrencyCode
+                          )}
                           tone={key === "compare" ? "accent" : "default"}
                           indicatorColor={key === "compare" ? "#FCA070" : "#00E0C8"}
                         />

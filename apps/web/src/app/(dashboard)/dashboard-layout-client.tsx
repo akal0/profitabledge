@@ -28,6 +28,7 @@ import { useGoalDialog } from "@/stores/goal-dialog";
 import { DashboardShellBootstrap } from "@/features/dashboard-shell/components/dashboard-shell-bootstrap";
 import { DashboardShellSidebar } from "@/features/dashboard-shell/components/dashboard-shell-sidebar";
 import { DashboardShellHeader } from "@/features/dashboard-shell/components/dashboard-shell-header";
+import { useMt5LiveLeaseHeartbeat } from "@/features/settings/connections/lib/mt5-live-lease";
 import {
   isAccountScopedRoute,
   queryKeyIncludesAccountId,
@@ -39,6 +40,7 @@ import { useAlphaPageTracking } from "@/features/platform/alpha/hooks/use-alpha-
 import {
   accountIsEaSynced,
   accountSupportsLiveSync,
+  isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
 import {
   meetsRequirement,
@@ -46,6 +48,7 @@ import {
 } from "@/features/navigation/config/nav-sections";
 import { isHeldBackDashboardRoute } from "@/features/navigation/lib/held-back-routes";
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
 import { useAccountTransitionStore } from "@/stores/account-transition";
 import { OnbordaProvider, useOnborda } from "onborda";
@@ -80,9 +83,7 @@ function TourBackdropBlur() {
   const isSidebarTourStep =
     isDashboardTourActive && currentStep > ADD_ACCOUNT_SHEET_LAST_STEP;
   const isSheetPhase =
-    isSheetStep ||
-    requestedAddAccountSheetOpen ||
-    guidedSheetTransitionActive;
+    isSheetStep || requestedAddAccountSheetOpen || guidedSheetTransitionActive;
   const isSheetAnimationLock = isSheetStep || guidedSheetTransitionActive;
 
   useEffect(() => {
@@ -231,11 +232,7 @@ function TourBackdropBlur() {
   );
 }
 
-function DashboardOnbordaShell({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardOnbordaShell({ children }: { children: React.ReactNode }) {
   const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
   const disablePointerTransition = useTourStore(
     (s) => s.disablePointerTransition
@@ -255,13 +252,10 @@ function DashboardOnbordaShell({
     isOnbordaVisible &&
     currentTour === TOUR_ID &&
     currentStep > ADD_ACCOUNT_SHEET_LAST_STEP;
-  const suppressOverlayForSheet =
-    isSheetStep || guidedSheetTransitionActive;
+  const suppressOverlayForSheet = isSheetStep || guidedSheetTransitionActive;
 
   const allowInteraction =
-    isOnbordaVisible &&
-    currentTour === TOUR_ID &&
-    suppressOverlayForSheet;
+    isOnbordaVisible && currentTour === TOUR_ID && suppressOverlayForSheet;
 
   return (
     <StableOnborda
@@ -348,7 +342,14 @@ function DashboardMainStage({
               showAccountTransitionFallback && "pointer-events-none opacity-0"
             )}
           >
-            {shouldHoldAccountScopedContent ? null : children}
+            {shouldHoldAccountScopedContent ? (
+              <RouteLoadingFallback
+                route={routeLoadingVariant}
+                className="min-h-0 bg-background dark:bg-sidebar"
+              />
+            ) : (
+              children
+            )}
           </div>
 
           {showAccountTransitionFallback ? (
@@ -494,6 +495,7 @@ export default function DashboardLayoutClient({
 }: {
   children: React.ReactNode;
 }) {
+  const [hasMounted, setHasMounted] = useState(false);
   const {
     isSessionPending,
     hasConfirmedSession,
@@ -504,6 +506,10 @@ export default function DashboardLayoutClient({
   const safePathname = pathname ?? "/dashboard";
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const currentDashboardPath = useMemo(() => {
     const query = searchParams?.toString() ?? "";
@@ -574,6 +580,8 @@ export default function DashboardLayoutClient({
   const hasIncompleteOnboarding = Boolean(
     billingState && !billingState.onboarding.isComplete
   );
+  const connectionsEnabled = isPublicAlphaFeatureEnabled("connections");
+  const mt5IngestionEnabled = isPublicAlphaFeatureEnabled("mt5Ingestion");
   const canLoadDashboardShellData =
     isSessionReady && hasFetchedBillingState && !hasIncompleteOnboarding;
 
@@ -589,7 +597,7 @@ export default function DashboardLayoutClient({
     (Boolean(accountId) &&
       accounts.some((account) => account.id === accountId));
   const shouldWaitForAccountValidation =
-    hasScopedAccountSelection && !hasFetchedAccounts;
+    hasScopedAccountSelection && !hasFetchedAccounts && accounts.length === 0;
   const shouldHoldAccountScopedContent =
     shouldWaitForAccountValidation ||
     (hasScopedAccountSelection &&
@@ -638,12 +646,21 @@ export default function DashboardLayoutClient({
   });
 
   const connections = (rawConnections as ConnectionRow[] | undefined) ?? [];
+  useMt5LiveLeaseHeartbeat({
+    connections,
+    enabled:
+      canLoadDashboardShellData && connectionsEnabled && mt5IngestionEnabled,
+    route: safePathname,
+  });
   const currentAccountConnection =
     resolvedAccountId && resolvedAccountId !== ALL_ACCOUNTS_ID
       ? pickPreferredAccountConnection(connections, resolvedAccountId)
       : null;
 
   const connectionBadge = getConnectionBadge(currentAccountConnection);
+  const currentAccountIsDemo = currentAccount
+    ? isDemoWorkspaceAccount(currentAccount)
+    : false;
   const breadcrumbs = getDashboardBreadcrumbs(safePathname);
   const hasAdminAccess = billingState?.admin?.isAdmin === true;
   const hasAffiliateAccess = Boolean(
@@ -761,6 +778,15 @@ export default function DashboardLayoutClient({
   const showAccountTransitionFallback =
     routeIsAccountScoped && Boolean(pendingAccountId);
 
+  if (!hasMounted) {
+    return (
+      <DashboardGateFallback
+        route="dashboard"
+        message="Loading your workspace and plan access..."
+      />
+    );
+  }
+
   if (isSessionPending || isRecoveringSession) {
     return (
       <DashboardGateFallback
@@ -827,11 +853,13 @@ export default function DashboardLayoutClient({
             currentAccountName={currentAccount?.name}
             currentAccountBroker={currentAccount?.broker}
             currentAccountIsProp={currentAccount?.isPropAccount}
-            currentAccountIsDemo={currentAccount?.broker === "Profitabledge"}
-            currentAccountIsEaSynced={accountIsEaSynced(currentAccount)}
-            currentAccountSupportsLiveSync={accountSupportsLiveSync(
-              currentAccount
-            )}
+            currentAccountIsDemo={currentAccountIsDemo}
+            currentAccountIsEaSynced={
+              !currentAccountIsDemo && accountIsEaSynced(currentAccount)
+            }
+            currentAccountSupportsLiveSync={
+              !currentAccountIsDemo && accountSupportsLiveSync(currentAccount)
+            }
             currentAccountLastImportedAt={currentAccount?.lastImportedAt}
             connectionBadge={connectionBadge}
             isAccountsRoute={Boolean(isAccountsRoute)}

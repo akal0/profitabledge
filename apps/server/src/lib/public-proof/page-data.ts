@@ -19,6 +19,8 @@ type PublicProofShare = {
   broker: string | null;
   brokerType: string | null;
   brokerServer: string | null;
+  accountNumber?: string | null;
+  preferredDataSource?: string | null;
   createdAt: Date;
   traderName: string | null;
   traderImage?: string | null;
@@ -80,10 +82,22 @@ function parseNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function buildVerificationLabel(verificationLevel: string | null | undefined) {
-  switch (verificationLevel) {
+function buildVerificationLabel(input: {
+  verificationLevel: string | null | undefined;
+  connectionKind:
+    | "manual"
+    | "ea_synced"
+    | "broker_synced"
+    | "csv_imported"
+    | "demo";
+}) {
+  if (input.connectionKind === "demo") {
+    return "Demo account";
+  }
+
+  switch (input.verificationLevel) {
     case "api_verified":
-      return "API verified";
+      return "Broker verified";
     case "ea_synced":
       return "EA verified";
     case "prop_verified":
@@ -229,12 +243,15 @@ function resolveLiveStatusLabel(input: {
   connectionKind:
     | "manual"
     | "ea_synced"
-    | "api_synced"
-    | "mt5_synced"
-    | "mt4_synced"
-    | "csv_imported";
+    | "broker_synced"
+    | "csv_imported"
+    | "demo";
   lastSyncedAt?: Date | null;
 }) {
+  if (input.connectionKind === "demo") {
+    return "Provided by Profitabledge";
+  }
+
   if (
     input.connectionKind === "manual" ||
     input.connectionKind === "csv_imported"
@@ -270,10 +287,14 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
   const monthlyReturns = buildMonthlyReturns(closedTradeRows);
   const dailyPerformance = buildDailyPerformance(closedTradeRows);
   const connectionTrust = resolveAccountConnectionTrust({
+    name: input.share.accountName,
+    broker: input.share.broker,
     verificationLevel: input.share.verificationLevel,
     isVerified: input.share.isVerified,
     brokerType: input.share.brokerType,
     brokerServer: input.share.brokerServer,
+    accountNumber: input.share.accountNumber ?? null,
+    preferredDataSource: input.share.preferredDataSource ?? null,
     lastImportedAt: input.lastImportedAt ?? null,
   });
   const floatingPnl = input.liveTradeRows.reduce(
@@ -356,7 +377,10 @@ export function buildPublicProofPageData(input: BuildPublicProofPageDataInput) {
       connectionKind: connectionTrust.kind,
       connectionLabel: connectionTrust.label,
       verificationLevel: input.share.verificationLevel ?? "unverified",
-      verificationLabel: buildVerificationLabel(input.share.verificationLevel),
+      verificationLabel: buildVerificationLabel({
+        verificationLevel: input.share.verificationLevel,
+        connectionKind: connectionTrust.kind,
+      }),
       auditCoverageStartsAt: input.share.createdAt,
       legacyAuditGap,
       lastSyncedAt: input.share.lastSyncedAt ?? null,

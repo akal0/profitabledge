@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -259,6 +259,26 @@ export default function EditProfilePage() {
       toast.error(error.message || "Failed to update profile");
     }
   };
+
+  const effectsPreviewUser = useMemo(
+    () => ({
+      name: form.fullName || user?.name || null,
+      username: form.username || user?.username || null,
+      image: form.image || user?.image || null,
+      bannerUrl: bannerUrl || null,
+      bannerPosition: bannerPosition || null,
+    }),
+    [
+      form.fullName,
+      form.username,
+      form.image,
+      user?.name,
+      user?.username,
+      user?.image,
+      bannerUrl,
+      bannerPosition,
+    ]
+  );
 
   if (isLoading) {
     return <RouteLoadingFallback route="settingsProfile" className="min-h-full" />;
@@ -614,7 +634,7 @@ export default function EditProfilePage() {
               disabled={
                 updateProfile.isPending || isAvatarUploading || isBannerUploading
               }
-              className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+              className="cursor-pointer flex h-9 w-max items-center justify-center gap-2 rounded-sm bg-sidebar px-3 py-2 text-xs text-white ring ring-white/5 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {updateProfile.isPending || isAvatarUploading || isBannerUploading
                 ? "Saving..."
@@ -627,11 +647,7 @@ export default function EditProfilePage() {
           <div className="px-6 sm:px-8 py-6">
             <ProfileEffectsEditor
               profileEffects={(user as any)?.profileEffects ?? null}
-              user={{
-                name: user?.name ?? null,
-                username: user?.username ?? null,
-                image: user?.image ?? null,
-              }}
+              user={effectsPreviewUser}
             />
           </div>
         </TabsContent>

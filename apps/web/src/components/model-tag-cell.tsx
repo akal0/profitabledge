@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { trpcOptions, trpcClient, queryClient } from "@/utils/trpc";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Plus, Lightbulb } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
 import Color from "color";
-import { useAccountStore } from "@/stores/account";
 import { toast } from "sonner";
 import {
   getTradeIdentifierColorStyle,
@@ -37,8 +36,10 @@ import {
 
 interface ModelTagCellProps {
   tradeId: string;
+  accountId?: string | null;
   modelTag: string | null | undefined;
   modelTagColor: string | null | undefined;
+  allModelTags?: ModelTagOption[];
   isLive?: boolean;
 }
 
@@ -60,8 +61,10 @@ const DEFAULT_MODEL_COLORS = [
 
 export function ModelTagCell({
   tradeId,
+  accountId,
   modelTag,
   modelTagColor,
+  allModelTags = [],
   isLive = false,
 }: ModelTagCellProps) {
   const [open, setOpen] = React.useState(false);
@@ -71,15 +74,7 @@ export function ModelTagCell({
   );
   const [showColorPicker, setShowColorPicker] = React.useState(false);
   const [isColorDirty, setIsColorDirty] = React.useState(false);
-  const { selectedAccountId } = useAccountStore();
-
-  const modelTagsOpts = trpcOptions.trades.listModelTags.queryOptions({
-    accountId: selectedAccountId || "",
-  });
-  const { data: modelTags = [] } = useQuery({
-    ...modelTagsOpts,
-    enabled: Boolean(selectedAccountId),
-  }) as { data: ModelTagOption[] | undefined };
+  const modelTags = allModelTags;
 
   const matchedExistingTag = React.useMemo(() => {
     if (!modelTags || !tagName.trim()) return null;
@@ -103,6 +98,13 @@ export function ModelTagCell({
         queryKey: [["trades"]],
         refetchType: "active",
       });
+      if (accountId) {
+        void queryClient.invalidateQueries({
+          queryKey: trpcOptions.trades.listModelTags.queryOptions({
+            accountId,
+          }).queryKey,
+        });
+      }
       setOpen(false);
       setIsColorDirty(false);
     },

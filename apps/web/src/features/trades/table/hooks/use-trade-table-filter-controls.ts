@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { parseAsString, useQueryState, useQueryStates } from "nuqs";
 
-import { trpcOptions } from "@/utils/trpc";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
 import {
   deriveTradeTableFilterState,
   type TradeTableStatFilters,
@@ -63,14 +63,27 @@ export function useTradeTableFilterControls() {
     { history: "push" }
   );
 
-  const viewOpts = trpcOptions.views.get.queryOptions({
-    id: viewParam || "",
+  const activeViewKey = React.useMemo(
+    () =>
+      viewParam
+        ? trpcOptions.views.get.queryOptions({ id: viewParam }).queryKey
+        : (["views", "inactive", "selected-view"] as const),
+    [viewParam]
+  );
+  const { data: selectedViewRaw } = useSuspenseQuery<SelectedTradeView | null>({
+    queryKey: activeViewKey,
+    queryFn: async () => {
+      if (!viewParam) {
+        return null;
+      }
+
+      return (await trpcClient.views.get.query({
+        id: viewParam,
+      })) as SelectedTradeView;
+    },
+    staleTime: viewParam ? 30_000 : Infinity,
   });
-  const { data: selectedViewRaw } = useQuery({
-    ...viewOpts,
-    enabled: Boolean(viewParam),
-  });
-  const selectedView = selectedViewRaw as SelectedTradeView | undefined;
+  const selectedView = selectedViewRaw ?? undefined;
   const selectedViewConfig = React.useMemo<SelectedTradeViewConfig | undefined>(
     () =>
       selectedView?.config && typeof selectedView.config === "object"
@@ -140,13 +153,35 @@ export function useTradeTableFilterControls() {
     ]
   );
 
-  const [statFilters, setStatFilters] = React.useState<TradeTableStatFilters>(
-    filterState.statFilterSeed
+  const statFilterSeed = React.useMemo<TradeTableStatFilters>(
+    () => ({
+      rrMin: filterState.statFilterSeed.rrMin,
+      rrMax: filterState.statFilterSeed.rrMax,
+      mfeMin: filterState.statFilterSeed.mfeMin,
+      mfeMax: filterState.statFilterSeed.mfeMax,
+      maeMin: filterState.statFilterSeed.maeMin,
+      maeMax: filterState.statFilterSeed.maeMax,
+      efficiencyMin: filterState.statFilterSeed.efficiencyMin,
+      efficiencyMax: filterState.statFilterSeed.efficiencyMax,
+    }),
+    [
+      filterState.statFilterSeed.efficiencyMax,
+      filterState.statFilterSeed.efficiencyMin,
+      filterState.statFilterSeed.maeMax,
+      filterState.statFilterSeed.maeMin,
+      filterState.statFilterSeed.mfeMax,
+      filterState.statFilterSeed.mfeMin,
+      filterState.statFilterSeed.rrMax,
+      filterState.statFilterSeed.rrMin,
+    ]
   );
 
+  const [statFilters, setStatFilters] =
+    React.useState<TradeTableStatFilters>(statFilterSeed);
+
   React.useEffect(() => {
-    setStatFilters(filterState.statFilterSeed);
-  }, [filterState.statFilterSeed]);
+    setStatFilters(statFilterSeed);
+  }, [statFilterSeed]);
 
   return {
     q,

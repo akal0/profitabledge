@@ -21,7 +21,9 @@ import {
   buildMonthGrid,
   endOfDay,
   endOfWeek,
+  formatCalendarDayKey,
   normalizeImpact,
+  parseCalendarDayKey,
   startOfDay,
   startOfWeek,
 } from "../lib/economic-calendar-utils";
@@ -81,9 +83,9 @@ export default function EconomicCalendar() {
       try {
         const response = await fetch(
           range
-            ? `${CALENDAR_ENDPOINT}?start=${range.start
-                .toISOString()
-                .slice(0, 10)}&end=${range.end.toISOString().slice(0, 10)}`
+            ? `${CALENDAR_ENDPOINT}?start=${formatCalendarDayKey(
+                range.start
+              )}&end=${formatCalendarDayKey(range.end)}`
             : CALENDAR_ENDPOINT,
           { signal: controller.signal }
         );
@@ -103,7 +105,9 @@ export default function EconomicCalendar() {
             .filter((date): date is Date => Boolean(date));
 
           if (dates.length > 0) {
-            const maxDate = new Date(Math.max(...dates.map((date) => date.getTime())));
+            const maxDate = new Date(
+              Math.max(...dates.map((date) => date.getTime()))
+            );
             const weekStart = startOfWeek(maxDate);
             const weekEnd = endOfWeek(maxDate);
             setRange({
@@ -186,15 +190,15 @@ export default function EconomicCalendar() {
 
   useEffect(() => {
     if (!range) return;
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const rangeStart = startOfDay(range.start).toISOString().slice(0, 10);
-    const rangeEnd = startOfDay(range.end).toISOString().slice(0, 10);
+    const todayKey = formatCalendarDayKey(new Date());
+    const rangeStart = formatCalendarDayKey(startOfDay(range.start));
+    const rangeEnd = formatCalendarDayKey(startOfDay(range.end));
     if (todayKey < rangeStart || todayKey > rangeEnd) return;
     if (lastNewsIngestRef.current === todayKey) return;
 
     const todaysEvents = filteredEvents.filter((event) => {
       if (!event.date) return false;
-      return new Date(event.date).toISOString().slice(0, 10) === todayKey;
+      return formatCalendarDayKey(new Date(event.date)) === todayKey;
     });
 
     if (todaysEvents.length === 0) return;
@@ -214,7 +218,7 @@ export default function EconomicCalendar() {
     const grouped: GroupedEvents = {};
     filteredEvents.forEach((event) => {
       const dateKey = event.date
-        ? new Date(event.date).toISOString().slice(0, 10)
+        ? formatCalendarDayKey(new Date(event.date))
         : "unknown";
       if (!grouped[dateKey]) grouped[dateKey] = [];
       grouped[dateKey].push(event);
@@ -222,7 +226,10 @@ export default function EconomicCalendar() {
     return grouped;
   }, [filteredEvents]);
 
-  const monthGrid = useMemo(() => (range ? buildMonthGrid(range.start) : []), [range]);
+  const monthGrid = useMemo(
+    () => (range ? buildMonthGrid(range.start) : []),
+    [range]
+  );
 
   useEffect(() => {
     if (!range) return;
@@ -236,7 +243,7 @@ export default function EconomicCalendar() {
 
   const dayEvents = useMemo(() => {
     if (!range) return [];
-    const key = range.start.toISOString().slice(0, 10);
+    const key = formatCalendarDayKey(range.start);
     return groupedEvents[key] || [];
   }, [groupedEvents, range]);
 
@@ -261,7 +268,7 @@ export default function EconomicCalendar() {
       Object.keys(groupedEvents)
         .filter((key) => key !== "unknown")
         .sort()
-        .map((key) => new Date(key)),
+        .map((key) => parseCalendarDayKey(key)),
     [groupedEvents]
   );
 
@@ -321,12 +328,16 @@ export default function EconomicCalendar() {
         onViewModeChange={setViewMode}
         onCurrencyFilterChange={(currency, checked) =>
           setCurrencyFilter((current) =>
-            checked ? [...current, currency] : current.filter((item) => item !== currency)
+            checked
+              ? [...current, currency]
+              : current.filter((item) => item !== currency)
           )
         }
         onImpactFilterChange={(impact, checked) =>
           setImpactFilter((current) =>
-            checked ? [...current, impact] : current.filter((item) => item !== impact)
+            checked
+              ? [...current, impact]
+              : current.filter((item) => item !== impact)
           )
         }
       />
@@ -336,7 +347,7 @@ export default function EconomicCalendar() {
           {Array.from({ length: 4 }).map((_, index) => (
             <div
               key={index}
-              className="border border-white/5 bg-white p-4 dark:bg-sidebar"
+              className="rounded-sm bg-white p-4 ring-1 ring-black/10 dark:bg-sidebar dark:ring-white/5"
             >
               <Skeleton className="mb-3 h-4 w-32 rounded-none bg-sidebar-accent" />
               <Skeleton className="h-3 w-full rounded-none bg-sidebar-accent" />
@@ -345,7 +356,7 @@ export default function EconomicCalendar() {
           ))}
         </div>
       ) : error ? (
-        <div className="border border-white/5 bg-white p-4 text-sm text-red-300 dark:bg-sidebar">
+        <div className="rounded-sm bg-white p-4 text-sm text-red-300 ring-1 ring-black/10 dark:bg-sidebar dark:ring-white/5">
           {error}
         </div>
       ) : (

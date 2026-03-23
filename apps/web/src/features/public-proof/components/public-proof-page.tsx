@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@profitabledge/contracts/trpc";
 import {
@@ -44,10 +44,6 @@ import {
   getAffiliatePfpEffectStyle,
   getAffiliatePfpWrapperClassName,
   getCustomPfpAnimationClassName,
-  getAffiliateNameColorStyle,
-  getAffiliateNameFontClassName,
-  getAffiliateNameEffectClassName,
-  getAffiliateNameEffectStyle,
   getConnectionBadgeClassName,
   getOriginBadgeClassName,
 } from "@/features/public-proof/lib/public-proof-badges";
@@ -61,6 +57,7 @@ import {
 import { PublicProofDrawdownCard } from "@/features/public-proof/components/public-proof-drawdown-card";
 import { PublicProofEquityCurveCard } from "@/features/public-proof/components/public-proof-equity-curve-card";
 import { PublicProofMonthlyReturnsCard } from "@/features/public-proof/components/public-proof-monthly-returns-card";
+import { AffiliateNameEffectText } from "@/features/public-proof/components/affiliate-name-effect-text";
 import { PublicProofTopSymbolsCard } from "@/features/public-proof/components/public-proof-top-symbols-card";
 import {
   PublicProofTradesTable,
@@ -111,21 +108,69 @@ function getMetricToneClasses(
 
 function formatProofDay(value?: string | Date | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString("en-GB", {
     weekday: "short",
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   });
 }
 
 function formatProofDate(value?: string | Date | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString("en-GB", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   });
+}
+
+function formatProofConnectionLabel(
+  kind?: string | null,
+  fallback?: string | null
+) {
+  switch (kind) {
+    case "broker_synced":
+    case "api_synced":
+      return "Broker sync";
+    case "ea_synced":
+      return "EA synced";
+    case "mt5_synced":
+      return "MT5 synced";
+    case "mt4_synced":
+      return "MT4 synced";
+    case "csv_imported":
+      return "CSV import";
+    case "demo":
+      return "Demo account";
+    default:
+      return fallback || "Manual";
+  }
+}
+
+function formatProofVerificationLabel(
+  connectionKind?: string | null,
+  fallback?: string | null
+) {
+  switch (connectionKind) {
+    case "broker_synced":
+    case "api_synced":
+      return "Broker verified";
+    case "ea_synced":
+      return "EA verified";
+    case "mt5_synced":
+      return "MT5 verified";
+    case "mt4_synced":
+      return "MT4 verified";
+    case "csv_imported":
+      return "CSV imported";
+    case "demo":
+      return "Demo account";
+    default:
+      return fallback || "Self-reported";
+  }
 }
 
 function ProofMetricCard({
@@ -146,13 +191,13 @@ function ProofMetricCard({
 
   return (
     <GoalSurface className="w-full h-full overflow-hidden">
-      <div className="p-3.5 pb-12">
-        <div className="flex items-center  gap-2">
+      <div className="flex h-full min-h-0 flex-col p-3.5">
+        <div className="flex items-center gap-2">
           <Icon className={cn("h-3.5 w-3.5", iconClassName)} />
           <span className="text-xs text-white/50">{label}</span>
         </div>
         <GoalContentSeparator className="mb-3.5 mt-3.5" />
-        <div className="flex flex-col justify-end h-full">
+        <div className="flex min-h-0 flex-1 flex-col justify-end">
           <p
             className={cn(
               "text-2xl font-semibold tracking-tight",
@@ -163,7 +208,7 @@ function ProofMetricCard({
           </p>
           <p className="mt-1 text-xs leading-4 text-white/40">{detail}</p>
 
-          <div className="mt-3 mb-4 h-1.5 rounded-full bg-white/8 relative overflow-hidden">
+          <div className="mt-3 h-1.5 rounded-full bg-white/8 relative overflow-hidden">
             <div className={cn("h-full w-full", railClassName)} />
           </div>
         </div>
@@ -221,21 +266,25 @@ function ProofContentCard({
 
   return (
     <GoalSurface className="w-full h-full overflow-hidden">
-      <div className="p-3.5 pb-12">
+      <div className="flex h-full min-h-0 flex-col p-3.5">
         <div className="flex items-center gap-2">
           <Icon className={cn("h-3.5 w-3.5", iconClassName)} />
           <span className="text-xs text-white/50">{label}</span>
         </div>
         <GoalContentSeparator className="mb-3.5 mt-3.5" />
-        <div className="flex h-full flex-col justify-end">
-          {children}
-          <p className="mt-1 text-xs leading-4 text-white/40">{description}</p>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-[4.75rem] space-y-1.5">
+            {children}
+            <p className="text-xs leading-4 text-white/40">{description}</p>
+          </div>
           {rail === null ? null : rail === undefined ? (
-            <div className="relative mb-4 mt-3 h-1.5 overflow-hidden rounded-full bg-white/8">
-              <div className={cn("h-full w-full", railClassName)} />
+            <div className="relative mt-auto pt-4">
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/8">
+                <div className={cn("h-full w-full", railClassName)} />
+              </div>
             </div>
           ) : (
-            <div className="mb-4 mt-3">{rail}</div>
+            <div className="mt-auto pt-4">{rail}</div>
           )}
         </div>
       </div>
@@ -257,7 +306,7 @@ export function PublicProofPage({
   const [statusFilter, setStatusFilter] = useState("all");
   const [editFilter, setEditFilter] = useState("all");
 
-  const pageQuery = useQuery(
+  const pageQuery = useSuspenseQuery(
     trpcOptions.proof.getPublicPage.queryOptions({
       username,
       publicAccountSlug,
@@ -304,55 +353,6 @@ export function PublicProofPage({
     return pages?.flatMap((page) => page.items) ?? [];
   }, [tradesQuery.data]);
 
-  if (pageQuery.isLoading) {
-    return (
-      <div className="min-h-screen w-full bg-sidebar px-4 py-20 text-white md:px-6 lg:px-8">
-        <div className="w-full animate-pulse space-y-6">
-          <div className="h-8 w-48 rounded-sm bg-white/5" />
-          <div className="h-32 w-full rounded-lg bg-sidebar p-1">
-            <div className="h-full w-full rounded-sm bg-white/5" />
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className="h-48 rounded-lg bg-sidebar p-1">
-                <div className="h-full w-full rounded-sm bg-white/5" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (pageQuery.error || !pageQuery.data) {
-    return (
-      <div className="min-h-screen h-full w-full bg-sidebar px-4 py-24 text-white md:px-6 lg:px-8">
-        <div className="w-full">
-          <GoalSurface className="mx-auto w-full max-w-3xl">
-            <div className="px-8 py-10 text-center">
-              <p className="text-xs uppercase tracking-[0.2em] text-white/35">
-                Public proof
-              </p>
-              <h1 className="mt-4 text-3xl font-semibold">
-                Proof page unavailable
-              </h1>
-              <p className="mt-4 text-sm leading-6 text-white/55">
-                {pageQuery.error?.message ||
-                  "This public proof link is invalid, revoked, or no longer active."}
-              </p>
-              <Button
-                className="mt-6 rounded-sm bg-teal-500 text-black hover:bg-teal-400"
-                asChild
-              >
-                <Link href="/sign-up">Create your own proof page</Link>
-              </Button>
-            </div>
-          </GoalSurface>
-        </div>
-      </div>
-    );
-  }
-
   const page = pageQuery.data as PublicProofPageData;
   const affiliate = (
     page as PublicProofPageData & { affiliate?: PublicProofAffiliate }
@@ -365,9 +365,24 @@ export function PublicProofPage({
     nameColor?: string;
   } | null;
   const trustStartedAt = formatProofDate(page.proof.auditCoverageStartsAt);
-  const lastSyncedLabel = page.proof.lastSyncedAt
-    ? formatTimestamp(page.proof.lastSyncedAt)
-    : "No sync timestamp";
+  const proofConnectionKind = page.proof.connectionKind as string | null;
+  const lastUpdatedTitle =
+    proofConnectionKind === "demo" ? "Source" : "Last updated";
+  const lastUpdatedLabel =
+    proofConnectionKind === "demo"
+      ? "Provided by Profitabledge"
+      : page.proof.lastSyncedAt
+      ? formatTimestamp(page.proof.lastSyncedAt)
+      : "No update timestamp";
+  const connectionLabel = formatProofConnectionLabel(
+    proofConnectionKind,
+    page.proof.connectionLabel
+  );
+  const verificationLabel = formatProofVerificationLabel(
+    proofConnectionKind,
+    page.proof.verificationLabel
+  );
+  const liveStatusLabel = page.proof.liveStatusLabel;
   const totalSourceTrades =
     page.trust.sourceCounts.brokerSync +
     page.trust.sourceCounts.csvImport +
@@ -450,15 +465,31 @@ export function PublicProofPage({
         <div className="relative px-4 md:px-6 lg:px-8">
           {/* Avatar overlapping banner */}
           <div className="-mt-9 pb-4">
-            {profileEffects?.pfpEffect && profileEffects.pfpEffect !== "none" ? (
-              <div className={cn("inline-flex rounded-full", getAffiliatePfpWrapperClassName(profileEffects.pfpEffect))}>
+            {profileEffects?.pfpEffect &&
+            profileEffects.pfpEffect !== "none" ? (
+              <div
+                className={cn(
+                  "inline-flex rounded-full",
+                  getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
+                )}
+              >
                 <Avatar
                   className={cn(
                     "size-[72px] rounded-full shadow-lg",
                     getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
-                    profileEffects.pfpEffect === "custom" && getCustomPfpAnimationClassName((profileEffects as any).customRingEffect)
+                    profileEffects.pfpEffect === "custom" &&
+                      getCustomPfpAnimationClassName(
+                        (profileEffects as any).customRingEffect
+                      )
                   )}
-                  style={profileEffects.pfpEffect === "custom" ? getAffiliatePfpEffectStyle("custom", { from: (profileEffects as any).customRingFrom, to: (profileEffects as any).customRingTo }) : undefined}
+                  style={
+                    profileEffects.pfpEffect === "custom"
+                      ? getAffiliatePfpEffectStyle("custom", {
+                          from: (profileEffects as any).customRingFrom,
+                          to: (profileEffects as any).customRingTo,
+                        })
+                      : undefined
+                  }
                 >
                   {page.trader.image ? (
                     <AvatarImage
@@ -497,31 +528,22 @@ export function PublicProofPage({
             <div className="min-w-0 space-y-4">
               <div className="space-y-2">
                 <p className="text-xs ">
-                  <span
-                    className={cn(
-                      "font-semibold",
-                      profileEffects
-                        ? [
-                            getAffiliateNameFontClassName(profileEffects.nameFont),
-                            getAffiliateNameEffectClassName(profileEffects.nameEffect),
-                          ]
-                        : "text-teal-300/80"
-                    )}
-                    style={
-                      profileEffects
+                  <AffiliateNameEffectText
+                    nameFont={profileEffects?.nameFont}
+                    nameEffect={profileEffects?.nameEffect}
+                    nameColor={profileEffects?.nameColor}
+                    customGradient={
+                      profileEffects?.nameColor === "custom"
                         ? {
-                            ...getAffiliateNameColorStyle(profileEffects.nameColor, profileEffects.nameColor === "custom" ? { from: (profileEffects as any).customGradientFrom, to: (profileEffects as any).customGradientTo } : null),
-                            ...getAffiliateNameEffectStyle(
-                              profileEffects.nameEffect,
-                              profileEffects.nameColor,
-                              profileEffects.nameColor === "custom" ? { from: (profileEffects as any).customGradientFrom, to: (profileEffects as any).customGradientTo } : null
-                            ),
+                            from: (profileEffects as any).customGradientFrom,
+                            to: (profileEffects as any).customGradientTo,
                           }
-                        : undefined
+                        : null
                     }
+                    className={!profileEffects ? "text-teal-300/80" : undefined}
                   >
                     @{page.trader.username}'s
-                  </span>{" "}
+                  </AffiliateNameEffectText>{" "}
                   public proof page
                 </p>
                 <div>
@@ -556,28 +578,32 @@ export function PublicProofPage({
                 <Badge
                   className={cn(
                     "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
-                    getConnectionBadgeClassName(page.proof.connectionKind)
+                    getConnectionBadgeClassName(proofConnectionKind)
                   )}
                 >
-                  {page.proof.connectionLabel}
+                  {connectionLabel}
                 </Badge>
 
                 <Badge className="rounded-sm ring-1 ring-white/10 bg-white/5 text-[10px] uppercase tracking-[0.05em] text-white/70">
-                  {page.proof.verificationLabel}
+                  {verificationLabel}
                 </Badge>
                 <Badge
                   className={cn(
                     "rounded-sm ring-1 text-[10px] uppercase tracking-[0.05em]",
-                    page.summary.openTradesCount > 0
+                    proofConnectionKind === "demo"
+                      ? "ring-violet-500/25 bg-violet-500/15 text-violet-300"
+                      : page.summary.openTradesCount > 0
                       ? "ring-teal-500/25 bg-teal-500/15 text-teal-300"
                       : "ring-white/10 bg-white/5 text-white/60"
                   )}
                 >
-                  {page.proof.liveStatusLabel}
+                  {liveStatusLabel}
                 </Badge>
               </div>
               <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/45">
-                <span>Last synced: {lastSyncedLabel}</span>
+                <span>
+                  {lastUpdatedTitle}: {lastUpdatedLabel}
+                </span>
                 <span>Audit coverage: {trustStartedAt}</span>
                 <span>
                   Source mix: {page.trust.sourceBadges.length || 1} channel
@@ -660,18 +686,18 @@ export function PublicProofPage({
               <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <OverviewStatusCard
                   label="Connection"
-                  value={page.proof.connectionLabel}
-                  tooltip="How this account’s trades are sourced into the proof page, such as API sync, EA sync, CSV import, or manual entry."
+                  value={connectionLabel}
+                  tooltip="How this account’s trades are sourced into the proof page, such as broker sync, EA sync, CSV import, manual entry, or a demo workspace account."
                 />
                 <OverviewStatusCard
                   label="Verification"
-                  value={page.proof.verificationLabel}
-                  tooltip="The trust tier currently attached to this account based on verification state and broker connectivity."
+                  value={verificationLabel}
+                  tooltip="The trust tier currently attached to this account based on the current connection method and verification state."
                 />
                 <OverviewStatusCard
                   label="Live status"
-                  value={page.proof.liveStatusLabel}
-                  tooltip="Whether the account appears to be actively syncing right now based on its latest sync activity."
+                  value={liveStatusLabel}
+                  tooltip="Whether the account appears to be updating right now based on its latest recorded activity."
                 />
                 <OverviewStatusCard
                   label="Audit coverage"
@@ -992,12 +1018,12 @@ export function PublicProofPage({
 
                 <ProofContentCard
                   label="Verification"
-                  description="Account-level trust mode and verification state for this public proof link."
+                  description="Account-level connection and verification state for this public proof link."
                   icon={ShieldCheck}
                   tone="info"
                 >
                   <p className="text-2xl font-semibold tracking-tight text-sky-300">
-                    {page.proof.connectionLabel}
+                    {connectionLabel}
                   </p>
                 </ProofContentCard>
 
@@ -1027,7 +1053,7 @@ export function PublicProofPage({
 
                 <ProofContentCard
                   label="Audit coverage"
-                  description={`Edits and removed imported or synced trades are tracked from ${trustStartedAt}.`}
+                  description={`Edits and removed imported, synced, or demo-recorded trades are tracked from ${trustStartedAt}.`}
                   icon={AlertTriangle}
                   tone={page.proof.legacyAuditGap ? "warning" : "positive"}
                 >
@@ -1056,16 +1082,18 @@ export function PublicProofPage({
                   <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-sm bg-white/[0.03] px-4 py-4 ring-1 ring-white/6">
                       <p className="text-xs text-white/40">
-                        Removed synced/imported
+                        Removed imported/synced
                       </p>
                       <p className="mt-2 text-lg font-semibold text-white">
                         {page.trust.removedTradesCount}
                       </p>
                     </div>
                     <div className="rounded-sm bg-white/[0.03] px-4 py-4 ring-1 ring-white/6">
-                      <p className="text-xs text-white/40">Last synced</p>
+                      <p className="text-xs text-white/40">
+                        {lastUpdatedTitle}
+                      </p>
                       <p className="mt-2 text-sm font-medium text-white">
-                        {lastSyncedLabel}
+                        {lastUpdatedLabel}
                       </p>
                     </div>
                     <div className="rounded-sm bg-white/[0.03] px-4 py-4 ring-1 ring-white/6">

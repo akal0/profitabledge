@@ -25,6 +25,20 @@ class ActiveConnectionState:
     last_heartbeat_at: datetime
 
 
+class InactiveConnectionError(RuntimeError):
+    def __init__(
+        self,
+        connection_id: str,
+        *,
+        reason: str,
+        meta: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(reason)
+        self.connection_id = connection_id
+        self.reason = reason
+        self.meta = meta or {}
+
+
 def log_message(worker_id: str, message: str, *, error: bool = False) -> None:
     print(
         f"[mt5-worker {worker_id}] {message}",
@@ -64,6 +78,58 @@ def best_effort_report_status(
             error=not is_retryable_control_plane_error(error),
         )
         return False
+
+
+def best_effort_release_connection(
+    adapter: Any,
+    worker_id: str,
+    connection_id: str,
+) -> None:
+    try:
+        adapter.release_connection(connection_id)
+    except Exception as error:  # noqa: BLE001
+        log_message(
+            worker_id,
+            f"failed to release {connection_id}: {error}",
+            error=True,
+        )
+
+
+def assert_connection_is_live(
+    bootstrap: dict[str, Any],
+    connection_id: str,
+) -> None:
+    if bootstrap.get("isPaused") is True:
+        raise InactiveConnectionError(
+            connection_id,
+            reason="paused",
+            meta={
+                "phase": "sleeping",
+                "sleepReason": "paused",
+            },
+        )
+
+    live_lease = bootstrap.get("liveLease")
+    if not isinstance(live_lease, dict):
+        return
+
+    if live_lease.get("active") is False:
+        try:
+            active_holder_count = int(live_lease.get("activeHolderCount", 0) or 0)
+        except (TypeError, ValueError):
+            active_holder_count = 0
+
+        raise InactiveConnectionError(
+            connection_id,
+            reason="lease_inactive",
+            meta={
+                "phase": "sleeping",
+                "sleepReason": "no_live_viewer",
+                "activeHolderCount": active_holder_count,
+                "leaseUntil": live_lease.get("leaseUntil"),
+                "lastHeartbeatAt": live_lease.get("lastHeartbeatAt"),
+            },
+        )
 
 
 def build_adapter(config: WorkerConfig):
@@ -146,8 +212,13 @@ def process_connection(
     worker_id: str,
     connection_id: str,
     lookback_days: int,
+    *,
+    enforce_live_lease: bool,
 ) -> ActiveConnectionState:
     bootstrap = client.get_connection(connection_id)
+    if enforce_live_lease:
+        assert_connection_is_live(bootstrap, connection_id)
+
     session_key = f"{worker_id}:{connection_id}"
 
     best_effort_report_status(
@@ -251,6 +322,7 @@ def process_connection(
 
 def emit_idle_heartbeats(
     client: ControlPlaneClient,
+    adapter: Any,
     active_connections: dict[str, ActiveConnectionState],
     worker_id: str,
     heartbeat_seconds: int,
@@ -291,6 +363,7 @@ def emit_idle_heartbeats(
 
     for connection_id in stale_connection_ids:
         active_connections.pop(connection_id, None)
+        best_effort_release_connection(adapter, worker_id, connection_id)
 
 
 def main() -> int:
@@ -343,6 +416,7 @@ def main() -> int:
                         worker_id=config.worker_id,
                         connection_id=args.connection_id,
                         lookback_days=config.lookback_days,
+                        enforce_live_lease=False,
                     )
                     active_connections[args.connection_id] = state
                     processed_connection_ids.add(args.connection_id)
@@ -376,15 +450,45 @@ def main() -> int:
                                 worker_id=config.worker_id,
                                 connection_id=connection_id,
                                 lookback_days=config.lookback_days,
+                                enforce_live_lease=True,
                             )
                             active_connections[connection_id] = state
                             processed_connection_ids.add(connection_id)
+                        except InactiveConnectionError as error:
+                            previous_state = active_connections.pop(connection_id, None)
+                            best_effort_release_connection(
+                                adapter,
+                                config.worker_id,
+                                connection_id,
+                            )
+                            best_effort_report_status(
+                                client,
+                                config.worker_id,
+                                connection_id=connection_id,
+                                worker_host_id=config.worker_id,
+                                status="sleeping",
+                                session_key=(
+                                    previous_state.session_key
+                                    if previous_state
+                                    else f"{config.worker_id}:{connection_id}"
+                                ),
+                                meta=error.meta,
+                            )
+                            log_message(
+                                config.worker_id,
+                                f"released {connection_id}: {error.reason}",
+                            )
                         except Exception as error:  # noqa: BLE001
                             retryable_control_plane_error = is_retryable_control_plane_error(
                                 error
                             )
                             if not retryable_control_plane_error:
                                 active_connections.pop(connection_id, None)
+                                best_effort_release_connection(
+                                    adapter,
+                                    config.worker_id,
+                                    connection_id,
+                                )
                             loop_error = str(error)
                             if not retryable_control_plane_error:
                                 best_effort_report_status(
@@ -412,6 +516,7 @@ def main() -> int:
 
                     emit_idle_heartbeats(
                         client=client,
+                        adapter=adapter,
                         active_connections=active_connections,
                         worker_id=config.worker_id,
                         heartbeat_seconds=config.heartbeat_seconds,
@@ -478,7 +583,11 @@ def main() -> int:
                 )
                 return 0
 
-            time.sleep(config.poll_seconds)
+            sleep_seconds = config.poll_seconds
+            if not args.connection_id and len(active_connections) == 0:
+                sleep_seconds = min(config.poll_seconds, 10)
+
+            time.sleep(sleep_seconds)
     finally:
         try:
             adapter.close()

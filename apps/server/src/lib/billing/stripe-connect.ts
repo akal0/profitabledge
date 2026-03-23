@@ -36,6 +36,14 @@ function getStripeSecretKey() {
     });
   }
 
+  if (env.STRIPE_SECRET_KEY.startsWith("rk_")) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Stripe Connect requires a standard Stripe secret key (sk_test_ or sk_live_), not a restricted key",
+    });
+  }
+
   return env.STRIPE_SECRET_KEY;
 }
 

@@ -77,14 +77,17 @@ function OnboardingPageContent() {
     ...trpcOptions.billing.getState.queryOptions(),
     enabled: isSessionReady,
   });
-  const completeGrowthAccess = useMutation(
+  const bootstrapGrowthAccess = useMutation(
+    trpcOptions.billing.completeGrowthAccess.mutationOptions()
+  );
+  const redeemGrowthAccess = useMutation(
     trpcOptions.billing.completeGrowthAccess.mutationOptions()
   );
   const createCheckout = useMutation<any, unknown, any>({
     mutationFn: (input) => (trpcClient.billing as any).createCheckout.mutate(input),
   });
-  const syncFromPolar = useMutation(
-    trpcOptions.billing.syncFromPolar.mutationOptions()
+  const syncBillingState = useMutation(
+    trpcOptions.billing.syncBillingState.mutationOptions()
   );
 
   const activePlanKey =
@@ -117,7 +120,7 @@ function OnboardingPageContent() {
       try {
         if (options?.syncPlan) {
           try {
-            await trpcClient.billing.syncFromPolar.mutate();
+            await trpcClient.billing.syncBillingState.mutate();
           } catch {
             // Best-effort reconciliation for local dev and webhook lag.
           }
@@ -235,7 +238,7 @@ function OnboardingPageContent() {
       return;
     }
 
-    void completeGrowthAccess
+    void bootstrapGrowthAccess
       .mutateAsync({
         betaCode: storedBetaCode ?? undefined,
         referralCode: storedReferralCode ?? undefined,
@@ -263,7 +266,7 @@ function OnboardingPageContent() {
 
         setActivationMessage(error.message || "Unable to activate access");
       });
-  }, [billingStateQuery.data, completeGrowthAccess, billingStateQuery]);
+  }, [billingStateQuery.data, billingStateQuery, bootstrapGrowthAccess]);
 
   useEffect(() => {
     const checkoutStatus = searchParams?.get("checkout");
@@ -304,7 +307,7 @@ function OnboardingPageContent() {
         }
 
         try {
-          const synced = await syncFromPolar.mutateAsync();
+          const synced = await syncBillingState.mutateAsync();
           const refetched = await billingStateQuery.refetch();
           const nextPlanKey =
             (refetched.data?.billing.activePlanKey as
@@ -328,7 +331,7 @@ function OnboardingPageContent() {
             toast.error(
               error instanceof Error
                 ? error.message
-                : "Unable to sync your plan from Polar"
+                : "Unable to sync your plan"
             );
             return;
           }
@@ -350,7 +353,7 @@ function OnboardingPageContent() {
     billingStateQuery,
     completeOnboardingAndRedirect,
     searchParams,
-    syncFromPolar,
+    syncBillingState,
   ]);
 
   useEffect(() => {
@@ -395,7 +398,7 @@ function OnboardingPageContent() {
 
     try {
       const storedIntent = getStoredGrowthIntent();
-      const result = await completeGrowthAccess.mutateAsync({
+      const result = await redeemGrowthAccess.mutateAsync({
         betaCode: normalizedCode,
         referralCode: storedIntent.referralCode,
         affiliateCode: storedIntent.affiliateCode,
@@ -629,13 +632,13 @@ function OnboardingPageContent() {
 
                       <Button
                         onClick={handleRedeemAccess}
-                        disabled={completeGrowthAccess.isPending}
+                        disabled={redeemGrowthAccess.isPending}
                         className={getOnboardingButtonClassName({
                           tone: "gold",
                           className: "sm:min-w-40",
                         })}
                       >
-                        {completeGrowthAccess.isPending
+                        {redeemGrowthAccess.isPending
                           ? "Activating..."
                           : "Redeem access"}
                       </Button>

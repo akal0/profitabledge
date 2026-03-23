@@ -216,6 +216,15 @@ export const trade = pgTable(
   },
   (table) => ({
     // Indexes for filtering performance
+    accountCreatedAtIdx: index("idx_trade_account_created_at").on(
+      table.accountId,
+      table.createdAt,
+      table.id
+    ),
+    accountSymbolIdx: index("idx_trade_account_symbol").on(
+      table.accountId,
+      table.symbol
+    ),
     sessionTagIdx: index("idx_trade_session_tag").on(
       table.accountId,
       table.sessionTag

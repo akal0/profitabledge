@@ -110,6 +110,7 @@ function SegmentedModeControl<TValue extends string>({
         const button = (
           <Button
             key={option.value}
+            type="button"
             disabled={option.disabled}
             className={cn(
               "flex h-max cursor-pointer items-center justify-center rounded-sm px-3 py-2 text-xs transition-all duration-250 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40",

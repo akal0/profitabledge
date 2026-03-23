@@ -13,6 +13,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartDateRange } from "./use-chart-date-range";
 import { useChartTrades } from "./use-chart-trades";
@@ -76,6 +77,7 @@ export function PerformanceHeatmap({
 }: {
   accountId?: string;
 }) {
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
   const { start, end, min, max } = useChartDateRange();
 
   const resolvedRange = React.useMemo(() => {
@@ -121,7 +123,8 @@ export function PerformanceHeatmap({
     const grid: Record<string, { profit: number; count: number }> = {};
 
     trades.forEach((trade) => {
-      if (!trade.close || trade.profit == null) return;
+      const netProfit = Number(trade.netPnl ?? trade.profit ?? 0);
+      if (!trade.close || !Number.isFinite(netProfit)) return;
 
       const closeDate = new Date(trade.close);
       const hour = closeDate.getHours();
@@ -132,7 +135,7 @@ export function PerformanceHeatmap({
         grid[key] = { profit: 0, count: 0 };
       }
 
-      grid[key].profit += Number(trade.profit);
+      grid[key].profit += netProfit;
       grid[key].count += 1;
     });
 
@@ -261,13 +264,21 @@ export function PerformanceHeatmap({
                           />
                           <DashboardChartTooltipRow
                             label="Net P&L"
-                            value={formatSignedCurrency(cell.profit, 2)}
+                            value={formatSignedCurrency(
+                              cell.profit,
+                              2,
+                              resolvedCurrencyCode
+                            )}
                             tone={totalTone}
                             dimmed={cell.count === 0}
                           />
                           <DashboardChartTooltipRow
                             label="Avg per trade"
-                            value={formatSignedCurrency(cell.avgProfit, 2)}
+                            value={formatSignedCurrency(
+                              cell.avgProfit,
+                              2,
+                              resolvedCurrencyCode
+                            )}
                             tone={averageTone}
                             dimmed={cell.count === 0}
                           />

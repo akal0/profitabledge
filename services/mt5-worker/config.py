@@ -157,7 +157,7 @@ def load_config() -> WorkerConfig:
             float(os.getenv("MT5_HTTP_RETRY_BACKOFF_SECONDS", "1.5")),
             0.0,
         ),
-        poll_seconds=max(int(os.getenv("MT5_POLL_SECONDS", "2")), 1),
+        poll_seconds=max(int(os.getenv("MT5_POLL_SECONDS", "30")), 1),
         heartbeat_seconds=max(int(os.getenv("MT5_HEARTBEAT_SECONDS", "5")), 1),
         claim_limit=max(int(os.getenv("MT5_CLAIM_LIMIT", "5")), 1),
         lookback_days=max(int(os.getenv("MT5_LOOKBACK_DAYS", "90")), 1),

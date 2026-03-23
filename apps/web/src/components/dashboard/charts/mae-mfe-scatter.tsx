@@ -19,6 +19,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 
 interface MAEMFEScatterProps {
@@ -28,6 +29,7 @@ interface MAEMFEScatterProps {
 export function MAEMFEScatterChart({ accountId }: MAEMFEScatterProps) {
   const renderMode = useChartRenderMode();
   const { trades, isLoading } = useChartTrades(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   if (isLoading) {
     return (
@@ -45,8 +47,9 @@ export function MAEMFEScatterChart({ accountId }: MAEMFEScatterProps) {
       trade.maePips !== undefined &&
       trade.mfePips !== null &&
       trade.mfePips !== undefined &&
-      trade.profit !== null &&
-      trade.profit !== undefined
+      (trade.netPnl !== null &&
+        trade.netPnl !== undefined) ||
+      (trade.profit !== null && trade.profit !== undefined)
     );
   });
   const sampleStep =
@@ -60,9 +63,9 @@ export function MAEMFEScatterChart({ accountId }: MAEMFEScatterProps) {
   const scatterData = sampledTrades.map((trade) => ({
     mae: Math.abs(trade.maePips ?? 0),
     mfe: Math.abs(trade.mfePips ?? 0),
-    profit: trade.profit ?? 0,
+    profit: trade.netPnl ?? trade.profit ?? 0,
     symbol: trade.symbol,
-    size: Math.max(1, Math.abs(trade.profit ?? 0)),
+    size: Math.max(1, Math.abs(trade.netPnl ?? trade.profit ?? 0)),
   }));
 
   if (scatterData.length === 0) {
@@ -129,7 +132,11 @@ export function MAEMFEScatterChart({ accountId }: MAEMFEScatterProps) {
                 />
                 <DashboardChartTooltipRow
                   label="P&L"
-                  value={formatSignedCurrency(point.profit, 2)}
+                  value={formatSignedCurrency(
+                    point.profit,
+                    2,
+                    resolvedCurrencyCode
+                  )}
                   tone={point.profit >= 0 ? "positive" : "negative"}
                 />
               </DashboardChartTooltipFrame>

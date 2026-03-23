@@ -32,6 +32,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartDateRange } from "./use-chart-date-range";
 
@@ -201,6 +202,7 @@ export function PerformingAssetsBarChart({
   const [activeDataset, setActiveDataset] = React.useState<
     "profit" | "compare" | undefined
   >(undefined);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const primarySeries = rows ?? series;
   const secondarySeries = comparisonRows ?? comparisonSeries;
@@ -310,7 +312,7 @@ export function PerformingAssetsBarChart({
   }, [dataForChart, comparisonDataForChart]);
 
   const currencyTick = (v: number) => {
-    return formatSignedCurrency(v, 0, currencyCode);
+    return formatSignedCurrency(v, 0, resolvedCurrencyCode);
   };
 
   // Compute most/least profitable assets (include comparison if enabled)
@@ -356,18 +358,32 @@ export function PerformingAssetsBarChart({
       <CardHeader className="p-0">
         <CardTitle className={cn("flex items-center -mt-3", titleClassName)}>
           {bestWorst.best && bestWorst.worst ? (
-            <p className="font-normal text-white/40 text-sm tracking-wide">
-              Most profitable asset:{" "}
-              <span className="text-teal-400 font-medium">
-                {bestWorst.best.symbol} (
-                {formatSignedCurrency(bestWorst.best.v, 0, currencyCode)})
-              </span>{" "}
-              · Least profitable asset:{" "}
-              <span className="text-rose-400 font-medium">
-                {bestWorst.worst.symbol} (
-                {formatSignedCurrency(bestWorst.worst.v, 0, currencyCode)})
+            <div className="flex flex-col gap-0.5 text-sm font-normal tracking-wide text-white/40">
+              <span className="block">
+                Most profitable asset:{" "}
+                <span className="font-medium text-teal-400">
+                  {bestWorst.best.symbol} (
+                  {formatSignedCurrency(
+                    bestWorst.best.v,
+                    0,
+                    resolvedCurrencyCode
+                  )}
+                  )
+                </span>
               </span>
-            </p>
+              <span className="block">
+                Least profitable asset:{" "}
+                <span className="font-medium text-rose-400">
+                  {bestWorst.worst.symbol} (
+                  {formatSignedCurrency(
+                    bestWorst.worst.v,
+                    0,
+                    resolvedCurrencyCode
+                  )}
+                  )
+                </span>
+              </span>
+            </div>
           ) : (
             <p className="font-normal text-white/40 text-sm tracking-wide">
               Asset performance
@@ -378,7 +394,7 @@ export function PerformingAssetsBarChart({
 
       <CardContent
         className={cn(
-          "mt-auto overflow-visible pl-2 pr-0 pt-0 pb-0",
+          "mt-auto overflow-visible pl-0 pr-0 pt-0 pb-0",
           contentClassName
         )}
       >
@@ -389,7 +405,7 @@ export function PerformingAssetsBarChart({
               data={mergedData}
               onMouseLeave={() => {}}
               margin={{
-                left: chartMargin?.left ?? 44,
+                left: chartMargin?.left ?? 0,
                 right: chartMargin?.right ?? 0,
                 top: chartMargin?.top ?? 12,
                 bottom: chartMargin?.bottom ?? -4,
@@ -399,7 +415,7 @@ export function PerformingAssetsBarChart({
                 domain={[niceScale.min, niceScale.max]}
                 tickLine={false}
                 axisLine={false}
-                width={64}
+                width={56}
                 tickMargin={6}
                 tickFormatter={currencyTick}
                 ticks={niceScale.ticks}
@@ -495,7 +511,7 @@ export function PerformingAssetsBarChart({
                               item.name ??
                               (key === "profit" ? "Selected" : "Previous")
                             }
-                            value={formatSignedCurrency(v, 0, currencyCode)}
+                            value={formatSignedCurrency(v, 0, resolvedCurrencyCode)}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
                             indicatorColor={

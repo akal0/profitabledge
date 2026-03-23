@@ -141,6 +141,8 @@ export const recentByDayProcedure = protectedProcedure
     const rows = await db
       .select({
         profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
+        commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
+        swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
         openRaw: sql<string | null>`${trade.open}`,
         openTime: trade.openTime,
         createdAt: trade.createdAt,
@@ -152,7 +154,10 @@ export const recentByDayProcedure = protectedProcedure
 
     const tradeDays = rows.map((row) => ({
       ymd: extractTradeYmd(row),
-      profit: Number(row.profit || 0),
+      profit:
+        Number(row.profit || 0) +
+        Number(row.commissions || 0) +
+        Number(row.swap || 0),
     }));
 
     if (tradeDays.length === 0) {
@@ -348,6 +353,8 @@ export const profitByAssetRangeProcedure = protectedProcedure
     const rows = await db
       .select({
         profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
+        commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
+        swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
         symbol: trade.symbol,
         openRaw: sql<string | null>`${trade.open}`,
         openTime: trade.openTime,
@@ -391,7 +398,10 @@ export const profitByAssetRangeProcedure = protectedProcedure
         totalProfit: 0,
         displaySymbol: groupDisplay.get(key) ?? row.symbol ?? "(UNKNOWN)",
       };
-      existing.totalProfit += Number(row.profit || 0);
+      existing.totalProfit +=
+        Number(row.profit || 0) +
+        Number(row.commissions || 0) +
+        Number(row.swap || 0);
       bySymbol.set(key, existing);
     }
 

@@ -41,6 +41,22 @@ function formatCurrency(cents?: number | null) {
   }).format((cents ?? 0) / 100);
 }
 
+function formatCommissionSplit(bps?: number | null) {
+  const percentage = (bps ?? 0) / 100;
+  return `${
+    Number.isInteger(percentage) ? percentage.toFixed(0) : percentage.toFixed(2)
+  }%`;
+}
+
+function formatCurrencyCode(value?: string | null) {
+  return (value || "USD").toUpperCase();
+}
+
+const SHARE_ASSET_INPUT_CLASS =
+  "h-10 border-none ring ring-white/10! shadow-none bg-transparent! text-xs hover:bg-sidebar-accent hover:brightness-120";
+const SHARE_ASSET_INLINE_BUTTON_CLASS =
+  "h-10 rounded-sm border-none ring ring-white/10 bg-transparent px-2 text-xs text-white hover:bg-sidebar-accent hover:brightness-120";
+
 function StatCard({
   label,
   value,
@@ -82,10 +98,7 @@ export default function AffiliateDashboardPage() {
   const trackedClicks =
     typeof dashboard?.stats?.linkClicks === "number"
       ? dashboard.stats.linkClicks
-      : channels.reduce(
-          (sum: number, ch: any) => sum + (ch.touches ?? 0),
-          0
-        );
+      : channels.reduce((sum: number, ch: any) => sum + (ch.touches ?? 0), 0);
 
   const statCards = [
     {
@@ -167,7 +180,7 @@ export default function AffiliateDashboardPage() {
                 ? copyToClipboard(profile.shareUrl, "Affiliate link copied")
                 : toast.error("Affiliate link is not ready yet")
             }
-            className="h-7 gap-1.5 rounded-sm border border-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent"
+            className="h-7 gap-1.5 rounded-sm border-none ring ring-white/10 bg-transparent px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
           >
             <Copy className="size-3" />
             Copy link
@@ -176,32 +189,28 @@ export default function AffiliateDashboardPage() {
       >
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div className="space-y-1.5">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
-              Affiliate link
-            </p>
+            <p className="text-[11px] text-white/30">Affiliate link</p>
             <Input
               readOnly
               value={profile?.shareUrl ?? ""}
-              className="h-8 border-white/10 bg-sidebar text-xs"
+              className={SHARE_ASSET_INPUT_CLASS}
             />
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
-              Affiliate code
-            </p>
-            <div className="flex gap-2">
+            <p className="text-[11px] text-white/30">Affiliate code</p>
+            <div className="flex items-stretch gap-2">
               <Input
                 readOnly
                 value={profile?.code ?? ""}
-                className="h-8 border-white/10 bg-sidebar text-xs"
+                className={SHARE_ASSET_INPUT_CLASS}
               />
               <Button
                 onClick={() =>
                   copyToClipboard(profile?.code ?? "", "Affiliate code copied")
                 }
                 disabled={!profile?.code}
-                className="h-8 rounded-sm border border-white/10 bg-sidebar px-2 text-xs text-white hover:bg-sidebar-accent"
+                className={SHARE_ASSET_INLINE_BUTTON_CLASS}
               >
                 <Copy className="size-3" />
               </Button>
@@ -210,20 +219,18 @@ export default function AffiliateDashboardPage() {
 
           {defaultOfferCode ? (
             <div className="space-y-1.5">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
-                Default offer code
-              </p>
-              <div className="flex gap-2">
+              <p className="text-[11px] text-white/30">Default offer code</p>
+              <div className="flex items-stretch gap-2">
                 <Input
                   readOnly
                   value={defaultOfferCode}
-                  className="h-8 border-white/10 bg-sidebar text-xs"
+                  className={SHARE_ASSET_INPUT_CLASS}
                 />
                 <Button
                   onClick={() =>
                     copyToClipboard(defaultOfferCode, "Offer code copied")
                   }
-                  className="h-8 rounded-sm border border-white/10 bg-sidebar px-2 text-xs text-white hover:bg-sidebar-accent"
+                  className={SHARE_ASSET_INLINE_BUTTON_CLASS}
                 >
                   <BadgePercent className="size-3" />
                 </Button>
@@ -233,65 +240,127 @@ export default function AffiliateDashboardPage() {
 
           {typeof profile?.commissionBps === "number" ? (
             <div className="space-y-1.5">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-white/30">
-                Payout split
-              </p>
+              <p className="text-[11px] text-white/30">Payout split</p>
               <div className="rounded-sm border border-white/5 bg-sidebar-accent p-3 text-xs text-white/55">
                 <span className="font-medium text-white">
-                  {(profile.commissionBps / 100).toFixed(2)}%
+                  {formatCommissionSplit(profile.commissionBps)}
                 </span>{" "}
                 of the commissionable order amount
               </div>
             </div>
           ) : null}
         </div>
-
       </GoalPanel>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <GoalPanel
-          icon={DollarSign}
-          title="Commission history"
-          description="Every paid order tied to your affiliate customers."
-          action={
-            <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
-              {dashboard.commissionEvents.length} events
-            </Badge>
-          }
-        >
-          <div className="space-y-2">
-            {dashboard.commissionEvents.length ? (
-              dashboard.commissionEvents.map((event: any) => (
-                <div
-                  key={event.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent p-3"
-                >
-                  <div>
-                    <p className="text-xs font-medium text-white">
-                      Order {event.polarOrderId}
-                    </p>
-                    <p className="text-[10px] text-white/35">
-                      {event.currency || "USD"} • {formatDate(event.occurredAt)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-white">
-                      {formatCurrency(event.commissionAmount)}
-                    </p>
-                    <p className="text-[10px] text-white/35">
-                      On {formatCurrency(event.orderAmount)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
-                No commission events yet.
-              </div>
-            )}
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex size-9 items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent">
+              <DollarSign className="size-4 text-emerald-300" />
+            </div>
+            <div>
+              <h2 className="text-sm font-medium text-white">
+                Commission history
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-white/45">
+                Every paid order tied to your affiliate customers.
+              </p>
+            </div>
           </div>
-        </GoalPanel>
-      </div>
+
+          <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+            {dashboard.commissionEvents.length} events
+          </Badge>
+        </div>
+
+        {dashboard.commissionEvents.length ? (
+          <div className="overflow-hidden rounded-lg border border-white/5 bg-sidebar">
+            <div className="overflow-x-auto">
+              <table className="min-w-[1220px] w-full text-left">
+                <thead className="bg-sidebar">
+                  <tr className="border-b border-white/5">
+                    {[
+                      "Username",
+                      "Email",
+                      "Order",
+                      "Date",
+                      "Payment plan",
+                      "Price",
+                      "Currency",
+                      "Commission",
+                      "Commission split",
+                    ].map((column) => (
+                      <th
+                        key={column}
+                        className="px-4 py-3 text-xs font-medium text-white/55"
+                      >
+                        {column}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-sidebar-accent/60">
+                  {dashboard.commissionEvents.map((event: any) => (
+                    <tr
+                      key={event.id}
+                      className="border-b border-white/5 last:border-b-0"
+                    >
+                      <td className="px-4 py-3 align-top">
+                        <p className="text-sm text-white">
+                          {event.referredUsername
+                            ? `@${event.referredUsername}`
+                            : "—"}
+                        </p>
+                        {event.referredName ? (
+                          <p className="mt-1 text-[11px] text-white/35">
+                            {event.referredName}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 align-top text-sm text-white/75">
+                        {event.referredEmail ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <p className="text-sm text-white">
+                          {event.orderReference || event.polarOrderId || "—"}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top text-sm text-white/75">
+                        {formatDate(event.occurredAt)}
+                      </td>
+                      <td className="px-4 py-3 align-top text-sm text-white/75">
+                        {event.paymentPlanLabel ?? "Unknown"}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <p className="text-sm text-white">
+                          {formatCurrency(event.orderAmount)}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top text-sm text-white/75">
+                        {formatCurrencyCode(event.currency)}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <p className="text-sm text-white">
+                          {formatCurrency(event.commissionAmount)}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <p className="text-sm text-white">
+                          {formatCommissionSplit(event.commissionBps)}
+                        </p>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
+            No commission events yet.
+          </div>
+        )}
+      </section>
 
       {channels.length > 0 && (
         <GoalPanel

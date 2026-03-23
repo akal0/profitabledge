@@ -1,4 +1,5 @@
 import type { NormalizedImportedTrade } from "../types";
+import { deriveTradeDurationSeconds } from "../utils";
 
 export type TradovatePairedTradeSeed = {
   symbol: string;
@@ -101,6 +102,7 @@ export function groupTradovatePairedTrades(input: {
       swap: null,
       commissions: null,
       pips: null,
+      tradeDurationSeconds: deriveTradeDurationSeconds(openTime, closeTime),
       comment: null,
       brokerMeta: {
         importReportType: input.reportType,

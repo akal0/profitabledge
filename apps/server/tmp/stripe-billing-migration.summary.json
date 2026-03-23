@@ -1,0 +1,7 @@
+{
+  "outPath": "/Users/abdul/Desktop/profitabledge/apps/server/tmp/stripe-billing-migration.csv",
+  "subscriptionCount": 7,
+  "skippedWithoutStripeCustomer": 0,
+  "skippedWithoutPrice": 0,
+  "adjustedStartDateCount": 0
+}

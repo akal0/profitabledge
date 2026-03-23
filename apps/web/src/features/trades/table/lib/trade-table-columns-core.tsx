@@ -137,38 +137,55 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
   {
     accessorKey: "sessionTag",
     header: () => withTradeTableHeaderTooltip("sessionTag", "Session"),
-    cell: ({ row }) => (
-      <SessionTagCell
-        tradeId={row.original.id}
-        sessionTag={row.original.sessionTag}
-        sessionTagColor={row.original.sessionTagColor}
-        isLive={row.original.isLive}
-      />
-    ),
+    cell: ({ row, table }) => {
+      const meta = getTradeTableMeta(table.options.meta);
+
+      return (
+        <SessionTagCell
+          tradeId={row.original.id}
+          accountId={row.original.accountId}
+          sessionTag={row.original.sessionTag}
+          sessionTagColor={row.original.sessionTagColor}
+          allSessionTags={meta.sessionTags}
+          isLive={row.original.isLive}
+        />
+      );
+    },
   },
   {
     accessorKey: "modelTag",
     header: () => withTradeTableHeaderTooltip("modelTag", "Model"),
-    cell: ({ row }) => (
-      <ModelTagCell
-        tradeId={row.original.id}
-        modelTag={row.original.modelTag}
-        modelTagColor={row.original.modelTagColor}
-        isLive={row.original.isLive}
-      />
-    ),
+    cell: ({ row, table }) => {
+      const meta = getTradeTableMeta(table.options.meta);
+
+      return (
+        <ModelTagCell
+          tradeId={row.original.id}
+          accountId={row.original.accountId}
+          modelTag={row.original.modelTag}
+          modelTagColor={row.original.modelTagColor}
+          allModelTags={meta.modelTags}
+          isLive={row.original.isLive}
+        />
+      );
+    },
   },
   {
     accessorKey: "customTags",
     header: () => withTradeTableHeaderTooltip("customTags", "Trade tags"),
-    cell: ({ row }) => (
-      <TradeTagsCell
-        tradeId={row.original.id}
-        accountId={row.original.accountId}
-        customTags={row.original.customTags}
-        isLive={row.original.isLive}
-      />
-    ),
+    cell: ({ row, table }) => {
+      const meta = getTradeTableMeta(table.options.meta);
+
+      return (
+        <TradeTagsCell
+          tradeId={row.original.id}
+          accountId={row.original.accountId}
+          customTags={row.original.customTags}
+          existingTags={meta.customTags}
+          isLive={row.original.isLive}
+        />
+      );
+    },
     enableSorting: false,
     size: 180,
     minSize: 140,

@@ -1,5 +1,6 @@
 export function getConnectionBadgeClassName(kind?: string | null) {
   switch (kind) {
+    case "broker_synced":
     case "api_synced":
       return "ring-cyan-500/30 bg-cyan-500/15 text-cyan-300";
     case "mt5_synced":
@@ -10,6 +11,8 @@ export function getConnectionBadgeClassName(kind?: string | null) {
       return "ring-teal-500/30 bg-teal-500/15 text-teal-300";
     case "csv_imported":
       return "ring-amber-500/30 bg-amber-500/15 text-amber-300";
+    case "demo":
+      return "ring-violet-500/30 bg-violet-500/15 text-violet-300";
     default:
       return "ring-white/10 bg-white/5 text-white/60";
   }
@@ -39,7 +42,9 @@ export function getAffiliateBadgeClassName(effectVariant?: string | null) {
   }
 }
 
-export function getAffiliateBannerOverlayClassName(effectVariant?: string | null) {
+export function getAffiliateBannerOverlayClassName(
+  effectVariant?: string | null
+) {
   switch (effectVariant) {
     case "emerald_aurora":
       return "bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.42),transparent_38%),radial-gradient(circle_at_top_right,rgba(45,212,191,0.22),transparent_32%)]";
@@ -98,7 +103,9 @@ const CUSTOM_RING_ANIMATIONS: Record<string, string> = {
   heartbeat: "animate-[pfp-hearts_2s_ease-in-out_infinite]",
 };
 
-export function getCustomPfpAnimationClassName(customRingEffect?: string | null) {
+export function getCustomPfpAnimationClassName(
+  customRingEffect?: string | null
+) {
   return CUSTOM_RING_ANIMATIONS[customRingEffect ?? "none"] ?? "";
 }
 
@@ -114,7 +121,8 @@ export function getAffiliatePfpEffectStyle(
   pfpEffect?: string | null,
   customRing?: { from?: string; to?: string } | null
 ): React.CSSProperties | undefined {
-  if (pfpEffect !== "custom" || !customRing?.from || !customRing?.to) return undefined;
+  if (pfpEffect !== "custom" || !customRing?.from || !customRing?.to)
+    return undefined;
   const from = customRing.from;
   const r1 = parseInt(from.slice(1, 3), 16);
   const g1 = parseInt(from.slice(3, 5), 16);
@@ -197,28 +205,32 @@ export function getAffiliateNameColorStyle(
       };
     case "ice":
       return {
-        backgroundImage: "linear-gradient(135deg, #e0f2fe, #7dd3fc, #38bdf8, #0ea5e9)",
+        backgroundImage:
+          "linear-gradient(135deg, #e0f2fe, #7dd3fc, #38bdf8, #0ea5e9)",
         WebkitBackgroundClip: "text",
         WebkitTextFillColor: "transparent",
         backgroundClip: "text",
       };
     case "midnight":
       return {
-        backgroundImage: "linear-gradient(135deg, #818cf8, #6366f1, #4f46e5, #312e81)",
+        backgroundImage:
+          "linear-gradient(135deg, #818cf8, #6366f1, #4f46e5, #312e81)",
         WebkitBackgroundClip: "text",
         WebkitTextFillColor: "transparent",
         backgroundClip: "text",
       };
     case "fire":
       return {
-        backgroundImage: "linear-gradient(135deg, #fbbf24, #f97316, #ef4444, #dc2626)",
+        backgroundImage:
+          "linear-gradient(135deg, #fbbf24, #f97316, #ef4444, #dc2626)",
         WebkitBackgroundClip: "text",
         WebkitTextFillColor: "transparent",
         backgroundClip: "text",
       };
     case "neon":
       return {
-        backgroundImage: "linear-gradient(135deg, #4ade80, #22d3ee, #a78bfa, #f472b6)",
+        backgroundImage:
+          "linear-gradient(135deg, #4ade80, #22d3ee, #a78bfa, #f472b6)",
         WebkitBackgroundClip: "text",
         WebkitTextFillColor: "transparent",
         backgroundClip: "text",
@@ -270,7 +282,10 @@ export function getAffiliateNameEffectClassName(nameEffect?: string | null) {
   }
 }
 
-function getShimmerColors(nameColor?: string | null, customGradient?: { from?: string; to?: string } | null) {
+function getShimmerColors(
+  nameColor?: string | null,
+  customGradient?: { from?: string; to?: string } | null
+) {
   if (nameColor === "custom" && customGradient?.from && customGradient?.to) {
     return { base: customGradient.from, highlight: customGradient.to };
   }
@@ -307,7 +322,10 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function getGlowColor(nameColor: string | null | undefined, alpha: number): string {
+function getGlowColor(
+  nameColor: string | null | undefined,
+  alpha: number
+): string {
   const colors: Record<string, [number, number, number]> = {
     gold: [251, 191, 36],
     emerald: [16, 185, 129],
@@ -331,19 +349,29 @@ export function getAffiliateNameEffectStyle(
   customGradient?: { from?: string; to?: string } | null
 ): React.CSSProperties | undefined {
   if (nameEffect === "glow") {
-    const glowColor = nameColor === "custom" && customGradient?.from
-      ? hexToRgba(customGradient.from, 0.6)
-      : getGlowColor(nameColor, 0.6);
+    const glowColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.6)
+        : getGlowColor(nameColor, 0.6);
     return {
       textShadow: `0 0 12px ${glowColor}, 0 0 24px ${glowColor}`,
     };
   }
   if (nameEffect === "sparkle") {
-    const glowColor = nameColor === "custom" && customGradient?.from
-      ? hexToRgba(customGradient.from, 0.5)
-      : getGlowColor(nameColor, 0.5);
+    const glowColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.5)
+        : getGlowColor(nameColor, 0.5);
+    const sparkleColor =
+      nameColor === "custom" && customGradient?.to
+        ? hexToRgba(customGradient.to, 0.9)
+        : nameColor
+        ? getGlowColor(nameColor, 0.9)
+        : "rgba(255,255,255,0.9)";
     return {
       textShadow: `0 0 8px ${glowColor}, 0 0 16px ${glowColor}`,
+      ["--name-sparkle-color" as string]: sparkleColor,
+      ["--name-sparkle-glow" as string]: glowColor,
     };
   }
   if (nameEffect === "shimmer") {
@@ -364,7 +392,8 @@ export function getAffiliateNameEffectStyle(
       } as React.CSSProperties;
     }
     return {
-      backgroundImage: "linear-gradient(90deg, #818cf8, #f472b6, #fbbf24, #818cf8)",
+      backgroundImage:
+        "linear-gradient(90deg, #818cf8, #f472b6, #fbbf24, #818cf8)",
       backgroundSize: "300% 100%",
       WebkitBackgroundClip: "text",
       WebkitTextFillColor: "transparent",
@@ -372,9 +401,10 @@ export function getAffiliateNameEffectStyle(
     } as React.CSSProperties;
   }
   if (nameEffect === "breathe") {
-    const glowColor = nameColor === "custom" && customGradient?.from
-      ? hexToRgba(customGradient.from, 0.5)
-      : getGlowColor(nameColor, 0.5);
+    const glowColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.5)
+        : getGlowColor(nameColor, 0.5);
     return {
       textShadow: `0 0 10px ${glowColor}, 0 0 20px ${glowColor}`,
     };
@@ -386,16 +416,59 @@ export function getAffiliateNameEffectStyle(
 
 export const PFP_EFFECT_PRESETS = [
   { value: "none", label: "None", preview: "bg-white/5" },
-  { value: "gold_glow", label: "Gold Glow", preview: "bg-amber-500/20 ring-1 ring-amber-400/40" },
-  { value: "emerald_pulse", label: "Emerald Pulse", preview: "bg-emerald-500/20 ring-1 ring-emerald-400/40" },
-  { value: "rainbow_ring", label: "Rainbow Ring", preview: "bg-[conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)]" },
-  { value: "frost_aura", label: "Frost Aura", preview: "bg-sky-500/20 ring-1 ring-sky-300/40" },
-  { value: "shadow_pulse", label: "Shadow Pulse", preview: "bg-purple-500/20 ring-1 ring-purple-400/40" },
-  { value: "electric_spark", label: "Electric Spark", preview: "bg-cyan-500/20 ring-1 ring-cyan-400/40" },
-  { value: "sakura_ring", label: "Sakura Ring", preview: "bg-[conic-gradient(from_0deg,#f9a8d4,#f472b6,#fb7185,#fda4af,#f9a8d4)]" },
-  { value: "neon_pulse", label: "Neon Pulse", preview: "bg-green-500/20 ring-1 ring-green-400/50" },
-  { value: "hearts", label: "Hearts", preview: "bg-rose-500/20 ring-1 ring-rose-400/40" },
-  { value: "custom", label: "Custom", preview: "bg-[conic-gradient(from_0deg,#ef4444,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)]" },
+  {
+    value: "gold_glow",
+    label: "Gold Glow",
+    preview: "bg-amber-500/20 ring-1 ring-amber-400/40",
+  },
+  {
+    value: "emerald_pulse",
+    label: "Emerald Pulse",
+    preview: "bg-emerald-500/20 ring-1 ring-emerald-400/40",
+  },
+  {
+    value: "rainbow_ring",
+    label: "Rainbow Ring",
+    preview:
+      "bg-[conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)]",
+  },
+  {
+    value: "frost_aura",
+    label: "Frost Aura",
+    preview: "bg-sky-500/20 ring-1 ring-sky-300/40",
+  },
+  {
+    value: "shadow_pulse",
+    label: "Shadow Pulse",
+    preview: "bg-purple-500/20 ring-1 ring-purple-400/40",
+  },
+  {
+    value: "electric_spark",
+    label: "Electric Spark",
+    preview: "bg-cyan-500/20 ring-1 ring-cyan-400/40",
+  },
+  {
+    value: "sakura_ring",
+    label: "Sakura Ring",
+    preview:
+      "bg-[conic-gradient(from_0deg,#f9a8d4,#f472b6,#fb7185,#fda4af,#f9a8d4)]",
+  },
+  {
+    value: "neon_pulse",
+    label: "Neon Pulse",
+    preview: "bg-green-500/20 ring-1 ring-green-400/50",
+  },
+  {
+    value: "hearts",
+    label: "Hearts",
+    preview: "bg-rose-500/20 ring-1 ring-rose-400/40",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    preview:
+      "bg-[conic-gradient(from_0deg,#ef4444,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)]",
+  },
 ] as const;
 
 export const NAME_EFFECT_PRESETS = [
@@ -411,24 +484,85 @@ export const NAME_FONT_PRESETS = [
   { value: "default", label: "Default", className: "" },
   { value: "serif", label: "Serif", className: "font-serif" },
   { value: "mono", label: "Mono", className: "font-mono" },
-  { value: "display", label: "Display", className: "font-black tracking-tight uppercase" },
+  {
+    value: "display",
+    label: "Display",
+    className: "font-black tracking-tight uppercase",
+  },
   { value: "handwriting", label: "Script", className: "italic" },
-  { value: "gothic", label: "Gothic", className: "font-serif font-black tracking-widest uppercase" },
-  { value: "thin", label: "Thin", className: "font-extralight tracking-[0.2em]" },
-  { value: "rounded", label: "Rounded", className: "font-medium tracking-wide" },
+  {
+    value: "gothic",
+    label: "Gothic",
+    className: "font-serif font-black tracking-widest uppercase",
+  },
+  {
+    value: "thin",
+    label: "Thin",
+    className: "font-extralight tracking-[0.2em]",
+  },
+  {
+    value: "rounded",
+    label: "Rounded",
+    className: "font-medium tracking-wide",
+  },
 ] as const;
 
 export const NAME_COLOR_PRESETS = [
   { value: "default", label: "Default", swatch: "bg-white" },
-  { value: "gold", label: "Gold", swatch: "bg-gradient-to-r from-amber-400 to-amber-600" },
-  { value: "emerald", label: "Emerald", swatch: "bg-gradient-to-r from-emerald-400 to-emerald-600" },
-  { value: "ocean", label: "Ocean", swatch: "bg-gradient-to-r from-cyan-400 to-indigo-500" },
-  { value: "sunset", label: "Sunset", swatch: "bg-gradient-to-r from-orange-400 to-pink-500" },
-  { value: "rose", label: "Rose", swatch: "bg-gradient-to-r from-pink-400 to-purple-400" },
-  { value: "aurora", label: "Aurora", swatch: "bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-400" },
-  { value: "ice", label: "Ice", swatch: "bg-gradient-to-r from-sky-200 via-sky-400 to-sky-600" },
-  { value: "midnight", label: "Midnight", swatch: "bg-gradient-to-r from-indigo-400 to-indigo-800" },
-  { value: "fire", label: "Fire", swatch: "bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600" },
-  { value: "neon", label: "Neon", swatch: "bg-gradient-to-r from-green-400 via-cyan-400 to-pink-400" },
-  { value: "custom", label: "Custom", swatch: "bg-[conic-gradient(from_0deg,#ef4444,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)]" },
+  {
+    value: "gold",
+    label: "Gold",
+    swatch: "bg-gradient-to-r from-amber-400 to-amber-600",
+  },
+  {
+    value: "emerald",
+    label: "Emerald",
+    swatch: "bg-gradient-to-r from-emerald-400 to-emerald-600",
+  },
+  {
+    value: "ocean",
+    label: "Ocean",
+    swatch: "bg-gradient-to-r from-cyan-400 to-indigo-500",
+  },
+  {
+    value: "sunset",
+    label: "Sunset",
+    swatch: "bg-gradient-to-r from-orange-400 to-pink-500",
+  },
+  {
+    value: "rose",
+    label: "Rose",
+    swatch: "bg-gradient-to-r from-pink-400 to-purple-400",
+  },
+  {
+    value: "aurora",
+    label: "Aurora",
+    swatch: "bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-400",
+  },
+  {
+    value: "ice",
+    label: "Ice",
+    swatch: "bg-gradient-to-r from-sky-200 via-sky-400 to-sky-600",
+  },
+  {
+    value: "midnight",
+    label: "Midnight",
+    swatch: "bg-gradient-to-r from-indigo-400 to-indigo-800",
+  },
+  {
+    value: "fire",
+    label: "Fire",
+    swatch: "bg-gradient-to-r from-yellow-400 via-orange-500 to-red-600",
+  },
+  {
+    value: "neon",
+    label: "Neon",
+    swatch: "bg-gradient-to-r from-green-400 via-cyan-400 to-pink-400",
+  },
+  {
+    value: "custom",
+    label: "Custom",
+    swatch:
+      "bg-[conic-gradient(from_0deg,#ef4444,#eab308,#22c55e,#3b82f6,#a855f7,#ef4444)]",
+  },
 ] as const;

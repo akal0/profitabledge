@@ -3,7 +3,7 @@ import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "../../db";
-import { trade, tradingAccount } from "../../db/schema/trading";
+import { openTrade, trade, tradingAccount } from "../../db/schema/trading";
 import { ALL_ACCOUNTS_ID } from "../../lib/account-scope";
 import { enhancedCache } from "../../lib/enhanced-cache";
 
@@ -168,6 +168,36 @@ export async function ensureTradeOwnership(userId: string, tradeId: string) {
   }
 
   return tradeRows[0];
+}
+
+export async function ensureOpenTradeOwnership(
+  userId: string,
+  openTradeId: string
+) {
+  const openTradeRows = await db
+    .select({
+      id: openTrade.id,
+      accountId: openTrade.accountId,
+    })
+    .from(openTrade)
+    .where(eq(openTrade.id, openTradeId))
+    .limit(1);
+
+  if (!openTradeRows[0]) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Open trade not found" });
+  }
+
+  const accountRows = await db
+    .select({ userId: tradingAccount.userId })
+    .from(tradingAccount)
+    .where(eq(tradingAccount.id, openTradeRows[0].accountId))
+    .limit(1);
+
+  if (!accountRows[0] || accountRows[0].userId !== userId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
+  }
+
+  return openTradeRows[0];
 }
 
 export async function ensureTradeBatchOwnership(

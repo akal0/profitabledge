@@ -20,6 +20,7 @@ interface AuthSplitShellProps {
   heroTitle?: string;
   heroDescription?: string;
   affiliate?: AffiliateInfo | null;
+  hideAffiliateDescription?: boolean;
 }
 
 const DEFAULT_HERO_EYEBROW = "Trading review, rebuilt";
@@ -34,6 +35,7 @@ export function AuthSplitShell({
   heroTitle = DEFAULT_HERO_TITLE,
   heroDescription = DEFAULT_HERO_DESCRIPTION,
   affiliate,
+  hideAffiliateDescription = false,
 }: AuthSplitShellProps) {
   return (
     <div className="relative min-h-screen w-screen max-w-none overflow-hidden bg-[#050505] text-white">
@@ -90,11 +92,13 @@ export function AuthSplitShell({
                     </span>
                   </div>
                 </div>
-                <p className="max-w-md text-center text-sm leading-5.5 text-white/50">
-                  You&apos;ve been invited to the sharpest trading journal on
-                  the market. <br />
-                  Are you ready to find your own profitable edge?
-                </p>
+                {hideAffiliateDescription ? null : (
+                  <p className="max-w-md text-center text-sm leading-5.5 text-white/50">
+                    You&apos;ve been invited to the sharpest trading journal on
+                    the market. <br />
+                    Are you ready to find your own profitable edge?
+                  </p>
+                )}
               </div>
             </div>
           ) : (

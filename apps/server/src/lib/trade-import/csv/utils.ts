@@ -209,3 +209,22 @@ export function coalesce<T>(...values: Array<T | null | undefined>): T | null {
   }
   return null;
 }
+
+export function deriveTradeDurationSeconds(
+  openTime: Date | null | undefined,
+  closeTime: Date | null | undefined
+): string | null {
+  if (!openTime || !closeTime) {
+    return null;
+  }
+
+  const durationSeconds = Math.floor(
+    (closeTime.getTime() - openTime.getTime()) / 1000
+  );
+
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 0) {
+    return null;
+  }
+
+  return durationSeconds.toString();
+}

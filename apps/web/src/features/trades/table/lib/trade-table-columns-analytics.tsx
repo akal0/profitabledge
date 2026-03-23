@@ -525,8 +525,16 @@ export const tradeTableAnalyticsColumns: ColumnDef<TradeRow>[] = [
   {
     accessorKey: "drawdown",
     header: () => renderTradeTableInfoHeader("drawdown", "Max drawdown"),
-    cell: ({ row }) => (
-      <DrawdownCell trade={row.original} rowIndex={row.index} />
-    ),
+    cell: ({ row, table }) => {
+      const meta = (table.options.meta as TradeTableMeta | undefined) ?? {};
+
+      return (
+        <DrawdownCell
+          rowIndex={row.index}
+          drawdown={meta.drawdownByTradeId?.[row.original.id]}
+          isLoading={meta.drawdownLoading}
+        />
+      );
+    },
   },
 ];

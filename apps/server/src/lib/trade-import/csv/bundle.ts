@@ -76,7 +76,9 @@ const TRADE_SOURCE_PRIORITY: Record<string, number> = {
   "tradovate-position-history": 1,
 };
 
-function toParsedImportTrade(trade: NormalizedImportedTrade): ParsedImportTrade {
+function toParsedImportTrade(
+  trade: NormalizedImportedTrade
+): ParsedImportTrade {
   return {
     ticket: trade.ticket,
     open: trade.openTime?.toISOString() ?? null,
@@ -92,7 +94,7 @@ function toParsedImportTrade(trade: NormalizedImportedTrade): ParsedImportTrade 
     commissions: trade.commissions,
     profit: trade.profit,
     pips: trade.pips,
-    tradeDurationSeconds: null,
+    tradeDurationSeconds: trade.tradeDurationSeconds ?? null,
     openTime: trade.openTime,
     closeTime: trade.closeTime,
     sessionTag: null,
@@ -210,7 +212,9 @@ function extractSupplementalAccountHints(
         "Net Liquidating Value",
       ])
     )
-    .filter((value): value is number => value != null && Number.isFinite(value));
+    .filter(
+      (value): value is number => value != null && Number.isFinite(value)
+    );
 
   const liveEquityCandidates = records
     .map((record) =>
@@ -221,7 +225,9 @@ function extractSupplementalAccountHints(
         "NetLiq",
       ])
     )
-    .filter((value): value is number => value != null && Number.isFinite(value));
+    .filter(
+      (value): value is number => value != null && Number.isFinite(value)
+    );
 
   return {
     brokerType: null,
@@ -243,34 +249,35 @@ function classifyTradovateSupplementalFile(
   const headers = document.headers;
   const normalizedName = normalizeKey(file.fileName ?? "");
 
-  const category: SupplementalCategory | null =
-    normalizedName.includes("account balance")
-      ? "account-balance-history"
-      : normalizedName.includes("cash history") ||
-          normalizedName.includes("client statement")
-        ? "cash-history"
-      : normalizedName.includes("fills")
-          ? "fills"
-          : normalizedName.includes("orders") ||
-              normalizedName.includes("order details")
-            ? "orders"
-            : looksLikeHeader(headers, ["Order ID", "Status"], "all")
-              ? "orders"
-              : looksLikeHeader(headers, ["Fill ID", "Order ID"], "all")
-                ? "fills"
-                : looksLikeHeader(
-                      headers,
-                      ["Net Liquidating Value", "Balance", "Equity"],
-                      "any"
-                    )
-                  ? "account-balance-history"
-                  : looksLikeHeader(
-                        headers,
-                        ["Cash Balance", "Net Cash", "Transaction Type", "Amount"],
-                        "any"
-                      )
-                    ? "cash-history"
-                    : null;
+  const category: SupplementalCategory | null = normalizedName.includes(
+    "account balance"
+  )
+    ? "account-balance-history"
+    : normalizedName.includes("cash history") ||
+      normalizedName.includes("client statement")
+    ? "cash-history"
+    : normalizedName.includes("fills")
+    ? "fills"
+    : normalizedName.includes("orders") ||
+      normalizedName.includes("order details")
+    ? "orders"
+    : looksLikeHeader(headers, ["Order ID", "Status"], "all")
+    ? "orders"
+    : looksLikeHeader(headers, ["Fill ID", "Order ID"], "all")
+    ? "fills"
+    : looksLikeHeader(
+        headers,
+        ["Net Liquidating Value", "Balance", "Equity"],
+        "any"
+      )
+    ? "account-balance-history"
+    : looksLikeHeader(
+        headers,
+        ["Cash Balance", "Net Cash", "Transaction Type", "Amount"],
+        "any"
+      )
+    ? "cash-history"
+    : null;
 
   if (!category) {
     return null;
@@ -338,16 +345,17 @@ export function parseBrokerCsvImportBundle(input: {
       if (input.broker === "tradovate") {
         const supplemental = classifyTradovateSupplementalFile(file);
         if (supplemental) {
-          accountHints = mergeAccountHints(accountHints, supplemental.accountHints);
+          accountHints = mergeAccountHints(
+            accountHints,
+            supplemental.accountHints
+          );
           continue;
         }
       }
 
       const fileLabel = normalizeFileName(file.fileName);
       const message =
-        error instanceof TRPCError
-          ? error.message
-          : "Unsupported file format.";
+        error instanceof TRPCError ? error.message : "Unsupported file format.";
 
       throw new TRPCError({
         code: "BAD_REQUEST",
@@ -370,7 +378,8 @@ export function parseBrokerCsvImportBundle(input: {
 
   tradeSources.sort(
     (left, right) =>
-      getTradeSourcePriority(left.parserId) - getTradeSourcePriority(right.parserId)
+      getTradeSourcePriority(left.parserId) -
+      getTradeSourcePriority(right.parserId)
   );
 
   const dedupedTrades = new Map<string, ParsedImportTrade>();
@@ -392,13 +401,17 @@ export function parseBrokerCsvImportBundle(input: {
     parserId: descriptor.parserId,
     parserLabel: descriptor.parserLabel,
     reportType: descriptor.reportType,
-    files: input.files.map((file) => normalizeFileName(file.fileName) ?? "upload.csv"),
+    files: input.files.map(
+      (file) => normalizeFileName(file.fileName) ?? "upload.csv"
+    ),
     warnings: uniqueWarnings(warnings),
     accountHints: accountHints.brokerType
       ? accountHints
       : {
           ...accountHints,
-          brokerType: input.broker.toLowerCase().includes("mt") ? "mt5" : "other",
+          brokerType: input.broker.toLowerCase().includes("mt")
+            ? "mt5"
+            : "other",
         },
     trades: [...dedupedTrades.values()],
     existingTrades: input.existingTrades ?? [],

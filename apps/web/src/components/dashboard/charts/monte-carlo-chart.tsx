@@ -22,6 +22,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartTrades } from "./use-chart-trades";
 
@@ -204,6 +205,7 @@ export function MonteCarloChart({
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const {
     percentiles,
@@ -322,7 +324,7 @@ export function MonteCarloChart({
               finalP50 >= 0 ? "text-teal-400" : "text-rose-400"
             )}
           >
-            {formatSignedCurrency(finalP50, 0)}
+            {formatSignedCurrency(finalP50, 0, resolvedCurrencyCode)}
           </span>
           .
         </span>
@@ -387,7 +389,9 @@ export function MonteCarloChart({
               axisLine={false}
               tickMargin={6}
               width={20}
-              tickFormatter={(value) => formatSignedCurrency(value, 0)}
+              tickFormatter={(value) =>
+                formatSignedCurrency(value, 0, resolvedCurrencyCode)
+              }
             />
             <ChartTooltip
               cursor={false}
@@ -398,17 +402,29 @@ export function MonteCarloChart({
                   <DashboardChartTooltipFrame title={`Trade ${step}`}>
                     <DashboardChartTooltipRow
                       label="95th percentile"
-                      value={formatSignedCurrency(Number(payload[0].payload.p95), 0)}
+                      value={formatSignedCurrency(
+                        Number(payload[0].payload.p95),
+                        0,
+                        resolvedCurrencyCode
+                      )}
                       tone="positive"
                     />
                     <DashboardChartTooltipRow
                       label="75th percentile"
-                      value={formatSignedCurrency(Number(payload[0].payload.p75), 0)}
+                      value={formatSignedCurrency(
+                        Number(payload[0].payload.p75),
+                        0,
+                        resolvedCurrencyCode
+                      )}
                       tone="positive"
                     />
                     <DashboardChartTooltipRow
                       label="Median path"
-                      value={formatSignedCurrency(Number(payload[0].payload.p50), 0)}
+                      value={formatSignedCurrency(
+                        Number(payload[0].payload.p50),
+                        0,
+                        resolvedCurrencyCode
+                      )}
                       tone={
                         Number(payload[0].payload.p50) >= 0
                           ? "positive"
@@ -417,12 +433,20 @@ export function MonteCarloChart({
                     />
                     <DashboardChartTooltipRow
                       label="25th percentile"
-                      value={formatSignedCurrency(Number(payload[0].payload.p25), 0)}
+                      value={formatSignedCurrency(
+                        Number(payload[0].payload.p25),
+                        0,
+                        resolvedCurrencyCode
+                      )}
                       tone="negative"
                     />
                     <DashboardChartTooltipRow
                       label="5th percentile"
-                      value={formatSignedCurrency(Number(payload[0].payload.p5), 0)}
+                      value={formatSignedCurrency(
+                        Number(payload[0].payload.p5),
+                        0,
+                        resolvedCurrencyCode
+                      )}
                       tone="negative"
                     />
                   </DashboardChartTooltipFrame>

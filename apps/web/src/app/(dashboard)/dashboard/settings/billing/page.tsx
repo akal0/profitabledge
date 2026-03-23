@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { ExternalLink, RefreshCw, Shield, Sparkles } from "lucide-react";
 import Image from "next/image";
@@ -22,6 +23,30 @@ import { useAccountStore } from "@/stores/account";
 import CircleCheck from "@/public/icons/circle-check.svg";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
+type LegacyMigrationState = {
+  requiresCheckout: boolean;
+  targetPlanKey: BillingPlanKey;
+  accessEndsAt?: string | Date | null;
+  hasTemporaryAccess: boolean;
+};
+
+type BillingPageState = {
+  activePlanKey: BillingPlanKey;
+  customer?: {
+    stripeCustomerId?: string | null;
+  } | null;
+  subscription?: {
+    provider?: string | null;
+    status?: string | null;
+    currentPeriodEnd?: string | Date | null;
+  } | null;
+  override?: unknown;
+  credits?: {
+    remainingCredits: number;
+    allowanceCredits: number;
+  } | null;
+  legacyMigration?: LegacyMigrationState | null;
+};
 
 const PLAN_CARD_META: Record<
   BillingPlanKey,
@@ -177,6 +202,61 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="text-sm font-medium tracking-[-0.04em] text-white/35">
       {children}
     </p>
+  );
+}
+
+function LegacyMigrationBanner({
+  targetPlanTitle,
+  accessEndsAt,
+  hasTemporaryAccess,
+  onContinue,
+  isPending,
+}: {
+  targetPlanTitle: string;
+  accessEndsAt?: string | Date | null;
+  hasTemporaryAccess: boolean;
+  onContinue: () => void;
+  isPending: boolean;
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-[24px] ring ring-emerald-500/18 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.22),transparent_32%),linear-gradient(135deg,rgba(10,18,14,0.98),rgba(7,12,10,0.96))] px-5 py-4 shadow-[0_18px_42px_rgba(0,0,0,0.24)]">
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.05),transparent_32%,rgba(255,255,255,0.02)_68%,transparent)]" />
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="max-w-2xl space-y-2">
+          <Badge className="ring ring-emerald-500/20 bg-emerald-500/10 text-[10px] text-emerald-200">
+            Stripe migration required
+          </Badge>
+          <div className="space-y-1">
+            <p className="text-base font-semibold tracking-[-0.04em] text-white">
+              Continue in /settings/billing to move this plan to Stripe.
+            </p>
+            <p className="text-sm font-medium tracking-[-0.04em] text-white/56">
+              Your access is temporarily preserved while you finish the move.
+              {hasTemporaryAccess && accessEndsAt ? (
+                <span className="text-white/72">
+                  {" "}
+                  Temporary access ends {formatDate(accessEndsAt)}.
+                </span>
+              ) : null}
+              <span className="text-white/72">
+                {" "}
+                Your current plan is {targetPlanTitle}.
+              </span>
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={onContinue}
+          disabled={isPending}
+          className="h-9 cursor-pointer gap-2 rounded-sm ring ring-emerald-400/35 bg-emerald-400/24 px-4 text-sm font-medium text-white transition-all duration-250 active:scale-95 hover:bg-emerald-400/34 hover:brightness-120"
+        >
+          <Sparkles className="size-3.5" />
+          {isPending ? "Redirecting..." : "Continue on Stripe"}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -343,6 +423,8 @@ function WalletHero({
 }
 
 export default function BillingSettingsPage() {
+  const searchParams = useSearchParams();
+  const hasTriggeredStripeReturnSyncRef = useRef(false);
   const [hoveredCard, setHoveredCard] = useState<BillingPlanKey | null>(null);
   const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
 
@@ -415,8 +497,8 @@ export default function BillingSettingsPage() {
     return { line, area };
   }, [walletTradesQuery.data]);
 
-  const syncFromPolar = useMutation({
-    ...trpcOptions.billing.syncFromPolar.mutationOptions(),
+  const syncBillingState = useMutation({
+    ...trpcOptions.billing.syncBillingState.mutationOptions(),
     onSuccess: () => {
       void billingStateQuery.refetch();
       toast.success("Billing synced");
@@ -433,18 +515,26 @@ export default function BillingSettingsPage() {
   );
   const [affiliateOfferCode, setAffiliateOfferCode] = useState("");
   const plans = billingConfigQuery.data?.plans ?? [];
-  const activePlanKey =
-    (billingStateQuery.data?.billing.activePlanKey as
-      | BillingPlanKey
-      | undefined) ?? "student";
+  const billingData = billingStateQuery.data?.billing as
+    | BillingPageState
+    | undefined;
+  const legacyMigration = billingData?.legacyMigration ?? null;
+  const activePlanKey = billingData?.activePlanKey ?? "student";
   const activePlan =
     plans.find((p) => p.key === activePlanKey) ?? plans[0] ?? null;
   const access = billingStateQuery.data?.access;
-  const subscription = billingStateQuery.data?.billing.subscription;
-  const creditState = billingStateQuery.data?.billing.credits;
+  const subscription = billingData?.subscription;
+  const creditState = billingData?.credits;
   const canManageSubscription = Boolean(
-    billingStateQuery.data?.billing.customer || subscription
+    billingData?.customer?.stripeCustomerId &&
+      billingData?.subscription?.provider === "stripe"
   );
+  const returnedFromStripeCheckout = searchParams?.get("checkout") === "success";
+  const migrationCheckoutPlan =
+    legacyMigration?.requiresCheckout
+      ? plans.find((plan) => plan.key === legacyMigration.targetPlanKey) ??
+        null
+      : null;
 
   const handleCheckout = async (
     planKey: Extract<BillingPlanKey, "professional" | "institutional">
@@ -472,6 +562,15 @@ export default function BillingSettingsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!returnedFromStripeCheckout || hasTriggeredStripeReturnSyncRef.current) {
+      return;
+    }
+
+    hasTriggeredStripeReturnSyncRef.current = true;
+    syncBillingState.mutate();
+  }, [returnedFromStripeCheckout, syncBillingState]);
+
   if (billingStateQuery.isLoading || billingConfigQuery.isLoading) {
     return <RouteLoadingFallback route="settingsBilling" className="min-h-full" />;
   }
@@ -491,17 +590,17 @@ export default function BillingSettingsPage() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
-              onClick={() => syncFromPolar.mutate()}
-              disabled={syncFromPolar.isPending}
+              onClick={() => syncBillingState.mutate()}
+              disabled={syncBillingState.isPending}
               className="h-8 cursor-pointer gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:brightness-120 hover:bg-sidebar-accent"
             >
               <RefreshCw
                 className={cn(
                   "size-3",
-                  syncFromPolar.isPending && "animate-spin"
+                  syncBillingState.isPending && "animate-spin"
                 )}
               />
-              {syncFromPolar.isPending ? "Syncing..." : "Sync from Polar"}
+              {syncBillingState.isPending ? "Syncing..." : "Refresh billing"}
             </Button>
             {canManageSubscription ? (
               <Button
@@ -534,6 +633,25 @@ export default function BillingSettingsPage() {
           />
         </div>
       </div>
+
+      {legacyMigration?.requiresCheckout && migrationCheckoutPlan ? (
+        <div className="px-6 pb-2 sm:px-8">
+          <LegacyMigrationBanner
+            targetPlanTitle={migrationCheckoutPlan.title}
+            accessEndsAt={legacyMigration.accessEndsAt ?? null}
+            hasTemporaryAccess={legacyMigration.hasTemporaryAccess}
+            onContinue={() =>
+              void handleCheckout(
+                migrationCheckoutPlan.key as Extract<
+                  BillingPlanKey,
+                  "professional" | "institutional"
+                >
+              )
+            }
+            isPending={createCheckout.isPending}
+          />
+        </div>
+      ) : null}
 
       <Separator />
 
@@ -569,6 +687,9 @@ export default function BillingSettingsPage() {
         <div className="grid gap-3 sm:grid-cols-3">
           {plans.map((plan) => {
             const isActive = plan.key === activePlanKey;
+            const isMigrationTarget =
+              Boolean(legacyMigration?.requiresCheckout) &&
+              legacyMigration?.targetPlanKey === plan.key;
             const isProfessional = plan.key === "professional";
             const isInstitutional = plan.key === "institutional";
             const canCheckout =
@@ -629,6 +750,8 @@ export default function BillingSettingsPage() {
               ? "fill-emerald-400"
               : "fill-white/40";
 
+            const isCheckoutableCurrentCard = isActive && isMigrationTarget;
+
             return (
               <div
                 key={plan.key}
@@ -645,6 +768,39 @@ export default function BillingSettingsPage() {
                 }}
                 onMouseEnter={() => setHoveredCard(plan.key as BillingPlanKey)}
                 onMouseLeave={() => setHoveredCard(null)}
+                onClick={
+                  isCheckoutableCurrentCard
+                    ? () =>
+                        void handleCheckout(
+                          plan.key as Extract<
+                            BillingPlanKey,
+                            "professional" | "institutional"
+                          >
+                        )
+                    : undefined
+                }
+                onKeyDown={
+                  isCheckoutableCurrentCard
+                    ? (event: KeyboardEvent<HTMLDivElement>) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          void handleCheckout(
+                            plan.key as Extract<
+                              BillingPlanKey,
+                              "professional" | "institutional"
+                            >
+                          );
+                        }
+                      }
+                    : undefined
+                }
+                role={isCheckoutableCurrentCard ? "button" : undefined}
+                tabIndex={isCheckoutableCurrentCard ? 0 : undefined}
+                aria-label={
+                  isCheckoutableCurrentCard
+                    ? `Continue ${plan.title} plan on Stripe`
+                    : undefined
+                }
               >
                 <div
                   className={cn(
@@ -755,7 +911,31 @@ export default function BillingSettingsPage() {
 
                     {/* CTA */}
                     <div className="mt-auto pt-1">
-                      {isActive ? (
+                      {isCheckoutableCurrentCard ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleCheckout(
+                              plan.key as Extract<
+                                BillingPlanKey,
+                                "professional" | "institutional"
+                              >
+                            );
+                          }}
+                          disabled={createCheckout.isPending}
+                          className={cn(
+                            "h-9 w-full cursor-pointer rounded-sm text-xs font-medium shadow-sidebar-button transition-all duration-250 active:scale-95",
+                            ctaButtonCn
+                          )}
+                        >
+                          <Sparkles className="size-3" />
+                          {createCheckout.isPending
+                            ? "Redirecting..."
+                            : "Continue on Stripe"}
+                        </Button>
+                      ) : isActive ? (
                         <div
                           className={cn(
                             "flex h-9 w-full items-center justify-center rounded-sm text-xs",

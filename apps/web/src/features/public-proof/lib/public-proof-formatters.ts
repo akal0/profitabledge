@@ -1,5 +1,8 @@
 "use client";
 
+const PUBLIC_PROOF_LOCALE = "en-GB";
+const PUBLIC_PROOF_TIME_ZONE = "UTC";
+
 export function formatCurrency(value: number) {
   return value.toLocaleString("en-US", {
     style: "currency",
@@ -16,20 +19,22 @@ export function formatR(value: number | null) {
 
 export function formatTimestamp(value?: string | Date | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleString(undefined, {
+  return new Date(value).toLocaleString(PUBLIC_PROOF_LOCALE, {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: PUBLIC_PROOF_TIME_ZONE,
   });
 }
 
 export function formatShortDate(value?: string | Date | null) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString(undefined, {
+  return new Date(value).toLocaleDateString(PUBLIC_PROOF_LOCALE, {
     month: "short",
     day: "numeric",
+    timeZone: PUBLIC_PROOF_TIME_ZONE,
   });
 }
 

@@ -1,9 +1,11 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import type Stripe from "stripe";
 import { z } from "zod";
 import { db } from "../db";
 import {
   billingCustomer,
+  billingEntitlementOverride,
   billingOrder,
   billingSubscription,
   billingWebhookEvent,
@@ -15,8 +17,10 @@ import { activationMilestone } from "../db/schema/operations";
 import { tradingAccount } from "../db/schema/trading";
 import {
   getAffiliateCommissionBps as getServerAffiliateCommissionBps,
+  getBillingProvider,
   getBillingPlanDefinition,
   getBillingPlanDefinitions,
+  getHigherBillingPlanKey,
   getWebAppUrl,
   isPrivateBetaAdminEmail,
   isPrivateBetaRequired,
@@ -25,6 +29,7 @@ import {
   REFERRAL_FREE_MONTH_THRESHOLD,
   REFERRAL_UPGRADE_TRIAL_DAYS,
   REFERRAL_UPGRADE_TRIAL_THRESHOLD,
+  resolvePlanKeyFromStripePriceId,
   resolvePlanKeyFromProductId,
   type BillingPlanKey,
 } from "../lib/billing/config";
@@ -86,8 +91,18 @@ import {
   AFFILIATE_NAME_COLORS,
 } from "../lib/billing/growth";
 import { getUserEdgeCreditSnapshot } from "../lib/billing/edge-credits";
-import { getPolarClient } from "../lib/billing/polar";
-import { ensureActivationMilestone } from "../lib/ops/event-log";
+import {
+  createStripeBillingPortalSession,
+  createStripeCheckoutSession,
+  createStripeCustomer,
+  getStripeClient,
+  isStripeMissingCustomerError,
+  retrieveStripeCustomer,
+} from "../lib/billing/stripe";
+import {
+  ensureActivationMilestone,
+  recordAppEvent,
+} from "../lib/ops/event-log";
 import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
 
 const ONBOARDING_COMPLETION_KEY = "onboarding_completed";
@@ -105,6 +120,8 @@ const AFFILIATE_PAYMENT_METHOD_TYPES = [
   "crypto",
   "other",
 ] as const;
+const BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE = "beta_stripe_migration";
+const BETA_STRIPE_MIGRATION_GRACE_DAYS = 30;
 
 function buildPrivateBetaCode() {
   return `BETA${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -631,11 +648,250 @@ async function upsertBillingOrderFromPolar(input: {
   return inserted;
 }
 
+function fromStripeTimestamp(value?: number | null) {
+  return value ? new Date(value * 1000) : null;
+}
+
+function resolvePlanKeyFromStripeState(input: {
+  metadata?: Record<string, unknown> | null;
+  priceId?: string | null;
+}) {
+  const metadataPlanKey =
+    typeof input.metadata?.plan_key === "string" ? input.metadata.plan_key : null;
+  if (
+    metadataPlanKey === "student" ||
+    metadataPlanKey === "professional" ||
+    metadataPlanKey === "institutional"
+  ) {
+    return metadataPlanKey as BillingPlanKey;
+  }
+
+  return resolvePlanKeyFromStripePriceId(input.priceId);
+}
+
+async function upsertBillingCustomerFromStripe(input: {
+  userId: string;
+  stripeCustomerId: string;
+  email?: string | null;
+  name?: string | null;
+  defaultPaymentMethodId?: string | null;
+  metadata?: Record<string, unknown> | null;
+}) {
+  const existing = await db
+    .select()
+    .from(billingCustomer)
+    .where(eq(billingCustomer.userId, input.userId))
+    .limit(1);
+
+  const values = {
+    provider: "stripe" as const,
+    providerCustomerId: input.stripeCustomerId,
+    stripeCustomerId: input.stripeCustomerId,
+    stripeDefaultPaymentMethodId: input.defaultPaymentMethodId ?? null,
+    email: input.email ?? null,
+    name: input.name ?? null,
+    metadata: input.metadata ?? null,
+    updatedAt: new Date(),
+  };
+
+  if (existing[0]) {
+    const [updated] = await db
+      .update(billingCustomer)
+      .set(values)
+      .where(eq(billingCustomer.id, existing[0].id))
+      .returning();
+
+    return updated ?? existing[0];
+  }
+
+  const [inserted] = await db
+    .insert(billingCustomer)
+    .values({
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      ...values,
+    })
+    .returning();
+
+  return inserted;
+}
+
+async function upsertBillingSubscriptionFromStripe(input: {
+  userId: string;
+  stripeSubscriptionId: string;
+  stripeCustomerId?: string | null;
+  stripeCheckoutSessionId?: string | null;
+  stripePriceId?: string | null;
+  stripeProductId?: string | null;
+  stripeLatestInvoiceId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  status: string;
+  currency?: string | null;
+  amount?: number | null;
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodStart?: Date | null;
+  currentPeriodEnd?: Date | null;
+  trialStart?: Date | null;
+  trialEnd?: Date | null;
+  startedAt?: Date | null;
+  endsAt?: Date | null;
+  endedAt?: Date | null;
+  canceledAt?: Date | null;
+}) {
+  const existing = await db
+    .select()
+    .from(billingSubscription)
+    .where(eq(billingSubscription.stripeSubscriptionId, input.stripeSubscriptionId))
+    .limit(1);
+
+  const planKey = resolvePlanKeyFromStripeState({
+    metadata: input.metadata ?? null,
+    priceId: input.stripePriceId ?? null,
+  });
+
+  const values = {
+    userId: input.userId,
+    provider: "stripe" as const,
+    providerSubscriptionId: input.stripeSubscriptionId,
+    providerCustomerId: input.stripeCustomerId ?? null,
+    providerCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
+    providerPriceId: input.stripePriceId ?? null,
+    providerProductId: input.stripeProductId ?? null,
+    stripeSubscriptionId: input.stripeSubscriptionId,
+    stripeCustomerId: input.stripeCustomerId ?? null,
+    stripeCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
+    stripePriceId: input.stripePriceId ?? null,
+    stripeProductId: input.stripeProductId ?? null,
+    stripeLatestInvoiceId: input.stripeLatestInvoiceId ?? null,
+    planKey,
+    status: input.status,
+    currency: input.currency ?? null,
+    amount: input.amount ?? null,
+    cancelAtPeriodEnd: Boolean(input.cancelAtPeriodEnd),
+    currentPeriodStart: input.currentPeriodStart ?? null,
+    currentPeriodEnd: input.currentPeriodEnd ?? null,
+    trialStart: input.trialStart ?? null,
+    trialEnd: input.trialEnd ?? null,
+    startedAt: input.startedAt ?? null,
+    endsAt: input.endsAt ?? null,
+    endedAt: input.endedAt ?? null,
+    canceledAt: input.canceledAt ?? null,
+    metadata: input.metadata ?? null,
+    updatedAt: new Date(),
+  };
+
+  if (existing[0]) {
+    const [updated] = await db
+      .update(billingSubscription)
+      .set(values)
+      .where(eq(billingSubscription.id, existing[0].id))
+      .returning();
+    return updated ?? existing[0];
+  }
+
+  const [inserted] = await db
+    .insert(billingSubscription)
+    .values({
+      id: crypto.randomUUID(),
+      ...values,
+    })
+    .returning();
+  return inserted;
+}
+
+async function upsertBillingOrderFromStripe(input: {
+  userId: string;
+  providerOrderId: string;
+  stripeInvoiceId?: string | null;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  stripeCheckoutSessionId?: string | null;
+  stripePaymentIntentId?: string | null;
+  stripeChargeId?: string | null;
+  stripePriceId?: string | null;
+  stripeProductId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  status: string;
+  currency?: string | null;
+  subtotalAmount?: number | null;
+  discountAmount?: number | null;
+  taxAmount?: number | null;
+  totalAmount?: number | null;
+  paid?: boolean;
+  paidAt?: Date | null;
+  createdAt?: Date | null;
+}) {
+  const existing = await db
+    .select()
+    .from(billingOrder)
+    .where(eq(billingOrder.providerOrderId, input.providerOrderId))
+    .limit(1);
+
+  const planKey = resolvePlanKeyFromStripeState({
+    metadata: input.metadata ?? null,
+    priceId: input.stripePriceId ?? null,
+  });
+
+  const values = {
+    userId: input.userId,
+    provider: "stripe" as const,
+    providerOrderId: input.providerOrderId,
+    providerCustomerId: input.stripeCustomerId ?? null,
+    providerSubscriptionId: input.stripeSubscriptionId ?? null,
+    providerCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
+    providerInvoiceId: input.stripeInvoiceId ?? null,
+    providerPaymentIntentId: input.stripePaymentIntentId ?? null,
+    providerChargeId: input.stripeChargeId ?? null,
+    providerPriceId: input.stripePriceId ?? null,
+    providerProductId: input.stripeProductId ?? null,
+    stripeInvoiceId: input.stripeInvoiceId ?? null,
+    stripeCustomerId: input.stripeCustomerId ?? null,
+    stripeSubscriptionId: input.stripeSubscriptionId ?? null,
+    stripeCheckoutSessionId: input.stripeCheckoutSessionId ?? null,
+    stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+    stripeChargeId: input.stripeChargeId ?? null,
+    stripePriceId: input.stripePriceId ?? null,
+    stripeProductId: input.stripeProductId ?? null,
+    planKey,
+    status: input.status,
+    currency: input.currency ?? null,
+    subtotalAmount: input.subtotalAmount ?? null,
+    discountAmount: input.discountAmount ?? null,
+    taxAmount: input.taxAmount ?? null,
+    totalAmount: input.totalAmount ?? null,
+    paid: Boolean(input.paid),
+    paidAt: input.paidAt ?? null,
+    metadata: input.metadata ?? null,
+    updatedAt: new Date(),
+  };
+
+  if (existing[0]) {
+    const [updated] = await db
+      .update(billingOrder)
+      .set(values)
+      .where(eq(billingOrder.id, existing[0].id))
+      .returning();
+    return updated ?? existing[0];
+  }
+
+  const [inserted] = await db
+    .insert(billingOrder)
+    .values({
+      id: crypto.randomUUID(),
+      createdAt: input.createdAt ?? new Date(),
+      ...values,
+    })
+    .returning();
+  return inserted;
+}
+
 async function updateUserPremiumFlag(userId: string) {
-  const { activePlanKey, subscription } = await getActiveBillingState(userId);
+  const { activePlanKey, subscription, override } = await getActiveBillingState(userId);
   const isPremium =
     activePlanKey !== "student" &&
-    Boolean(subscription && isActiveSubscriptionStatus(subscription.status));
+    Boolean(
+      (subscription && isActiveSubscriptionStatus(subscription.status)) || override
+    );
 
   await db
     .update(userTable)
@@ -644,6 +900,1001 @@ async function updateUserPremiumFlag(userId: string) {
       updatedAt: new Date(),
     })
     .where(eq(userTable.id, userId));
+}
+
+async function ensureStripeCustomerForUser(user: Awaited<ReturnType<typeof getUserRow>>) {
+  const [existing] = await db
+    .select()
+    .from(billingCustomer)
+    .where(eq(billingCustomer.userId, user.id))
+    .limit(1);
+
+  if (existing?.stripeCustomerId) {
+    try {
+      const customer = await retrieveStripeCustomer(existing.stripeCustomerId);
+      if (customer && !customer.deleted) {
+        return upsertBillingCustomerFromStripe({
+          userId: user.id,
+          stripeCustomerId: customer.id,
+          email: customer.email ?? user.email,
+          name: customer.name ?? user.name,
+          defaultPaymentMethodId:
+            typeof customer.invoice_settings?.default_payment_method === "string"
+              ? customer.invoice_settings.default_payment_method
+              : null,
+          metadata: normalizeBillingMetadata(customer.metadata),
+        });
+      }
+    } catch (error) {
+      if (!isStripeMissingCustomerError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  const customer = await createStripeCustomer({
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+  });
+
+  return upsertBillingCustomerFromStripe({
+    userId: user.id,
+    stripeCustomerId: customer.id,
+    email: customer.email ?? user.email,
+    name: customer.name ?? user.name,
+    metadata: normalizeBillingMetadata(customer.metadata),
+  });
+}
+
+async function findUserIdForStripeCustomer(input: {
+  stripeCustomerId?: string | null;
+  metadataUserId?: string | null;
+}) {
+  if (input.metadataUserId) {
+    return input.metadataUserId;
+  }
+
+  if (!input.stripeCustomerId) {
+    return null;
+  }
+
+  const [existing] = await db
+    .select({
+      userId: billingCustomer.userId,
+    })
+    .from(billingCustomer)
+    .where(eq(billingCustomer.stripeCustomerId, input.stripeCustomerId))
+    .limit(1);
+
+  if (existing?.userId) {
+    return existing.userId;
+  }
+
+  const customer = await retrieveStripeCustomer(input.stripeCustomerId);
+  if (!customer || customer.deleted) {
+    return null;
+  }
+
+  return typeof customer.metadata?.user_id === "string"
+    ? customer.metadata.user_id
+    : null;
+}
+
+async function syncStripeBillingStateForUser(
+  user: Awaited<ReturnType<typeof getUserRow>>
+) {
+  const stripe = getStripeClient();
+  const existingCustomer = await ensureStripeCustomerForUser(user);
+
+  if (!existingCustomer?.stripeCustomerId) {
+    const billing = await getActiveBillingState(user.id);
+    return { activePlanKey: billing.activePlanKey };
+  }
+
+  const customer = await retrieveStripeCustomer(existingCustomer.stripeCustomerId);
+  if (customer && !customer.deleted) {
+    await upsertBillingCustomerFromStripe({
+      userId: user.id,
+      stripeCustomerId: customer.id,
+      email: customer.email ?? user.email,
+      name: customer.name ?? user.name,
+      defaultPaymentMethodId:
+        typeof customer.invoice_settings?.default_payment_method === "string"
+          ? customer.invoice_settings.default_payment_method
+          : null,
+      metadata: normalizeBillingMetadata(customer.metadata),
+    });
+  }
+
+  const subscriptions = await stripe.subscriptions.list({
+    customer: existingCustomer.stripeCustomerId,
+    status: "all",
+    limit: 20,
+  });
+
+  for (const rawSubscription of subscriptions.data) {
+    const subscription = rawSubscription as any;
+    const primaryItem = subscription.items.data[0];
+    const price = primaryItem?.price;
+    const subscriptionMetadata = normalizeBillingMetadata(subscription.metadata);
+
+    await upsertBillingSubscriptionFromStripe({
+      userId: user.id,
+      stripeSubscriptionId: subscription.id,
+      stripeCustomerId:
+        typeof subscription.customer === "string"
+          ? subscription.customer
+          : subscription.customer?.id ?? null,
+      stripePriceId: price?.id ?? null,
+      stripeProductId:
+        typeof price?.product === "string" ? price.product : price?.product?.id ?? null,
+      stripeLatestInvoiceId:
+        typeof subscription.latest_invoice === "string"
+          ? subscription.latest_invoice
+          : subscription.latest_invoice?.id ?? null,
+      metadata: subscriptionMetadata,
+      status: subscription.status,
+      currency: price?.currency?.toUpperCase() ?? null,
+      amount: price?.unit_amount ?? null,
+      cancelAtPeriodEnd: subscription.cancel_at_period_end,
+      currentPeriodStart: fromStripeTimestamp(subscription.current_period_start),
+      currentPeriodEnd: fromStripeTimestamp(subscription.current_period_end),
+      trialStart: fromStripeTimestamp(subscription.trial_start),
+      trialEnd: fromStripeTimestamp(subscription.trial_end),
+      startedAt: fromStripeTimestamp(subscription.start_date),
+      endedAt: fromStripeTimestamp(subscription.ended_at),
+      canceledAt: fromStripeTimestamp(subscription.canceled_at),
+    });
+
+    if (subscription.status === "active" || subscription.status === "trialing") {
+      await markAffiliateSubscriptionActive({
+        referredUserId: user.id,
+        subscriptionId: subscription.id,
+        activatedAt: fromStripeTimestamp(subscription.start_date) ?? new Date(),
+      });
+    }
+  }
+
+  const hasActiveStripeSubscription = subscriptions.data.some((subscription) =>
+    isActiveSubscriptionStatus(subscription.status)
+  );
+
+  if (hasActiveStripeSubscription) {
+    await finalizeStripeBetaMigrationForUserId({
+      userId: user.id,
+      completedByUserId: "stripe_sync",
+    });
+  }
+
+  await updateUserPremiumFlag(user.id);
+  const billing = await getActiveBillingState(user.id);
+  return { activePlanKey: billing.activePlanKey };
+}
+
+export async function syncStripeBillingStateForUserId(userId: string) {
+  const user = await getUserRow(userId);
+  return syncStripeBillingStateForUser(user);
+}
+
+function buildLegacyDisconnectMetadata(input: {
+  metadata: unknown;
+  disconnectedByUserId: string;
+  reason?: string | null;
+  now: Date;
+}) {
+  const metadata = normalizeBillingMetadata(input.metadata) ?? {};
+
+  return {
+    ...metadata,
+    legacyDisconnect: {
+      disconnectedAt: input.now.toISOString(),
+      disconnectedByUserId: input.disconnectedByUserId,
+      reason: input.reason ?? null,
+      source: "stripe_migration",
+    },
+  };
+}
+
+function buildBetaStripeMigrationEndsAt(input: {
+  latestLegacyPeriodEnd?: Date | null;
+  now: Date;
+}) {
+  const minimumEndsAt = new Date(
+    input.now.getTime() +
+      BETA_STRIPE_MIGRATION_GRACE_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  const latestLegacyPeriodEnd = input.latestLegacyPeriodEnd;
+  if (
+    latestLegacyPeriodEnd &&
+    latestLegacyPeriodEnd.getTime() > minimumEndsAt.getTime()
+  ) {
+    return latestLegacyPeriodEnd;
+  }
+
+  return minimumEndsAt;
+}
+
+function buildStripeBetaMigrationMetadata(input: {
+  metadata: unknown;
+  status: "pending" | "completed";
+  targetPlanKey?: BillingPlanKey | null;
+  preparedByUserId?: string | null;
+  completedByUserId?: string | null;
+  accessEndsAt?: Date | null;
+  now: Date;
+}) {
+  const metadata = normalizeBillingMetadata(input.metadata) ?? {};
+  const existingMigration =
+    metadata.stripeBetaMigration &&
+    typeof metadata.stripeBetaMigration === "object" &&
+    !Array.isArray(metadata.stripeBetaMigration)
+      ? (metadata.stripeBetaMigration as Record<string, unknown>)
+      : {};
+
+  const preparedAt =
+    input.status === "pending"
+      ? input.now.toISOString()
+      : typeof existingMigration.preparedAt === "string"
+      ? existingMigration.preparedAt
+      : input.now.toISOString();
+
+  return {
+    ...metadata,
+    stripeBetaMigration: {
+      ...existingMigration,
+      status: input.status,
+      targetPlanKey: input.targetPlanKey ?? existingMigration.targetPlanKey ?? null,
+      preparedAt,
+      preparedByUserId:
+        input.preparedByUserId ??
+        (typeof existingMigration.preparedByUserId === "string"
+          ? existingMigration.preparedByUserId
+          : null),
+      accessEndsAt:
+        input.accessEndsAt?.toISOString() ??
+        (typeof existingMigration.accessEndsAt === "string"
+          ? existingMigration.accessEndsAt
+          : null),
+      completedAt:
+        input.status === "completed" ? input.now.toISOString() : null,
+      completedByUserId:
+        input.status === "completed" ? input.completedByUserId ?? null : null,
+    },
+  };
+}
+
+async function getActiveLegacyBillingSnapshot(userId: string) {
+  const subscriptions = await db
+    .select({
+      id: billingSubscription.id,
+      planKey: billingSubscription.planKey,
+      currentPeriodEnd: billingSubscription.currentPeriodEnd,
+      updatedAt: billingSubscription.updatedAt,
+    })
+    .from(billingSubscription)
+    .where(
+      and(
+        eq(billingSubscription.userId, userId),
+        eq(billingSubscription.provider, "polar"),
+        inArray(billingSubscription.status, ["active", "trialing"])
+      )
+    )
+    .orderBy(
+      desc(billingSubscription.currentPeriodEnd),
+      desc(billingSubscription.updatedAt)
+    );
+
+  if (subscriptions.length === 0) {
+    return null;
+  }
+
+  const highestPlanKey = subscriptions.reduce<BillingPlanKey>(
+    (currentHighest, subscription) => {
+      const planKey = getBillingPlanDefinition(
+        subscription.planKey as BillingPlanKey
+      )
+        ? (subscription.planKey as BillingPlanKey)
+        : ("student" as BillingPlanKey);
+
+      return getHigherBillingPlanKey(currentHighest, planKey);
+    },
+    "student"
+  );
+
+  const latestPeriodEnd = subscriptions.reduce<Date | null>(
+    (latest, subscription) => {
+      if (!subscription.currentPeriodEnd) {
+        return latest;
+      }
+
+      if (!latest) {
+        return subscription.currentPeriodEnd;
+      }
+
+      return latest.getTime() >= subscription.currentPeriodEnd.getTime()
+        ? latest
+        : subscription.currentPeriodEnd;
+    },
+    null
+  );
+
+  return {
+    activePlanKey: highestPlanKey,
+    latestPeriodEnd,
+    subscriptionCount: subscriptions.length,
+    subscriptions,
+  };
+}
+
+async function getActiveBetaStripeMigrationOverride(userId: string) {
+  const now = new Date();
+  const [override] = await db
+    .select({
+      id: billingEntitlementOverride.id,
+      planKey: billingEntitlementOverride.planKey,
+      startsAt: billingEntitlementOverride.startsAt,
+      endsAt: billingEntitlementOverride.endsAt,
+    })
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, userId),
+        eq(
+          billingEntitlementOverride.sourceType,
+          BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE
+        ),
+        lte(billingEntitlementOverride.startsAt, now),
+        gte(billingEntitlementOverride.endsAt, now)
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt))
+    .limit(1);
+
+  return override ?? null;
+}
+
+async function ensureBetaStripeMigrationOverride(input: {
+  userId: string;
+  targetPlanKey: BillingPlanKey;
+  endsAt: Date;
+}) {
+  const [existingOverride] = await db
+    .select({
+      id: billingEntitlementOverride.id,
+      planKey: billingEntitlementOverride.planKey,
+      startsAt: billingEntitlementOverride.startsAt,
+      endsAt: billingEntitlementOverride.endsAt,
+    })
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, input.userId),
+        eq(
+          billingEntitlementOverride.sourceType,
+          BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE
+        )
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt))
+    .limit(1);
+
+  const now = new Date();
+  const planKey = existingOverride?.planKey
+    ? getHigherBillingPlanKey(
+        existingOverride.planKey as BillingPlanKey,
+        input.targetPlanKey
+      )
+    : input.targetPlanKey;
+  const startsAt =
+    existingOverride?.startsAt && existingOverride.startsAt.getTime() < now.getTime()
+      ? existingOverride.startsAt
+      : now;
+  const endsAt =
+    existingOverride?.endsAt &&
+    existingOverride.endsAt.getTime() > input.endsAt.getTime()
+      ? existingOverride.endsAt
+      : input.endsAt;
+
+  if (existingOverride) {
+    const [updated] = await db
+      .update(billingEntitlementOverride)
+      .set({
+        planKey,
+        startsAt,
+        endsAt,
+        updatedAt: now,
+      })
+      .where(eq(billingEntitlementOverride.id, existingOverride.id))
+      .returning();
+
+    return updated ?? existingOverride;
+  }
+
+  const [inserted] = await db
+    .insert(billingEntitlementOverride)
+    .values({
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      sourceType: BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE,
+      planKey,
+      startsAt,
+      endsAt,
+    })
+    .returning();
+
+  return inserted;
+}
+
+async function setStripeBetaMigrationCustomerState(input: {
+  userId: string;
+  status: "pending" | "completed";
+  targetPlanKey?: BillingPlanKey | null;
+  preparedByUserId?: string | null;
+  completedByUserId?: string | null;
+  accessEndsAt?: Date | null;
+}) {
+  const [customer] = await db
+    .select()
+    .from(billingCustomer)
+    .where(eq(billingCustomer.userId, input.userId))
+    .limit(1);
+
+  if (!customer) {
+    return null;
+  }
+
+  const now = new Date();
+  const [updated] = await db
+    .update(billingCustomer)
+    .set({
+      metadata: buildStripeBetaMigrationMetadata({
+        metadata: customer.metadata,
+        status: input.status,
+        targetPlanKey: input.targetPlanKey ?? null,
+        preparedByUserId: input.preparedByUserId ?? null,
+        completedByUserId: input.completedByUserId ?? null,
+        accessEndsAt: input.accessEndsAt ?? null,
+        now,
+      }),
+      updatedAt: now,
+    })
+    .where(eq(billingCustomer.id, customer.id))
+    .returning();
+
+  return updated ?? customer;
+}
+
+async function getStripeBetaMigrationState(userId: string) {
+  const legacy = await getActiveLegacyBillingSnapshot(userId);
+  const activeOverride = await getActiveBetaStripeMigrationOverride(userId);
+  const [activeStripeSubscription] = await db
+    .select({
+      id: billingSubscription.id,
+      planKey: billingSubscription.planKey,
+      currentPeriodEnd: billingSubscription.currentPeriodEnd,
+    })
+    .from(billingSubscription)
+    .where(
+      and(
+        eq(billingSubscription.userId, userId),
+        eq(billingSubscription.provider, "stripe"),
+        inArray(billingSubscription.status, ["active", "trialing"])
+      )
+    )
+    .orderBy(
+      desc(billingSubscription.currentPeriodEnd),
+      desc(billingSubscription.updatedAt)
+    )
+    .limit(1);
+
+  const requiresCheckout =
+    !activeStripeSubscription && Boolean(activeOverride || legacy);
+  const targetPlanKey = activeOverride?.planKey
+    ? (activeOverride.planKey as BillingPlanKey)
+    : legacy?.activePlanKey ?? null;
+
+  return {
+    requiresCheckout,
+    targetPlanKey,
+    accessEndsAt: activeOverride?.endsAt ?? legacy?.latestPeriodEnd ?? null,
+    hasTemporaryAccess: Boolean(activeOverride),
+    hasActiveStripeSubscription: Boolean(activeStripeSubscription),
+    hasLegacyBilling: Boolean(legacy),
+    legacySubscriptionCount: legacy?.subscriptionCount ?? 0,
+  };
+}
+
+async function listLegacyBillingCustomers() {
+  const rows = await db
+    .select({
+      subscription: billingSubscription,
+      customer: {
+        id: billingCustomer.id,
+        provider: billingCustomer.provider,
+        stripeCustomerId: billingCustomer.stripeCustomerId,
+        polarCustomerId: billingCustomer.polarCustomerId,
+      },
+      user: {
+        id: userTable.id,
+        name: userTable.name,
+        email: userTable.email,
+        username: userTable.username,
+        isPremium: userTable.isPremium,
+      },
+    })
+    .from(billingSubscription)
+    .innerJoin(userTable, eq(billingSubscription.userId, userTable.id))
+    .leftJoin(billingCustomer, eq(billingCustomer.userId, billingSubscription.userId))
+    .where(
+      and(
+        eq(billingSubscription.provider, "polar"),
+        inArray(billingSubscription.status, ["active", "trialing"])
+      )
+    )
+    .orderBy(
+      desc(billingSubscription.currentPeriodEnd),
+      desc(billingSubscription.updatedAt)
+    );
+
+  const grouped = new Map<
+    string,
+    {
+      user: {
+        id: string;
+        name: string | null;
+        email: string | null;
+        username: string | null;
+        isPremium: boolean | null;
+      };
+      customer: {
+        provider: string | null;
+        stripeCustomerId: string | null;
+        polarCustomerId: string | null;
+      } | null;
+      activeLegacyPlanKey: BillingPlanKey;
+      latestLegacyPeriodEnd: Date | null;
+      subscriptions: Array<{
+        id: string;
+        planKey: string;
+        status: string;
+        amount: number | null;
+        currency: string | null;
+        currentPeriodStart: Date | null;
+        currentPeriodEnd: Date | null;
+        startedAt: Date | null;
+        updatedAt: Date;
+      }>;
+    }
+  >();
+
+  for (const row of rows) {
+    const existing = grouped.get(row.user.id);
+    const planKey = getBillingPlanDefinition(
+      row.subscription.planKey as BillingPlanKey
+    )
+      ? (row.subscription.planKey as BillingPlanKey)
+      : ("student" as BillingPlanKey);
+
+    if (!existing) {
+      grouped.set(row.user.id, {
+        user: row.user,
+        customer: row.customer,
+        activeLegacyPlanKey: planKey,
+        latestLegacyPeriodEnd: row.subscription.currentPeriodEnd ?? null,
+        subscriptions: [
+          {
+            id: row.subscription.id,
+            planKey: row.subscription.planKey,
+            status: row.subscription.status,
+            amount: row.subscription.amount,
+            currency: row.subscription.currency,
+            currentPeriodStart: row.subscription.currentPeriodStart,
+            currentPeriodEnd: row.subscription.currentPeriodEnd,
+            startedAt: row.subscription.startedAt,
+            updatedAt: row.subscription.updatedAt,
+          },
+        ],
+      });
+      continue;
+    }
+
+    existing.activeLegacyPlanKey = getHigherBillingPlanKey(
+      existing.activeLegacyPlanKey,
+      planKey
+    );
+    existing.latestLegacyPeriodEnd =
+      (existing.latestLegacyPeriodEnd?.getTime() ?? 0) >=
+      (row.subscription.currentPeriodEnd?.getTime() ?? 0)
+        ? existing.latestLegacyPeriodEnd
+        : (row.subscription.currentPeriodEnd ?? existing.latestLegacyPeriodEnd);
+    existing.subscriptions.push({
+      id: row.subscription.id,
+      planKey: row.subscription.planKey,
+      status: row.subscription.status,
+      amount: row.subscription.amount,
+      currency: row.subscription.currency,
+      currentPeriodStart: row.subscription.currentPeriodStart,
+      currentPeriodEnd: row.subscription.currentPeriodEnd,
+      startedAt: row.subscription.startedAt,
+      updatedAt: row.subscription.updatedAt,
+    });
+  }
+
+  const entries = Array.from(grouped.values());
+  const cutoverStates = await Promise.all(
+    entries.map(async (entry) => ({
+      userId: entry.user.id,
+      ...(await getLegacyBillingCutoverState(entry.user.id)),
+    }))
+  );
+  const cutoverStateByUserId = new Map(
+    cutoverStates.map((entry) => [entry.userId, entry])
+  );
+
+  return entries
+    .map((entry) => ({
+      ...entry,
+      subscriptionCount: entry.subscriptions.length,
+      hasStripeCustomer: Boolean(entry.customer?.stripeCustomerId),
+      stripeCustomerId: entry.customer?.stripeCustomerId ?? null,
+      polarCustomerId: entry.customer?.polarCustomerId ?? null,
+      hasActiveStripeSubscription: Boolean(
+        cutoverStateByUserId.get(entry.user.id)?.hasActiveStripeSubscription
+      ),
+      activeStripeSubscriptionId:
+        cutoverStateByUserId.get(entry.user.id)?.activeStripeSubscriptionId ??
+        null,
+      hasActiveEntitlementOverride: Boolean(
+        cutoverStateByUserId.get(entry.user.id)?.hasActiveEntitlementOverride
+      ),
+      activeEntitlementOverrideId:
+        cutoverStateByUserId.get(entry.user.id)?.activeEntitlementOverrideId ??
+        null,
+    }))
+    .sort(
+      (left, right) =>
+        (right.latestLegacyPeriodEnd?.getTime() ?? 0) -
+        (left.latestLegacyPeriodEnd?.getTime() ?? 0)
+    );
+}
+
+async function getLegacyBillingCutoverState(userId: string) {
+  const [activeStripeSubscription] = await db
+    .select({
+      id: billingSubscription.id,
+    })
+    .from(billingSubscription)
+    .where(
+      and(
+        eq(billingSubscription.userId, userId),
+        eq(billingSubscription.provider, "stripe"),
+        inArray(billingSubscription.status, ["active", "trialing"])
+      )
+    )
+    .orderBy(
+      desc(billingSubscription.currentPeriodEnd),
+      desc(billingSubscription.updatedAt)
+    )
+    .limit(1);
+
+  const now = new Date();
+  const [activeOverride] = await db
+    .select({
+      id: billingEntitlementOverride.id,
+    })
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, userId),
+        lte(billingEntitlementOverride.startsAt, now),
+        gte(billingEntitlementOverride.endsAt, now)
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt))
+    .limit(1);
+
+  return {
+    hasActiveStripeSubscription: Boolean(activeStripeSubscription),
+    activeStripeSubscriptionId: activeStripeSubscription?.id ?? null,
+    hasActiveEntitlementOverride: Boolean(activeOverride),
+    activeEntitlementOverrideId: activeOverride?.id ?? null,
+  };
+}
+
+export async function prepareLegacyBillingCustomerForStripeBetaMigrationByUserId(
+  input: {
+    userId: string;
+    preparedByUserId: string;
+    reason?: string | null;
+  }
+) {
+  await syncStripeBillingStateForUserId(input.userId);
+
+  const legacy = await getActiveLegacyBillingSnapshot(input.userId);
+  const cutoverState = await getLegacyBillingCutoverState(input.userId);
+  if (!legacy) {
+    const billing = await getActiveBillingState(input.userId);
+    return {
+      userId: input.userId,
+      preparedOverrideId: null,
+      disconnectedSubscriptionCount: 0,
+      activePlanKey: billing.activePlanKey,
+      hasActiveStripeSubscription: cutoverState.hasActiveStripeSubscription,
+    };
+  }
+
+  let preparedOverrideId: string | null = null;
+  if (!cutoverState.hasActiveStripeSubscription) {
+    const endsAt = buildBetaStripeMigrationEndsAt({
+      latestLegacyPeriodEnd: legacy.latestPeriodEnd,
+      now: new Date(),
+    });
+    const override = await ensureBetaStripeMigrationOverride({
+      userId: input.userId,
+      targetPlanKey: legacy.activePlanKey,
+      endsAt,
+    });
+    preparedOverrideId = override.id;
+
+    await setStripeBetaMigrationCustomerState({
+      userId: input.userId,
+      status: "pending",
+      targetPlanKey: legacy.activePlanKey,
+      preparedByUserId: input.preparedByUserId,
+      accessEndsAt: endsAt,
+    });
+  }
+
+  const disconnected = await disconnectLegacyBillingCustomerByUserId({
+    userId: input.userId,
+    disconnectedByUserId: input.preparedByUserId,
+    reason:
+      input.reason ??
+      "Private beta billing was moved to Stripe. Continue in Settings > Billing to re-enter payment details.",
+  });
+
+  return {
+    ...disconnected,
+    preparedOverrideId,
+    hasActiveStripeSubscription: cutoverState.hasActiveStripeSubscription,
+  };
+}
+
+async function prepareAllLegacyBillingCustomersForStripeBetaMigration(input: {
+  preparedByUserId: string;
+  reason?: string | null;
+}) {
+  const customers = await listLegacyBillingCustomers();
+  let preparedUserCount = 0;
+  let preparedOverrideCount = 0;
+  let disconnectedSubscriptionCount = 0;
+
+  for (const customer of customers) {
+    const result = await prepareLegacyBillingCustomerForStripeBetaMigrationByUserId(
+      {
+        userId: customer.user.id,
+        preparedByUserId: input.preparedByUserId,
+        reason: input.reason ?? null,
+      }
+    );
+
+    preparedUserCount += 1;
+    if (result.preparedOverrideId) {
+      preparedOverrideCount += 1;
+    }
+    disconnectedSubscriptionCount += result.disconnectedSubscriptionCount;
+  }
+
+  return {
+    preparedUserCount,
+    preparedOverrideCount,
+    disconnectedSubscriptionCount,
+  };
+}
+
+async function finalizeStripeBetaMigrationForUserId(input: {
+  userId: string;
+  completedByUserId: string;
+}) {
+  const now = new Date();
+  const overrideRows = await db
+    .select({
+      id: billingEntitlementOverride.id,
+      planKey: billingEntitlementOverride.planKey,
+      endsAt: billingEntitlementOverride.endsAt,
+    })
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, input.userId),
+        eq(
+          billingEntitlementOverride.sourceType,
+          BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE
+        ),
+        gte(billingEntitlementOverride.endsAt, now)
+      )
+    );
+
+  for (const override of overrideRows) {
+    await db
+      .update(billingEntitlementOverride)
+      .set({
+        endsAt: now,
+        updatedAt: now,
+      })
+      .where(eq(billingEntitlementOverride.id, override.id));
+  }
+
+  const legacy = await getActiveLegacyBillingSnapshot(input.userId);
+  if (legacy) {
+    await disconnectLegacyBillingCustomerByUserId({
+      userId: input.userId,
+      disconnectedByUserId: input.completedByUserId,
+      reason: "Legacy Polar access was disabled after Stripe billing became active",
+    });
+  }
+
+  if (overrideRows.length > 0 || legacy) {
+    await setStripeBetaMigrationCustomerState({
+      userId: input.userId,
+      status: "completed",
+      targetPlanKey:
+        overrideRows[0]?.planKey
+          ? (overrideRows[0].planKey as BillingPlanKey)
+          : legacy?.activePlanKey ?? null,
+      completedByUserId: input.completedByUserId,
+      accessEndsAt: null,
+    });
+
+    await recordAppEvent({
+      userId: input.userId,
+      category: "billing",
+      name: "stripe_beta_migration_completed",
+      source: "billing_sync",
+      summary: "Legacy beta billing access was migrated to Stripe",
+      level: "info",
+      metadata: {
+        completedByUserId: input.completedByUserId,
+        clearedOverrideCount: overrideRows.length,
+        disconnectedLegacySubscriptionCount: legacy?.subscriptionCount ?? 0,
+      },
+    });
+  }
+}
+
+export async function disconnectLegacyBillingCustomerByUserId(input: {
+  userId: string;
+  disconnectedByUserId: string;
+  reason?: string | null;
+}) {
+  const cutoverState = await getLegacyBillingCutoverState(input.userId);
+  if (
+    !cutoverState.hasActiveStripeSubscription &&
+    !cutoverState.hasActiveEntitlementOverride
+  ) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message:
+        "Legacy access can only be disconnected after Stripe access is active or an entitlement override is in place",
+    });
+  }
+
+  const subscriptions = await db
+    .select()
+    .from(billingSubscription)
+    .where(
+      and(
+        eq(billingSubscription.userId, input.userId),
+        eq(billingSubscription.provider, "polar"),
+        inArray(billingSubscription.status, ["active", "trialing"])
+      )
+    );
+
+  const now = new Date();
+
+  for (const subscription of subscriptions) {
+    await db
+      .update(billingSubscription)
+      .set({
+        status: "canceled",
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd:
+          subscription.currentPeriodEnd &&
+          subscription.currentPeriodEnd.getTime() < now.getTime()
+            ? subscription.currentPeriodEnd
+            : now,
+        endedAt: subscription.endedAt ?? now,
+        canceledAt: subscription.canceledAt ?? now,
+        metadata: buildLegacyDisconnectMetadata({
+          metadata: subscription.metadata,
+          disconnectedByUserId: input.disconnectedByUserId,
+          reason: input.reason ?? null,
+          now,
+        }),
+        updatedAt: now,
+      })
+      .where(eq(billingSubscription.id, subscription.id));
+  }
+
+  const [customer] = await db
+    .select()
+    .from(billingCustomer)
+    .where(eq(billingCustomer.userId, input.userId))
+    .limit(1);
+
+  if (customer) {
+    await db
+      .update(billingCustomer)
+      .set({
+        metadata: buildLegacyDisconnectMetadata({
+          metadata: customer.metadata,
+          disconnectedByUserId: input.disconnectedByUserId,
+          reason: input.reason ?? null,
+          now,
+        }),
+        updatedAt: now,
+      })
+      .where(eq(billingCustomer.id, customer.id));
+  }
+
+  if (subscriptions.length > 0) {
+    await recordAppEvent({
+      userId: input.userId,
+      category: "billing",
+      name: "legacy_billing_disconnected",
+      source: "growth_admin",
+      summary: "Legacy Polar-backed billing access was disconnected",
+      level: "warning",
+      metadata: {
+        disconnectedByUserId: input.disconnectedByUserId,
+        disconnectedSubscriptionCount: subscriptions.length,
+        reason: input.reason ?? null,
+      },
+    });
+  }
+
+  await updateUserPremiumFlag(input.userId);
+  const billing = await getActiveBillingState(input.userId);
+
+  return {
+    userId: input.userId,
+    disconnectedSubscriptionCount: subscriptions.length,
+    activePlanKey: billing.activePlanKey,
+    hasStripeCustomer: Boolean(billing.customer?.stripeCustomerId),
+  };
+}
+
+async function disconnectAllLegacyBillingCustomers(input: {
+  disconnectedByUserId: string;
+  reason?: string | null;
+}) {
+  const customers = (await listLegacyBillingCustomers()).filter(
+    (customer) =>
+      customer.hasActiveStripeSubscription ||
+      customer.hasActiveEntitlementOverride
+  );
+  let disconnectedUserCount = 0;
+  let disconnectedSubscriptionCount = 0;
+
+  for (const customer of customers) {
+    const result = await disconnectLegacyBillingCustomerByUserId({
+      userId: customer.user.id,
+      disconnectedByUserId: input.disconnectedByUserId,
+      reason: input.reason ?? null,
+    });
+
+    if (result.disconnectedSubscriptionCount > 0) {
+      disconnectedUserCount += 1;
+      disconnectedSubscriptionCount += result.disconnectedSubscriptionCount;
+    }
+  }
+
+  return {
+    disconnectedUserCount,
+    disconnectedSubscriptionCount,
+  };
 }
 
 function assertGrowthAdmin(email?: string | null) {
@@ -738,6 +1989,7 @@ async function completeGrowthAccessForUser(
 
 export const billingRouter = router({
   getPublicConfig: publicProcedure.query(() => {
+    const billingProvider = getBillingProvider();
     const plans = getBillingPlanDefinitions().map((plan) => ({
       key: plan.key,
       title: plan.title,
@@ -753,7 +2005,11 @@ export const billingRouter = router({
       includesBacktest: plan.includesBacktest,
       includesCopier: plan.includesCopier,
       isFree: plan.isFree,
-      isConfigured: plan.isFree || Boolean(plan.polarProductId),
+      isConfigured:
+        plan.isFree ||
+        (billingProvider === "stripe"
+          ? Boolean(plan.stripePriceId)
+          : Boolean(plan.polarProductId)),
     }));
 
     return {
@@ -904,7 +2160,7 @@ export const billingRouter = router({
 
   getState: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    const [access, referral, affiliate, billing, onboarding, credits] =
+    const [access, referral, affiliate, billing, onboarding, credits, legacyMigration] =
       await Promise.all([
         getAccessStatus(user.id, user.email),
         buildReferralState(user.id),
@@ -912,6 +2168,7 @@ export const billingRouter = router({
         getActiveBillingState(user.id),
         getOnboardingStatus(user.id),
         getUserEdgeCreditSnapshot(user.id),
+        getStripeBetaMigrationState(user.id),
       ]);
     const isAdmin = isGrowthAdminEmail(user.email);
 
@@ -925,6 +2182,7 @@ export const billingRouter = router({
         customer: billing.customer,
         subscription: billing.subscription,
         override: billing.override,
+        legacyMigration,
         credits,
       },
       admin: {
@@ -937,6 +2195,9 @@ export const billingRouter = router({
     const invoices = await db
       .select({
         id: billingOrder.id,
+        provider: billingOrder.provider,
+        providerOrderId: billingOrder.providerOrderId,
+        stripeInvoiceId: billingOrder.stripeInvoiceId,
         polarOrderId: billingOrder.polarOrderId,
         planKey: billingOrder.planKey,
         status: billingOrder.status,
@@ -956,6 +2217,10 @@ export const billingRouter = router({
 
     return invoices.map((invoice) => ({
       ...invoice,
+      referenceId:
+        invoice.providerOrderId ??
+        invoice.stripeInvoiceId ??
+        invoice.polarOrderId,
       planTitle:
         getBillingPlanDefinition(invoice.planKey as BillingPlanKey)?.title ??
         "Student",
@@ -1225,14 +2490,15 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const plan = getBillingPlanDefinition(input.planKey);
-      if (!plan || !plan.polarProductId) {
+      if (!plan || !plan.stripePriceId) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "That plan is not configured in Polar",
+          message: "That plan is not configured in Stripe",
         });
       }
 
       const user = await getUserRow(ctx.session.user.id);
+      const stripeCustomer = await ensureStripeCustomerForUser(user);
       const growthCookieContext = getGrowthCookieContext(ctx);
       await claimPendingGrowthAttribution({
         userId: user.id,
@@ -1271,81 +2537,95 @@ export const billingRouter = router({
             currentPlanKey: billing.activePlanKey,
             targetPlanKey: input.planKey,
           });
+      const affiliateOfferCouponId =
+        affiliateCheckout.offer?.discountProvider === "stripe"
+          ? (affiliateCheckout.offer.providerDiscountId ?? null)
+          : null;
+      const referralRewardCouponId =
+        referralRewardGrant?.discountProvider === "stripe"
+          ? (referralRewardGrant.providerDiscountId ?? null)
+          : null;
+
+      if (affiliateCheckout.offer && !affiliateOfferCouponId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "That affiliate offer is not configured for Stripe checkout yet",
+        });
+      }
       if (
         affiliateCheckout.offer &&
-        (referralRewardGrant?.polarDiscountId || upgradeOfferDiscount?.id)
+        (referralRewardCouponId || upgradeOfferDiscount?.id)
       ) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message: "Affiliate offer codes cannot be combined with other checkout discounts",
         });
       }
-      const checkoutDiscountId =
-        affiliateCheckout.offer?.polarDiscountId ??
-        referralRewardGrant?.polarDiscountId ??
+      const checkoutCouponId =
+        affiliateOfferCouponId ??
+        referralRewardCouponId ??
         upgradeOfferDiscount?.id ??
         null;
 
-      const polar = getPolarClient();
       const returnPath = assertAppRelativePath(input.returnPath);
-      // Build successUrl manually so {CHECKOUT_ID} is not URL-encoded by URLSearchParams
       const successBase = buildAppUrl(returnPath, {
         checkout: "success",
         plan: plan.key,
       });
-      const successUrl = `${successBase}&checkout_id={CHECKOUT_ID}`;
+      const successUrl = `${successBase}&session_id={CHECKOUT_SESSION_ID}`;
 
-      const checkout = await polar.checkouts.create({
-        products: [plan.polarProductId],
-        externalCustomerId: user.id,
+      const metadata = {
+        user_id: user.id,
+        plan_key: plan.key,
+        billing_provider: "stripe",
+        ...(affiliateCheckout.attribution?.id
+          ? {
+              affiliate_attribution_id: affiliateCheckout.attribution.id,
+              affiliate_code: affiliateCheckout.attribution.affiliateCode,
+              affiliate_commission_bps: String(
+                affiliateCommissionBps ?? getServerAffiliateCommissionBps()
+              ),
+              ...(affiliateCheckout.offer?.id
+                ? {
+                    affiliate_offer_id: affiliateCheckout.offer.id,
+                  }
+                : {}),
+              ...(affiliateCheckout.offer?.code
+                ? {
+                    affiliate_offer_code: affiliateCheckout.offer.code,
+                  }
+                : {}),
+              ...(affiliateCheckout.attribution.affiliateTrackingLinkId
+                ? {
+                    affiliate_tracking_link_id:
+                      affiliateCheckout.attribution.affiliateTrackingLinkId,
+                  }
+                : {}),
+            }
+          : {}),
+        ...(referralRewardGrant?.id
+          ? { referral_reward_grant_id: referralRewardGrant.id }
+          : {}),
+      };
+
+      const checkout = await createStripeCheckoutSession({
+        customerId: stripeCustomer?.stripeCustomerId ?? null,
         customerEmail: user.email,
         customerName: user.name,
-        discountId: checkoutDiscountId,
-        allowDiscountCodes: false,
+        clientReferenceId: user.id,
+        planKey: plan.key,
+        couponId: checkoutCouponId,
         successUrl,
-        returnUrl: buildAppUrl(returnPath),
+        cancelUrl: buildAppUrl(returnPath),
         metadata: {
-          user_id: user.id,
-          plan_key: plan.key,
-          ...(affiliateCheckout.attribution?.id
-            ? {
-                affiliate_attribution_id: affiliateCheckout.attribution.id,
-                affiliate_code: affiliateCheckout.attribution.affiliateCode,
-                affiliate_commission_bps: String(
-                  affiliateCommissionBps ?? getServerAffiliateCommissionBps()
-                ),
-                ...(affiliateCheckout.offer?.id
-                  ? {
-                      affiliate_offer_id: affiliateCheckout.offer.id,
-                    }
-                  : {}),
-                ...(affiliateCheckout.offer?.code
-                  ? {
-                      affiliate_offer_code: affiliateCheckout.offer.code,
-                    }
-                  : {}),
-                ...(affiliateCheckout.attribution.affiliateTrackingLinkId
-                  ? {
-                      affiliate_tracking_link_id:
-                        affiliateCheckout.attribution.affiliateTrackingLinkId,
-                    }
-                  : {}),
-              }
-            : {}),
-          ...(referralRewardGrant?.id
-            ? { referral_reward_grant_id: referralRewardGrant.id }
-            : {}),
-        },
-        customerMetadata: {
-          user_id: user.id,
-          ...(affiliateCheckout.attribution?.affiliateCode
-            ? { affiliate_code: affiliateCheckout.attribution.affiliateCode }
-            : {}),
+          ...metadata,
         },
       });
 
       return {
         url: checkout.url,
+        id: checkout.id,
       };
     }),
 
@@ -1359,157 +2639,33 @@ export const billingRouter = router({
       const user = await getUserRow(ctx.session.user.id);
       const billing = await getActiveBillingState(user.id);
 
-      if (!billing.customer && !billing.subscription) {
+      if (!billing.customer?.stripeCustomerId) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "No Polar customer is linked to this account yet",
+          message: "No Stripe customer is linked to this account yet",
         });
       }
 
-      const polar = getPolarClient();
-      const session = await polar.customerSessions.create({
-        externalCustomerId: user.id,
+      const session = await createStripeBillingPortalSession({
+        customerId: billing.customer.stripeCustomerId,
         returnUrl: buildAppUrl(
           input.returnPath ?? "/dashboard/settings/billing"
         ),
       });
 
       return {
-        url: session.customerPortalUrl,
+        url: session.url,
       };
     }),
 
+  syncBillingState: protectedProcedure.mutation(async ({ ctx }) => {
+    const user = await getUserRow(ctx.session.user.id);
+    return syncStripeBillingStateForUser(user);
+  }),
+
   syncFromPolar: protectedProcedure.mutation(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    const polar = getPolarClient();
-
-    let polarCustomer = null;
-
-    try {
-      polarCustomer = await polar.customers.getExternal({
-        externalId: user.id,
-      });
-    } catch {
-      polarCustomer = null;
-    }
-
-    if (polarCustomer) {
-      await upsertBillingCustomerFromPolar({
-        userId: user.id,
-        polarCustomerId: polarCustomer.id,
-        polarExternalId: user.id,
-        email: polarCustomer.email ?? null,
-        name: polarCustomer.name ?? null,
-      });
-
-      // Fetch subscriptions for this customer
-      const subscriptionsPage = await polar.subscriptions.list({
-        externalCustomerId: user.id,
-        limit: 10,
-      });
-
-      for (const sub of subscriptionsPage.result.items) {
-        await upsertBillingSubscriptionFromPolar({
-          userId: user.id,
-          polarSubscriptionId: sub.id,
-          polarCustomerId: sub.customerId,
-          polarProductId: sub.productId,
-          planKey: resolvePlanKeyFromProductId(sub.productId),
-          status: sub.status,
-          currency: sub.currency ?? null,
-          amount: sub.amount ?? null,
-          recurringInterval: sub.recurringInterval ?? null,
-          cancelAtPeriodEnd: sub.cancelAtPeriodEnd ?? false,
-          currentPeriodStart: sub.currentPeriodStart
-            ? new Date(sub.currentPeriodStart)
-            : null,
-          currentPeriodEnd: sub.currentPeriodEnd
-            ? new Date(sub.currentPeriodEnd)
-            : null,
-          startedAt: sub.startedAt ? new Date(sub.startedAt) : null,
-          endsAt: sub.endsAt ? new Date(sub.endsAt) : null,
-          endedAt: sub.endedAt ? new Date(sub.endedAt) : null,
-          canceledAt: sub.canceledAt ? new Date(sub.canceledAt) : null,
-          metadata:
-            (sub.metadata as Record<string, string | number | boolean>) ?? {},
-        });
-
-        if (sub.status === "active") {
-          await markAffiliateSubscriptionActive({
-            referredUserId: user.id,
-            subscriptionId: sub.id,
-            activatedAt: sub.startedAt ? new Date(sub.startedAt) : new Date(),
-          });
-        }
-      }
-
-      // Fetch orders for this customer
-      const ordersPage = await polar.orders.list({
-        externalCustomerId: user.id,
-        limit: 50,
-      });
-
-      for (const order of ordersPage.result.items) {
-        const orderMetadata = normalizeBillingMetadata(order.metadata);
-        const affiliateOrderMetadata =
-          extractAffiliateOrderMetadata(orderMetadata);
-
-        await upsertBillingOrderFromPolar({
-          userId: user.id,
-          polarOrderId: order.id,
-          polarCustomerId: order.customerId,
-          polarSubscriptionId: order.subscriptionId ?? null,
-          polarProductId: order.productId ?? null,
-          planKey: resolvePlanKeyFromProductId(order.productId),
-          status: order.status,
-          currency: order.currency ?? null,
-          subtotalAmount: order.subtotalAmount ?? null,
-          discountAmount: order.discountAmount ?? null,
-          taxAmount: order.taxAmount ?? null,
-          totalAmount: order.totalAmount ?? null,
-          paid: order.status === "paid",
-          paidAt: order.status === "paid" ? new Date(order.createdAt) : null,
-          metadata: orderMetadata ?? {},
-        });
-
-        if (order.status === "paid") {
-          await markReferralConversionPaid({
-            referredUserId: user.id,
-            orderId: order.id,
-            subscriptionId: order.subscriptionId ?? null,
-            paidAt: new Date(order.createdAt),
-          });
-
-          await recordAffiliateCommissionEvent({
-            referredUserId: user.id,
-            polarOrderId: order.id,
-            polarSubscriptionId: order.subscriptionId ?? null,
-            affiliateAttributionId:
-              affiliateOrderMetadata.affiliateAttributionId,
-            orderAmount: resolveCommissionableOrderAmount({
-              subtotalAmount: order.subtotalAmount,
-              discountAmount: order.discountAmount,
-              totalAmount: order.totalAmount,
-            }),
-            currency: order.currency ?? null,
-            commissionBps: affiliateOrderMetadata.commissionBps,
-            metadata: orderMetadata,
-            occurredAt: new Date(order.createdAt),
-          });
-
-          if (affiliateOrderMetadata.rewardGrantId) {
-            await markReferralRewardGrantConsumed(
-              affiliateOrderMetadata.rewardGrantId
-            );
-          }
-        }
-      }
-
-      await updateUserPremiumFlag(user.id);
-    }
-
-    const billing = await getActiveBillingState(user.id);
-    return { activePlanKey: billing.activePlanKey };
+    return syncStripeBillingStateForUser(user);
   }),
 
   createPrivateBetaCode: protectedProcedure
@@ -1568,6 +2724,47 @@ export const billingRouter = router({
 
     return listAffiliatePayoutQueue();
   }),
+
+  listLegacyBillingCustomers: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserRow(ctx.session.user.id);
+    assertGrowthAdmin(user.email);
+
+    return listLegacyBillingCustomers();
+  }),
+
+  disconnectLegacyBillingCustomer: protectedProcedure
+    .input(
+      z.object({
+        userId: z.string(),
+        reason: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return disconnectLegacyBillingCustomerByUserId({
+        userId: input.userId,
+        disconnectedByUserId: user.id,
+        reason: input.reason ?? null,
+      });
+    }),
+
+  disconnectAllLegacyBillingCustomers: protectedProcedure
+    .input(
+      z.object({
+        reason: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return disconnectAllLegacyBillingCustomers({
+        disconnectedByUserId: user.id,
+        reason: input.reason ?? null,
+      });
+    }),
 
   approveAffiliateWithdrawal: protectedProcedure
     .input(
@@ -1896,6 +3093,7 @@ export async function syncPolarWebhookEvent(event: any) {
         polarOrderId: event.data.id,
         polarSubscriptionId: event.data.subscriptionId ?? null,
         affiliateAttributionId: affiliateOrderMetadata.affiliateAttributionId,
+        planKey: resolvePlanKeyFromProductId(event.data.productId),
         orderAmount: resolveCommissionableOrderAmount({
           subtotalAmount: event.data.subtotalAmount,
           discountAmount: event.data.discountAmount,
@@ -1913,5 +3111,324 @@ export async function syncPolarWebhookEvent(event: any) {
         );
       }
     }
+  }
+}
+
+export async function syncStripeWebhookEvent(event: Stripe.Event) {
+  const objectId =
+    typeof (event.data.object as { id?: unknown })?.id === "string"
+      ? ((event.data.object as { id: string }).id ?? null)
+      : null;
+
+  const seen = await db
+    .select()
+    .from(billingWebhookEvent)
+    .where(
+      and(
+        eq(billingWebhookEvent.provider, "stripe"),
+        eq(billingWebhookEvent.providerEventId, event.id)
+      )
+    )
+    .limit(1);
+
+  if (seen[0]?.processingStatus === "processed") {
+    return;
+  }
+
+  const [webhookRow] = seen[0]
+    ? await db
+        .update(billingWebhookEvent)
+        .set({
+          providerObjectId: objectId,
+          eventKey: `stripe:${event.id}`,
+          eventType: event.type,
+          objectId,
+          processingStatus: "pending",
+          processedAt: null,
+          errorMessage: null,
+          payload: event as unknown as Record<string, unknown>,
+        })
+        .where(eq(billingWebhookEvent.id, seen[0].id))
+        .returning()
+    : await db
+        .insert(billingWebhookEvent)
+        .values({
+          id: crypto.randomUUID(),
+          provider: "stripe",
+          providerEventId: event.id,
+          providerObjectId: objectId,
+          eventKey: `stripe:${event.id}`,
+          eventType: event.type,
+          objectId,
+          processingStatus: "pending",
+          payload: event as unknown as Record<string, unknown>,
+        })
+        .returning();
+
+  try {
+    if (event.type.startsWith("customer.")) {
+      const customer = event.data.object as Stripe.Customer;
+      if (!customer.deleted) {
+        const userId = await findUserIdForStripeCustomer({
+          stripeCustomerId: customer.id,
+          metadataUserId:
+            typeof customer.metadata?.user_id === "string"
+              ? customer.metadata.user_id
+              : null,
+        });
+        if (userId) {
+          await upsertBillingCustomerFromStripe({
+            userId,
+            stripeCustomerId: customer.id,
+            email: customer.email ?? null,
+            name: customer.name ?? null,
+            defaultPaymentMethodId:
+              typeof customer.invoice_settings?.default_payment_method ===
+              "string"
+                ? customer.invoice_settings.default_payment_method
+                : null,
+            metadata: normalizeBillingMetadata(customer.metadata),
+          });
+        }
+      }
+    } else if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const userId =
+        typeof session.metadata?.user_id === "string"
+          ? session.metadata.user_id
+          : session.client_reference_id ?? null;
+
+      if (userId && typeof session.customer === "string") {
+        const customer = await retrieveStripeCustomer(session.customer);
+        if (customer && !customer.deleted) {
+          await upsertBillingCustomerFromStripe({
+            userId,
+            stripeCustomerId: customer.id,
+            email: customer.email ?? null,
+            name: customer.name ?? null,
+            defaultPaymentMethodId:
+              typeof customer.invoice_settings?.default_payment_method ===
+              "string"
+                ? customer.invoice_settings.default_payment_method
+                : null,
+            metadata: normalizeBillingMetadata(customer.metadata),
+          });
+        }
+      }
+    } else if (event.type.startsWith("customer.subscription.")) {
+      const subscription = event.data.object as any;
+      const userId = await findUserIdForStripeCustomer({
+        stripeCustomerId:
+          typeof subscription.customer === "string"
+            ? subscription.customer
+            : subscription.customer?.id ?? null,
+        metadataUserId:
+          typeof subscription.metadata?.user_id === "string"
+            ? subscription.metadata.user_id
+            : null,
+      });
+
+      if (userId) {
+        const primaryItem = subscription.items.data[0];
+        const price = primaryItem?.price;
+        await upsertBillingSubscriptionFromStripe({
+          userId,
+          stripeSubscriptionId: subscription.id,
+          stripeCustomerId:
+            typeof subscription.customer === "string"
+              ? subscription.customer
+              : subscription.customer?.id ?? null,
+          stripePriceId: price?.id ?? null,
+          stripeProductId:
+            typeof price?.product === "string"
+              ? price.product
+              : price?.product?.id ?? null,
+          stripeLatestInvoiceId:
+            typeof subscription.latest_invoice === "string"
+              ? subscription.latest_invoice
+              : subscription.latest_invoice?.id ?? null,
+          metadata: normalizeBillingMetadata(subscription.metadata),
+          status: subscription.status,
+          currency: price?.currency?.toUpperCase() ?? null,
+          amount: price?.unit_amount ?? null,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          currentPeriodStart: fromStripeTimestamp(
+            subscription.current_period_start
+          ),
+          currentPeriodEnd: fromStripeTimestamp(subscription.current_period_end),
+          trialStart: fromStripeTimestamp(subscription.trial_start),
+          trialEnd: fromStripeTimestamp(subscription.trial_end),
+          startedAt: fromStripeTimestamp(subscription.start_date),
+          endedAt: fromStripeTimestamp(subscription.ended_at),
+          canceledAt: fromStripeTimestamp(subscription.canceled_at),
+        });
+
+        if (
+          subscription.status === "active" ||
+          subscription.status === "trialing"
+        ) {
+          await markAffiliateSubscriptionActive({
+            referredUserId: userId,
+            subscriptionId: subscription.id,
+            activatedAt:
+              fromStripeTimestamp(subscription.start_date) ?? new Date(),
+          });
+        }
+
+        await updateUserPremiumFlag(userId);
+      }
+    } else if (
+      event.type === "invoice.paid" ||
+      event.type === "invoice.payment_failed" ||
+      event.type === "invoice.finalized"
+    ) {
+      const invoice = event.data.object as any;
+      const userId = await findUserIdForStripeCustomer({
+        stripeCustomerId:
+          typeof invoice.customer === "string"
+            ? invoice.customer
+            : invoice.customer?.id ?? null,
+        metadataUserId: null,
+      });
+
+      if (userId) {
+        const line =
+          invoice.lines.data.find((item: any) => item.type === "subscription") ??
+          invoice.lines.data[0];
+        const subscriptionId =
+          typeof invoice.subscription === "string"
+            ? invoice.subscription
+            : invoice.subscription?.id ?? null;
+        const [subscriptionRow] = subscriptionId
+          ? await db
+              .select()
+              .from(billingSubscription)
+              .where(eq(billingSubscription.stripeSubscriptionId, subscriptionId))
+              .limit(1)
+          : [null];
+        const metadata = {
+          ...(normalizeBillingMetadata(subscriptionRow?.metadata) ?? {}),
+          ...(normalizeBillingMetadata(invoice.metadata) ?? {}),
+        };
+        const affiliateOrderMetadata = extractAffiliateOrderMetadata(metadata);
+        const price = line?.price ?? null;
+        const discountAmount = Array.isArray(invoice.total_discount_amounts)
+          ? invoice.total_discount_amounts.reduce(
+              (sum: number, item: any) => sum + (item.amount ?? 0),
+              0
+            )
+          : 0;
+        const taxAmount =
+          (typeof invoice.tax === "number" ? invoice.tax : null) ??
+          (Array.isArray(invoice.total_taxes)
+            ? invoice.total_taxes.reduce(
+                (sum: number, item: any) => sum + (item.amount ?? 0),
+                0
+              )
+            : 0);
+        const paidAt =
+          fromStripeTimestamp(invoice.status_transitions?.paid_at) ??
+          fromStripeTimestamp(invoice.created) ??
+          new Date();
+        const order = await upsertBillingOrderFromStripe({
+          userId,
+          providerOrderId: invoice.id,
+          stripeInvoiceId: invoice.id,
+          stripeCustomerId:
+            typeof invoice.customer === "string"
+              ? invoice.customer
+              : invoice.customer?.id ?? null,
+          stripeSubscriptionId: subscriptionId,
+          stripePaymentIntentId:
+            typeof invoice.payment_intent === "string"
+              ? invoice.payment_intent
+              : invoice.payment_intent?.id ?? null,
+          stripeChargeId:
+            typeof invoice.charge === "string"
+              ? invoice.charge
+              : invoice.charge?.id ?? null,
+          stripePriceId: price?.id ?? subscriptionRow?.stripePriceId ?? null,
+          stripeProductId:
+            (typeof price?.product === "string"
+              ? price.product
+              : price?.product?.id) ??
+            subscriptionRow?.stripeProductId ??
+            null,
+          metadata,
+          status: invoice.status ?? (event.type === "invoice.paid" ? "paid" : "open"),
+          currency: invoice.currency?.toUpperCase() ?? null,
+          subtotalAmount: invoice.subtotal ?? null,
+          discountAmount,
+          taxAmount,
+          totalAmount: invoice.total ?? invoice.amount_paid ?? null,
+          paid: event.type === "invoice.paid" || invoice.paid,
+          paidAt: event.type === "invoice.paid" || invoice.paid ? paidAt : null,
+          createdAt: fromStripeTimestamp(invoice.created),
+        });
+
+        if (event.type === "invoice.paid" || invoice.paid) {
+          await markReferralConversionPaid({
+            referredUserId: userId,
+            orderId: invoice.id,
+            subscriptionId,
+            paidAt,
+          });
+
+          await recordAffiliateCommissionEvent({
+            provider: "stripe",
+            providerOrderId: invoice.id,
+            providerSubscriptionId: subscriptionId,
+            billingOrderId: order.id,
+            stripeInvoiceId: invoice.id,
+            stripeSubscriptionId: subscriptionId,
+            referredUserId: userId,
+            affiliateAttributionId: affiliateOrderMetadata.affiliateAttributionId,
+            planKey: order.planKey,
+            orderAmount: resolveCommissionableOrderAmount({
+              subtotalAmount: invoice.subtotal,
+              discountAmount,
+              totalAmount: invoice.total ?? invoice.amount_paid,
+            }),
+            subtotalAmount: invoice.subtotal ?? null,
+            discountAmount,
+            taxAmount,
+            currency: invoice.currency?.toUpperCase() ?? null,
+            commissionBps: affiliateOrderMetadata.commissionBps,
+            metadata,
+            occurredAt: paidAt,
+          });
+
+          if (affiliateOrderMetadata.rewardGrantId) {
+            await markReferralRewardGrantConsumed(
+              affiliateOrderMetadata.rewardGrantId
+            );
+          }
+        }
+
+        await updateUserPremiumFlag(userId);
+      }
+    }
+
+    await db
+      .update(billingWebhookEvent)
+      .set({
+        processingStatus: "processed",
+        processedAt: new Date(),
+        errorMessage: null,
+        payload: event as unknown as Record<string, unknown>,
+      })
+      .where(eq(billingWebhookEvent.id, webhookRow.id));
+  } catch (error) {
+    await db
+      .update(billingWebhookEvent)
+      .set({
+        processingStatus: "failed",
+        processedAt: null,
+        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        payload: event as unknown as Record<string, unknown>,
+      })
+      .where(eq(billingWebhookEvent.id, webhookRow.id));
+
+    throw error;
   }
 }

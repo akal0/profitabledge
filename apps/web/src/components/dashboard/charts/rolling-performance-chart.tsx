@@ -23,6 +23,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartTrades } from "./use-chart-trades";
 
@@ -54,9 +55,13 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-function formatMetricValue(metric: RollingMetricKey, value: number) {
+function formatMetricValue(
+  metric: RollingMetricKey,
+  value: number,
+  currencyCode?: string | null
+) {
   if (metric === "expectancy") {
-    return formatSignedCurrency(value, 2);
+    return formatSignedCurrency(value, 2, currencyCode);
   }
   if (metric === "avgRR") {
     return `${value.toFixed(2)}R`;
@@ -79,6 +84,7 @@ export function RollingPerformanceChart({
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const chartData = useMemo(() => {
     if (trades.length < window) return [];
@@ -188,7 +194,7 @@ export function RollingPerformanceChart({
                 : "text-white/80"
             )}
           >
-            {formatMetricValue(metric, currentValue)}
+            {formatMetricValue(metric, currentValue, resolvedCurrencyCode)}
           </span>
           .
         </p>
@@ -228,7 +234,7 @@ export function RollingPerformanceChart({
               width={metric === "expectancy" ? 64 : 40}
               tickFormatter={(value) => {
                 if (metric === "expectancy") {
-                  return formatSignedCurrency(value, 0);
+                  return formatSignedCurrency(value, 0, resolvedCurrencyCode);
                 }
                 if (metric === "avgRR") return `${value.toFixed(1)}R`;
                 if (metric === "winRate") return `${Math.round(value)}%`;
@@ -245,7 +251,11 @@ export function RollingPerformanceChart({
                   <DashboardChartTooltipFrame title={item.payload.date}>
                     <DashboardChartTooltipRow
                       label={config.label}
-                      value={formatMetricValue(metric, value)}
+                      value={formatMetricValue(
+                        metric,
+                        value,
+                        resolvedCurrencyCode
+                      )}
                       tone={
                         metric === "expectancy"
                           ? value >= 0

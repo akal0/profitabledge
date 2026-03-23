@@ -26,6 +26,38 @@ ES,"Mar 15, 2026 10:00 AM","Mar 15, 2026 10:05 AM",Buy,1,5000,5004,200`;
     expect(result.files).toEqual(["statement.csv"]);
   });
 
+  it("parses FTMO-style trading journal statements through the generic parser", () => {
+    const csv = `Ticket,Open,Type,Volume,Symbol,Price,SL,TP,Close,Price,Swap,Commissions,Profit,Pips,"Trade duration in seconds"
+50275593,"2025-02-25 10:39:29",buy,2.5,GBPUSD,1.26189000,1.26194,1.26507000,"2025-02-25 12:02:38",1.26194000,0,-7.5,12.50000000,0,4989
+48800661,"2025-02-13 12:16:03",sell,2.4,EURJPY,160.56000000,160.254,158.89800000,"2025-02-14 17:56:17",159.92800000,-30.95,-7.2,997.04000000,0,106814`;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "ftmo",
+      files: [{ fileName: "trading-journal.csv", fileContent: csv }],
+    });
+
+    expect(result.parserId).toBe("generic-trade-statement");
+    expect(result.trades).toHaveLength(2);
+    expect(result.trades[0]).toMatchObject({
+      ticket: "50275593",
+      symbol: "GBPUSD",
+      tradeType: "long",
+      volume: 2.5,
+      openPrice: 1.26189,
+      closePrice: 1.26194,
+      commissions: -7.5,
+      profit: 12.5,
+      tradeDurationSeconds: "4989",
+    });
+    expect(result.trades[1]).toMatchObject({
+      ticket: "48800661",
+      symbol: "EURJPY",
+      tradeType: "short",
+      swap: -30.95,
+      tradeDurationSeconds: "106814",
+    });
+  });
+
   it("accepts Tradovate supplemental files without treating them as trade rows", () => {
     const performanceCsv = `Symbol,Buy Fill Id,Sell Fill Id,Qty,Buy Price,Sell Price,PnL,Bought Timestamp,Sold Timestamp
 NQ,1001,1002,1,20000,20010,100,03/15/2026 10:00 AM,03/15/2026 10:05 AM`;

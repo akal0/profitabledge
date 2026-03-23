@@ -12,6 +12,8 @@ export type LiveCapabilityAccountLike = {
 };
 
 export type AccountSourceBadgeAccountLike = LiveCapabilityAccountLike & {
+  name?: string | null;
+  broker?: string | null;
   brokerType?: string | null;
   brokerServer?: string | null;
   accountNumber?: string | number | null;
@@ -186,34 +188,37 @@ export function getAccountSourceBadge(
     };
   }
 
+  if (
+    isDemoWorkspaceAccount({
+      name: account.name,
+      broker: account.broker,
+      brokerServer: account.brokerServer,
+      accountNumber: account.accountNumber,
+    })
+  ) {
+    return {
+      label: "Demo account",
+      className: "ring-violet-500/30 bg-violet-500/15 text-violet-200",
+    };
+  }
+
   const brokerType = account.brokerType?.toLowerCase();
   const hasImport = Boolean(account.lastImportedAt);
 
   if (account.verificationLevel === "api_verified") {
     return {
-      label: "API synced",
-      className: "ring-cyan-500/30 bg-cyan-500/15 text-cyan-300",
+      label: "Broker sync",
+      className: "ring-sky-500/30 bg-sky-500/15 text-sky-300",
     };
   }
 
   if (accountIsEaSynced(account) || hasVerifiedFlag(account)) {
-    if (brokerType === "mt5" || account.brokerServer) {
-      return {
-        label: "MT5 synced",
-        className: "ring-sky-500/30 bg-sky-500/15 text-sky-300",
-      };
-    }
-
-    if (brokerType === "mt4") {
-      return {
-        label: "MT4 synced",
-        className: "ring-indigo-500/30 bg-indigo-500/15 text-indigo-300",
-      };
-    }
-
     return {
       label: "EA synced",
-      className: "ring-teal-500/30 bg-teal-500/15 text-teal-300",
+      className:
+        brokerType === "mt4"
+          ? "ring-indigo-500/30 bg-indigo-500/15 text-indigo-300"
+          : "ring-teal-500/30 bg-teal-500/15 text-teal-300",
     };
   }
 

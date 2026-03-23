@@ -15,6 +15,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartTrades } from "./use-chart-trades";
 
@@ -50,8 +51,12 @@ function heatColor(value: number, min: number, max: number): string {
   return "bg-red-500/25";
 }
 
-function formatMetricValue(metric: CorrelationMetric, value: number) {
-  if (metric === "pnl") return formatSignedCurrency(value, 0);
+function formatMetricValue(
+  metric: CorrelationMetric,
+  value: number,
+  currencyCode?: string | null
+) {
+  if (metric === "pnl") return formatSignedCurrency(value, 0, currencyCode);
   if (metric === "winRate") return `${value.toFixed(1)}%`;
   if (metric === "avgRR") return `${value.toFixed(2)}R`;
   return `${Math.round(value).toLocaleString()} trades`;
@@ -97,6 +102,7 @@ export function CorrelationMatrix({
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
   const [hoveredCell, setHoveredCell] = useState<{
     key: string;
     rect: { top: number; left: number; width: number };
@@ -142,7 +148,7 @@ export function CorrelationMatrix({
         }
 
         const pnls = cell.map((trade: any) =>
-          parseFloat(trade.profit?.toString() || "0")
+          parseFloat((trade.netPnl ?? trade.profit ?? 0).toString())
         );
         const rrs = cell
           .map((trade: any) => parseFloat(trade.realisedRR?.toString() || "0"))
@@ -317,7 +323,11 @@ export function CorrelationMatrix({
                           className="font-semibold leading-tight tabular-nums text-white/90"
                           style={{ fontSize: `${valueFontSize}px` }}
                         >
-                          {formatMetricValue(metric, value)}
+                          {formatMetricValue(
+                            metric,
+                            value,
+                            resolvedCurrencyCode
+                          )}
                         </span>
                       )}
                     </div>
@@ -346,7 +356,11 @@ export function CorrelationMatrix({
               <DashboardChartTooltipFrame title={`${row} × ${col}`}>
                 <DashboardChartTooltipRow
                   label={metricLabel}
-                  value={formatMetricValue(metric, value)}
+                  value={formatMetricValue(
+                    metric,
+                    value,
+                    resolvedCurrencyCode
+                  )}
                   tone={
                     metric === "pnl"
                       ? value >= 0

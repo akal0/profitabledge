@@ -1,5 +1,8 @@
 "use client";
 
+import type { TradeDrawdownMap } from "@/features/trades/table/lib/trade-drawdown";
+import type { NamedColorTag } from "@/features/trades/table/lib/trade-table-view-state";
+
 export type TradePnlDisplayMode = "usd" | "rr";
 
 export type InlineTradeUpdateInput = {
@@ -32,6 +35,11 @@ export type TradeTableMeta = {
   pnlMode?: TradePnlDisplayMode;
   baselineInitialBalance?: number | string | null;
   streakByTradeId?: Record<string, TradeStreakMeta>;
+  sessionTags?: NamedColorTag[];
+  modelTags?: NamedColorTag[];
+  customTags?: string[];
+  drawdownByTradeId?: TradeDrawdownMap;
+  drawdownLoading?: boolean;
   updateTrade?: (input: InlineTradeUpdateInput) => Promise<void>;
 };
 

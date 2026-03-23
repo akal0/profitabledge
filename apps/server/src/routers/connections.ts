@@ -23,7 +23,7 @@ import {
   brokerSyncCheckpoint,
 } from "../db/schema/mt5-sync";
 import { openTrade, tradingAccount } from "../db/schema/trading";
-import { eq, and, desc, gte, inArray } from "drizzle-orm";
+import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encryptCredentials } from "../lib/providers/credential-cipher";
 import {
@@ -37,6 +37,12 @@ import { getCTraderAuthUrl } from "../lib/providers/ctrader";
 import { createMtTerminalConnection } from "../lib/mt5/worker-control";
 import { isMtTerminalProvider } from "../lib/mt5/constants";
 import { buildMtConnectionCompleteness } from "../lib/mt5/completeness";
+import {
+  buildMt5LiveLeaseHolder,
+  getMt5LiveLeaseHolder,
+  normalizeMt5LiveLeaseRoute,
+  shouldRenewMt5LiveLease,
+} from "../lib/mt5/live-lease";
 import {
   isMtWorkerHostSnapshotFresh,
   listMtWorkerHostSnapshots,
@@ -504,6 +510,120 @@ export const connectionsRouter = router({
       };
     }
   }),
+
+  heartbeatTerminalLeases: protectedProcedure
+    .input(
+      z.object({
+        connectionIds: z.array(z.string()).min(1).max(12),
+        leaseId: z.string().uuid(),
+        route: z.string().max(160).nullish(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
+      assertAlphaFeatureEnabled("mt5Ingestion");
+
+      const connectionIds = [...new Set(input.connectionIds)].slice(0, 12);
+      const rows = await db.query.platformConnection.findMany({
+        where: and(
+          eq(platformConnection.userId, ctx.session.user.id),
+          inArray(platformConnection.id, connectionIds)
+        ),
+      });
+      const terminalConnections = rows.filter((connection) =>
+        isMtTerminalProvider(connection.provider)
+      );
+
+      if (terminalConnections.length === 0) {
+        return { success: true, connectionIds: [] as string[] };
+      }
+
+      const now = new Date();
+      const route = normalizeMt5LiveLeaseRoute(input.route);
+      const renewableConnections = terminalConnections.filter(
+        (connection) =>
+          !connection.isPaused &&
+          shouldRenewMt5LiveLease(
+            getMt5LiveLeaseHolder(connection.meta, input.leaseId),
+            {
+              now,
+              route,
+            }
+          )
+      );
+
+      await Promise.all(
+        renewableConnections.map((connection) => {
+          const holder = buildMt5LiveLeaseHolder({
+            leaseId: input.leaseId,
+            now,
+            route,
+          });
+
+          return db
+            .update(platformConnection)
+            .set({
+              meta: sql`jsonb_set(
+                COALESCE(${platformConnection.meta}, '{}'::jsonb),
+                ARRAY['mt5LiveLeases', 'holders', ${input.leaseId}]::text[],
+                ${JSON.stringify(holder)}::jsonb,
+                true
+              )`,
+            })
+            .where(eq(platformConnection.id, connection.id));
+        })
+      );
+
+      return {
+        success: true,
+        connectionIds: terminalConnections
+          .filter((connection) => !connection.isPaused)
+          .map((connection) => connection.id),
+      };
+    }),
+
+  releaseTerminalLeases: protectedProcedure
+    .input(
+      z.object({
+        connectionIds: z.array(z.string()).min(1).max(12),
+        leaseId: z.string().uuid(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("connections");
+      assertAlphaFeatureEnabled("mt5Ingestion");
+
+      const connectionIds = [...new Set(input.connectionIds)].slice(0, 12);
+      const rows = await db.query.platformConnection.findMany({
+        where: and(
+          eq(platformConnection.userId, ctx.session.user.id),
+          inArray(platformConnection.id, connectionIds)
+        ),
+      });
+      const terminalConnectionIds = rows
+        .filter((connection) => isMtTerminalProvider(connection.provider))
+        .map((connection) => connection.id);
+
+      if (terminalConnectionIds.length === 0) {
+        return { success: true, connectionIds: [] as string[] };
+      }
+
+      await Promise.all(
+        terminalConnectionIds.map((connectionId) =>
+          db
+            .update(platformConnection)
+            .set({
+              meta: sql`COALESCE(${platformConnection.meta}, '{}'::jsonb) #- ARRAY['mt5LiveLeases', 'holders', ${input.leaseId}]::text[]`,
+            })
+            .where(eq(platformConnection.id, connectionId))
+        )
+      );
+
+      return {
+        success: true,
+        connectionIds: terminalConnectionIds,
+      };
+    }),
 
   /** Get a single connection (must belong to user). */
   getById: protectedProcedure

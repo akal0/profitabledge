@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   Archive,
   Globe2,
+  Link2,
   MoreHorizontal,
   ShieldCheck,
   Tag,
@@ -13,6 +14,7 @@ import {
 import { toast } from "sonner";
 
 import { AccountPublicProofDialog } from "@/features/accounts/components/account-public-proof-dialog";
+import { AccountLinkConnectionDialog } from "@/features/accounts/components/account-link-connection-dialog";
 import { AccountTagsDialog } from "@/features/accounts/components/account-tags-dialog";
 import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { Button } from "@/components/ui/button";
@@ -23,8 +25,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { cn } from "@/lib/utils";
-import { queryClient, trpcClient } from "@/utils/trpc";
+import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 import {
   HEADER_ICON_BUTTON_CLASS,
   type AccountRecord,
@@ -41,9 +44,19 @@ export function AccountCardActionsMenu({
   account: AccountRecord;
   className?: string;
 }) {
+  const connectionsEnabled = isPublicAlphaFeatureEnabled("connections");
   const [tagsOpen, setTagsOpen] = useState(false);
   const [publicProofOpen, setPublicProofOpen] = useState(false);
+  const [linkConnectionOpen, setLinkConnectionOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const { data: connections = [] } = useQuery({
+    ...trpcOptions.connections.list.queryOptions(),
+    enabled: connectionsEnabled,
+  });
+  const linkableConnections = connections.filter(
+    (connection) => connection.accountId == null
+  );
 
   const archiveMutation = useMutation({
     mutationFn: (input: { accountId: string; archive: boolean }) =>
@@ -70,6 +83,27 @@ export function AccountCardActionsMenu({
     },
   });
 
+  const linkConnectionMutation = useMutation({
+    mutationFn: (connectionId: string) =>
+      trpcClient.connections.linkAccount.mutate({
+        connectionId,
+        accountId: account.id,
+      }),
+    onSuccess: async () => {
+      toast.success("Connection linked");
+      setLinkConnectionOpen(false);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+        queryClient.invalidateQueries({
+          queryKey: trpcOptions.connections.list.queryOptions().queryKey,
+        }),
+      ]);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to link connection");
+    },
+  });
+
   return (
     <>
       <AccountTagsDialog
@@ -83,6 +117,16 @@ export function AccountCardActionsMenu({
         open={publicProofOpen}
         onOpenChange={setPublicProofOpen}
         trigger={null}
+      />
+      <AccountLinkConnectionDialog
+        open={linkConnectionOpen}
+        accountName={account.name}
+        connections={linkableConnections}
+        isLinking={linkConnectionMutation.isPending}
+        onOpenChange={setLinkConnectionOpen}
+        onLinkConnection={(connectionId) =>
+          linkConnectionMutation.mutate(connectionId)
+        }
       />
       <DeleteAccountButton
         account={account}
@@ -136,6 +180,15 @@ export function AccountCardActionsMenu({
             <Globe2 className={ACCOUNT_ACTION_ICON_CLASS} />
             <span>Public proof page</span>
           </DropdownMenuItem>
+          {connectionsEnabled ? (
+            <DropdownMenuItem
+              className={ACCOUNT_ACTION_ITEM_CLASS}
+              onSelect={() => setLinkConnectionOpen(true)}
+            >
+              <Link2 className={ACCOUNT_ACTION_ICON_CLASS} />
+              <span>Link connection</span>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator className="-mx-1 my-1 bg-white/5" />
           <DropdownMenuItem
             className={ACCOUNT_ACTION_ITEM_CLASS}

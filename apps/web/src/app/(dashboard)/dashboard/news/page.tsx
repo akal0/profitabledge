@@ -4,7 +4,7 @@ import EconomicCalendar from "@/features/dashboard/economic-calendar/components/
 
 export default function EconomicCalendarPage() {
   return (
-    <main className="p-6 space-y-4 py-4">
+    <main className="w-full space-y-4 p-6 py-4">
       <Suspense
         fallback={
           <RouteLoadingFallback

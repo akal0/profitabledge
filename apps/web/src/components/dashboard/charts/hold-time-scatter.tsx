@@ -20,6 +20,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 
 function formatDuration(totalMinutes: number) {
@@ -46,6 +47,7 @@ export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
   const effectiveAccountId = accountId || storeAccountId;
   const renderMode = useChartRenderMode();
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const scatterData = useMemo(() => {
     const maxPoints =
@@ -55,12 +57,12 @@ export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
         return (
           Number.isFinite(Number(trade.holdSeconds)) &&
           Number(trade.holdSeconds) > 0 &&
-          Number.isFinite(Number(trade.profit))
+          Number.isFinite(Number(trade.netPnl ?? trade.profit))
         );
       })
       .map((trade) => ({
         trade,
-        profit: Number(trade.profit ?? 0),
+        profit: Number(trade.netPnl ?? trade.profit ?? 0),
       }));
     const sampleStep =
       maxPoints !== Number.POSITIVE_INFINITY &&
@@ -140,7 +142,9 @@ export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
           stroke="#ffffff50"
           tick={{ fill: "#ffffff70", fontSize: 11 }}
           width={72}
-          tickFormatter={(value) => formatSignedCurrency(value, 0)}
+          tickFormatter={(value) =>
+            formatSignedCurrency(value, 0, resolvedCurrencyCode)
+          }
           label={{
             value: "P&L",
             angle: -90,
@@ -166,7 +170,11 @@ export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
                 />
                 <DashboardChartTooltipRow
                   label="P&L"
-                  value={formatSignedCurrency(point.profit, 2)}
+                  value={formatSignedCurrency(
+                    point.profit,
+                    2,
+                    resolvedCurrencyCode
+                  )}
                   tone={point.profit >= 0 ? "positive" : "negative"}
                 />
                 <DashboardChartTooltipRow

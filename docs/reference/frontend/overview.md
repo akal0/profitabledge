@@ -114,6 +114,8 @@ Shared components live in:
 
 Current example:
 
+- the economic calendar route at `/dashboard/news` now uses a full-width page shell so the calendar surface can span the dashboard content area instead of sitting inside a narrower wrapper
+- the economic calendar now keys and groups calendar days from local `YYYY-MM-DD` values instead of UTC `toISOString()` slices, so month/week rendering and event grouping stay stable across DST boundaries such as the March clock change
 - Tradovate accounts expose a header-level CSV enrichment sheet next to the account-status badge so users can merge supplemental broker reports into the currently selected account from anywhere in the dashboard
 - the Tradovate enrichment sheet is idempotent from the user perspective and surfaces a `No new data to import` result when the uploaded files do not add or change anything on the selected account
 - shared multi-file CSV uploads now accumulate files across repeated file-picker opens and drag-drop actions, so users can build an import bundle incrementally instead of selecting every file in one shot
@@ -122,6 +124,7 @@ Current example:
 - the dashboard widget grid now filters out live-only widgets for non-live accounts while preserving those widgets in the saved layout for live-capable accounts, so manual/CSV accounts do not show empty widget slots
 - the dashboard header treats prop-account classification separately from live-sync status, so prop accounts only show live connection or live-synced badges when they actually have EA/API/terminal-backed live support
 - the dashboard shell and overview header now classify selected accounts from actual account/notification state: imported CSV accounts show `Imported account` plus a passive `Last updated` chip, EA-synced accounts show `EA-synced account` plus a passive sync timestamp, and only connector-backed accounts keep a manual `Sync account` trigger
+- the dashboard and public-proof trust surfaces should present broker-terminal accounts as `Broker sync` / `Broker verified`, EA accounts as `EA synced` / `EA verified`, and the seeded Profitabledge demo account as a demo account provided by Profitabledge rather than a live-synced account
 - the sidebar account selector mirrors that source classification with row icons: demo workspace accounts show the violet flask, connection-backed accounts show a plug, and EA-synced accounts keep the teal check indicator
 - the main dashboard sidebar footer now exposes a `Request a feature` action above `Settings`; it opens an in-app dialog backed by a shared product catalog covering current analysis, accounts, community, tools, growth, settings, onboarding, and public/share surfaces, and submits the request privately through the operations router instead of sending members to GitHub in the browser
 - app-router pages that depend on `useSearchParams()` are now isolated behind suspense boundaries so the web build can prerender static pages without CSR bailout failures
@@ -158,6 +161,8 @@ Current example:
 - the sidebar `NavUser` dropdown should act as quick access into concrete settings destinations such as profile, billing, and notifications, while sign-out routes through the shared Better Auth client and the current-plan / upgrade CTA reflects the live billing plan, showing the target plan's current upgrade offer badge (`10% off` for `Professional`, `15% off` for `Institutional`) and disappearing once the member is already on `Institutional`
 - account cards now expose a dedicated public-proof dialog that creates, rotates, revokes, and copies revocable `/{username}/{publicAccountSlug}/trades` links, while the public page itself lives outside the dashboard shell and stays focused on trust signals plus a curated trade ledger rather than reusing the owner dashboard
 - the public proof page now uses a proof-first tabbed IA (`Overview`, `Trades`, `Stats`, `Trust`): overview owns the trust/status hero, KPI rail, and chart switcher; trades keeps the read-only grouped/sortable ledger; stats owns advanced performance cards and monthly/daily breakdowns; trust owns provenance, verification, edit/delete disclosure, and audit-coverage messaging
+- the public proof `/{username}/{publicAccountSlug}/trades` route now suspends on its initial page query and falls through to the shared public-proof suspense fallback instead of rendering a route-local loading skeleton, while fetch failures render through the route-level public-proof unavailable state
+- public proof date/timestamp labels now use deterministic formatting instead of ambient server/browser locale defaults, so hydration stays stable on shared proof pages even when the server and viewer locale differ
 
 ## Shared UI patterns that are heavily reused
 

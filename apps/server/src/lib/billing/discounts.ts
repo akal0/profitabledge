@@ -3,7 +3,7 @@ import {
   BILLING_PLAN_TIER,
   type BillingPlanKey,
 } from "./config";
-import { getPolarClient } from "./polar";
+import { clampStripeDisplayString, getStripeClient } from "./stripe";
 
 function isUpgradeTargetPlan(
   currentPlanKey: BillingPlanKey,
@@ -29,25 +29,26 @@ export async function createUpgradeOfferDiscount(input: {
 
   const plan = getBillingPlanDefinition(input.targetPlanKey);
   const basisPoints = plan?.upgradeOfferBasisPoints ?? null;
-  if (!plan?.polarProductId || !basisPoints) {
+  if (!basisPoints) {
     return null;
   }
 
-  const polar = getPolarClient();
+  const stripe = getStripeClient();
 
-  return polar.discounts.create({
+  return stripe.coupons.create({
+    percent_off: basisPoints / 100,
     duration: "once",
-    type: "percentage",
-    basisPoints,
-    maxRedemptions: 1,
-    products: [plan.polarProductId],
-    name: `Upgrade offer ${input.targetPlanKey} for ${input.userId}`,
+    max_redemptions: 1,
+    name: clampStripeDisplayString(
+      `Upgrade ${input.targetPlanKey} ${input.userId.slice(0, 8)}`
+    ),
     metadata: {
       user_id: input.userId,
       reward_type: "upgrade_offer",
       current_plan: input.currentPlanKey,
       target_plan: input.targetPlanKey,
       basis_points: String(basisPoints),
+      billing_provider: "stripe",
     },
   });
 }

@@ -56,13 +56,19 @@ export type ChartTrade = {
 };
 
 function normalizeTrade(trade: any): ChartTrade {
+  const profit = Number(trade.profit ?? 0);
+  const commissions = Number(trade.commissions ?? 0);
+  const swap = Number(trade.swap ?? 0);
+
   return {
     ...trade,
     tradeDirection: trade.tradeDirection ?? trade.tradeType ?? null,
     tradeType: trade.tradeType ?? trade.tradeDirection ?? null,
     openTime: trade.openTime ?? trade.open ?? null,
     closeTime: trade.closeTime ?? trade.close ?? null,
-    netPnl: trade.netPnl ?? trade.profit ?? 0,
+    netPnl: Number.isFinite(Number(trade.netPnl))
+      ? Number(trade.netPnl)
+      : profit + commissions + swap,
   };
 }
 

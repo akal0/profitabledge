@@ -6,12 +6,7 @@ const TradesPage = () => {
   return (
     <main className="p-6 space-y-4 py-4">
       <Suspense
-        fallback={
-          <RouteLoadingFallback
-            route="trades"
-            className="min-h-[calc(100vh-10rem)]"
-          />
-        }
+        fallback={<RouteLoadingFallback route="trades" className="min-h-full" />}
       >
         <TradeTableInfinite />
       </Suspense>

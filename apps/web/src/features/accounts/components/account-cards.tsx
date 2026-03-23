@@ -232,6 +232,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
   });
 
   const balance = getAccountBalance(account);
+  const accountLabel = account.name || "Prop account";
   const propFirm: PropFirmOption = {
     id: account.propFirmId || "",
     displayName:
@@ -258,7 +259,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
   return (
     <AccountWidgetFrame
       icon={Trophy}
-      title={propFirm.displayName || "Prop firm"}
+      title={accountLabel}
       headerRight={
         <div className="flex items-center gap-1.5">
           <PropAccountStatusBadges
@@ -282,11 +283,9 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             className="size-12 shrink-0 rounded-full!"
           />
           <div>
-            <p className="text-sm font-semibold text-white">
-              {propFirm.displayName}
-            </p>
+            <p className="text-sm font-semibold text-white">{accountLabel}</p>
             <p className="mt-0.5 text-xs font-medium text-white/50 truncate max-w-[180px]">
-              {account.name}
+              {propFirm.displayName || "Prop firm"}
             </p>
             <AccountTagList account={account} />
           </div>

@@ -126,7 +126,7 @@ export function DashboardShellHeader({
             ) : currentAccountIsDemo ? (
               <>
                 <FlaskConical className="size-3.5 text-violet-400" />
-                <span className="hidden lg:inline">Demo account</span>
+                <span className="hidden lg:inline">Profitabledge demo</span>
                 <span className="lg:hidden">Demo</span>
               </>
             ) : currentAccountIsEaSynced ? (

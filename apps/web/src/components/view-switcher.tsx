@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { trpcOptions } from "@/utils/trpc";
-import { useQuery } from "@tanstack/react-query";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -39,17 +39,33 @@ export function ViewSwitcher({
   onManageViews,
   accountId,
 }: ViewSwitcherProps) {
-  const { data: views, isLoading } = useQuery(
+  const { data: views } = useSuspenseQuery(
     trpcOptions.views.list.queryOptions()
   );
-  const { data: defaultView } = useQuery(
+  const { data: defaultView } = useSuspenseQuery(
     trpcOptions.views.getDefault.queryOptions()
   );
-  const { data: gateStatus } = useQuery({
-    ...trpcOptions.trades.getSampleGateStatus.queryOptions({
-      accountId: accountId || "",
-    }),
-    enabled: Boolean(accountId),
+  const gateStatusKey = React.useMemo(
+    () =>
+      accountId
+        ? trpcOptions.trades.getSampleGateStatus.queryOptions({
+            accountId,
+          }).queryKey
+        : (["trades", "sample-gate", "inactive"] as const),
+    [accountId]
+  );
+  const { data: gateStatus } = useSuspenseQuery({
+    queryKey: gateStatusKey,
+    queryFn: async () => {
+      if (!accountId) {
+        return [];
+      }
+
+      return await trpcClient.trades.getSampleGateStatus.query({
+        accountId,
+      });
+    },
+    staleTime: accountId ? 60_000 : Infinity,
   });
 
   const advancedGate = gateStatus?.find((g) => g.tier === "advanced");
@@ -82,18 +98,6 @@ export function ViewSwitcher({
   const sectionTitleClass = toolbarFilterMenuSectionTitleClass;
   const separatorClass = toolbarFilterMenuMainSeparatorClass;
   const itemClass = cn(toolbarFilterMenuItemClass, "rounded-sm");
-
-  if (isLoading) {
-    return (
-      <Button
-        disabled
-        className={cn(toolbarSelectTriggerButtonClassName, "text-white/40")}
-      >
-        <Settings2 className="h-4 w-4 text-white/40" />
-        Loading...
-      </Button>
-    );
-  }
 
   return (
     <DropdownMenu>

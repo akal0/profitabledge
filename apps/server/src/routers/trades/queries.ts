@@ -1,4 +1,5 @@
 import { protectedProcedure } from "../../lib/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
@@ -11,6 +12,7 @@ import {
 } from "../../lib/advanced-metrics";
 import {
   buildAccountScopeCondition,
+  isAllAccountsScope,
   resolveScopedAccountIds,
 } from "../../lib/account-scope";
 import { evaluateCompliance } from "../../lib/compliance-audits";
@@ -1001,12 +1003,38 @@ export const tradeQueryProcedures = {
   getSampleGateStatus: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
-      await ensureAccountOwnership(ctx.session.user.id, input.accountId);
+      const scopedAccountIds = await resolveScopedAccountIds(
+        ctx.session.user.id,
+        input.accountId
+      );
+
+      if (scopedAccountIds.length === 0) {
+        if (!isAllAccountsScope(input.accountId)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Account not found",
+          });
+        }
+
+        const userRows = await db
+          .select({
+            advancedMetricsPreferences: user.advancedMetricsPreferences,
+          })
+          .from(user)
+          .where(eq(user.id, ctx.session.user.id))
+          .limit(1);
+
+        const prefs = (userRows[0]?.advancedMetricsPreferences as any) || {};
+        return getTradeSampleGateStatus(0, {
+          disableAllGates: prefs.disableSampleGating ?? false,
+          minimumSamples: undefined,
+        });
+      }
 
       const result = await db
         .select({ count: sql<number>`count(*)` })
         .from(trade)
-        .where(eq(trade.accountId, input.accountId));
+        .where(buildAccountScopeCondition(trade.accountId, scopedAccountIds));
 
       const tradeCount = Number(result[0]?.count || 0);
       const userRows = await db

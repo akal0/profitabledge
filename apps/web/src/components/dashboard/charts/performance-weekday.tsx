@@ -27,6 +27,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartDateRange } from "./use-chart-date-range";
 
@@ -142,6 +143,7 @@ export function PerformanceWeekdayChart({
   const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
   // Clipped area interaction state
   const chartRef = React.useRef<HTMLDivElement>(null);
   const [axis, setAxis] = React.useState(0);
@@ -339,9 +341,7 @@ export function PerformanceWeekdayChart({
   }, [dataForChart]);
 
   const currencyTick = (v: number) => {
-    const abs = Math.abs(Math.round(v));
-    const prefix = v < 0 ? "-$" : "$";
-    return `${prefix}${abs.toLocaleString()}`;
+    return formatSignedCurrency(v, 0, resolvedCurrencyCode);
   };
 
   // Compute best/worst day from aligned daily data
@@ -385,11 +385,11 @@ export function PerformanceWeekdayChart({
             <p className="font-normal text-white/40 text-sm tracking-wide">
               Most profitable day:{" "}
               <span className="text-teal-400 font-medium">
-                {bestWorst.best.k} ({formatSignedCurrency(bestWorst.best.v, 0)})
+                {bestWorst.best.k} ({formatSignedCurrency(bestWorst.best.v, 0, resolvedCurrencyCode)})
               </span>{" "}
               · Least profitable day:{" "}
               <span className="text-rose-400 font-medium">
-                {bestWorst.worst.k} ({formatSignedCurrency(bestWorst.worst.v, 0)})
+                {bestWorst.worst.k} ({formatSignedCurrency(bestWorst.worst.v, 0, resolvedCurrencyCode)})
               </span>
             </p>
           ) : (
@@ -526,7 +526,7 @@ export function PerformanceWeekdayChart({
               textAnchor="middle"
               fill="var(--primary-foreground)"
             >
-              ${springY.get().toFixed(0)}
+              {formatSignedCurrency(springY.get(), 0, resolvedCurrencyCode)}
             </text>
 
             {comparisonLabel ? (
@@ -620,7 +620,11 @@ export function PerformanceWeekdayChart({
                         <DashboardChartTooltipRow
                           key={key}
                           label={label}
-                          value={formatSignedCurrency(v, 0)}
+                          value={formatSignedCurrency(
+                            v,
+                            0,
+                            resolvedCurrencyCode
+                          )}
                           tone={v < 0 ? "negative" : "positive"}
                           indicatorColor={
                             typeof item.color === "string"

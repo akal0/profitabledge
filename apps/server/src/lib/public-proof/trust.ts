@@ -1,8 +1,14 @@
+import { isDemoWorkspaceAccountRecord } from "../../routers/accounts/demo-workspace";
+
 type AccountTrustInput = {
+  name?: string | null;
+  broker?: string | null;
   verificationLevel?: string | null;
   isVerified?: number | boolean | null;
   brokerType?: string | null;
   brokerServer?: string | null;
+  accountNumber?: string | null;
+  preferredDataSource?: string | null;
   lastImportedAt?: Date | string | null;
 };
 
@@ -105,23 +111,28 @@ export function resolveTradeOriginType(
 }
 
 export function resolveAccountConnectionTrust(input: AccountTrustInput) {
-  if (input.verificationLevel === "api_verified") {
-    return { kind: "api_synced" as const, label: "API synced" };
+  if (
+    isDemoWorkspaceAccountRecord({
+      name: input.name,
+      broker: input.broker,
+      brokerServer: input.brokerServer,
+      accountNumber: input.accountNumber,
+    })
+  ) {
+    return { kind: "demo" as const, label: "Profitabledge demo" };
+  }
+
+  if (
+    input.preferredDataSource === "broker" ||
+    input.verificationLevel === "api_verified"
+  ) {
+    return { kind: "broker_synced" as const, label: "Broker sync" };
   }
 
   if (
     input.verificationLevel === "ea_synced" ||
     hasVerifiedFlag(input.isVerified)
   ) {
-    const brokerType = input.brokerType?.toLowerCase();
-    if (brokerType === "mt5" || input.brokerServer) {
-      return { kind: "mt5_synced" as const, label: "MT5 synced" };
-    }
-
-    if (brokerType === "mt4") {
-      return { kind: "mt4_synced" as const, label: "MT4 synced" };
-    }
-
     return { kind: "ea_synced" as const, label: "EA synced" };
   }
 

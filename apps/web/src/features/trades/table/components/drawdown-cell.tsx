@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   TRADE_IDENTIFIER_PILL_CLASS,
@@ -9,59 +8,39 @@ import {
 } from "@/components/trades/trade-identifier-pill";
 import { cn } from "@/lib/utils";
 import { formatCurrencyValue } from "@/lib/trade-formatting";
-import { trpcOptions } from "@/utils/trpc";
-import type { TradeRow } from "@/features/trades/table/lib/trade-table-types";
-
-type TradeDrawdownResult =
-  | {
-      id: string;
-      adversePips: number | null;
-      adverseUsd?: number | null;
-      pctToSL?: number | null;
-      pctToStoploss?: number | null;
-      hit: "Stop loss" | "CLOSE" | "NONE" | "BE";
-      note?: string;
-    }
-  | null
-  | undefined;
+import type { TradeDrawdownResult } from "@/features/trades/table/lib/trade-drawdown";
 
 export function DrawdownCell({
-  trade,
   rowIndex,
+  drawdown,
+  isLoading,
 }: {
-  trade: TradeRow;
   rowIndex: number;
+  drawdown?: TradeDrawdownResult;
+  isLoading?: boolean;
 }) {
-  const debug =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("duka") === "1";
-
-  const query = useQuery({
-    ...trpcOptions.trades.drawdownForTrade.queryOptions({
-      id: trade.id,
-      debug,
-    }),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
-
   const [reveal, setReveal] = React.useState(false);
+  const hasDrawdown = drawdown != null;
 
   React.useEffect(() => {
-    if (query.isSuccess) {
-      const handle = setTimeout(() => setReveal(true), rowIndex * 250);
+    if (hasDrawdown) {
+      const handle = setTimeout(
+        () => setReveal(true),
+        Math.min(rowIndex, 6) * 35
+      );
       return () => clearTimeout(handle);
     }
 
     setReveal(false);
-  }, [query.isSuccess, rowIndex]);
+  }, [hasDrawdown, rowIndex]);
 
-  if (query.isLoading || !reveal) {
-    return <Skeleton className="h-5 w-[120px] rounded-none bg-sidebar-accent" />;
+  if (isLoading || (hasDrawdown && !reveal)) {
+    return (
+      <Skeleton className="h-5 w-[120px] rounded-none bg-sidebar-accent" />
+    );
   }
 
-  const drawdown = query.data as TradeDrawdownResult;
-  if (!drawdown) return <span className="text-white/40">—</span>;
+  if (!hasDrawdown) return <span className="text-white/40">—</span>;
 
   if (drawdown.note === "NO_Stop loss") {
     return (
@@ -100,7 +79,8 @@ export function DrawdownCell({
   let ddParam = "percent";
   if (typeof window !== "undefined") {
     try {
-      ddParam = new URLSearchParams(window.location.search).get("dd") || "percent";
+      ddParam =
+        new URLSearchParams(window.location.search).get("dd") || "percent";
     } catch {
       ddParam = "percent";
     }
@@ -142,5 +122,7 @@ export function DrawdownCell({
     chipClass = TRADE_IDENTIFIER_TONES.negative;
   }
 
-  return <span className={cn(TRADE_IDENTIFIER_PILL_CLASS, chipClass)}>{label}</span>;
+  return (
+    <span className={cn(TRADE_IDENTIFIER_PILL_CLASS, chipClass)}>{label}</span>
+  );
 }

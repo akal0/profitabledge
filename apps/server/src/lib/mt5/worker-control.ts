@@ -17,6 +17,7 @@ import { resolveUniqueConnectionDisplayName } from "../connections/display-name"
 import { isMtTerminalProvider } from "./constants";
 import { buildMtConnectionCompleteness } from "./completeness";
 import { getServerEnv } from "../env";
+import { getMt5LiveLeaseSnapshot } from "./live-lease";
 
 const ACTIVE_LEASE_MS = 60 * 1000;
 
@@ -38,6 +39,8 @@ function toPlatformConnectionStatus(
     case "syncing":
     case "pending":
       return "pending";
+    case "sleeping":
+      return "pending";
     case "error":
     case "degraded":
       return "error";
@@ -51,6 +54,7 @@ export interface MtWorkerBootstrapPayload {
   provider: string;
   displayName: string;
   accountId: string | null;
+  isPaused: boolean;
   credentials: Record<string, string>;
   meta: Record<string, unknown>;
   syncCursor: string | null;
@@ -63,6 +67,12 @@ export interface MtWorkerBootstrapPayload {
     lastFullReconcileAt: string | null;
   } | null;
   status: string;
+  liveLease: {
+    active: boolean;
+    activeHolderCount: number;
+    lastHeartbeatAt: string | null;
+    leaseUntil: string | null;
+  };
 }
 
 export function assertWorkerSecret(workerSecret: string | null | undefined) {
@@ -164,7 +174,13 @@ export async function claimMtConnections(input: {
     orderBy: desc(platformConnection.updatedAt),
   });
 
-  const candidates = connections.filter((connection) => !connection.isPaused);
+  const candidates = connections.filter((connection) => {
+    if (connection.isPaused) {
+      return false;
+    }
+
+    return getMt5LiveLeaseSnapshot(connection.meta).active;
+  });
   if (candidates.length === 0) {
     return [];
   }
@@ -322,15 +338,18 @@ export async function getMtConnectionBootstrap(connectionId: string) {
     connection.meta && typeof connection.meta === "object"
       ? (connection.meta as Record<string, unknown>)
       : {};
+  const liveLease = getMt5LiveLeaseSnapshot(connectionMeta);
+  const { mt5LiveLeases: _, ...bootstrapMeta } = connectionMeta;
 
   return {
     connectionId: connection.id,
     provider: connection.provider,
     displayName: connection.displayName,
     accountId: connection.accountId ?? null,
+    isPaused: connection.isPaused,
     credentials,
     meta: {
-      ...connectionMeta,
+      ...bootstrapMeta,
       gapHeal: completeness,
     },
     syncCursor: connection.syncCursor?.toISOString() ?? null,
@@ -348,6 +367,12 @@ export async function getMtConnectionBootstrap(connectionId: string) {
         }
       : null,
     status: connection.status,
+    liveLease: {
+      active: liveLease.active,
+      activeHolderCount: liveLease.activeHolderCount,
+      lastHeartbeatAt: liveLease.lastHeartbeatAt,
+      leaseUntil: liveLease.leaseUntil,
+    },
   } satisfies MtWorkerBootstrapPayload;
 }
 

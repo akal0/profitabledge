@@ -73,11 +73,15 @@ export function useTradeTableFilteredData({
     () => tokenizeTradeSearchQuery(q),
     [q]
   );
-  const searchDocumentByTradeId = React.useMemo(
-    () =>
-      new Map(baseRows.map((row) => [row.id, buildTradeSearchDocument(row)])),
-    [baseRows]
-  );
+  const searchDocumentByTradeId = React.useMemo(() => {
+    if (searchQueryTokens.length === 0) {
+      return null;
+    }
+
+    return new Map(
+      baseRows.map((row) => [row.id, buildTradeSearchDocument(row)])
+    );
+  }, [baseRows, searchQueryTokens.length]);
 
   const idsSet = React.useMemo(() => new Set(ids), [ids]);
   const killzoneSet = React.useMemo(() => new Set(killzones), [killzones]);
@@ -165,7 +169,10 @@ export function useTradeTableFilteredData({
       );
       const matchesSearch =
         searchQueryTokens.length === 0 ||
-        matchesTradeSearch(searchDocumentByTradeId.get(row.id), searchQueryTokens);
+        matchesTradeSearch(
+          searchDocumentByTradeId?.get(row.id),
+          searchQueryTokens
+        );
       const matchesHold = isValueInRange(row.holdSeconds, effectiveHoldRange);
       const matchesVolume = isValueInRange(row.volume, effectiveVolRange);
       const matchesProfit = isValueInRange(row.profit, effectivePlRange);

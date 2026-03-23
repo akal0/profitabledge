@@ -23,6 +23,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartTrades } from "./use-chart-trades";
 
@@ -49,9 +50,13 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-function formatMetricValue(metric: RiskMetricKey, value: number) {
+function formatMetricValue(
+  metric: RiskMetricKey,
+  value: number,
+  currencyCode?: string | null
+) {
   if (metric === "riskAdjustedEquity") {
-    return formatSignedCurrency(value, 2);
+    return formatSignedCurrency(value, 2, currencyCode);
   }
   return value.toFixed(3);
 }
@@ -68,6 +73,7 @@ export function RiskAdjustedChart({
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
 
   const chartData = useMemo(() => {
     if (trades.length < window) return [];
@@ -79,7 +85,7 @@ export function RiskAdjustedChart({
     );
 
     const returns = sorted.map((trade) =>
-      parseFloat(trade.profit?.toString() || "0")
+      parseFloat((trade.netPnl ?? trade.profit ?? 0).toString())
     );
     const dataPoints: { trade: number; value: number; date: string }[] = [];
 
@@ -178,7 +184,7 @@ export function RiskAdjustedChart({
               tone === "positive" ? "text-teal-400" : "text-rose-400"
             )}
           >
-            {formatMetricValue(metric, currentValue)}
+            {formatMetricValue(metric, currentValue, resolvedCurrencyCode)}
           </span>
           .
         </p>
@@ -207,7 +213,7 @@ export function RiskAdjustedChart({
               width={metric === "riskAdjustedEquity" ? 64 : 42}
               tickFormatter={(value) => {
                 if (metric === "riskAdjustedEquity") {
-                  return formatSignedCurrency(value, 0);
+                  return formatSignedCurrency(value, 0, resolvedCurrencyCode);
                 }
                 return value.toFixed(1);
               }}
@@ -222,7 +228,11 @@ export function RiskAdjustedChart({
                   <DashboardChartTooltipFrame title={item.payload.date}>
                     <DashboardChartTooltipRow
                       label={config.label}
-                      value={formatMetricValue(metric, value)}
+                      value={formatMetricValue(
+                        metric,
+                        value,
+                        resolvedCurrencyCode
+                      )}
                       tone={
                         metric === "riskAdjustedEquity"
                           ? value >= 0

@@ -1,185 +1,280 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { motion } from "motion/react";
 import {
   BadgePercent,
   Banknote,
   Gift,
   Shield,
+  Sparkles,
   TrendingUp,
-  Users,
+  type LucideIcon,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import {
+  GoalContentSeparator,
+  GoalPanel,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { Button } from "@/components/ui/button";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
-  GrowthCardShell,
-  GrowthPageBody,
-  GrowthPageShell,
-} from "@/features/growth/components/growth-page-primitives";
+  GrowthEmptyState,
+  GrowthStatCard,
+} from "@/features/growth/components/growth-goals-primitives";
 import { trpc } from "@/utils/trpc";
+
+type GrowthRouteCard = {
+  title: string;
+  description: string;
+  href: string;
+  cta: string;
+  icon: LucideIcon;
+  available: boolean;
+  unavailableMessage?: string;
+};
 
 export function GrowthOverview() {
   const billingStateQuery = trpc.billing.getState.useQuery();
 
   const affiliate = billingStateQuery.data?.affiliate;
   const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;
-  const growthDescription = isAdmin
-    ? "Manage referrals, affiliate access, and the related admin tooling"
-    : "Manage referrals, affiliate access, and your growth surfaces";
 
   if (billingStateQuery.isLoading) {
-    return <RouteLoadingFallback route="growth" className="min-h-[calc(100vh-10rem)]" />;
+    return (
+      <RouteLoadingFallback
+        route="growth"
+        className="min-h-[calc(100vh-10rem)]"
+      />
+    );
   }
 
-  return (
-    <GrowthPageShell
-      title="Growth"
-      description={growthDescription}
-    >
-      <GrowthPageBody className="space-y-6">
-        <GrowthCardShell className="overflow-hidden">
-          <div className="border-b border-white/5 bg-[radial-gradient(circle_at_top_left,rgba(34,197,94,0.14),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] p-6">
-            <Badge className="rounded-full bg-emerald-500/10 text-[10px] text-emerald-200 ring ring-emerald-500/15">
-              Growth hub
-            </Badge>
-            <p className="mt-3 text-lg font-semibold tracking-[-0.04em] text-white">
-              Growth routes now live outside Billing
-            </p>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
-              Referrals, affiliate tooling, and admin operations now have their
-              own dashboard surfaces, while payout methods stay attached to
-              Billing.
-            </p>
-          </div>
+  const statCards = [
+    {
+      icon: Gift,
+      label: "Referral program",
+      value: "Live",
+      color: "text-amber-300",
+    },
+    {
+      icon: BadgePercent,
+      label: "Affiliate access",
+      value: affiliate?.isAffiliate ? "Approved" : "Pending",
+      color: affiliate?.isAffiliate ? "text-emerald-300" : "text-white/55",
+    },
+    {
+      icon: TrendingUp,
+      label: "Attribution window",
+      value: "180 days",
+      color: "text-blue-300",
+    },
+    {
+      icon: isAdmin ? Shield : Banknote,
+      label: isAdmin ? "Admin tools" : "Payout rail",
+      value: isAdmin ? "Enabled" : affiliate?.isAffiliate ? "Billing" : "Locked",
+      color: isAdmin ? "text-teal-300" : "text-violet-300",
+    },
+  ] as const;
 
-          <div className="grid gap-3 p-6 lg:grid-cols-2">
-            <GrowthCardShell>
-              <div className="p-5">
-                <div className="flex items-center gap-2">
-                  <Gift className="size-3.5 text-amber-300" />
-                  <p className="text-xs font-medium text-white">Referrals</p>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-white/45">
-                  Share your referral link, track milestone rewards, and apply for
-                  affiliate access from the referrals route.
-                </p>
+  const routeCards: GrowthRouteCard[] = [
+    {
+      title: "Referrals",
+      description:
+        "Share your invite link, monitor milestone rewards, and apply for affiliate access from the referrals route.",
+      href: "/dashboard/referrals",
+      cta: "Open referrals",
+      icon: Gift,
+      available: true,
+    },
+    {
+      title: "Affiliate dashboard",
+      description:
+        "Approved affiliates track recurring commission, managed offers, tracked links, and performance surfaces here.",
+      href: "/dashboard/affiliate",
+      cta: "Open affiliate dashboard",
+      icon: BadgePercent,
+      available: affiliate?.isAffiliate || isAdmin,
+      unavailableMessage: "Affiliate approval is required before this route unlocks.",
+    },
+    {
+      title: "Billing payout methods",
+      description:
+        "Payout destinations stay under Billing so affiliate settlement lives next to the subscription and wallet flows.",
+      href: "/dashboard/settings/billing/payment-methods",
+      cta: "Open payment methods",
+      icon: Banknote,
+      available: affiliate?.isAffiliate === true,
+      unavailableMessage: "Billing payout setup appears after affiliate approval.",
+    },
+    {
+      title: "Growth admin",
+      description:
+        "Admins review affiliates, beta access, waitlist demand, and provider-aware payout settlement from one route.",
+      href: "/dashboard/growth-admin",
+      cta: "Open growth admin",
+      icon: Shield,
+      available: isAdmin,
+      unavailableMessage: "This route is restricted to allowlisted admin accounts.",
+    },
+  ];
+
+  return (
+    <main className="space-y-6 p-6 py-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {statCards.map((card, index) => (
+          <motion.div
+            key={card.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.08 * (index + 1) }}
+          >
+            <GrowthStatCard
+              icon={card.icon}
+              label={card.label}
+              value={card.value}
+              color={card.color}
+            />
+          </motion.div>
+        ))}
+      </div>
+
+      <GoalSurface>
+        <div className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-3xl">
+              <p className="text-xs text-white/30">
+                Growth workspace
+              </p>
+              <p className="mt-3 text-2xl font-semibold text-white">
+                Growth now follows the same operating surface as goals
+              </p>
+              <p className="mt-2 text-sm leading-6 text-white/45">
+                Referrals, affiliate access, payout setup, and admin operations
+                are split into focused routes, but they now live inside the same
+                card system, spacing, and hierarchy as the goals dashboard.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                asChild
+                className="h-9 rounded-sm border-none ring ring-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar hover:brightness-120"
+              >
+                <Link href="/dashboard/referrals">Open referrals</Link>
+              </Button>
+              {affiliate?.isAffiliate || isAdmin ? (
                 <Button
                   asChild
-                  className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar"
+                  className="h-9 rounded-sm border-none ring ring-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar hover:brightness-120"
                 >
-                  <Link href="/dashboard/referrals">Open referrals</Link>
+                  <Link href="/dashboard/affiliate">Open affiliate</Link>
                 </Button>
-              </div>
-            </GrowthCardShell>
-
-            <GrowthCardShell>
-              <div className="p-5">
-                <div className="flex items-center gap-2">
-                  <BadgePercent className="size-3.5 text-emerald-300" />
-                  <p className="text-xs font-medium text-white">Affiliate</p>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-white/45">
-                  Approved affiliates track recurring commission, invite activity,
-                  and mentorship-group ownership from the affiliate dashboard.
-                </p>
-                {affiliate?.isAffiliate || isAdmin ? (
-                  <Button
-                    asChild
-                    className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar"
-                  >
-                    <Link href="/dashboard/affiliate">Open affiliate dashboard</Link>
-                  </Button>
-                ) : (
-                  <p className="mt-5 text-[11px] text-white/35">
-                    Not approved yet. Apply from the referrals page.
-                  </p>
-                )}
-              </div>
-            </GrowthCardShell>
-
-            <GrowthCardShell>
-              <div className="p-5">
-                <div className="flex items-center gap-2">
-                  <Banknote className="size-3.5 text-blue-300" />
-                  <p className="text-xs font-medium text-white">Payment methods</p>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-white/45">
-                  Affiliate payout methods stay in Billing so commission
-                  instructions live next to the subscription and wallet details.
-                </p>
-                {affiliate?.isAffiliate ? (
-                  <Button
-                    asChild
-                    className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar"
-                  >
-                    <Link href="/dashboard/settings/billing/payment-methods">
-                      Open billing payment methods
-                    </Link>
-                  </Button>
-                ) : (
-                  <p className="mt-5 text-[11px] text-white/35">
-                    Payment methods appear in Billing after affiliate approval.
-                  </p>
-                )}
-              </div>
-            </GrowthCardShell>
-
-            {isAdmin ? (
-              <GrowthCardShell>
-                <div className="p-5">
-                  <div className="flex items-center gap-2">
-                    <Shield className="size-3.5 text-teal-300" />
-                    <p className="text-xs font-medium text-white">Growth admin</p>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-white/45">
-                    Admins manage beta codes, affiliate approvals, waitlist review,
-                    and manual commission payouts from a dedicated route.
-                  </p>
-                  <Button
-                    asChild
-                    className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar px-4 text-xs text-white hover:bg-sidebar"
-                  >
-                    <Link href="/dashboard/growth-admin">Open growth admin</Link>
-                  </Button>
-                </div>
-              </GrowthCardShell>
-            ) : null}
+              ) : null}
+            </div>
           </div>
-        </GrowthCardShell>
 
-        <div className="grid gap-3 xl:grid-cols-3">
-          {[
-            {
-              icon: TrendingUp,
-              label: "Growth hub",
-              detail: "Overview route for all growth surfaces and ownership.",
-            },
-            {
-              icon: Users,
-              label: "Separate programs",
-              detail: "Referrals and affiliates stay split with different rewards.",
-            },
-            {
-              icon: Shield,
-              label: "Admin workflows",
-              detail: "Operational controls are no longer buried in billing settings.",
-            },
-          ].map((item) => (
-            <GrowthCardShell key={item.label}>
-              <div className="p-4">
-                <item.icon className="size-4 text-white/65" />
-                <p className="mt-4 text-sm font-medium text-white">{item.label}</p>
-                <p className="mt-2 text-sm leading-6 text-white/40">
-                  {item.detail}
-                </p>
-              </div>
-            </GrowthCardShell>
-          ))}
+          <GoalContentSeparator className="my-5" />
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-sm border border-white/5 bg-sidebar/70 p-3">
+              <p className="text-[10px] text-white/25">
+                Routing
+              </p>
+              <p className="mt-2 text-sm text-white/65">
+                Referrals and affiliate ownership stay split, while payouts remain
+                attached to Billing.
+              </p>
+            </div>
+            <div className="rounded-sm border border-white/5 bg-sidebar/70 p-3">
+              <p className="text-[10px] text-white/25">
+                Attribution
+              </p>
+              <p className="mt-2 text-sm text-white/65">
+                First touch is durable across long purchase cycles, not just the
+                initial session.
+              </p>
+            </div>
+            <div className="rounded-sm border border-white/5 bg-sidebar/70 p-3">
+              <p className="text-[10px] text-white/25">
+                Operations
+              </p>
+              <p className="mt-2 text-sm text-white/65">
+                Admin review, payout approval, and affiliate offers live in a
+                dedicated route instead of being buried under billing settings.
+              </p>
+            </div>
+          </div>
         </div>
-      </GrowthPageBody>
-    </GrowthPageShell>
+      </GoalSurface>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        {routeCards
+          .filter((card) => card.available || card.title !== "Growth admin")
+          .map((card) => (
+            <GoalPanel
+              key={card.title}
+              icon={card.icon}
+              title={card.title}
+              description={card.description}
+              bodyClassName="space-y-4"
+            >
+              {card.available ? (
+                <div className="flex items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar/70 p-3">
+                  <div>
+                    <p className="text-[10px] text-white/25">
+                      Route status
+                    </p>
+                    <p className="mt-2 text-sm text-white/65">Available now</p>
+                  </div>
+                  <Button
+                    asChild
+                    className="h-8 rounded-sm border-none ring ring-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar hover:brightness-120"
+                  >
+                    <Link href={card.href}>{card.cta}</Link>
+                  </Button>
+                </div>
+              ) : (
+                <GrowthEmptyState
+                  message={card.unavailableMessage ?? "This route is not available yet."}
+                />
+              )}
+            </GoalPanel>
+          ))}
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        {[
+          {
+            icon: Sparkles,
+            title: "Faster read",
+            detail:
+              "Growth summaries now scan like goals: top metrics first, then the actual operating surfaces.",
+          },
+          {
+            icon: TrendingUp,
+            title: "Clearer ownership",
+            detail:
+              "Each route has a single responsibility, so the dashboard stops mixing overview, billing, and admin actions.",
+          },
+          {
+            icon: Shield,
+            title: "Admin isolation",
+            detail:
+              "Operational controls remain visible for admins without bloating the standard user route.",
+          },
+        ].map((item) => (
+          <GoalSurface key={item.title}>
+            <div className="p-4">
+              <item.icon className="h-4 w-4 text-white/60" />
+              <p className="mt-4 text-sm font-medium text-white">{item.title}</p>
+              <p className="mt-2 text-sm leading-6 text-white/40">
+                {item.detail}
+              </p>
+            </div>
+          </GoalSurface>
+        ))}
+      </div>
+    </main>
   );
 }

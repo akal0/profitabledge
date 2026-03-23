@@ -5,6 +5,7 @@ import type {
 } from "../types";
 import {
   coalesce,
+  deriveTradeDurationSeconds,
   inferTradeDirectionFromMove,
   parseTradeDirection,
   pickDate,
@@ -169,6 +170,7 @@ function mapTradovatePositionHistoryTrade(
       pickNumber(record, ["Fees", "Exchange Fees", "Total Fees"])
     ),
     pips: null,
+    tradeDurationSeconds: deriveTradeDurationSeconds(openTime, closeTime),
     comment: pickValue(record, ["Comment", "Strategy", "Notes"]),
     brokerMeta: {
       importReportType: "position-history",

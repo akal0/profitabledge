@@ -58,7 +58,7 @@ In `terminal` mode, the worker uses the last persisted sync checkpoint to fetch 
 - `MT5_WORKER_TAGS`
   - Optional comma-separated tags for the host, for example `mt5,ftmo,primary`
 - `MT5_POLL_SECONDS`
-  - Optional, default `2`
+  - Optional, default `30`
 - `MT5_HEARTBEAT_SECONDS`
   - Optional, default `5`
 - `MT5_HISTORY_OVERLAP_SECONDS`
@@ -234,7 +234,7 @@ cd services/mt5-worker/windows
   -TerminalPath "C:\Program Files\MetaTrader 5\terminal64.exe" `
   -TerminalPathMapJson '{"^FTMO-":"C:\\Program Files\\FTMO MetaTrader 5\\terminal64.exe"}' `
   -Children 2 `
-  -PollSeconds 2 `
+  -PollSeconds 30 `
   -HeartbeatSeconds 5 `
   -ConnectedTimeoutSeconds 20 `
   -HistoryOverlapSeconds 90 `
@@ -247,7 +247,7 @@ This will:
 - create `services/mt5-worker/.venv`
 - install `MetaTrader5`
 - write `services/mt5-worker/.env.windows`
-- set a faster terminal poll cadence for live updates
+- set a moderate terminal poll cadence for near-live updates
 - enable overlap polling plus periodic full reconciles for reliability and raw-payload backfills
 
 ### 2. Run a single real connection smoke test

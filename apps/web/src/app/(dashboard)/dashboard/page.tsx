@@ -27,6 +27,7 @@ import {
 import {
   accountIsEaSynced,
   accountSupportsLiveSync,
+  isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
 import {
   pickPreferredAccountConnection,
@@ -129,6 +130,10 @@ function DashboardPageContent() {
       return null;
     }
 
+    if (isDemoWorkspaceAccount(selectedAccount)) {
+      return null;
+    }
+
     if (selectedConnection) {
       return null;
     }
@@ -160,7 +165,9 @@ function DashboardPageContent() {
           isEditing={isWidgetsEditing}
           valueMode={valueMode}
           currencyLabel={currencyLabel}
-          currencyOptions={isAllAccountsScope(accountId) ? availableCurrencyCodes : []}
+          currencyOptions={
+            isAllAccountsScope(accountId) ? availableCurrencyCodes : []
+          }
           onCurrencyCodeChange={
             isAllAccountsScope(accountId)
               ? setAllAccountsPreferredCurrencyCode

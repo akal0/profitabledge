@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Plus, Tag as TagIcon } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,7 +19,6 @@ import {
   TRADE_IDENTIFIER_TONES,
 } from "@/components/trades/trade-identifier-pill";
 import { tradeTagEditorStyles } from "@/components/trades/trade-tag-editor-styles";
-import { useAccountStore } from "@/stores/account";
 import { cn } from "@/lib/utils";
 import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 
@@ -27,6 +26,7 @@ interface TradeTagsCellProps {
   tradeId: string;
   accountId?: string | null;
   customTags?: string[] | null;
+  existingTags?: string[];
   isLive?: boolean;
 }
 
@@ -102,7 +102,10 @@ function patchTradeTagsInQueryData(
   return data;
 }
 
-function mergeTradeTagSuggestions(existing: string[] | undefined, nextTags: string[]) {
+function mergeTradeTagSuggestions(
+  existing: string[] | undefined,
+  nextTags: string[]
+) {
   return normalizeTradeTags([...(existing ?? []), ...nextTags]);
 }
 
@@ -110,6 +113,7 @@ export function TradeTagsCell({
   tradeId,
   accountId,
   customTags,
+  existingTags = [],
   isLive = false,
 }: TradeTagsCellProps) {
   const [open, setOpen] = React.useState(false);
@@ -119,16 +123,7 @@ export function TradeTagsCell({
   const [displayedTags, setDisplayedTags] = React.useState(() =>
     normalizeTradeTags(customTags)
   );
-  const { selectedAccountId } = useAccountStore();
-  const effectiveAccountId = accountId || selectedAccountId || "";
-
-  const customTagsOptions = trpcOptions.trades.listCustomTags.queryOptions({
-    accountId: effectiveAccountId,
-  });
-  const { data: existingTags = [] } = useQuery({
-    ...customTagsOptions,
-    enabled: Boolean(effectiveAccountId),
-  }) as { data: string[] | undefined };
+  const effectiveAccountId = accountId || "";
 
   const currentTags = React.useMemo(
     () => normalizeTradeTags(customTags),
@@ -157,15 +152,16 @@ export function TradeTagsCell({
 
       await queryClient.cancelQueries({ queryKey: [["trades"]] });
 
-      if (effectiveAccountId) {
-        await queryClient.cancelQueries({ queryKey: customTagsOptions.queryKey });
-      }
-
       const previousTradesData = queryClient.getQueriesData({
         queryKey: [["trades"]],
       });
-      const previousCustomTagSuggestions = effectiveAccountId
-        ? queryClient.getQueryData<string[]>(customTagsOptions.queryKey)
+      const customTagsQueryKey = effectiveAccountId
+        ? trpcOptions.trades.listCustomTags.queryOptions({
+            accountId: effectiveAccountId,
+          }).queryKey
+        : null;
+      const previousCustomTagSuggestions = customTagsQueryKey
+        ? queryClient.getQueryData<string[]>(customTagsQueryKey)
         : undefined;
 
       setDisplayedTags(normalizedTags);
@@ -176,9 +172,9 @@ export function TradeTagsCell({
         patchTradeTagsInQueryData(data, tradeId, normalizedTags)
       );
 
-      if (effectiveAccountId) {
+      if (customTagsQueryKey) {
         queryClient.setQueryData<string[] | undefined>(
-          customTagsOptions.queryKey,
+          customTagsQueryKey,
           (existing) => mergeTradeTagSuggestions(existing, normalizedTags)
         );
       }
@@ -193,7 +189,9 @@ export function TradeTagsCell({
       void queryClient.invalidateQueries({ queryKey: [["trades"]] });
       if (effectiveAccountId) {
         void queryClient.invalidateQueries({
-          queryKey: customTagsOptions.queryKey,
+          queryKey: trpcOptions.trades.listCustomTags.queryOptions({
+            accountId: effectiveAccountId,
+          }).queryKey,
         });
       }
     },
@@ -204,7 +202,9 @@ export function TradeTagsCell({
 
       if (effectiveAccountId) {
         queryClient.setQueryData(
-          customTagsOptions.queryKey,
+          trpcOptions.trades.listCustomTags.queryOptions({
+            accountId: effectiveAccountId,
+          }).queryKey,
           context?.previousCustomTagSuggestions
         );
       }

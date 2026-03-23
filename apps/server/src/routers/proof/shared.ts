@@ -129,6 +129,8 @@ export async function loadPublicShareBySlug(publicAccountSlug: string) {
       broker: tradingAccount.broker,
       brokerType: tradingAccount.brokerType,
       brokerServer: tradingAccount.brokerServer,
+      accountNumber: tradingAccount.accountNumber,
+      preferredDataSource: tradingAccount.preferredDataSource,
       verificationLevel: tradingAccount.verificationLevel,
       isVerified: tradingAccount.isVerified,
       lastSyncedAt: tradingAccount.lastSyncedAt,
@@ -212,7 +214,8 @@ export async function getPublicProofAffiliateState(userId: string) {
   return {
     isAffiliate: true,
     badgeLabel:
-      typeof publicProof?.badgeLabel === "string" && publicProof.badgeLabel.trim()
+      typeof publicProof?.badgeLabel === "string" &&
+      publicProof.badgeLabel.trim()
         ? publicProof.badgeLabel.trim()
         : "Affiliate",
     effectVariant:

@@ -42,7 +42,7 @@ import {
   REFERRAL_UPGRADE_TRIAL_THRESHOLD,
   type BillingPlanKey,
 } from "./config";
-import { getPolarClient } from "./polar";
+import { clampStripeDisplayString, getStripeClient } from "./stripe";
 import {
   createStripeConnectedAccount,
   createStripeLoginLink,
@@ -238,6 +238,21 @@ function normalizeDestinationPath(input?: string | null) {
 
 function buildAffiliateTrackingLinkSlug(label: string) {
   return slugify(label) || "main";
+}
+
+function formatAffiliatePlanLabel(planKey?: string | null) {
+  if (!planKey) {
+    return "Unknown";
+  }
+
+  const plan = getBillingPlanDefinition(planKey as BillingPlanKey);
+  if (plan?.title) {
+    return plan.title;
+  }
+
+  return planKey
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 export function buildAffiliatePublicProofMetadata(
@@ -972,6 +987,57 @@ async function upsertAffiliateProviderAccountFromStripe(input: {
   return inserted ?? null;
 }
 
+function isReconnectableStripeAccountError(error: unknown) {
+  if (!(error instanceof TRPCError) || error.code !== "BAD_REQUEST") {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("does not have access to account") ||
+    message.includes("account does not exist") ||
+    message.includes("application access may have been revoked") ||
+    message.includes("no such account")
+  );
+}
+
+async function getOrCreateAffiliateStripeConnectedAccount(input: {
+  affiliateUserId: string;
+  email?: string | null;
+}) {
+  const existingAccount = await getAffiliateProviderAccountRow(input.affiliateUserId);
+  if (existingAccount?.providerAccountId) {
+    try {
+      return await retrieveStripeConnectedAccount(existingAccount.providerAccountId);
+    } catch (error) {
+      if (!isReconnectableStripeAccountError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  return createStripeConnectedAccount({
+    affiliateUserId: input.affiliateUserId,
+    email: input.email,
+  });
+}
+
+function getIgnoredGrowthClaimReason(error: unknown) {
+  if (!(error instanceof TRPCError) || error.code !== "BAD_REQUEST") {
+    return null;
+  }
+
+  if (error.message === "You cannot use your own affiliate link") {
+    return "self_affiliate";
+  }
+
+  if (error.message === "You cannot refer yourself") {
+    return "self_referral";
+  }
+
+  return null;
+}
+
 async function ensureAffiliateOfferRow(
   profile: typeof affiliateProfile.$inferSelect,
   createdByUserId?: string | null
@@ -1064,47 +1130,20 @@ async function ensureAffiliateTrackingLinkRow(input: {
   });
 }
 
-async function upsertPolarAffiliateOfferDiscount(input: {
-  polarDiscountId?: string | null;
+async function createStripeAffiliateOfferCoupon(input: {
   code: string;
   label: string;
   basisPoints: number;
 }) {
-  const products = getBillingPlanDefinitions()
-    .map((plan) => plan.polarProductId)
-    .filter((value): value is string => Boolean(value));
-
-  if (products.length === 0) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "Polar products are not configured",
-    });
-  }
-
-  const polar = getPolarClient();
-  if (input.polarDiscountId) {
-    return polar.discounts.update({
-      id: input.polarDiscountId,
-      discountUpdate: {
-        code: input.code,
-        name: input.label,
-        type: "percentage",
-        duration: "once",
-        basisPoints: input.basisPoints,
-        maxRedemptions: null,
-        products,
-      },
-    });
-  }
-
-  return polar.discounts.create({
+  const stripe = getStripeClient();
+  return stripe.coupons.create({
     duration: "once",
-    type: "percentage",
-    basisPoints: input.basisPoints,
-    name: input.label,
-    code: input.code,
-    maxRedemptions: null,
-    products,
+    percent_off: input.basisPoints / 100,
+    name: clampStripeDisplayString(input.label || input.code),
+    metadata: {
+      affiliate_offer_code: input.code,
+      billing_provider: "stripe",
+    },
   });
 }
 
@@ -1294,6 +1333,7 @@ export async function listAffiliateApplications() {
         id: userTable.id,
         name: userTable.name,
         email: userTable.email,
+        username: userTable.username,
       },
     })
     .from(affiliateApplication)
@@ -1573,11 +1613,64 @@ export async function buildAffiliateState(userId: string) {
     .where(eq(affiliateAttribution.affiliateUserId, userId))
     .orderBy(desc(affiliateAttribution.createdAt));
 
-  const commissionEvents = await db
-    .select()
+  const commissionEventRows = await db
+    .select({
+      id: affiliateCommissionEvent.id,
+      affiliateAttributionId: affiliateCommissionEvent.affiliateAttributionId,
+      affiliateUserId: affiliateCommissionEvent.affiliateUserId,
+      referredUserId: affiliateCommissionEvent.referredUserId,
+      referredUsernameSnapshot: affiliateCommissionEvent.referredUsername,
+      referredEmailSnapshot: affiliateCommissionEvent.referredEmail,
+      provider: affiliateCommissionEvent.provider,
+      providerOrderId: affiliateCommissionEvent.providerOrderId,
+      billingOrderId: affiliateCommissionEvent.billingOrderId,
+      stripeInvoiceId: affiliateCommissionEvent.stripeInvoiceId,
+      polarOrderId: affiliateCommissionEvent.polarOrderId,
+      polarSubscriptionId: affiliateCommissionEvent.polarSubscriptionId,
+      stripeSubscriptionId: affiliateCommissionEvent.stripeSubscriptionId,
+      trackedPlanKey: affiliateCommissionEvent.planKey,
+      orderAmount: affiliateCommissionEvent.orderAmount,
+      commissionBps: affiliateCommissionEvent.commissionBps,
+      commissionAmount: affiliateCommissionEvent.commissionAmount,
+      currency: affiliateCommissionEvent.currency,
+      affiliatePayoutId: affiliateCommissionEvent.affiliatePayoutId,
+      paidOutAt: affiliateCommissionEvent.paidOutAt,
+      occurredAt: affiliateCommissionEvent.occurredAt,
+      metadata: affiliateCommissionEvent.metadata,
+      createdAt: affiliateCommissionEvent.createdAt,
+      updatedAt: affiliateCommissionEvent.updatedAt,
+      referredUsername: userTable.username,
+      referredName: userTable.name,
+      referredEmail: userTable.email,
+      planKey: billingOrder.planKey,
+    })
     .from(affiliateCommissionEvent)
+    .leftJoin(userTable, eq(userTable.id, affiliateCommissionEvent.referredUserId))
+    .leftJoin(billingOrder, eq(billingOrder.id, affiliateCommissionEvent.billingOrderId))
     .where(eq(affiliateCommissionEvent.affiliateUserId, userId))
-    .orderBy(desc(affiliateCommissionEvent.occurredAt), desc(affiliateCommissionEvent.createdAt));
+    .orderBy(
+      desc(affiliateCommissionEvent.occurredAt),
+      desc(affiliateCommissionEvent.createdAt)
+    );
+  const commissionEvents = commissionEventRows.map((row) => {
+    const metadata =
+      row.metadata && typeof row.metadata === "object"
+        ? (row.metadata as Record<string, unknown>)
+        : null;
+    const metadataPlanKey =
+      typeof metadata?.plan_key === "string" ? metadata.plan_key : null;
+    const paymentPlanKey = row.trackedPlanKey ?? row.planKey ?? metadataPlanKey;
+
+    return {
+      ...row,
+      orderReference:
+        row.providerOrderId ?? row.stripeInvoiceId ?? row.polarOrderId ?? null,
+      referredUsername: row.referredUsernameSnapshot ?? row.referredUsername,
+      referredEmail: row.referredEmailSnapshot ?? row.referredEmail,
+      paymentPlanKey,
+      paymentPlanLabel: formatAffiliatePlanLabel(paymentPlanKey),
+    };
+  });
 
   const shareUrl = buildAffiliateShareUrl({
     affiliateCode: profile.code,
@@ -1920,8 +2013,7 @@ export async function saveAffiliateOffer(input: {
     }
   }
 
-  const polarDiscount = await upsertPolarAffiliateOfferDiscount({
-    polarDiscountId: existing?.polarDiscountId ?? null,
+  const stripeCoupon = await createStripeAffiliateOfferCoupon({
     code: normalizedCode,
     label: input.label.trim(),
     basisPoints,
@@ -1935,7 +2027,10 @@ export async function saveAffiliateOffer(input: {
         code: normalizedCode,
         label: input.label.trim(),
         description: input.description?.trim() || null,
-        polarDiscountId: polarDiscount.id,
+        discountProvider: "stripe",
+        providerDiscountId: stripeCoupon.id,
+        providerPromotionCodeId: null,
+        polarDiscountId: null,
         discountBasisPoints: basisPoints,
         isActive: true,
         updatedAt: new Date(),
@@ -1954,7 +2049,10 @@ export async function saveAffiliateOffer(input: {
         code: normalizedCode,
         label: input.label.trim(),
         description: input.description?.trim() || null,
-        polarDiscountId: polarDiscount.id,
+        discountProvider: "stripe",
+        providerDiscountId: stripeCoupon.id,
+        providerPromotionCodeId: null,
+        polarDiscountId: null,
         discountBasisPoints: basisPoints,
         isActive: true,
         createdByUserId: input.createdByUserId,
@@ -2163,20 +2261,20 @@ export async function createAffiliateStripeConnectSession(input: {
   }
 
   const user = await getMinimalUser(input.affiliateUserId);
-  const existingAccount = await getAffiliateProviderAccountRow(input.affiliateUserId);
-  const stripeAccount = existingAccount?.providerAccountId
-    ? await retrieveStripeConnectedAccount(existingAccount.providerAccountId)
-    : await createStripeConnectedAccount({
-        affiliateUserId: input.affiliateUserId,
-        email: user.email,
-      });
+  const stripeAccount = await getOrCreateAffiliateStripeConnectedAccount({
+    affiliateUserId: input.affiliateUserId,
+    email: user.email,
+  });
 
   const providerAccount = await upsertAffiliateProviderAccountFromStripe({
     affiliateUserId: input.affiliateUserId,
     account: stripeAccount,
   });
 
-  if ((input.mode ?? "onboarding") === "dashboard") {
+  const prefersDashboard = (input.mode ?? "onboarding") === "dashboard";
+  const canOpenExpressDashboard = Boolean(stripeAccount.details_submitted);
+
+  if (prefersDashboard && canOpenExpressDashboard) {
     const link = await createStripeLoginLink(stripeAccount.id);
     return {
       url: link.url,
@@ -2213,9 +2311,11 @@ export async function refreshAffiliateStripeConnectAccount(affiliateUserId: stri
     });
   }
 
-  const stripeAccount = await retrieveStripeConnectedAccount(
-    providerAccount.providerAccountId
-  );
+  const user = await getMinimalUser(affiliateUserId);
+  const stripeAccount = await getOrCreateAffiliateStripeConnectedAccount({
+    affiliateUserId,
+    email: user.email,
+  });
   return upsertAffiliateProviderAccountFromStripe({
     affiliateUserId,
     account: stripeAccount,
@@ -2968,6 +3068,7 @@ export async function listAffiliatePayoutQueue() {
           id: entry.user.id,
           name: entry.user.name,
           email: entry.user.email,
+          username: entry.user.username,
           code: entry.profile.code,
           commissionBps: entry.profile.commissionBps,
         },
@@ -3045,6 +3146,22 @@ export async function listAffiliatePayoutQueue() {
             : null,
         })),
         recentPayouts: payouts.slice(0, 5).map((row) => ({
+          ...row.payout,
+          amountUsd: row.payout.amount,
+          destinationLabel: buildWithdrawalDestinationLabel({
+            destinationType: row.payout.destinationType,
+            paymentMethod: row.paymentMethod,
+            providerAccount: row.providerAccount,
+          }),
+          paymentMethod: row.paymentMethod
+            ? {
+                id: row.paymentMethod.id,
+                label: row.paymentMethod.label,
+                methodType: row.paymentMethod.methodType,
+              }
+            : null,
+        })),
+        payouts: payouts.map((row) => ({
           ...row.payout,
           amountUsd: row.payout.amount,
           destinationLabel: buildWithdrawalDestinationLabel({
@@ -3497,33 +3614,65 @@ export async function claimPendingGrowthAttribution(input: {
     existingReferral ?? null;
   let affiliate: typeof affiliateAttribution.$inferSelect | null =
     existingAffiliate ?? null;
+  let pendingStatus = "claimed";
+  let pendingMetadata =
+    pending.metadata && typeof pending.metadata === "object"
+      ? { ...(pending.metadata as Record<string, unknown>) }
+      : null;
 
   if (!referral && !affiliate) {
     if (pending.touchType === "referral" && pending.referralCode) {
-      referral = await attachReferralConversionToUser({
-        userId: input.userId,
-        referralCode: pending.referralCode,
-        source: input.source ?? "claim",
-      });
+      try {
+        referral = await attachReferralConversionToUser({
+          userId: input.userId,
+          referralCode: pending.referralCode,
+          source: input.source ?? "claim",
+        });
+      } catch (error) {
+        const ignoredReason = getIgnoredGrowthClaimReason(error);
+        if (!ignoredReason) {
+          throw error;
+        }
+
+        pendingStatus = "ignored";
+        pendingMetadata = {
+          ...(pendingMetadata ?? {}),
+          ignoredReason,
+        };
+      }
     }
 
     if (pending.touchType === "affiliate" && pending.affiliateCode) {
-      affiliate = await attachAffiliateAttributionToUser({
-        userId: input.userId,
-        affiliateCode: pending.affiliateCode,
-        affiliateOfferId: pending.affiliateOfferId ?? null,
-        affiliateTrackingLinkId: pending.affiliateTrackingLinkId ?? null,
-        source: input.source ?? "claim",
-      });
+      try {
+        affiliate = await attachAffiliateAttributionToUser({
+          userId: input.userId,
+          affiliateCode: pending.affiliateCode,
+          affiliateOfferId: pending.affiliateOfferId ?? null,
+          affiliateTrackingLinkId: pending.affiliateTrackingLinkId ?? null,
+          source: input.source ?? "claim",
+        });
+      } catch (error) {
+        const ignoredReason = getIgnoredGrowthClaimReason(error);
+        if (!ignoredReason) {
+          throw error;
+        }
+
+        pendingStatus = "ignored";
+        pendingMetadata = {
+          ...(pendingMetadata ?? {}),
+          ignoredReason,
+        };
+      }
     }
   }
 
   await db
     .update(affiliatePendingAttribution)
     .set({
-      status: "claimed",
+      status: pendingStatus,
       claimedUserId: input.userId,
       claimedAt: now,
+      metadata: pendingMetadata,
       updatedAt: now,
     })
     .where(eq(affiliatePendingAttribution.id, pending.id));
@@ -3809,6 +3958,9 @@ async function createReferralRewardGrant(input: {
   conversionCount: number;
   status?: string;
   edgeCredits?: number | null;
+  discountProvider?: string | null;
+  providerDiscountId?: string | null;
+  providerDiscountCode?: string | null;
   polarDiscountId?: string | null;
   polarDiscountCode?: string | null;
   targetPlanKey?: string | null;
@@ -3842,6 +3994,9 @@ async function createReferralRewardGrant(input: {
       conversionCount: input.conversionCount,
       status: input.status ?? "granted",
       edgeCredits: input.edgeCredits ?? null,
+      discountProvider: input.discountProvider ?? null,
+      providerDiscountId: input.providerDiscountId ?? null,
+      providerDiscountCode: input.providerDiscountCode ?? null,
       polarDiscountId: input.polarDiscountId ?? null,
       polarDiscountCode: input.polarDiscountCode ?? null,
       targetPlanKey: input.targetPlanKey ?? null,
@@ -3889,28 +4044,21 @@ async function createOneMonthDiscount(input: {
   sequenceNumber: number;
   planKey: BillingPlanKey;
 }) {
-  const plan = getBillingPlanDefinition(input.planKey);
-  if (!plan?.polarProductId) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: `Plan ${input.planKey} is not configured for discounts`,
-    });
-  }
-
-  const polar = getPolarClient();
-  return polar.discounts.create({
+  const stripe = getStripeClient();
+  return stripe.coupons.create({
     duration: "repeating",
-    durationInMonths: 1,
-    type: "percentage",
-    basisPoints: 10000,
-    maxRedemptions: 1,
-    products: [plan.polarProductId],
-    name: `Referral reward ${input.sequenceNumber} for ${input.userId}`,
+    duration_in_months: 1,
+    percent_off: 100,
+    max_redemptions: 1,
+    name: clampStripeDisplayString(
+      `Reward ${input.sequenceNumber} ${input.planKey} ${input.userId.slice(0, 8)}`
+    ),
     metadata: {
       user_id: input.userId,
       reward_type: REWARD_TYPE_FREE_MONTH,
       reward_sequence: input.sequenceNumber,
       target_plan: input.planKey,
+      billing_provider: "stripe",
     },
   });
 }
@@ -3952,14 +4100,15 @@ async function grantFreeMonthReward(userId: string, sequenceNumber: number) {
   if (
     billing.subscription &&
     subscriptionPlanKey === targetPlanKey &&
-    billing.subscription.polarSubscriptionId
+    billing.subscription.stripeSubscriptionId
   ) {
-    const polar = getPolarClient();
-    await polar.subscriptions.update({
-      id: billing.subscription.polarSubscriptionId,
-      subscriptionUpdate: {
-        discountId: discount.id,
-      },
+    const stripe = getStripeClient();
+    await stripe.subscriptions.update(billing.subscription.stripeSubscriptionId, {
+      discounts: [
+        {
+          coupon: discount.id,
+        },
+      ],
     });
     status = "applied";
   }
@@ -3970,8 +4119,9 @@ async function grantFreeMonthReward(userId: string, sequenceNumber: number) {
     sequenceNumber,
     conversionCount: sequenceNumber * REFERRAL_FREE_MONTH_THRESHOLD,
     status,
-    polarDiscountId: discount.id,
-    polarDiscountCode: "code" in discount ? (discount.code as string | null) : null,
+    discountProvider: "stripe",
+    providerDiscountId: discount.id,
+    polarDiscountId: null,
     targetPlanKey,
   });
 }
@@ -4154,14 +4304,21 @@ export async function markAffiliateSubscriptionActive(input: {
 
 export async function recordAffiliateCommissionEvent(input: {
   referredUserId: string;
-  polarOrderId: string;
+  provider?: string | null;
+  providerOrderId?: string | null;
+  providerSubscriptionId?: string | null;
+  billingOrderId?: string | null;
+  polarOrderId?: string | null;
   polarSubscriptionId?: string | null;
+  stripeInvoiceId?: string | null;
+  stripeSubscriptionId?: string | null;
   affiliateAttributionId?: string | null;
   orderAmount?: number | null;
   subtotalAmount?: number | null;
   discountAmount?: number | null;
   taxAmount?: number | null;
   currency?: string | null;
+  planKey?: string | null;
   commissionBps?: number | null;
   metadata?: Record<string, unknown> | null;
   occurredAt?: Date | null;
@@ -4186,6 +4343,8 @@ export async function recordAffiliateCommissionEvent(input: {
     typeof input.metadata?.affiliate_tracking_link_id === "string"
       ? input.metadata.affiliate_tracking_link_id
       : null;
+  const metadataPlanKey =
+    typeof input.metadata?.plan_key === "string" ? input.metadata.plan_key : null;
 
   const resolvedAttributionId =
     input.affiliateAttributionId ?? metadataAttributionId ?? null;
@@ -4235,10 +4394,27 @@ export async function recordAffiliateCommissionEvent(input: {
     return null;
   }
 
+  const provider =
+    input.provider ??
+    (input.stripeInvoiceId || input.providerOrderId ? "stripe" : "polar");
+  const providerOrderId =
+    input.providerOrderId ?? input.stripeInvoiceId ?? input.polarOrderId ?? null;
+  if (!providerOrderId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Affiliate commission event requires an order reference",
+    });
+  }
+
   const existingEvent = await db
     .select()
     .from(affiliateCommissionEvent)
-    .where(eq(affiliateCommissionEvent.polarOrderId, input.polarOrderId))
+    .where(
+      and(
+        eq(affiliateCommissionEvent.provider, provider),
+        eq(affiliateCommissionEvent.providerOrderId, providerOrderId)
+      )
+    )
     .limit(1);
 
   if (existingEvent[0]) {
@@ -4265,6 +4441,14 @@ export async function recordAffiliateCommissionEvent(input: {
     (commissionBaseAmount * commissionBps) / 10000
   );
   const occurredAt = input.occurredAt ?? new Date();
+  const [referredUser] = await db
+    .select({
+      username: userTable.username,
+      email: userTable.email,
+    })
+    .from(userTable)
+    .where(eq(userTable.id, attribution.referredUserId))
+    .limit(1);
 
   const [inserted] = await db
     .insert(affiliateCommissionEvent)
@@ -4273,8 +4457,21 @@ export async function recordAffiliateCommissionEvent(input: {
       affiliateAttributionId: attribution.id,
       affiliateUserId: attribution.affiliateUserId,
       referredUserId: attribution.referredUserId,
-      polarOrderId: input.polarOrderId,
+      referredUsername: referredUser?.username ?? null,
+      referredEmail: referredUser?.email ?? null,
+      provider,
+      providerOrderId,
+      providerSubscriptionId:
+        input.providerSubscriptionId ??
+        input.stripeSubscriptionId ??
+        input.polarSubscriptionId ??
+        null,
+      billingOrderId: input.billingOrderId ?? null,
+      polarOrderId: input.polarOrderId ?? null,
       polarSubscriptionId: input.polarSubscriptionId ?? null,
+      stripeInvoiceId: input.stripeInvoiceId ?? null,
+      stripeSubscriptionId: input.stripeSubscriptionId ?? null,
+      planKey: input.planKey ?? metadataPlanKey ?? null,
       orderAmount: commissionBaseAmount,
       commissionBps,
       commissionAmount,
@@ -4291,7 +4488,10 @@ export async function recordAffiliateCommissionEvent(input: {
       firstPaidAt: attribution.firstPaidAt ?? occurredAt,
       lastPaidAt: occurredAt,
       convertedSubscriptionId:
-        input.polarSubscriptionId ?? attribution.convertedSubscriptionId,
+        input.providerSubscriptionId ??
+        input.stripeSubscriptionId ??
+        input.polarSubscriptionId ??
+        attribution.convertedSubscriptionId,
       updatedAt: new Date(),
     })
     .where(eq(affiliateAttribution.id, attribution.id));

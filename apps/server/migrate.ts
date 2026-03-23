@@ -13,6 +13,21 @@ if (!DATABASE_URL) {
 const sql = neon(DATABASE_URL);
 const migrationsDir = join(import.meta.dir, 'src/db/migrations');
 
+function splitMigrationStatements(migrationSQL: string) {
+  if (migrationSQL.includes('--> statement-breakpoint')) {
+    return migrationSQL
+      .split('--> statement-breakpoint')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+  }
+
+  return migrationSQL
+    .split(/;\s*\n/g)
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+    .map(s => (s.endsWith(';') ? s : `${s};`));
+}
+
 async function runMigrations() {
   console.log('Running database migrations...\n');
 
@@ -36,10 +51,7 @@ async function runMigrations() {
       const migrationSQL = readFileSync(migrationPath, 'utf-8');
 
       // Split by statement breakpoint
-      const statements = migrationSQL
-        .split('--> statement-breakpoint')
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
+      const statements = splitMigrationStatements(migrationSQL);
 
       console.log(`Found ${statements.length} statement(s) in ${file}`);
 

@@ -33,6 +33,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartDateRange } from "./use-chart-date-range";
 
@@ -182,6 +183,7 @@ export function DailyNetBarChart({
   const [activeDataset, setActiveDataset] = React.useState<
     "profit" | "compare" | undefined
   >(undefined);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const primarySeries = rows ?? series;
   const secondarySeries = comparisonRows ?? comparisonSeries;
@@ -286,7 +288,7 @@ export function DailyNetBarChart({
   }, [comparisonDataForChart, dataForChart]);
 
   const currencyTick = (v: number) => {
-    return formatSignedCurrency(v, 0, currencyCode);
+    return formatSignedCurrency(v, 0, resolvedCurrencyCode);
   };
 
   const weekNet = React.useMemo(
@@ -340,7 +342,7 @@ export function DailyNetBarChart({
           positiveWeekNet ? "text-teal-400" : "text-rose-400"
         )}
       >
-        {formatSignedCurrency(weekNet, 0, currencyCode)}
+        {formatSignedCurrency(weekNet, 0, resolvedCurrencyCode)}
       </span>
       .
     </p>
@@ -351,7 +353,7 @@ export function DailyNetBarChart({
         <span
           className={cn("font-semibold tracking-normal", "text-teal-400")}
         >
-          {formatSignedCurrency(weekNet, 0, currencyCode)}
+          {formatSignedCurrency(weekNet, 0, resolvedCurrencyCode)}
         </span>
         .
       </p>
@@ -361,7 +363,7 @@ export function DailyNetBarChart({
         <span
           className={cn("font-medium tracking-normal", "text-rose-400")}
         >
-          {formatSignedCurrency(weekNet, 0, currencyCode)}
+          {formatSignedCurrency(weekNet, 0, resolvedCurrencyCode)}
         </span>
         .
       </p>
@@ -376,7 +378,7 @@ export function DailyNetBarChart({
           positiveWeekNet ? "text-teal-400" : "text-rose-400"
         )}
       >
-        {formatSignedCurrency(weekNet, 0, currencyCode)}
+        {formatSignedCurrency(weekNet, 0, resolvedCurrencyCode)}
       </span>
       .
     </p>
@@ -398,7 +400,7 @@ export function DailyNetBarChart({
               data={mergedData}
               onMouseLeave={() => {}}
               margin={{
-                left: chartMargin?.left ?? 36,
+                left: chartMargin?.left ?? 0,
                 right: chartMargin?.right ?? 0,
                 top: chartMargin?.top ?? 12,
                 bottom: chartMargin?.bottom ?? -4,
@@ -408,7 +410,7 @@ export function DailyNetBarChart({
                 domain={[niceScale.min, niceScale.max]}
                 tickLine={false}
                 axisLine={false}
-                width={64}
+                width={56}
                 tickMargin={6}
                 tickFormatter={currencyTick}
                 ticks={niceScale.ticks}
@@ -505,7 +507,7 @@ export function DailyNetBarChart({
                               item.name ??
                               (key === "profit" ? "Selected" : "Comparison")
                             }
-                            value={formatSignedCurrency(v, 0, currencyCode)}
+                            value={formatSignedCurrency(v, 0, resolvedCurrencyCode)}
                             tone={v < 0 ? "negative" : "positive"}
                             dimmed={!isRowActive}
                             indicatorColor={

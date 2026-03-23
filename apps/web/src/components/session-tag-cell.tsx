@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { trpcOptions, trpcClient, queryClient } from "@/utils/trpc";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Plus, Tag as TagIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/color-picker";
 import { cn } from "@/lib/utils";
 import Color from "color";
-import { useAccountStore } from "@/stores/account";
 import { toast } from "sonner";
 import {
   getTradeIdentifierColorStyle,
@@ -38,8 +37,10 @@ import {
 
 interface SessionTagCellProps {
   tradeId: string;
+  accountId?: string | null;
   sessionTag: string | null | undefined;
   sessionTagColor: string | null | undefined;
+  allSessionTags?: SessionTagOption[];
   isLive?: boolean;
 }
 
@@ -61,8 +62,10 @@ const DEFAULT_SESSION_COLORS = [
 
 export function SessionTagCell({
   tradeId,
+  accountId,
   sessionTag,
   sessionTagColor,
+  allSessionTags = [],
   isLive = false,
 }: SessionTagCellProps) {
   const [open, setOpen] = React.useState(false);
@@ -72,15 +75,7 @@ export function SessionTagCell({
   );
   const [showColorPicker, setShowColorPicker] = React.useState(false);
   const [isColorDirty, setIsColorDirty] = React.useState(false);
-  const { selectedAccountId } = useAccountStore();
-
-  const sessionTagsOpts = trpcOptions.trades.listSessionTags.queryOptions({
-    accountId: selectedAccountId || "",
-  });
-  const { data: sessionTags = [] } = useQuery({
-    ...sessionTagsOpts,
-    enabled: Boolean(selectedAccountId),
-  }) as { data: SessionTagOption[] | undefined };
+  const sessionTags = allSessionTags;
 
   const matchedExistingTag = React.useMemo(() => {
     if (!sessionTags || !tagName.trim()) return null;
@@ -104,6 +99,13 @@ export function SessionTagCell({
         queryKey: [["trades"]],
         refetchType: "active",
       });
+      if (accountId) {
+        void queryClient.invalidateQueries({
+          queryKey: trpcOptions.trades.listSessionTags.queryOptions({
+            accountId,
+          }).queryKey,
+        });
+      }
       setOpen(false);
       setIsColorDirty(false);
     },

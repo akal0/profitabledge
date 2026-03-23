@@ -10,6 +10,74 @@ import {
   pickNumber,
   pickValue,
 } from "../utils";
+import type { CsvRowRecord, ImportedAccountHints } from "../types";
+
+function pickFirstRecordValue(
+  records: CsvRowRecord[],
+  candidates: string[]
+): string | null {
+  for (const record of records) {
+    const value = pickValue(record, candidates);
+    if (value) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function pickLatestRecordNumber(
+  records: CsvRowRecord[],
+  candidates: string[]
+): number | null {
+  for (let index = records.length - 1; index >= 0; index -= 1) {
+    const value = pickNumber(records[index]!, candidates);
+    if (value != null && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function extractGenericAccountHints(
+  records: CsvRowRecord[]
+): ImportedAccountHints {
+  return {
+    brokerType: null,
+    brokerServer: pickFirstRecordValue(records, [
+      "Server",
+      "Broker Server",
+      "Trading Server",
+      "Connection",
+    ]),
+    accountNumber: pickFirstRecordValue(records, [
+      "Account",
+      "Account Number",
+      "Account Num",
+      "Login",
+      "Login ID",
+    ]),
+    currency: pickFirstRecordValue(records, [
+      "Currency",
+      "Account Currency",
+      "Deposit Currency",
+      "Base Currency",
+    ]),
+    liveBalance: pickLatestRecordNumber(records, [
+      "Balance",
+      "Account Balance",
+      "Ending Balance",
+      "Final Balance",
+    ]),
+    liveEquity: pickLatestRecordNumber(records, [
+      "Equity",
+      "Account Equity",
+      "Net Liquidating Value",
+      "Net Equity",
+    ]),
+  };
+}
 
 function mapGenericTrade(
   record: Record<string, string>,
@@ -22,41 +90,50 @@ function mapGenericTrade(
     "Contract",
     "Product",
   ]);
-  const openTime = pickDate(record, [
-    "Open",
-    "Open time",
-    "Open Time",
-    "Open date",
-    "Open Date",
-    "OpenTime",
-    "Entry Time",
-    "Entry Date/Time",
-    "Opened",
-    "Time",
-  ], [
-    ["Open Date", "Open Time"],
-    ["Entry Date", "Entry Time"],
-    ["Date Opened", "Time Opened"],
-  ]);
-  const closeTime = pickDate(record, [
-    "Close",
-    "Close time",
-    "Close Time",
-    "Close date",
-    "Close Date",
-    "CloseTime",
-    "Exit Time",
-    "Exit Date/Time",
-    "Closed",
-    "Time 2",
-  ], [
-    ["Close Date", "Close Time"],
-    ["Exit Date", "Exit Time"],
-    ["Date Closed", "Time Closed"],
-  ]);
+  const openTime = pickDate(
+    record,
+    [
+      "Open",
+      "Open time",
+      "Open Time",
+      "Open date",
+      "Open Date",
+      "OpenTime",
+      "Entry Time",
+      "Entry Date/Time",
+      "Opened",
+      "Time",
+    ],
+    [
+      ["Open Date", "Open Time"],
+      ["Entry Date", "Entry Time"],
+      ["Date Opened", "Time Opened"],
+    ]
+  );
+  const closeTime = pickDate(
+    record,
+    [
+      "Close",
+      "Close time",
+      "Close Time",
+      "Close date",
+      "Close Date",
+      "CloseTime",
+      "Exit Time",
+      "Exit Date/Time",
+      "Closed",
+      "Time 2",
+    ],
+    [
+      ["Close Date", "Close Time"],
+      ["Exit Date", "Exit Time"],
+      ["Date Closed", "Time Closed"],
+    ]
+  );
   const openPrice = pickNumber(record, [
     "Open Price",
     "Price",
+    "Price 1",
     "Entry Price",
   ]);
   const closePrice = pickNumber(record, [
@@ -78,8 +155,7 @@ function mapGenericTrade(
   const tradeType =
     parseTradeDirection(
       pickValue(record, ["Type", "Side", "Direction", "Action", "Buy/Sell"])
-    ) ??
-    inferTradeDirectionFromMove({ openPrice, closePrice, profit });
+    ) ?? inferTradeDirectionFromMove({ openPrice, closePrice, profit });
 
   if (!symbol || !tradeType) {
     return null;
@@ -96,8 +172,7 @@ function mapGenericTrade(
         "Position ID",
         "Position Id",
         "Position",
-      ]) ??
-      `generic-${index + 1}`,
+      ]) ?? `generic-${index + 1}`,
     symbol,
     tradeType,
     volume: pickNumber(record, [
@@ -117,6 +192,13 @@ function mapGenericTrade(
     swap: pickNumber(record, ["Swap"]),
     commissions: pickNumber(record, ["Commissions", "Commission"]),
     pips: pickNumber(record, ["Pips"]),
+    tradeDurationSeconds:
+      pickValue(record, [
+        "Trade duration in seconds",
+        "Duration (seconds)",
+        "Duration Seconds",
+        "Hold Time Seconds",
+      ]) ?? null,
     comment: pickValue(record, ["Comment", "Notes"]),
     brokerMeta: null,
   };
@@ -127,7 +209,9 @@ export const genericTradeStatementCsvParser: BrokerCsvParser = {
   label: "Generic Trade Statement",
   brokers: "*",
   detect(context) {
-    const headerKeys = context.document.headers.map((header) => header.toLowerCase());
+    const headerKeys = context.document.headers.map((header) =>
+      header.toLowerCase()
+    );
     const hasSymbol = headerKeys.some(
       (header) =>
         header.includes("symbol") ||
@@ -171,9 +255,7 @@ export const genericTradeStatementCsvParser: BrokerCsvParser = {
       reportType: "trade-statement",
       trades,
       warnings: [],
-      accountHints: {
-        brokerType: "other",
-      },
+      accountHints: extractGenericAccountHints(context.document.records),
     };
   },
 };

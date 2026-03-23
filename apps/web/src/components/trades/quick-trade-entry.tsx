@@ -2,9 +2,18 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownRight, ArrowUpRight, Plus } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckCircle2,
+  Plus,
+  Sparkles,
+} from "lucide-react";
 
+import type { MediaFile } from "@/components/media/media-dropzone";
+import { ManualTradeCapturePreview } from "@/components/trades/manual-workspace/manual-trade-capture-preview";
 import { TradeDateTimeField } from "@/components/trades/trade-date-time-field";
+import { QuickTradeEntryNotesMedia } from "@/components/trades/quick-trade-entry-notes-media";
 import {
   TRADE_ACTION_BUTTON_CLASS,
   TRADE_ACTION_BUTTON_PRIMARY_CLASS,
@@ -12,7 +21,9 @@ import {
   TRADE_IDENTIFIER_TONES,
   TRADE_SURFACE_CARD_CLASS,
 } from "@/components/trades/trade-identifier-pill";
+import { persistQuickTradeEntryArtifacts } from "@/components/trades/quick-trade-entry-artifacts";
 import { TagMultiSelect } from "@/components/tags/tag-multi-select";
+import type { JournalBlock } from "@/components/journal/types";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -33,6 +44,8 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   formatSizingNumber,
   getEstimatedPipSize,
@@ -40,6 +53,14 @@ import {
   resolveManualTradeSizing,
   type ManualTradeSizingPreferences,
 } from "@/lib/manual-trade-sizing";
+import {
+  parseManualTradeCapture,
+  parseManualTradeCaptureBulk,
+} from "@/lib/manual-workspace/manual-trade-capture";
+import type {
+  ManualTradeCaptureParseResult,
+  ManualTradeCaptureResult,
+} from "@/lib/manual-workspace/manual-trade-capture-types";
 import { formatCurrencyValue } from "@/lib/trade-formatting";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -58,6 +79,29 @@ interface QuickTradeEntryProps {
 type NamedTradeTag = {
   name: string;
   color: string;
+};
+
+type WorkspaceTab = "single" | "capture" | "bulk" | "open";
+type EntryMode = "closed" | "open";
+
+type ManualOpenTradeRow = {
+  id: string;
+  ticket: string | null;
+  symbol: string | null;
+  tradeType: "long" | "short";
+  volume: number;
+  openPrice: number;
+  currentPrice: number | null;
+  profit: number;
+  commission: number;
+  swap: number;
+  openTime: string | null;
+  sl: number | null;
+  tp: number | null;
+  sessionTag: string | null;
+  comment: string | null;
+  modelTag: string | null;
+  customTags: string[];
 };
 
 const COMMON_SYMBOLS = [
@@ -167,6 +211,32 @@ function formatAssetClassLabel(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function numberToInputValue(value: number | null | undefined) {
+  return value == null || !Number.isFinite(value) ? "" : String(value);
+}
+
+function journalBlocksFromPlainText(text: string): JournalBlock[] {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  return [
+    {
+      id: crypto.randomUUID(),
+      type: "paragraph",
+      content: trimmed,
+    },
+  ];
+}
+
+function extractCaptureRows(
+  result: ManualTradeCaptureParseResult | null
+): ManualTradeCaptureResult[] {
+  if (!result) return [];
+  return result.kind === "bulk" ? result.rows : [result];
+}
+
 export function QuickTradeEntry({
   accountId,
   onTradeCreated,
@@ -175,6 +245,11 @@ export function QuickTradeEntry({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("single");
+  const [entryMode, setEntryMode] = useState<EntryMode>("closed");
+  const [activeOpenTradeId, setActiveOpenTradeId] = useState<string | null>(
+    null
+  );
 
   const [symbol, setSymbol] = useState("");
   const [customSymbol, setCustomSymbol] = useState("");
@@ -196,7 +271,18 @@ export function QuickTradeEntry({
   const [sessionTag, setSessionTag] = useState("");
   const [modelTag, setModelTag] = useState("");
   const [customTags, setCustomTags] = useState<string[]>([]);
+  const [noteContent, setNoteContent] = useState<JournalBlock[]>([]);
+  const [noteHtml, setNoteHtml] = useState("");
+  const [pendingMediaFiles, setPendingMediaFiles] = useState<MediaFile[]>([]);
+  const [noteEditorKey, setNoteEditorKey] = useState(0);
   const [autoCalculateProfit, setAutoCalculateProfit] = useState(true);
+  const [openTradeComment, setOpenTradeComment] = useState("");
+  const [captureInput, setCaptureInput] = useState("");
+  const [captureResult, setCaptureResult] =
+    useState<ManualTradeCaptureParseResult | null>(null);
+  const [bulkInput, setBulkInput] = useState("");
+  const [bulkResult, setBulkResult] =
+    useState<ManualTradeCaptureParseResult | null>(null);
   const previousSizingDefaultRef = useRef<string | null>(null);
 
   const recentSymbolsQuery = useQuery({
@@ -224,6 +310,12 @@ export function QuickTradeEntry({
     enabled: open,
     staleTime: 30_000,
   });
+  const manualOpenTradesQuery = useQuery({
+    ...trpcOptions.trades.listManualOpenTrades.queryOptions({ accountId }),
+    enabled: open,
+    staleTime: 10_000,
+    refetchInterval: open ? 10_000 : false,
+  });
 
   const recentSymbols = useMemo(
     () => (recentSymbolsQuery.data as string[] | undefined) ?? [],
@@ -240,6 +332,10 @@ export function QuickTradeEntry({
   const customTagSuggestions = useMemo(
     () => (customTagsQuery.data as string[] | undefined) ?? [],
     [customTagsQuery.data]
+  );
+  const manualOpenTrades = useMemo(
+    () => (manualOpenTradesQuery.data as ManualOpenTradeRow[] | undefined) ?? [],
+    [manualOpenTradesQuery.data]
   );
 
   const symbolOptions = useMemo(() => {
@@ -338,17 +434,26 @@ export function QuickTradeEntry({
     [commissions]
   );
   const parsedSwap = useMemo(() => parseNumberInput(swap), [swap]);
-
-  const timeOrderValid = closeTime.getTime() > openTime.getTime();
+  const closeReferenceTime = useMemo(
+    () => (entryMode === "open" ? createRoundedNow() : closeTime),
+    [closeTime, entryMode]
+  );
+  const timeOrderValid =
+    entryMode === "open"
+      ? closeReferenceTime.getTime() > openTime.getTime()
+      : closeTime.getTime() > openTime.getTime();
 
   const estimatedProfit = useMemo(() => {
     if (!autoCalculateProfit) return null;
-    if (
-      !effectiveSymbol ||
-      !parsedOpenPrice ||
-      !parsedClosePrice ||
-      !parsedVolume
-    ) {
+    if (!effectiveSymbol || !parsedOpenPrice || !parsedVolume) {
+      return null;
+    }
+
+    if (entryMode === "open" && !parsedClosePrice) {
+      return 0;
+    }
+
+    if (!parsedClosePrice) {
       return null;
     }
 
@@ -360,6 +465,7 @@ export function QuickTradeEntry({
     return priceDiff * parsedVolume * resolvedSizing.profile.contractSize;
   }, [
     autoCalculateProfit,
+    entryMode,
     effectiveSymbol,
     parsedClosePrice,
     parsedOpenPrice,
@@ -371,7 +477,15 @@ export function QuickTradeEntry({
   const effectiveProfit = autoCalculateProfit ? estimatedProfit : parsedProfit;
 
   const estimatedPips = useMemo(() => {
-    if (!effectiveSymbol || !parsedOpenPrice || !parsedClosePrice) {
+    if (!effectiveSymbol || !parsedOpenPrice) {
+      return null;
+    }
+
+    if (entryMode === "open" && !parsedClosePrice) {
+      return 0;
+    }
+
+    if (!parsedClosePrice) {
       return null;
     }
 
@@ -381,7 +495,7 @@ export function QuickTradeEntry({
         : parsedOpenPrice - parsedClosePrice;
 
     return priceDiff / getEstimatedPipSize(effectiveSymbol);
-  }, [effectiveSymbol, parsedClosePrice, parsedOpenPrice, tradeType]);
+  }, [effectiveSymbol, entryMode, parsedClosePrice, parsedOpenPrice, tradeType]);
 
   const plannedRR = useMemo(() => {
     if (!parsedOpenPrice || parsedSl === null || parsedTp === null) {
@@ -407,15 +521,19 @@ export function QuickTradeEntry({
   }, [effectiveProfit, parsedCommission, parsedSwap]);
 
   const canSubmit = useMemo(() => {
+    if (entryMode === "open") {
+      return Boolean(effectiveSymbol && parsedVolume && parsedOpenPrice);
+    }
+
     return Boolean(
       effectiveSymbol &&
         parsedVolume &&
         parsedOpenPrice &&
-        parsedClosePrice &&
         timeOrderValid &&
-        effectiveProfit !== null
+        (parsedClosePrice || effectiveProfit !== null)
     );
   }, [
+    entryMode,
     effectiveProfit,
     effectiveSymbol,
     parsedClosePrice,
@@ -437,15 +555,23 @@ export function QuickTradeEntry({
       return "Enter a valid trade size.";
     }
 
-    if (!parsedOpenPrice || !parsedClosePrice) {
-      return "Enter both entry and exit prices.";
+    if (!parsedOpenPrice) {
+      return entryMode === "open"
+        ? "Enter the live entry price."
+        : "Enter the entry price.";
+    }
+
+    if (entryMode === "closed" && !parsedClosePrice && parsedProfit === null) {
+      return "Enter an exit price or a trade P&L value.";
     }
 
     if (!timeOrderValid) {
-      return "Close time must be after open time.";
+      return entryMode === "open"
+        ? "Open time must be before now."
+        : "Close time must be after open time.";
     }
 
-    if (!autoCalculateProfit && parsedProfit === null) {
+    if (entryMode === "closed" && !autoCalculateProfit && parsedProfit === null) {
       return "Enter the trade P&L or turn auto-calculate back on.";
     }
 
@@ -453,6 +579,7 @@ export function QuickTradeEntry({
   }, [
     autoCalculateProfit,
     customSymbol,
+    entryMode,
     effectiveSymbol,
     parsedClosePrice,
     parsedOpenPrice,
@@ -465,6 +592,9 @@ export function QuickTradeEntry({
   function resetForm() {
     const defaults = createDefaultTradeWindow();
 
+    setWorkspaceTab("single");
+    setEntryMode("closed");
+    setActiveOpenTradeId(null);
     setSymbol("");
     setCustomSymbol("");
     setTradeType("long");
@@ -485,7 +615,16 @@ export function QuickTradeEntry({
     setSessionTag("");
     setModelTag("");
     setCustomTags([]);
+    setNoteContent([]);
+    setNoteHtml("");
+    setPendingMediaFiles([]);
+    setNoteEditorKey((current) => current + 1);
     setAutoCalculateProfit(true);
+    setOpenTradeComment("");
+    setCaptureInput("");
+    setCaptureResult(null);
+    setBulkInput("");
+    setBulkResult(null);
     previousSizingDefaultRef.current = null;
   }
 
@@ -497,72 +636,449 @@ export function QuickTradeEntry({
     }
   }
 
-  async function handleSubmit(mode: "close" | "continue") {
-    if (
-      !canSubmit ||
-      !effectiveSymbol ||
-      !parsedVolume ||
-      !parsedOpenPrice ||
-      !parsedClosePrice ||
-      effectiveProfit === null
-    ) {
+  const captureParseOptions = useMemo(
+    () => ({
+      referenceDate: new Date(),
+      resolvePipSize: (nextSymbol: string) => getEstimatedPipSize(nextSymbol),
+      resolveContractSize: (nextSymbol: string) =>
+        resolveManualTradeSizing(nextSymbol, manualTradeSizing).profile
+          .contractSize,
+    }),
+    [manualTradeSizing]
+  );
+
+  function invalidateWorkspaceQueries() {
+    return Promise.all([
+      queryClient.invalidateQueries({ queryKey: [["trades"]] }),
+      queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" }),
+      queryClient.invalidateQueries({ queryKey: ["dashboard-chart-trades"] }),
+      queryClient.refetchQueries({
+        queryKey: ["dashboard-chart-trades"],
+        type: "active",
+      }),
+      queryClient.invalidateQueries({
+        queryKey: trpcOptions.accounts.stats.queryOptions({ accountId })
+          .queryKey,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: trpcOptions.accounts.aggregatedStats.queryOptions({})
+          .queryKey,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: trpcOptions.trades.listManualOpenTrades.queryOptions({
+          accountId,
+        }).queryKey,
+      }),
+      queryClient.invalidateQueries({
+        queryKey: trpcOptions.accounts.liveMetrics.queryOptions({
+          accountId,
+        }).queryKey,
+      }),
+      queryClient.invalidateQueries({ queryKey: ["accounts"] }),
+      queryClient.invalidateQueries({ queryKey: ["propFirms"] }),
+    ]);
+  }
+
+  function applyCaptureResult(result: ManualTradeCaptureResult) {
+    const detectedSymbol = result.fields.symbol.value?.trim().toUpperCase() || "";
+    const useCustomSymbol =
+      detectedSymbol.length > 0 && !symbolOptions.includes(detectedSymbol);
+
+    setWorkspaceTab("single");
+    setActiveOpenTradeId(null);
+    setEntryMode(result.derived.isOpenTrade.value ? "open" : "closed");
+    setSymbol(
+      detectedSymbol
+        ? useCustomSymbol
+          ? "custom"
+          : detectedSymbol
+        : ""
+    );
+    setCustomSymbol(useCustomSymbol ? detectedSymbol : "");
+    setTradeType(result.fields.direction.value === "short" ? "short" : "long");
+    setVolume(numberToInputValue(result.fields.volume.value));
+    setOpenPrice(numberToInputValue(result.fields.openPrice.value));
+    setClosePrice(numberToInputValue(result.fields.closePrice.value));
+    setSl(numberToInputValue(result.fields.stopLoss.value));
+    setTp(numberToInputValue(result.fields.takeProfit.value));
+    setProfit(numberToInputValue(result.fields.profit.value));
+    setCommissions(numberToInputValue(result.fields.commission.value));
+    setSwap(numberToInputValue(result.fields.swap.value));
+    setAutoCalculateProfit(result.fields.profit.value == null);
+    setOpenTime(result.fields.openTime.value ?? createDefaultTradeWindow().openTime);
+    setCloseTime(result.fields.closeTime.value ?? createRoundedNow());
+    setOpenTradeComment(result.fields.notes.value ?? "");
+    setSessionTag("");
+    setModelTag("");
+    setCustomTags([]);
+    const noteBlocks = journalBlocksFromPlainText(result.fields.notes.value ?? "");
+    setNoteContent(noteBlocks);
+    setNoteHtml(result.fields.notes.value ?? "");
+    setPendingMediaFiles([]);
+    setNoteEditorKey((current) => current + 1);
+  }
+
+  function loadManualOpenTrade(row: ManualOpenTradeRow) {
+    const detectedSymbol = row.symbol?.trim().toUpperCase() || "";
+    const useCustomSymbol =
+      detectedSymbol.length > 0 && !symbolOptions.includes(detectedSymbol);
+
+    setWorkspaceTab("single");
+    setEntryMode("closed");
+    setActiveOpenTradeId(row.id);
+    setSymbol(
+      detectedSymbol
+        ? useCustomSymbol
+          ? "custom"
+          : detectedSymbol
+        : ""
+    );
+    setCustomSymbol(useCustomSymbol ? detectedSymbol : "");
+    setTradeType(row.tradeType === "short" ? "short" : "long");
+    setVolume(numberToInputValue(row.volume));
+    setOpenPrice(numberToInputValue(row.openPrice));
+    setClosePrice(numberToInputValue(row.currentPrice));
+    setOpenTime(row.openTime ? new Date(row.openTime) : createRoundedNow());
+    setCloseTime(createRoundedNow());
+    setSl(numberToInputValue(row.sl));
+    setTp(numberToInputValue(row.tp));
+    setProfit("");
+    setCommissions(numberToInputValue(row.commission));
+    setSwap(numberToInputValue(row.swap));
+    setSessionTag(row.sessionTag ?? "");
+    setModelTag(row.modelTag ?? "");
+    setCustomTags(row.customTags ?? []);
+    setOpenTradeComment(row.comment ?? "");
+    setAutoCalculateProfit(true);
+    setNoteContent([]);
+    setNoteHtml("");
+    setPendingMediaFiles([]);
+    setNoteEditorKey((current) => current + 1);
+  }
+
+  async function handleCaptureParse() {
+    const nextInput = captureInput.trim();
+    if (!nextInput) {
+      setCaptureResult(null);
+      return;
+    }
+
+    const parsed = nextInput.includes("\n")
+      ? parseManualTradeCaptureBulk(nextInput, captureParseOptions)
+      : parseManualTradeCapture(nextInput, captureParseOptions);
+
+    setCaptureResult(parsed);
+
+    if (parsed.kind === "bulk") {
+      toast.success(`Parsed ${parsed.rows.length} trade drafts.`);
+      return;
+    }
+
+    toast.success("Capture parsed. Review and load it into the form.");
+  }
+
+  async function handleBulkParse() {
+    const nextInput = bulkInput.trim();
+    if (!nextInput) {
+      setBulkResult(null);
+      return;
+    }
+
+    const parsed = nextInput.includes("\n")
+      ? parseManualTradeCaptureBulk(nextInput, captureParseOptions)
+      : parseManualTradeCapture(nextInput, captureParseOptions);
+
+    setBulkResult(parsed);
+  }
+
+  function isPresent<T>(value: T | null): value is T {
+    return value !== null;
+  }
+
+  function buildClosedTradePayloadFromCapture(result: ManualTradeCaptureResult) {
+    const symbolValue = result.fields.symbol.value?.trim().toUpperCase();
+    const volumeValue = result.fields.volume.value;
+    const openPriceValue = result.fields.openPrice.value;
+    const openTimeValue = result.fields.openTime.value;
+    const tradeType: "long" | "short" =
+      result.fields.direction.value === "short" ? "short" : "long";
+
+    if (!symbolValue || !volumeValue || !openPriceValue || !openTimeValue) {
+      return null;
+    }
+
+    return {
+      accountId,
+      symbol: symbolValue,
+      tradeType,
+      volume: volumeValue,
+      openPrice: openPriceValue,
+      openTime: openTimeValue.toISOString(),
+      closePrice: result.fields.closePrice.value ?? undefined,
+      closeTime:
+        result.fields.closeTime.value?.toISOString() ??
+        createRoundedNow().toISOString(),
+      sl: result.fields.stopLoss.value ?? undefined,
+      tp: result.fields.takeProfit.value ?? undefined,
+      profit: result.fields.profit.value ?? undefined,
+      commissions: result.fields.commission.value ?? undefined,
+      swap: result.fields.swap.value ?? undefined,
+    };
+  }
+
+  function buildOpenTradePayloadFromCapture(result: ManualTradeCaptureResult) {
+    const symbolValue = result.fields.symbol.value?.trim().toUpperCase();
+    const volumeValue = result.fields.volume.value;
+    const openPriceValue = result.fields.openPrice.value;
+    const openTimeValue = result.fields.openTime.value;
+    const tradeType: "long" | "short" =
+      result.fields.direction.value === "short" ? "short" : "long";
+
+    if (!symbolValue || !volumeValue || !openPriceValue || !openTimeValue) {
+      return null;
+    }
+
+    return {
+      accountId,
+      symbol: symbolValue,
+      tradeType,
+      volume: volumeValue,
+      openPrice: openPriceValue,
+      openTime: openTimeValue.toISOString(),
+      currentPrice: result.fields.closePrice.value ?? undefined,
+      sl: result.fields.stopLoss.value ?? undefined,
+      tp: result.fields.takeProfit.value ?? undefined,
+      profit: result.fields.profit.value ?? undefined,
+      commissions: result.fields.commission.value ?? undefined,
+      swap: result.fields.swap.value ?? undefined,
+      comment: result.fields.notes.value ?? undefined,
+    };
+  }
+
+  async function handleBulkSubmit() {
+    const rows = extractCaptureRows(bulkResult);
+    if (rows.length === 0) {
+      toast.error("Parse some trades first.");
+      return;
+    }
+
+    const openPayloads = rows
+      .filter((row) => row.derived.isOpenTrade.value)
+      .map(buildOpenTradePayloadFromCapture)
+      .filter(isPresent);
+    const closedPayloads = rows
+      .filter((row) => !row.derived.isOpenTrade.value)
+      .map(buildClosedTradePayloadFromCapture)
+      .filter(isPresent);
+
+    if (openPayloads.length === 0 && closedPayloads.length === 0) {
+      toast.error("No valid trades were detected in the pasted content.");
       return;
     }
 
     setSubmitting(true);
 
     try {
-      const result = await trpcClient.trades.create.mutate({
-        accountId,
-        symbol: effectiveSymbol,
-        tradeType,
-        volume: parsedVolume,
-        openPrice: parsedOpenPrice,
-        closePrice: parsedClosePrice,
-        openTime: openTime.toISOString(),
-        closeTime: closeTime.toISOString(),
-        sl: parsedSl ?? undefined,
-        tp: parsedTp ?? undefined,
-        profit: effectiveProfit,
-        commissions: parsedCommission ?? undefined,
-        swap: parsedSwap ?? undefined,
-        sessionTag: sessionTag.trim() || undefined,
-        modelTag: modelTag.trim() || undefined,
-        customTags,
+      const [bulkClosedResult, openResults] = await Promise.all([
+        closedPayloads.length > 0
+          ? trpcClient.trades.bulkCreateManualTrades.mutate({
+              accountId,
+              trades: closedPayloads,
+            })
+          : Promise.resolve(null),
+        Promise.all(
+          openPayloads.map((payload) =>
+            trpcClient.trades.createManualOpenTrade.mutate(payload)
+          )
+        ),
+      ]);
+
+      await invalidateWorkspaceQueries();
+
+      const createdClosedCount = bulkClosedResult?.createdCount ?? 0;
+      const createdOpenCount = openResults.length;
+      const matchedCount = bulkClosedResult?.matchedCount ?? 0;
+
+      toast.success(
+        `${createdClosedCount + createdOpenCount} manual trade${
+          createdClosedCount + createdOpenCount === 1 ? "" : "s"
+        } added.`
+      );
+
+      if (matchedCount > 0) {
+        toast.warning(
+          `${matchedCount} trade${
+            matchedCount === 1 ? "" : "s"
+          } look similar to existing broker/import history.`
+        );
+      }
+
+      setBulkInput("");
+      setBulkResult(null);
+      setWorkspaceTab(createdOpenCount > 0 ? "open" : "single");
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to create manual trades");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleQuickCloseOpenTrade(row: ManualOpenTradeRow) {
+    try {
+      setSubmitting(true);
+      const result = await trpcClient.trades.closeManualOpenTrade.mutate({
+        openTradeId: row.id,
+        closePrice: row.currentPrice ?? undefined,
       });
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: [["trades"]] }),
-        queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" }),
-        queryClient.invalidateQueries({ queryKey: ["dashboard-chart-trades"] }),
-        queryClient.refetchQueries({
-          queryKey: ["dashboard-chart-trades"],
-          type: "active",
-        }),
-        queryClient.invalidateQueries({
-          queryKey: trpcOptions.accounts.stats.queryOptions({ accountId })
-            .queryKey,
-        }),
-        queryClient.invalidateQueries({
-          queryKey: trpcOptions.accounts.aggregatedStats.queryOptions({})
-            .queryKey,
-        }),
-        queryClient.invalidateQueries({ queryKey: ["accounts"] }),
-        queryClient.invalidateQueries({ queryKey: ["propFirms"] }),
-      ]);
+      await invalidateWorkspaceQueries();
+
+      toast.success(
+        `Position closed: ${result.symbol} ${formatCurrencyValue(
+          result.profit,
+          {
+            showPlus: true,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        )}`
+      );
+    } catch (error: any) {
+      toast.error(error?.message || "Failed to close open trade");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleSubmit(mode: "close" | "continue") {
+    if (!canSubmit || !effectiveSymbol || !parsedVolume || !parsedOpenPrice) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      if (entryMode === "open") {
+        const result = await trpcClient.trades.createManualOpenTrade.mutate({
+          accountId,
+          symbol: effectiveSymbol,
+          tradeType,
+          volume: parsedVolume,
+          openPrice: parsedOpenPrice,
+          openTime: openTime.toISOString(),
+          currentPrice: parsedClosePrice ?? undefined,
+          sl: parsedSl ?? undefined,
+          tp: parsedTp ?? undefined,
+          profit: effectiveProfit ?? undefined,
+          commissions: parsedCommission ?? undefined,
+          swap: parsedSwap ?? undefined,
+          sessionTag: sessionTag.trim() || undefined,
+          modelTag: modelTag.trim() || undefined,
+          customTags,
+          comment: openTradeComment.trim() || undefined,
+        });
+
+        await invalidateWorkspaceQueries();
+
+        toast.success(
+          mode === "continue"
+            ? `Open position added. Ready for the next one: ${result.symbol}`
+            : `Open position added: ${result.symbol}`
+        );
+
+        resetForm();
+        setWorkspaceTab("open");
+
+        if (mode === "close") {
+          setOpen(false);
+        }
+
+        return;
+      }
+
+      const result = activeOpenTradeId
+        ? await trpcClient.trades.closeManualOpenTrade.mutate({
+            openTradeId: activeOpenTradeId,
+            symbol: effectiveSymbol,
+            tradeType,
+            volume: parsedVolume,
+            openPrice: parsedOpenPrice,
+            openTime: openTime.toISOString(),
+            closePrice: parsedClosePrice ?? undefined,
+            closeTime: closeTime.toISOString(),
+            sl: parsedSl ?? undefined,
+            tp: parsedTp ?? undefined,
+            profit: effectiveProfit ?? undefined,
+            commissions: parsedCommission ?? undefined,
+            swap: parsedSwap ?? undefined,
+            sessionTag: sessionTag.trim() || undefined,
+            modelTag: modelTag.trim() || undefined,
+            customTags,
+          })
+        : await trpcClient.trades.createManualClosedTrade.mutate({
+            accountId,
+            symbol: effectiveSymbol,
+            tradeType,
+            volume: parsedVolume,
+            openPrice: parsedOpenPrice,
+            closePrice: parsedClosePrice ?? undefined,
+            openTime: openTime.toISOString(),
+            closeTime: closeTime.toISOString(),
+            sl: parsedSl ?? undefined,
+            tp: parsedTp ?? undefined,
+            profit: effectiveProfit ?? undefined,
+            commissions: parsedCommission ?? undefined,
+            swap: parsedSwap ?? undefined,
+            sessionTag: sessionTag.trim() || undefined,
+            modelTag: modelTag.trim() || undefined,
+            customTags,
+          });
+
+      const artifactResult = await persistQuickTradeEntryArtifacts({
+        tradeId: result.id,
+        noteContent,
+        noteHtml,
+        mediaFiles: pendingMediaFiles,
+      });
+
+      await invalidateWorkspaceQueries();
 
       toast.success(
         mode === "continue"
-          ? `Trade added. Ready for the next one: ${result.symbol}`
-          : `Trade added: ${result.symbol} ${formatCurrencyValue(
-              result.profit,
-              {
-                showPlus: true,
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }
-            )}`
+          ? `${activeOpenTradeId ? "Position closed" : "Trade added"}. Ready for the next one: ${result.symbol}`
+          : `${activeOpenTradeId ? "Position closed" : "Trade added"}: ${
+              result.symbol
+            } ${formatCurrencyValue(result.profit, {
+              showPlus: true,
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`
       );
+
+      if (
+        "reconciliationCandidates" in result &&
+        result.reconciliationCandidates.length > 0
+      ) {
+        toast.warning(
+          `${result.reconciliationCandidates.length} possible broker/import match${
+            result.reconciliationCandidates.length === 1 ? "" : "es"
+          } found for this manual trade.`
+        );
+      }
+
+      if (artifactResult.failedMediaCount > 0) {
+        toast.warning(
+          `${artifactResult.failedMediaCount} attachment${
+            artifactResult.failedMediaCount === 1 ? "" : "s"
+          } failed to upload. The trade was still saved.`
+        );
+      }
+
+      if (artifactResult.noteFailed) {
+        toast.warning(
+          "The trade was saved, but the note could not be attached."
+        );
+      }
 
       onTradeCreated?.({
         id: result.id,
@@ -1055,7 +1571,24 @@ export function QuickTradeEntry({
             </div>
           </div>
 
-          <Separator />
+          <QuickTradeEntryNotesMedia
+            noteEditorKey={noteEditorKey}
+            noteContent={noteContent}
+            onNoteChange={(blocks, html) => {
+              setNoteContent(blocks);
+              setNoteHtml(html);
+            }}
+            mediaFiles={pendingMediaFiles}
+            onFilesSelected={(files) =>
+              setPendingMediaFiles((current) => [...current, ...files])
+            }
+            onFileRemove={(id) =>
+              setPendingMediaFiles((current) =>
+                current.filter((file) => file.id !== id)
+              )
+            }
+            disabled={submitting}
+          />
 
           <div className="space-y-4 px-6 py-5">
             <div className="flex flex-wrap items-center justify-between gap-3">

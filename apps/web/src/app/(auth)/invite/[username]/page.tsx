@@ -85,6 +85,14 @@ function deriveSignupName(email: string) {
 
 export default function InvitePage() {
   const params = useParams<{ username: string }>();
+  const username = decodeURIComponent(params?.username ?? "");
+  const initialAffiliate: AffiliateInfo | null = username
+    ? {
+        name: username,
+        username,
+        image: null,
+      }
+    : null;
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
@@ -93,10 +101,11 @@ export default function InvitePage() {
   const [socialProviderLoading, setSocialProviderLoading] = useState<
     "google" | "twitter" | null
   >(null);
-  const [affiliate, setAffiliate] = useState<AffiliateInfo | null>(null);
-
-  const username = decodeURIComponent(params?.username ?? "");
+  const [affiliate, setAffiliate] = useState<AffiliateInfo | null>(
+    initialAffiliate
+  );
   const channel = searchParams?.get("channel") ?? null;
+  const inviterLabel = affiliate?.username || affiliate?.name || username;
 
   useEffect(() => {
     storeAffiliateIntent(username, channel);
@@ -194,11 +203,12 @@ export default function InvitePage() {
       heroTitle="Build the review process before the account pressure compounds."
       heroDescription="One workspace for journaling, trade analysis, and prop-account discipline so the edge gets sharper as the data grows."
       affiliate={affiliate}
+      hideAffiliateDescription
     >
       <div className="space-y-8">
         <div className="space-y-3 text-center">
           <p className="text-3xl font-medium tracking-[-0.05em] text-white/50">
-            First time here?
+            You&apos;ve been invited by {inviterLabel}
           </p>
           <p className="text-sm leading-6 text-white/56">
             You've come to the right place. All roads lead back to{" "}

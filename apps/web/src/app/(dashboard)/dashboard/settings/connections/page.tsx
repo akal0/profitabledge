@@ -69,9 +69,9 @@ export default function ConnectionsSettingsPage() {
       connectionsEnabled && mt5IngestionEnabled && terminalConnections.length > 0,
     refetchInterval:
       connectionsEnabled && mt5IngestionEnabled && terminalConnections.length > 0
-        ? 10000
+        ? 30000
         : false,
-    refetchIntervalInBackground: true,
+    refetchIntervalInBackground: false,
   }) as {
     data: TerminalSupervisorStatus | undefined;
     refetch: () => Promise<unknown>;

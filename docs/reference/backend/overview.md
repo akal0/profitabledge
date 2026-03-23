@@ -25,6 +25,10 @@
 - account performance and broker-owned trade interpretation
   - `apps/server/src/routers/accounts/performance.ts`
   - `apps/server/src/lib/trades/trade-outcome.ts`
+- CSV/XML/XLSX trade import normalization
+  - `apps/server/src/routers/upload.ts`
+  - `apps/server/src/lib/trade-import/...`
+  - parser modules should emit the shared normalized trade shape first, then let bundle/persistence layers handle dedupe and inserts; broker-specific logic should stay in parser detection, pairing, and account-hint extraction rather than leaking into persistence
 - verification and public track records
   - `apps/server/src/routers/accounts/track-record.ts`
 - public proof share and trust-audit APIs
@@ -32,6 +36,7 @@
   - `apps/server/src/routers/proof/...`
   - `apps/server/src/lib/public-proof/...`
   - `apps/server/src/lib/public-proof/page-data.ts` owns public proof overview/stat/trust shaping so router queries can stay focused on fetch + authorization instead of inlining proof-page aggregation logic
+  - public-proof trust classification should distinguish `Broker sync` / `Broker verified` from `EA synced` / `EA verified`, and the seeded Profitabledge demo account must override those trust labels instead of inheriting generic live-sync wording from stored verification fields
   - live public-proof open-trade rows should treat their headline floating P&L as net open P&L (`profit + swap`) while still preserving raw swap separately for any downstream UI that wants to break it out
 - health and sync status
   - `apps/server/src/routers/accounts/health.ts`

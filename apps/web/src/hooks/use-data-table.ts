@@ -11,7 +11,6 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type VisibilityState,
-  flexRender,
   useReactTable,
 } from "@tanstack/react-table";
 import { trpcClient, trpcOptions, queryClient } from "@/utils/trpc";
@@ -26,6 +25,8 @@ export interface UseDataTableOptions<TData> {
   meta?: any;
   disablePreferences?: boolean;
   getRowId?: (row: TData, index: number) => string;
+  enableFilteringRowModel?: boolean;
+  enablePaginationRowModel?: boolean;
 }
 
 export function useDataTable<TData>({
@@ -37,6 +38,8 @@ export function useDataTable<TData>({
   meta,
   disablePreferences,
   getRowId,
+  enableFilteringRowModel = true,
+  enablePaginationRowModel = true,
 }: UseDataTableOptions<TData>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
@@ -172,6 +175,8 @@ export function useDataTable<TData>({
     // These tables render the full row model, so auto-resetting pagination
     // can schedule unnecessary state updates during mount in React dev.
     autoResetPageIndex: false,
+    manualFiltering: !enableFilteringRowModel,
+    manualPagination: !enablePaginationRowModel,
     state: {
       sorting,
       columnFilters,
@@ -188,8 +193,12 @@ export function useDataTable<TData>({
     onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: enableFilteringRowModel
+      ? getFilteredRowModel()
+      : undefined,
+    getPaginationRowModel: enablePaginationRowModel
+      ? getPaginationRowModel()
+      : undefined,
   });
 
   return {

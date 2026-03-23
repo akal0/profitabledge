@@ -3,6 +3,25 @@ import path from "path";
 import dotenv from "dotenv";
 import { z } from "zod";
 
+const stripeSecretKeySchema = z
+  .string()
+  .regex(
+    /^(?:sk|rk)_(?:test|live)_/,
+    "Stripe secret keys must start with sk_test_, sk_live_, rk_test_, or rk_live_"
+  );
+
+const stripeWebhookSecretSchema = z
+  .string()
+  .regex(/^whsec_/, "Stripe webhook secrets must start with whsec_");
+
+const stripePriceIdSchema = z
+  .string()
+  .regex(/^price_/, "Stripe price IDs must start with price_");
+
+const stripeBillingPortalConfigurationSchema = z
+  .string()
+  .regex(/^bpc_/, "Stripe portal configuration IDs must start with bpc_");
+
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   BETTER_AUTH_SECRET: z.string().min(1).optional(),
@@ -20,12 +39,18 @@ const serverEnvSchema = z.object({
   RESEND_FROM_EMAIL: z.string().email().optional(),
   UPLOADTHING_TOKEN: z.string().min(1).optional(),
   WEB_URL: z.string().url().optional(),
+  BILLING_PROVIDER: z.enum(["polar", "stripe"]).optional(),
   POLAR_ACCESS_TOKEN: z.string().min(1).optional(),
   POLAR_WEBHOOK_SECRET: z.string().min(1).optional(),
   POLAR_SERVER: z.enum(["production", "sandbox"]).optional(),
   POLAR_PRODUCT_PRO_ID: z.string().min(1).optional(),
   POLAR_PRODUCT_ELITE_ID: z.string().min(1).optional(),
-  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_SECRET_KEY: stripeSecretKeySchema.optional(),
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSecretSchema.optional(),
+  STRIPE_PRICE_PROFESSIONAL_MONTHLY_ID: stripePriceIdSchema.optional(),
+  STRIPE_PRICE_INSTITUTIONAL_MONTHLY_ID: stripePriceIdSchema.optional(),
+  STRIPE_BILLING_PORTAL_CONFIGURATION_ID:
+    stripeBillingPortalConfigurationSchema.optional(),
   STRIPE_CONNECT_COUNTRY: z.string().min(2).max(2).optional(),
   GITHUB_FEATURE_REQUEST_TOKEN: z.string().min(1).optional(),
   GITHUB_FEATURE_REQUEST_OWNER: z.string().min(1).optional(),

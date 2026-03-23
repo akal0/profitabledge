@@ -1,11 +1,16 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
-import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import {
+  formatSignedCurrencyValue,
+  normalizeCurrencyCode,
+} from "@/features/dashboard/widgets/lib/widget-shared";
 import { Separator } from "@/components/ui/separator";
 import { APP_TOOLTIP_SURFACE_CLASS } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 
 export type DashboardTooltipTone =
   | "default"
@@ -95,6 +100,50 @@ export function formatSignedCurrency(
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+export function useChartCurrencyCode(
+  accountId?: string,
+  explicitCurrencyCode?: string | null
+) {
+  const selectedAccountId = useAccountStore((state) => state.selectedAccountId);
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
+  const effectiveAccountId = accountId ?? selectedAccountId;
+  const normalizedExplicitCurrency = normalizeCurrencyCode(explicitCurrencyCode);
+  const normalizedPreferredCurrency = normalizeCurrencyCode(
+    allAccountsPreferredCurrencyCode
+  );
+  const shouldLookupAccountCurrency = Boolean(
+    effectiveAccountId && !isAllAccountsScope(effectiveAccountId)
+  );
+  const { accounts } = useAccountCatalog({
+    enabled: shouldLookupAccountCurrency,
+    staleTime: 60_000,
+  });
+
+  return useMemo(() => {
+    if (normalizedExplicitCurrency) {
+      return normalizedExplicitCurrency;
+    }
+
+    if (effectiveAccountId && !isAllAccountsScope(effectiveAccountId)) {
+      const accountCurrency = accounts.find(
+        (account) => account.id === effectiveAccountId
+      )?.initialCurrency;
+      return (
+        normalizeCurrencyCode(accountCurrency) ?? normalizedPreferredCurrency
+      );
+    }
+
+    return normalizedPreferredCurrency;
+  }, [
+    accounts,
+    effectiveAccountId,
+    normalizedExplicitCurrency,
+    normalizedPreferredCurrency,
+  ]);
 }
 
 export function formatSignedPercent(value: number, digits = 2) {

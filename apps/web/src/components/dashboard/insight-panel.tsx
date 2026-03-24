@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TRADE_SURFACE_CARD_CLASS } from "@/components/trades/trade-identifier-pill";
+import { useTabAttentionActivity } from "@/hooks/use-tab-attention-activity";
 
 const SEVERITY_CONFIG = {
   critical: {
@@ -98,6 +99,7 @@ export function InsightPanel() {
   const generate = trpc.ai.generateInsightsManual.useMutation({
     onSuccess: () => refetch(),
   });
+  useTabAttentionActivity("insights", generate.isPending);
 
   const insights = insightsData?.items ?? [];
   const unreadCount = insightsData?.unreadCount ?? 0;

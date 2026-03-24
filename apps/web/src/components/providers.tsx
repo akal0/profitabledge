@@ -15,6 +15,7 @@ import { Toaster } from "./ui/sonner";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { authClient } from "@/lib/auth-client";
 import { useAccountStore } from "@/stores/account";
+import { TabAttentionController } from "@/components/tab-attention-controller";
 import {
   GROWTH_TOUCH_COOKIE,
   GROWTH_VISITOR_COOKIE,
@@ -140,6 +141,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 forcedTheme="dark"
                 disableTransitionOnChange
               >
+                <TabAttentionController />
                 <TooltipProvider>{children}</TooltipProvider>
                 <Toaster richColors />
               </ThemeProvider>

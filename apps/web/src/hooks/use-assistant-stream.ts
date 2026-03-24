@@ -15,6 +15,7 @@ import type {
   VizSpec,
 } from "@/types/assistant-stream";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
+import { startTabAttentionActivity } from "@/stores/tab-attention";
 
 const INITIAL_STATE: AssistantStreamState = {
   stage: null,
@@ -67,6 +68,7 @@ export function useAssistantStream() {
 
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
+      const releaseTabAttention = startTabAttentionActivity("assistant");
 
       setState((prev) => ({ ...prev, isStreaming: true }));
 
@@ -203,6 +205,8 @@ export function useAssistantStream() {
           isStreaming: false,
           error: error.message || "Stream failed",
         }));
+      } finally {
+        releaseTabAttention();
       }
     },
     [commitLines]
@@ -240,6 +244,12 @@ export function useAssistantStream() {
       toast.error(state.error);
     }
   }, [state.error]);
+
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   return {
     state,

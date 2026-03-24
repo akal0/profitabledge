@@ -31,6 +31,7 @@ import {
 import { WidgetWrapper } from "./widget-wrapper";
 import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
 import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
+import { useTabAttentionActivity } from "@/hooks/use-tab-attention-activity";
 
 const WIDGET_CONTENT_SEPARATOR_CLASS = "-mx-3.5 shrink-0 self-stretch";
 
@@ -85,6 +86,7 @@ export function DailyBriefingCard({
   const generateMutation = trpc.ai.generateBriefing.useMutation({
     onSuccess: () => refetch(),
   });
+  useTabAttentionActivity("daily-briefing", generateMutation.isPending);
 
   const content = briefing?.content as any;
   const hasBriefing = !!content;

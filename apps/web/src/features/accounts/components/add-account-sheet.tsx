@@ -64,6 +64,7 @@ import {
   type ManualAccountBrokerType,
 } from "@/features/accounts/lib/manual-account";
 import { useAccountStore } from "@/stores/account";
+import { startTabAttentionActivity } from "@/stores/tab-attention";
 
 export type AddAccountForm = {
   method: "csv" | "broker" | "ea" | "manual" | null;
@@ -476,11 +477,13 @@ export function AddAccountSheet({
     const previousDemoCreated = useTourStore.getState().demoCreated;
     const isGuidedDemoTourStep =
       currentTour === TOUR_ID && currentStep === ADD_ACCOUNT_SHEET_LAST_STEP;
+    const releaseTabAttention = startTabAttentionActivity("demo-workspace");
     const loadingToastId = toast.loading(
       hadExistingDemoWorkspace
         ? "Refreshing demo workspace. The dashboard may look empty until the new data finishes loading."
         : "Preparing demo workspace. The dashboard may look empty until the seeded data finishes loading."
     );
+    let hydrationStarted = false;
 
     try {
       setSubmitting(true);
@@ -530,6 +533,7 @@ export function AddAccountSheet({
         handleOpenChange(false);
       }
 
+      hydrationStarted = true;
       void trpcClient.accounts
         .hydrateDemoWorkspace.mutate({ accountId: createdAccount.id })
         .then(async (hydrated) => {
@@ -548,6 +552,9 @@ export function AddAccountSheet({
               "Demo workspace is taking longer than expected. You can keep using the platform and refresh shortly.",
             { id: loadingToastId }
           );
+        })
+        .finally(() => {
+          releaseTabAttention();
         });
     } catch (e: any) {
       setDemoWorkspaceStatus("idle");
@@ -560,6 +567,9 @@ export function AddAccountSheet({
         { id: loadingToastId }
       );
     } finally {
+      if (!hydrationStarted) {
+        releaseTabAttention();
+      }
       setDemoWorkspaceStatus("idle");
       setSubmitting(false);
     }

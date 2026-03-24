@@ -15,6 +15,11 @@ import { MilestoneCelebration } from "@/components/goals/milestone-celebration";
 import { ProcessScorecard } from "@/components/goals/process-scorecard";
 import { ProgressRing } from "@/components/goals/progress-ring";
 import { StreakTracker } from "@/components/goals/streak-tracker";
+import {
+  Tabs,
+  TabsListUnderlined,
+  TabsTriggerUnderlined,
+} from "@/components/ui/tabs";
 import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { useGoalDialog } from "@/stores/goal-dialog";
@@ -32,6 +37,54 @@ type GoalRow = {
   startDate: string;
   isCustom?: boolean | null;
 };
+
+type GoalLifecycleStatus = "active" | "paused" | "achieved" | "failed";
+
+const PROCESS_TARGET_TYPES = new Set([
+  "journalRate",
+  "ruleCompliance",
+  "edgeTradeRate",
+  "breakAfterLoss",
+  "checklistCompletion",
+  "maxRiskPerTrade",
+]);
+
+const GOAL_LIFECYCLE_ORDER: GoalLifecycleStatus[] = [
+  "active",
+  "paused",
+  "achieved",
+  "failed",
+];
+
+const GOAL_LIFECYCLE_LABELS: Record<
+  GoalLifecycleStatus,
+  { title: string; emptyTitle: string; emptyDescription: string }
+> = {
+  active: {
+    title: "Active goals",
+    emptyTitle: "No active goals yet",
+    emptyDescription: "Create a goal to get started",
+  },
+  paused: {
+    title: "Paused goals",
+    emptyTitle: "No paused goals",
+    emptyDescription: "Paused goals will show up here when you need to step back without deleting them.",
+  },
+  achieved: {
+    title: "Achieved goals",
+    emptyTitle: "No achieved goals yet",
+    emptyDescription: "Completed goals will stay here so you can review what you’ve closed out.",
+  },
+  failed: {
+    title: "Failed goals",
+    emptyTitle: "No failed goals",
+    emptyDescription: "Missed goals will show here so you can review and rework them.",
+  },
+};
+
+function isProcessGoal(goal: GoalRow) {
+  return PROCESS_TARGET_TYPES.has(goal.targetType);
+}
 
 function OverviewStatCard({
   icon: Icon,
@@ -76,6 +129,8 @@ export default function GoalsPage() {
   const queryClient = useQueryClient();
   const { open: createDialogOpen, setOpen: setCreateDialogOpen } =
     useGoalDialog();
+  const [goalStatusTab, setGoalStatusTab] =
+    useState<GoalLifecycleStatus>("active");
   const [celebrationData, setCelebrationData] = useState<{
     show: boolean;
     milestone: {
@@ -100,8 +155,8 @@ export default function GoalsPage() {
   const { data: goals = [], isLoading: isLoadingGoals } = useQuery({
     ...trpcOptions.goals.list.queryOptions({
       accountId: scopedAccountId,
-      status: "active",
     }),
+    staleTime: 30_000,
   });
 
   const { data: stats } = useQuery({
@@ -122,29 +177,33 @@ export default function GoalsPage() {
     }),
   });
 
-  const activeGoals = useMemo(() => (goals as GoalRow[]) || [], [goals]);
+  const allGoals = useMemo(() => (goals as GoalRow[]) || [], [goals]);
+  const goalsByStatus = useMemo(() => {
+    const grouped = Object.fromEntries(
+      GOAL_LIFECYCLE_ORDER.map((status) => [status, [] as GoalRow[]])
+    ) as Record<GoalLifecycleStatus, GoalRow[]>;
+
+    allGoals.forEach((goal) => {
+      const status = GOAL_LIFECYCLE_ORDER.includes(
+        goal.status as GoalLifecycleStatus
+      )
+        ? (goal.status as GoalLifecycleStatus)
+        : "active";
+      grouped[status].push(goal);
+    });
+
+    return grouped;
+  }, [allGoals]);
+  const activeGoals = goalsByStatus.active;
   const processGoals = useMemo(
-    () =>
-      activeGoals.filter((goal) =>
-        [
-          "journalRate",
-          "ruleCompliance",
-          "edgeTradeRate",
-          "breakAfterLoss",
-          "checklistCompletion",
-          "maxRiskPerTrade",
-        ].includes(goal.targetType)
-      ),
+    () => activeGoals.filter((goal) => isProcessGoal(goal)),
     [activeGoals]
   );
   const outcomeGoals = useMemo(
-    () =>
-      activeGoals.filter(
-        (goal) =>
-          !processGoals.some((processGoal) => processGoal.id === goal.id)
-      ),
-    [activeGoals, processGoals]
+    () => activeGoals.filter((goal) => !isProcessGoal(goal)),
+    [activeGoals]
   );
+  const visibleLifecycleGoals = goalsByStatus[goalStatusTab];
 
   useEffect(() => {
     const refreshKey = `${scopedAccountId ?? "all"}:${activeGoals
@@ -378,43 +437,83 @@ export default function GoalsPage() {
           </GoalSurface>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <section>
-            <h2 className="mb-4 text-xl font-semibold text-white">
-              Outcome goals
-            </h2>
-            {isLoadingGoals ? (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-sm text-white/40">Loading goals...</p>
-              </div>
-            ) : (
-              <ActiveGoalsList
-                goals={outcomeGoals}
-                onDelete={handleDeleteGoal}
-                onPause={handlePauseGoal}
-                onResume={handleResumeGoal}
-              />
-            )}
-          </section>
+        <Tabs
+          value={goalStatusTab}
+          onValueChange={(value) =>
+            setGoalStatusTab(value as GoalLifecycleStatus)
+          }
+          className="space-y-6"
+        >
+          <div className="overflow-x-auto">
+            <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5">
+              {GOAL_LIFECYCLE_ORDER.map((status) => (
+                <TabsTriggerUnderlined
+                  key={status}
+                  value={status}
+                  className="gap-2 text-sm"
+                >
+                  <span>{GOAL_LIFECYCLE_LABELS[status].title}</span>
+                  <span className="rounded-full bg-white/6 px-2 py-0.5 text-[11px] text-white/55">
+                    {goalsByStatus[status].length}
+                  </span>
+                </TabsTriggerUnderlined>
+              ))}
+            </TabsListUnderlined>
+          </div>
 
-          <section>
-            <h2 className="mb-4 text-xl font-semibold text-white">
-              Process goals
-            </h2>
-            {isLoadingGoals ? (
-              <div className="flex items-center justify-center py-12">
-                <p className="text-sm text-white/40">Loading goals...</p>
-              </div>
-            ) : (
+          {isLoadingGoals ? (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-sm text-white/40">Loading goals...</p>
+            </div>
+          ) : goalStatusTab === "active" ? (
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <section>
+                <h2 className="mb-4 text-xl font-semibold text-white">
+                  Outcome goals
+                </h2>
+                <ActiveGoalsList
+                  goals={outcomeGoals}
+                  onDelete={handleDeleteGoal}
+                  onPause={handlePauseGoal}
+                  onResume={handleResumeGoal}
+                  emptyTitle="No active outcome goals"
+                  emptyDescription="Outcome targets like profit, win rate, or streaks will show here."
+                />
+              </section>
+
+              <section>
+                <h2 className="mb-4 text-xl font-semibold text-white">
+                  Process goals
+                </h2>
+                <ActiveGoalsList
+                  goals={processGoals}
+                  onDelete={handleDeleteGoal}
+                  onPause={handlePauseGoal}
+                  onResume={handleResumeGoal}
+                  emptyTitle="No active process goals"
+                  emptyDescription="Process-driven targets like journal rate or rule compliance will show here."
+                />
+              </section>
+            </div>
+          ) : (
+            <section>
+              <h2 className="mb-4 text-xl font-semibold text-white">
+                {GOAL_LIFECYCLE_LABELS[goalStatusTab].title}
+              </h2>
               <ActiveGoalsList
-                goals={processGoals}
+                goals={visibleLifecycleGoals}
                 onDelete={handleDeleteGoal}
-                onPause={handlePauseGoal}
-                onResume={handleResumeGoal}
+                onResume={
+                  goalStatusTab === "paused" ? handleResumeGoal : undefined
+                }
+                emptyTitle={GOAL_LIFECYCLE_LABELS[goalStatusTab].emptyTitle}
+                emptyDescription={
+                  GOAL_LIFECYCLE_LABELS[goalStatusTab].emptyDescription
+                }
               />
-            )}
-          </section>
-        </div>
+            </section>
+          )}
+        </Tabs>
       </main>
 
       <CreateGoalDialog

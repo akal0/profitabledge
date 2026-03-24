@@ -84,8 +84,7 @@ export function BulkTagToolbar({
       return await trpcClient.trades.bulkUpdateSessionTags.mutate(input);
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [["trades"]] });
-      queryClient.refetchQueries({ queryKey: [["trades"]] });
+      void queryClient.invalidateQueries({ queryKey: [["trades"]] });
       toast.success(`Updated ${data.updatedCount} trades with session tag`);
       setSessionPopoverOpen(false);
       setSessionTagName("");
@@ -107,8 +106,7 @@ export function BulkTagToolbar({
       return await trpcClient.trades.bulkUpdateModelTags.mutate(input);
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: [["trades"]] });
-      queryClient.refetchQueries({ queryKey: [["trades"]] });
+      void queryClient.invalidateQueries({ queryKey: [["trades"]] });
       toast.success(`Updated ${data.updatedCount} trades with model tag`);
       setModelPopoverOpen(false);
       setModelTagName("");

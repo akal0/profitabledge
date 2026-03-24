@@ -1,9 +1,7 @@
 export type AssistantSurface =
   | "dashboard"
   | "journal"
-  | "backtest"
   | "prop-tracker"
-  | "psychology"
   | "trades"
   | "settings"
   | "assistant"
@@ -12,7 +10,6 @@ export type AssistantSurface =
 export interface AssistantPageContextPayload {
   pathname?: string;
   surface?: AssistantSurface;
-  backtestSessionId?: string | null;
   propAccountId?: string | null;
   journalEntryId?: string | null;
   dashboardWidgetIds?: string[];
@@ -25,9 +22,7 @@ export interface AssistantPageContextPayload {
 export function inferAssistantSurface(pathname?: string | null): AssistantSurface {
   if (!pathname) return "unknown";
   if (pathname === "/assistant") return "assistant";
-  if (pathname.startsWith("/dashboard/psychology")) return "psychology";
   if (pathname.startsWith("/dashboard/prop-tracker")) return "prop-tracker";
-  if (pathname.startsWith("/dashboard/backtest") || pathname.startsWith("/backtest")) return "backtest";
   if (pathname.startsWith("/dashboard/journal")) return "journal";
   if (pathname.startsWith("/dashboard/trades")) return "trades";
   if (pathname.startsWith("/dashboard/settings")) return "settings";
@@ -63,16 +58,8 @@ export function buildContextFromPath(
 
   const surface = inferAssistantSurface(pathname);
   const segments = pathname.split("/").filter(Boolean);
-  let backtestSessionId: string | null = searchParams.get("sessionId");
   let propAccountId: string | null = null;
   let journalEntryId: string | null = null;
-
-  if (surface === "backtest") {
-    const reviewIdx = segments.findIndex((segment) => segment === "review");
-    if (reviewIdx > 0 && segments[reviewIdx - 1]) {
-      backtestSessionId = backtestSessionId || segments[reviewIdx - 1];
-    }
-  }
 
   if (surface === "prop-tracker") {
     const propIdx = segments.findIndex((segment) => segment === "prop-tracker");
@@ -89,7 +76,6 @@ export function buildContextFromPath(
   return {
     pathname,
     surface,
-    backtestSessionId,
     propAccountId,
     journalEntryId,
     source,

@@ -467,9 +467,7 @@ function DashboardContentStage({
 
 const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/dashboard/prop-tracker", plan: "professional" },
-  { prefix: "/dashboard/copier", plan: "institutional" },
   { prefix: "/assistant", plan: "professional" },
-  { prefix: "/backtest", plan: "professional" },
 ];
 
 function DashboardGateFallback({

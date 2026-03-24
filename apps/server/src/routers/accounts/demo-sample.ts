@@ -22,7 +22,6 @@ import { createAutoTradeReviewEntry } from "../../lib/auto-journal";
 import { createEdgeRecord } from "../../lib/edges/compatibility";
 import { bulkAssignLegacyModelTagToTrades } from "../../lib/edges/service";
 import { generateFeedEventForTrade } from "../../lib/feed-event-generator";
-import { seedDemoBacktestSessions } from "./demo-backtest";
 import { seedDemoDigests } from "./demo-digests";
 import { seedDemoGoalsAndAlerts } from "./demo-governance";
 import {
@@ -2496,24 +2495,6 @@ export async function seedSampleAccount(
         breakAfterLoss,
         winRate,
         averageRR,
-      })
-    ),
-    runOptionalDemoSeedStep("demo backtest seed", () =>
-      seedDemoBacktestSessions({
-        userId,
-        now,
-        basePrices: {
-          EURUSD: basePrices.EURUSD,
-          XAUUSD: basePrices.XAUUSD,
-        },
-        pipSizes: {
-          EURUSD: pipSizes.EURUSD,
-          XAUUSD: pipSizes.XAUUSD,
-        },
-        pipValuePerLot: {
-          EURUSD: pipValuePerLot.EURUSD,
-          XAUUSD: pipValuePerLot.XAUUSD,
-        },
       })
     ),
     runOptionalDemoSeedStep("demo digest seed", async () => {

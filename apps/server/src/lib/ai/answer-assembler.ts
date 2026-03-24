@@ -229,7 +229,8 @@ function assembleAggregateAnswer(
       const aggregatedByWeekday: Record<string, number> = {};
       for (const row of groups) {
         const rawValue = Number(row[dayValueField] ?? 0);
-        const rawDay = row.open ?? row.date ?? row.close ?? row.day;
+        const rawDay =
+          row.weekday ?? row.open ?? row.date ?? row.close ?? row.day;
         const weekday = formatWeekdayLabel(rawDay);
         aggregatedByWeekday[weekday] =
           (aggregatedByWeekday[weekday] ?? 0) + rawValue;
@@ -267,13 +268,14 @@ function assembleAggregateAnswer(
   if (plan.groupBy && plan.groupBy.length > 0) {
     const groups = result.meta?.groups || [];
     if (groups.length > 0) {
-      const groupField = plan.groupBy[0].field;
+      const groupFields = plan.groupBy.map((group) => group.field);
+      const groupField = groupFields[0];
       const valueField =
         plan.aggregates?.[0]?.as ||
-        Object.keys(groups[0] || {}).find((key) => key !== groupField) ||
+        Object.keys(groups[0] || {}).find((key) => !groupFields.includes(key)) ||
         "";
       const topRow = groups[0] || {};
-      const groupValue = formatGroupValue(topRow[groupField], groupField);
+      const groupValue = formatGroupLabelFromRow(topRow, groupFields);
       const value = valueField
         ? formatAggregateValue(valueField, topRow[valueField])
         : "—";
@@ -289,7 +291,7 @@ function assembleAggregateAnswer(
         if (runnerUps.length > 0) {
           markdown += `### Context\n\n`;
           runnerUps.forEach((row) => {
-            const label = formatGroupValue(row[groupField], groupField);
+            const label = formatGroupLabelFromRow(row, groupFields);
             const rowValue = valueField
               ? formatAggregateValue(valueField, row[valueField])
               : "—";
@@ -407,6 +409,25 @@ function formatBreakdownValue(value: any, column: string): string {
     })}`;
   }
 
+  if (columnLower.includes("rr") || columnLower.includes("riskreward")) {
+    return `${Number(value).toLocaleString(undefined, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 2,
+    })}R`;
+  }
+
+  if (columnLower.includes("pip")) {
+    return `${Number(value).toLocaleString(undefined, {
+      maximumFractionDigits: 1,
+    })} pips`;
+  }
+
+  if (columnLower.includes("volume") || columnLower.includes("lot")) {
+    return `${Number(value).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    })} lots`;
+  }
+
   if (typeof value === "number") {
     return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
   }
@@ -430,6 +451,16 @@ function formatGroupValue(value: any, column: string): string {
     }
   }
   return String(value);
+}
+
+function formatGroupLabelFromRow(
+  row: Record<string, any>,
+  columns: string[]
+): string {
+  return columns
+    .map((column) => formatGroupValue(row[column], column))
+    .filter((value) => value !== "Unknown")
+    .join(" / ");
 }
 
 function formatAggregateValue(key: string, value: any): string {
@@ -472,6 +503,25 @@ function formatAggregateValue(key: string, value: any): string {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     })}%`;
+  }
+
+  if (keyLower.includes("rr") || keyLower.includes("riskreward")) {
+    return `${Number(value).toLocaleString(undefined, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 2,
+    })}R`;
+  }
+
+  if (keyLower.includes("pip")) {
+    return `${Number(value).toLocaleString(undefined, {
+      maximumFractionDigits: 1,
+    })} pips`;
+  }
+
+  if (keyLower.includes("volume") || keyLower.includes("lot")) {
+    return `${Number(value).toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    })} lots`;
   }
 
   if (

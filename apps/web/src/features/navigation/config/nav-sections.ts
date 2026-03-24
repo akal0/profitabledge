@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 import type { AlphaFeatureKey } from "@profitabledge/platform";
 import {
   Sparkles,
-  Copy,
   Target,
   Trophy,
   Building2,
@@ -64,9 +63,8 @@ export function getNavSections(
         { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
         { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
         { title: "Edges", url: "/dashboard/edges", icon: Layers3 },
-        { title: "Psychology", url: "/dashboard/psychology", icon: TrendingUp },
         { title: "Goals", url: "/dashboard/goals", icon: Target },
-        { title: "Calendar", url: "/dashboard/news", icon: Clock },
+        { title: "Calendar", url: "/dashboard/calendar", icon: Clock },
       ] satisfies NavItem[],
     } satisfies NavSection,
     {
@@ -88,12 +86,6 @@ export function getNavSections(
     {
       label: "Tools",
       items: [
-        {
-          title: "Trade copier",
-          url: "/dashboard/copier",
-          icon: Copy,
-          planRequirement: "institutional" as PlanKey,
-        },
         ...(publicAlphaFlags.aiAssistant
           ? [
               {
@@ -102,16 +94,8 @@ export function getNavSections(
                 icon: Sparkles,
                 planRequirement: "professional" as PlanKey,
               },
-            ]
-          : []),
-        {
-          title: "Backtest",
-          url: "/backtest",
-          icon: BarChart3,
-          planRequirement: "professional" as PlanKey,
-          featureFlag: "backtest",
-          disabledTooltip: "Coming soon!",
-        },
+          ]
+        : []),
       ] satisfies NavItem[],
     } satisfies NavSection,
     {

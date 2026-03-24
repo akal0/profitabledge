@@ -23,7 +23,6 @@ export type NotificationType =
   | "prop_phase_advanced"
   | "edge_invite"
   | "journal_share_request"
-  | "copier_signal"
   | "leaderboard_update"
   | "system_maintenance"
   | "system_update";
@@ -115,7 +114,6 @@ export function getNotificationCategory(
     case "news_upcoming":
       return "news";
     case "leaderboard_update":
-    case "copier_signal":
     case "journal_share_request":
       return "social";
     case "edge_invite":
@@ -173,7 +171,6 @@ function isTypeEnabled(
     case "prop_phase_advanced":
       return prefs.alerts;
     case "leaderboard_update":
-    case "copier_signal":
     case "journal_share_request":
       return prefs.social;
     case "edge_invite":

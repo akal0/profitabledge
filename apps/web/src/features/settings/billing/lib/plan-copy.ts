@@ -3,8 +3,6 @@ export type BillingPlanCopySource = {
   includedAiCredits: number;
   includedLiveSyncSlots: number;
   includesPropTracker: boolean;
-  includesBacktest: boolean;
-  includesCopier: boolean;
 };
 
 export function formatLiveSyncSlots(slots: number) {
@@ -78,26 +76,6 @@ export function getPlanFeatureLines(plan: BillingPlanCopySource) {
       tone: plan.includesPropTracker
         ? ("positive" as const)
         : ("muted" as const),
-      accentTone: "default" as const,
-    },
-    {
-      key: "backtest",
-      prefix: "",
-      accent: "",
-      suffix: plan.includesBacktest
-        ? "Backtesting tools included"
-        : "Backtesting tools not included",
-      tone: plan.includesBacktest ? ("positive" as const) : ("muted" as const),
-      accentTone: "default" as const,
-    },
-    {
-      key: "copier",
-      prefix: "",
-      accent: "",
-      suffix: plan.includesCopier
-        ? "Trade copier included"
-        : "Trade copier not included",
-      tone: plan.includesCopier ? ("positive" as const) : ("muted" as const),
       accentTone: "default" as const,
     },
   ];

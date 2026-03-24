@@ -281,8 +281,7 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
     mutationFn: async (input: InlineTradeUpdateInput) =>
       trpcClient.trades.update.mutate(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [["trades"]] });
-      queryClient.refetchQueries({ queryKey: [["trades"]] });
+      void queryClient.invalidateQueries({ queryKey: [["trades"]] });
     },
     onError: (error) => {
       console.error("Inline trade update failed:", error);

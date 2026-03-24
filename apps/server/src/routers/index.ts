@@ -1,4 +1,4 @@
-import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
+import { router } from "../lib/trpc";
 
 import { uploadRouter } from "./upload";
 import { accountsRouter } from "./accounts";
@@ -9,7 +9,6 @@ import { apiKeysRouter } from "./api-keys";
 import { aiKeysRouter } from "./ai-keys";
 import { viewsRouter } from "./views";
 import { aiRouter } from "./ai";
-import { copierRouter } from "./copier";
 import { notificationsRouter } from "./notifications";
 import { goalsRouter } from "./goals";
 import { propFirmsRouter } from "./prop-firms";
@@ -22,7 +21,6 @@ import { rulesRouter } from "./rules";
 import { marketDataRouter } from "./market-data";
 import { watchlistRouter, tradeNotesRouter } from "./watchlist";
 import { connectionsRouter } from "./connections";
-import { backtestRouter } from "./backtest";
 import { workerRouter } from "./worker";
 import { operationsRouter } from "./operations";
 import { billingRouter } from "./billing";
@@ -40,7 +38,6 @@ export const appRouter = router({
   aiKeys: aiKeysRouter,
   views: viewsRouter,
   ai: aiRouter,
-  copier: copierRouter,
   notifications: notificationsRouter,
   goals: goalsRouter,
   propFirms: propFirmsRouter,
@@ -54,7 +51,6 @@ export const appRouter = router({
   watchlist: watchlistRouter,
   tradeNotes: tradeNotesRouter,
   connections: connectionsRouter,
-  backtest: backtestRouter,
   worker: workerRouter,
   operations: operationsRouter,
   billing: billingRouter,

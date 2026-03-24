@@ -70,6 +70,8 @@ interface ActiveGoalsListProps {
   onDelete?: (id: string) => void;
   onPause?: (id: string) => void;
   onResume?: (id: string) => void;
+  emptyTitle?: string;
+  emptyDescription?: string;
 }
 
 export function ActiveGoalsList({
@@ -78,6 +80,8 @@ export function ActiveGoalsList({
   onDelete,
   onPause,
   onResume,
+  emptyTitle = "No active goals yet",
+  emptyDescription = "Create a goal to get started",
 }: ActiveGoalsListProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -112,8 +116,8 @@ export function ActiveGoalsList({
     return (
       <GoalSurface>
         <div className="py-12 text-center">
-          <p className="text-sm text-white/40">No active goals yet</p>
-          <p className="mt-2 text-xs text-white/30">Create a goal to get started</p>
+          <p className="text-sm text-white/40">{emptyTitle}</p>
+          <p className="mt-2 text-xs text-white/30">{emptyDescription}</p>
         </div>
       </GoalSurface>
     );
@@ -238,9 +242,11 @@ export function ActiveGoalsList({
                   <span className="inline-flex items-center rounded-sm bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-white/55">
                     {TARGET_TYPE_META[goal.targetType]?.label || goal.targetType}
                   </span>
-                  {goal.status === "paused" && (
-                    <span className="inline-flex items-center rounded-sm bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-white/45">
-                      Paused
+                  {goal.status !== "active" && (
+                    <span
+                      className={goalStatusBadgeClassName(goal.status)}
+                    >
+                      {goalStatusLabel(goal.status)}
                     </span>
                   )}
                 </div>
@@ -251,4 +257,29 @@ export function ActiveGoalsList({
       })}
     </div>
   );
+}
+
+function goalStatusLabel(status: string) {
+  switch (status) {
+    case "paused":
+      return "Paused";
+    case "achieved":
+      return "Achieved";
+    case "failed":
+      return "Failed";
+    default:
+      return status;
+  }
+}
+
+function goalStatusBadgeClassName(status: string) {
+  if (status === "achieved") {
+    return "inline-flex items-center rounded-sm bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-300";
+  }
+
+  if (status === "failed") {
+    return "inline-flex items-center rounded-sm bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-300";
+  }
+
+  return "inline-flex items-center rounded-sm bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-white/45";
 }

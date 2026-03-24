@@ -102,8 +102,6 @@ function getPlanComparisonRows(plan: {
   includedAiCredits: number;
   includedLiveSyncSlots: number;
   includesPropTracker: boolean;
-  includesBacktest: boolean;
-  includesCopier: boolean;
 }) {
   return [
     {
@@ -127,16 +125,6 @@ function getPlanComparisonRows(plan: {
       tone: plan.includesPropTracker
         ? ("positive" as const)
         : ("muted" as const),
-    },
-    {
-      label: "Backtest",
-      value: plan.includesBacktest ? "Included" : "Not included",
-      tone: plan.includesBacktest ? ("positive" as const) : ("muted" as const),
-    },
-    {
-      label: "Copier",
-      value: plan.includesCopier ? "Included" : "Not included",
-      tone: plan.includesCopier ? ("positive" as const) : ("muted" as const),
     },
   ];
 }

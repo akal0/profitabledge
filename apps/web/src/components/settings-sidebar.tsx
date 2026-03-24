@@ -46,7 +46,7 @@ type NavSection = {
   items: NavItem[];
 };
 
-const settingsNavSections: NavSection[] = [
+export const settingsNavSections: NavSection[] = [
   {
     label: "Account",
     items: [

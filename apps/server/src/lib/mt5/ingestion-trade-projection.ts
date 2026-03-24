@@ -26,7 +26,6 @@ import {
   getOrderTradeKey,
   getPipSizeForSymbolFromMap,
   getTradeKey,
-  isCopiedTradeComment,
   mergeBrokerMetaExecutionContext,
   normalizeTradeSide,
   parseDate,
@@ -1129,75 +1128,5 @@ export async function emitMt5CopierPositionSideEffects(input: {
   modifiedPositions: ModifiedPositionSeed[];
   removedOpenTrades: RemovedOpenTradeSeed[];
 }) {
-  const openedPositions = input.openedPositions.filter(
-    (position) => !isCopiedTradeComment(position.comment)
-  );
-  const modifiedPositions = input.modifiedPositions.filter(
-    (position) => !isCopiedTradeComment(position.comment)
-  );
-  const removedOpenTrades = input.removedOpenTrades.filter(
-    (tradeSeed) => !isCopiedTradeComment(tradeSeed.comment)
-  );
-
-  if (
-    openedPositions.length === 0 &&
-    modifiedPositions.length === 0 &&
-    removedOpenTrades.length === 0
-  ) {
-    return;
-  }
-
-  const {
-    findGroupsForMaster,
-    processMasterTradeOpen,
-    processMasterTradeClose,
-    processMasterTradeModify,
-  } = await import("../copy-engine");
-
-  const activeGroupIds = await findGroupsForMaster(input.accountId);
-  if (activeGroupIds.length === 0) {
-    return;
-  }
-
-  const masterMetrics = {
-    balance: input.account.balance,
-    equity: input.account.equity,
-    initialBalance: input.account.balance,
-  };
-
-  for (const position of openedPositions) {
-    const { sessionTag } = deriveSessionTagAt(position.openTime);
-    await processMasterTradeOpen(
-      input.accountId,
-      {
-        ticket: position.ticket,
-        symbol: position.symbol,
-        tradeType: position.tradeType,
-        volume: position.volume,
-        openPrice: position.openPrice,
-        sl: position.sl ?? undefined,
-        tp: position.tp ?? undefined,
-        sessionTag: sessionTag ?? undefined,
-      },
-      masterMetrics
-    );
-  }
-
-  for (const position of modifiedPositions) {
-    await processMasterTradeModify(
-      input.accountId,
-      position.ticket,
-      position.newSl,
-      position.newTp
-    );
-  }
-
-  for (const removedTrade of removedOpenTrades) {
-    await processMasterTradeClose(
-      input.accountId,
-      removedTrade.ticket,
-      toNumber(removedTrade.currentPrice ?? removedTrade.openPrice),
-      toNumber(removedTrade.profit)
-    );
-  }
+  void input;
 }

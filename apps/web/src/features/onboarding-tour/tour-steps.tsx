@@ -35,7 +35,6 @@ export const TOUR_STEP_URLS: string[] = [
   "/dashboard/reports",
   "/dashboard/trades",
   "/dashboard/journal",
-  "/dashboard/psychology",
   "/dashboard/goals",
   "/dashboard/accounts",
   "/dashboard/prop-tracker",
@@ -156,17 +155,6 @@ export const DASHBOARD_TOURS: Tour[] = [
         content:
           "Document your sessions in rich text. Record your pre-trade mindset, post-trade reflections, and anything that shapes your edge. Entries are linked to your trading days so you can look back at any moment.",
         selector: '[data-onborda="nav-dashboard-journal"]',
-        side: "right",
-        showControls: true,
-        pointerPadding: 6,
-        pointerRadius: 6,
-      },
-      {
-        icon: "",
-        title: "Emotions affect the way you trade",
-        content:
-          "Your head is as important as your setup. Track emotional patterns, your tilt meter, and behavioural tendencies across sessions — so you can spot when you're trading your best, and when to step back.",
-        selector: '[data-onborda="nav-dashboard-psychology"]',
         side: "right",
         showControls: true,
         pointerPadding: 6,

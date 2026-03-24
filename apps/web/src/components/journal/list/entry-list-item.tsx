@@ -59,7 +59,7 @@ export function EntryListItem({
           {entry.entryType && entry.entryType !== "general" ? (
             <>
               <span>•</span>
-              <span>{entryTypeLabels[entry.entryType] || entry.entryType}</span>
+              <span>{entryTypeLabels[entry.entryType] || "General"}</span>
             </>
           ) : null}
         </div>

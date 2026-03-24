@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 
-export const metadata: Metadata = { title: "Copier" };
+export const metadata: Metadata = { title: "Economic calendar" };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <Suspense fallback={<RouteLoadingFallback route="copier" />}>
+    <Suspense fallback={<RouteLoadingFallback route="economicCalendar" />}>
       {children}
     </Suspense>
   );

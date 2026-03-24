@@ -1,6 +1,11 @@
 import { sql, type SQL } from "drizzle-orm";
 
-import { trade } from "../../db/schema/trading";
+import {
+  edge,
+  trade,
+  tradeEdgeAssignment,
+  tradeRuleEvaluation,
+} from "../../db/schema/trading";
 
 export const DERIVED_FIELDS: Record<
   string,
@@ -189,6 +194,88 @@ export const DERIVED_FIELDS: Record<
             : sql`EXTRACT(HOUR FROM ${trade.openTime}) BETWEEN ${rangeStart} AND ${rangeEnd}`
         );
         return sql`(${sql.join(conditions, sql` OR `)})`;
+      }
+      return null;
+    },
+  },
+  edgeName: {
+    getSelectSQL: () =>
+      sql<string>`COALESCE((
+        SELECT ${edge.name}
+        FROM ${tradeEdgeAssignment}
+        INNER JOIN ${edge} ON ${edge.id} = ${tradeEdgeAssignment.edgeId}
+        WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
+        ORDER BY ${tradeEdgeAssignment.createdAt} DESC
+        LIMIT 1
+      ), ${trade.modelTag}, 'Unassigned')`,
+    getFilterSQL: (op: string, value: any) => {
+      const edgeNameSQL = sql`COALESCE((
+        SELECT ${edge.name}
+        FROM ${tradeEdgeAssignment}
+        INNER JOIN ${edge} ON ${edge.id} = ${tradeEdgeAssignment.edgeId}
+        WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
+        ORDER BY ${tradeEdgeAssignment.createdAt} DESC
+        LIMIT 1
+      ), ${trade.modelTag}, 'Unassigned')`;
+
+      if (op === "eq") {
+        return sql`${edgeNameSQL} = ${String(value)}`;
+      }
+      if (op === "neq") {
+        return sql`${edgeNameSQL} <> ${String(value)}`;
+      }
+      if (op === "contains") {
+        return sql`${edgeNameSQL} ILIKE ${`%${String(value)}%`}`;
+      }
+      if (op === "in") {
+        const values = (Array.isArray(value) ? value : [value])
+          .map((entry) => String(entry).trim())
+          .filter(Boolean);
+        if (values.length === 0) return null;
+        return sql`${edgeNameSQL} IN (${sql.join(
+          values.map((entry) => sql`${entry}`),
+          sql`, `
+        )})`;
+      }
+      return null;
+    },
+  },
+  complianceStatus: {
+    getSelectSQL: () =>
+      sql<string>`COALESCE((
+        SELECT ${tradeRuleEvaluation.status}
+        FROM ${tradeRuleEvaluation}
+        WHERE ${tradeRuleEvaluation.tradeId} = ${trade.id}
+        ORDER BY ${tradeRuleEvaluation.evaluatedAt} DESC
+        LIMIT 1
+      ), 'unknown')`,
+    getFilterSQL: (op: string, value: any) => {
+      const complianceSQL = sql`COALESCE((
+        SELECT ${tradeRuleEvaluation.status}
+        FROM ${tradeRuleEvaluation}
+        WHERE ${tradeRuleEvaluation.tradeId} = ${trade.id}
+        ORDER BY ${tradeRuleEvaluation.evaluatedAt} DESC
+        LIMIT 1
+      ), 'unknown')`;
+
+      if (op === "eq") {
+        return sql`${complianceSQL} = ${String(value)}`;
+      }
+      if (op === "neq") {
+        return sql`${complianceSQL} <> ${String(value)}`;
+      }
+      if (op === "contains") {
+        return sql`${complianceSQL} ILIKE ${`%${String(value)}%`}`;
+      }
+      if (op === "in") {
+        const values = (Array.isArray(value) ? value : [value])
+          .map((entry) => String(entry).trim())
+          .filter(Boolean);
+        if (values.length === 0) return null;
+        return sql`${complianceSQL} IN (${sql.join(
+          values.map((entry) => sql`${entry}`),
+          sql`, `
+        )})`;
       }
       return null;
     },

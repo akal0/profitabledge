@@ -61,7 +61,6 @@ const serverEnvSchema = z.object({
   ALPHA_ENABLE_AI_ASSISTANT: z.string().min(1).optional(),
   ALPHA_ENABLE_COMMUNITY: z.string().min(1).optional(),
   ALPHA_ENABLE_CONNECTIONS: z.string().min(1).optional(),
-  ALPHA_ENABLE_BACKTEST: z.string().min(1).optional(),
   ALPHA_ENABLE_FEEDBACK: z.string().min(1).optional(),
   ALPHA_ENABLE_SUPPORT_DIAGNOSTICS: z.string().min(1).optional(),
   ALPHA_ENABLE_SCHEDULED_SYNC: z.string().min(1).optional(),

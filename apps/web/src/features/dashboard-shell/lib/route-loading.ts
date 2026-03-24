@@ -8,18 +8,20 @@ export function resolveRouteLoadingVariant(pathname: string): RouteLoadingVarian
   if (pathname.startsWith("/dashboard/journal")) return "journal";
   if (pathname.startsWith("/dashboard/goals")) return "goals";
   if (pathname.startsWith("/dashboard/reports")) return "reports";
-  if (pathname.startsWith("/dashboard/psychology")) return "psychology";
   if (pathname.startsWith("/dashboard/prop-tracker")) return "propTracker";
   if (pathname.startsWith("/dashboard/feed")) return "feed";
-  if (pathname.startsWith("/dashboard/copier")) return "copier";
   if (pathname.startsWith("/dashboard/affiliate")) return "affiliate";
   if (pathname.startsWith("/dashboard/leaderboard")) return "leaderboard";
   if (pathname.startsWith("/dashboard/referrals")) return "referrals";
   if (pathname.startsWith("/dashboard/achievements")) return "achievements";
   if (pathname.startsWith("/dashboard/growth-admin")) return "growthAdmin";
   if (pathname.startsWith("/dashboard/growth")) return "growth";
-  if (pathname.startsWith("/dashboard/backtest")) return "backtest";
-  if (pathname.startsWith("/dashboard/news")) return "economicCalendar";
+  if (
+    pathname.startsWith("/dashboard/calendar") ||
+    pathname.startsWith("/dashboard/news")
+  ) {
+    return "economicCalendar";
+  }
   if (pathname.startsWith("/dashboard/settings/alerts")) return "settingsAlerts";
   if (pathname.startsWith("/dashboard/settings/api")) return "settingsApi";
   if (pathname.startsWith("/dashboard/settings/ai")) return "settingsAi";
@@ -57,9 +59,8 @@ export function isAccountScopedRoute(pathname: string): boolean {
     pathname.startsWith("/dashboard/trades") ||
     pathname.startsWith("/dashboard/journal") ||
     pathname.startsWith("/dashboard/goals") ||
-    pathname.startsWith("/dashboard/psychology") ||
     pathname.startsWith("/dashboard/prop-tracker") ||
-    pathname.startsWith("/dashboard/backtest") ||
+    pathname.startsWith("/dashboard/calendar") ||
     pathname.startsWith("/dashboard/news") ||
     pathname.startsWith("/dashboard/settings/alerts") ||
     pathname.startsWith("/dashboard/settings/billing") ||

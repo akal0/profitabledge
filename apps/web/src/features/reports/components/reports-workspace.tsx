@@ -181,6 +181,9 @@ const REPORT_PANEL_DEFAULT_SPANS: Partial<Record<ReportPanelId, number>> = {
   maeMfeScatter: 2,
 };
 
+const REPORT_QUERY_STALE_TIME = 30_000;
+const REPORT_QUERY_GC_TIME = 5 * 60_000;
+
 const LENS_STAT_CARD_METRICS: Record<ReportLensId, ReportMetricId[]> = {
   performance: ["tradeCount", "netPnl", "winRate", "avgRR"],
   time: ["tradeCount", "netPnl", "winRate", "avgHold"],
@@ -1236,7 +1239,10 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
   const { accounts } = useAccountCatalog({
     enabled: Boolean(accountId),
   });
-  const { data: me } = useQuery(trpcOptions.users.me.queryOptions());
+  const { data: me } = useQuery({
+    ...trpcOptions.users.me.queryOptions(),
+    staleTime: 5 * 60_000,
+  });
 
   const [lensParam, setLensParam] = useQueryState("rlens", {
     defaultValue: "",
@@ -1631,34 +1637,54 @@ function ReportsWorkspaceContent() {
     })
   );
   const heroQuery = useQuery(
-    trpcOptions.reports.getHeroChart.queryOptions({
-      ...filtersInput,
-      lens: activeLens,
-      dimension: activeDimension,
-    })
+    {
+      ...trpcOptions.reports.getHeroChart.queryOptions({
+        ...filtersInput,
+        lens: activeLens,
+        dimension: activeDimension,
+      }),
+      staleTime: REPORT_QUERY_STALE_TIME,
+      gcTime: REPORT_QUERY_GC_TIME,
+      refetchOnWindowFocus: false,
+    }
   );
   const overviewQuery = useQuery(
-    trpcOptions.reports.getLensOverview.queryOptions({
-      ...filtersInput,
-      lens: activeLens,
-      dimension: activeDimension,
-      drilldown,
-    })
+    {
+      ...trpcOptions.reports.getLensOverview.queryOptions({
+        ...filtersInput,
+        lens: activeLens,
+        dimension: activeDimension,
+        drilldown,
+      }),
+      staleTime: REPORT_QUERY_STALE_TIME,
+      gcTime: REPORT_QUERY_GC_TIME,
+      refetchOnWindowFocus: false,
+    }
   );
   const breakdownQuery = useQuery(
-    trpcOptions.reports.getBreakdownTable.queryOptions({
-      ...filtersInput,
-      lens: activeLens,
-      dimension: activeDimension,
-    })
+    {
+      ...trpcOptions.reports.getBreakdownTable.queryOptions({
+        ...filtersInput,
+        lens: activeLens,
+        dimension: activeDimension,
+      }),
+      staleTime: REPORT_QUERY_STALE_TIME,
+      gcTime: REPORT_QUERY_GC_TIME,
+      refetchOnWindowFocus: false,
+    }
   );
   const panelQueries = useQueries({
     queries: activePanels.map((panelId) =>
-      trpcOptions.reports.getPanelData.queryOptions({
-        ...filtersInput,
-        lens: activeLens,
-        panelId,
-        drilldown,
+      ({
+        ...trpcOptions.reports.getPanelData.queryOptions({
+          ...filtersInput,
+          lens: activeLens,
+          panelId,
+          drilldown,
+        }),
+        staleTime: REPORT_QUERY_STALE_TIME,
+        gcTime: REPORT_QUERY_GC_TIME,
+        refetchOnWindowFocus: false,
       })
     ),
   });

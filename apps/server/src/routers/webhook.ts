@@ -17,7 +17,6 @@ import {
 } from "../lib/ai/engine";
 import { syncPropAccountState } from "../lib/prop-rule-monitor";
 import { accountWebhookProcedures } from "./webhook/account-sync";
-import { copierWebhookProcedures } from "./webhook/copier";
 import { marketDataWebhookProcedures } from "./webhook/market-data";
 import { preTradeWebhookProcedures } from "./webhook/pre-trade";
 import { verifyApiKey } from "./webhook/shared";
@@ -919,6 +918,5 @@ export const webhookRouter = router({
       }
     }),
 
-  ...copierWebhookProcedures,
   ...preTradeWebhookProcedures,
 });

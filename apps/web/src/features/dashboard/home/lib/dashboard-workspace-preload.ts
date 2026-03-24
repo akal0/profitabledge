@@ -183,51 +183,7 @@ export function hasPrefetchedDashboardWorkspace(targetPath: string) {
     return false;
   }
 
-  const rangeState = deriveDashboardRangeState(bounds);
-  const criticalKeys: Array<readonly unknown[]> = [
-    trpcOptions.accounts.stats.queryOptions({
-      accountId: selectedAccountId,
-    }).queryKey,
-    trpcOptions.trades.listInfinite.queryOptions({
-      accountId: selectedAccountId,
-      limit: DASHBOARD_WIDGET_TRADE_LIMIT,
-    }).queryKey,
-    selectedAccountId === ALL_ACCOUNTS_ID
-      ? trpcOptions.accounts.aggregatedStats.queryOptions({}).queryKey
-      : trpcOptions.accounts.liveMetrics.queryOptions({
-          accountId: selectedAccountId,
-        }).queryKey,
-  ];
-
-  if (rangeState?.visibleRange) {
-    criticalKeys.push(
-      trpcOptions.accounts.recentByDay.queryOptions({
-        accountId: selectedAccountId,
-        startISO: rangeState.visibleRange.start.toISOString(),
-        endISO: rangeState.visibleRange.end.toISOString(),
-      }).queryKey,
-      trpcOptions.accounts.rangeSummary.queryOptions({
-        accountId: selectedAccountId,
-        startISO: rangeState.visibleRange.start.toISOString(),
-        endISO: rangeState.visibleRange.end.toISOString(),
-      }).queryKey
-    );
-  }
-
-  if (rangeState?.calendarFetchRange) {
-    criticalKeys.push(
-      trpcOptions.accounts.recentByDay.queryOptions({
-        accountId: selectedAccountId,
-        startISO: rangeState.calendarFetchRange.start.toISOString(),
-        endISO: rangeState.calendarFetchRange.end.toISOString(),
-      }).queryKey
-    );
-  }
-
-  return criticalKeys.every((queryKey) => {
-    const state = queryClient.getQueryState(queryKey);
-    return Boolean(state?.dataUpdatedAt);
-  });
+  return true;
 }
 
 export async function prefetchDashboardWorkspace(targetPath: string) {
@@ -272,7 +228,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
   const calendarFetchRange = rangeState?.calendarFetchRange;
   const hasScopedAccountSelection = selectedAccountId !== ALL_ACCOUNTS_ID;
 
-  const criticalWarmups = [
+  const eagerWarmups = [
     queryClient.prefetchQuery({
       ...trpcOptions.accounts.stats.queryOptions({
         accountId: selectedAccountId,
@@ -300,7 +256,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
   ];
 
   if (visibleRange) {
-    criticalWarmups.push(
+    eagerWarmups.push(
       queryClient.prefetchQuery({
         ...trpcOptions.accounts.recentByDay.queryOptions({
           accountId: selectedAccountId,
@@ -321,7 +277,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
   }
 
   if (calendarFetchRange) {
-    criticalWarmups.push(
+    eagerWarmups.push(
       queryClient.prefetchQuery({
         ...trpcOptions.accounts.recentByDay.queryOptions({
           accountId: selectedAccountId,
@@ -333,7 +289,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
     );
   }
 
-  await Promise.allSettled(criticalWarmups);
+  void Promise.allSettled(eagerWarmups);
 
   const backgroundWarmups: WarmupTask[] = [];
 

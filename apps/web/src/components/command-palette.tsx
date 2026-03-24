@@ -25,7 +25,6 @@ import {
   Zap,
   Clock,
   Star,
-  Copy,
   Sparkles,
   MoreHorizontal,
   Brain,
@@ -135,39 +134,15 @@ const baseResults: ResultItem[] = [
     iconBg: "bg-amber-500/10",
   },
   {
-    icon: Brain,
-    label: "Psychology",
-    subtitle: "Pages  ·  Review behavior and mental patterns",
-    href: "/dashboard/psychology",
-    key: "",
-    category: "pages",
-    iconColor: "text-fuchsia-400",
-    iconBg: "bg-fuchsia-500/10",
-  },
-  {
     icon: Clock,
     label: "Calendar",
     subtitle: "Pages  ·  Economic calendar & market events",
-    href: "/dashboard/news",
+    href: "/dashboard/calendar",
     key: "",
     category: "pages",
     iconColor: "text-sky-400",
     iconBg: "bg-sky-500/10",
   },
-  ...(publicAlphaFlags.backtest
-    ? [
-        {
-          icon: BarChart3,
-          label: "Backtest",
-          subtitle: "Pages  ·  Strategy backtesting",
-          href: "/backtest",
-          key: "",
-          category: "pages" as const,
-          iconColor: "text-cyan-400",
-          iconBg: "bg-cyan-500/10",
-        },
-      ]
-    : []),
   {
     icon: Trophy,
     label: "Prop Tracker",
@@ -200,17 +175,6 @@ const baseResults: ResultItem[] = [
     iconBg: "bg-amber-500/10",
   },
   // Tools
-  {
-    icon: Copy,
-    label: "Trade Copier",
-    subtitle: "Tools  ·  Copy trades across accounts",
-    shortcut: "⌘C",
-    href: "/dashboard/copier",
-    key: "c",
-    category: "tools",
-    iconColor: "text-indigo-400",
-    iconBg: "bg-indigo-500/10",
-  },
   {
     icon: Target,
     label: "Goals",

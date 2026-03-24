@@ -25,6 +25,7 @@ import { generateMeteredGeminiContent } from "./gemini";
 import { cache, cacheKeys } from "../cache";
 import type { CondensedProfile } from "./engine/types";
 import { logAIProviderError } from "./provider-errors";
+import { buildDeterministicTradePlan } from "./deterministic-plan-builder";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -92,6 +93,15 @@ export async function generatePlan(
           vizTitle: "Your Trading Profile",
           _profileSummary: true,
         } as TradeQueryPlan & { _profileSummary: boolean },
+      };
+    }
+
+    const deterministicPlan = buildDeterministicTradePlan(normalizedMessage);
+    if (deterministicPlan) {
+      cache.set(cacheKey, deterministicPlan, PLAN_CACHE_TTL_MS);
+      return {
+        success: true,
+        plan: deterministicPlan,
       };
     }
 
@@ -216,7 +226,7 @@ VISUALIZATION TYPES (vizType):
 
 DOMAIN MAPPING:
 - Dashboard KPI questions -> aggregate
-- Backtesting / compare one setup vs another -> compare
+- Compare one setup, edge, or cohort vs another -> compare
 - Journal / reflection / coaching -> recommendation
 - Psychology or discipline phrasing -> recommendation unless the user explicitly asks for a grouped breakdown
 - "Find patterns", "what changes after X", "what state am I in" -> diagnose

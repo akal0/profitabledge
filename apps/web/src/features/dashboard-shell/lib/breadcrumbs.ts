@@ -9,6 +9,7 @@ export type DashboardBreadcrumbs = {
 
 const DASHBOARD_LABEL_OVERRIDES: Record<string, string> = {
   accounts: "Trading accounts",
+  calendar: "Economic calendar",
   edges: "Edges",
   "economic-calendar": "Economic calendar",
   "growth-admin": "Growth admin",
@@ -86,26 +87,6 @@ export function getDashboardBreadcrumbs(
       items: [
         { label: "Dashboard", href: "/dashboard" },
         { label: "Edges" },
-      ],
-    };
-  }
-
-  if (paths.length >= 3 && paths[1] === "backtest") {
-    const subPage = formatDashboardLabel(paths[2]);
-    return {
-      items: [
-        { label: "Dashboard", href: "/dashboard" },
-        { label: "Backtesting", href: "/dashboard/backtest" },
-        { label: subPage },
-      ],
-    };
-  }
-
-  if (paths.length === 2 && paths[1] === "backtest") {
-    return {
-      items: [
-        { label: "Dashboard", href: "/dashboard" },
-        { label: "Backtesting" },
       ],
     };
   }

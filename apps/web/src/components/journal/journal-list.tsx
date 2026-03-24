@@ -34,7 +34,6 @@ type EntryTypeFilter =
   | "comparison"
   | "trade_review"
   | "strategy"
-  | "backtest"
   | null;
 type DateRangeFilter = "all" | "today" | "week" | "month";
 type SortField = "updatedAt" | "createdAt" | "title";
@@ -144,7 +143,6 @@ export function JournalList({
     trade_review: "Trade Review",
     strategy: "Strategy",
     comparison: "Comparison",
-    backtest: "Backtest",
     edge: "Edge entry",
   };
 

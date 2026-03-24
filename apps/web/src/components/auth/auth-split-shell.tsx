@@ -127,7 +127,7 @@ function AuthHeroAccentOrbs({ reducedMotion }: { reducedMotion: boolean }) {
 }
 
 function AuthHeroCopy({ slides }: { slides: AuthHeroSlide[] }) {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = Boolean(useReducedMotion());
   const [activeIndex, setActiveIndex] = useState(0);
   const activeSlide = slides[activeIndex] ?? slides[0];
 

@@ -90,7 +90,7 @@ export function EntryCard({
                 variant="outline"
                 className="border-white/10 text-xs text-white/40"
               >
-                {entryTypeLabels[entry.entryType] || entry.entryType}
+                {entryTypeLabels[entry.entryType] || "General"}
               </Badge>
             </>
           ) : null}

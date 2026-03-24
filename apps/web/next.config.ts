@@ -3,20 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: ["@profitabledge/contracts", "@profitabledge/platform"],
   distDir: process.env.NODE_ENV === "development" ? ".next-dev" : ".next",
-  async redirects() {
-    return [
-      {
-        source: "/dashboard/backtest",
-        destination: "/backtest",
-        permanent: false,
-      },
-      {
-        source: "/dashboard/backtest/:path*",
-        destination: "/backtest/:path*",
-        permanent: false,
-      },
-    ];
-  },
   webpack(config) {
     const rules = config.module.rules as Array<{
       test?: unknown;

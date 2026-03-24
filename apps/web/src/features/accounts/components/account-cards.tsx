@@ -229,6 +229,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
       accountId: account.id,
     }),
     enabled: !!account.isPropAccount,
+    staleTime: 15_000,
   });
 
   const balance = getAccountBalance(account);

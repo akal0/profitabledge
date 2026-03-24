@@ -44,7 +44,6 @@ type KnownNotificationType =
   | "prop_phase_advanced"
   | "edge_invite"
   | "leaderboard_update"
-  | "copier_signal"
   | "system_maintenance"
   | "system_update";
 
@@ -194,7 +193,6 @@ const knownNotificationTypes = [
   "prop_phase_advanced",
   "edge_invite",
   "leaderboard_update",
-  "copier_signal",
   "system_maintenance",
   "system_update",
 ] as const satisfies readonly KnownNotificationType[];
@@ -259,7 +257,6 @@ const notificationTypePrimaryTab: Record<
   prop_phase_advanced: "alerts",
   edge_invite: "system",
   leaderboard_update: "social",
-  copier_signal: "social",
   system_maintenance: "system",
   system_update: "system",
 };
@@ -402,7 +399,7 @@ function buildSettingsUpdatedUrl(metadata?: NotificationMetadata | null) {
 }
 
 function buildCalendarUrl(_metadata?: NotificationMetadata | null) {
-  return "/dashboard/news";
+  return "/dashboard/calendar";
 }
 
 function buildNotificationUrl(item: NotificationItem) {
@@ -434,8 +431,6 @@ function buildNotificationUrl(item: NotificationItem) {
       return "/dashboard/settings/alerts";
     case "leaderboard_update":
       return "/dashboard";
-    case "copier_signal":
-      return "/dashboard/copier";
     case "api_key":
       return "/dashboard/settings/api";
     case "webhook_sync":

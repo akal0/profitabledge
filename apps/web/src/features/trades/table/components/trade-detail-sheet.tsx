@@ -252,12 +252,7 @@ export function TradeDetailSheet({
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [["trades"]] }),
-        queryClient.refetchQueries({ queryKey: [["trades"]], type: "active" }),
         queryClient.invalidateQueries({ queryKey: ["dashboard-chart-trades"] }),
-        queryClient.refetchQueries({
-          queryKey: ["dashboard-chart-trades"],
-          type: "active",
-        }),
         queryClient.invalidateQueries({
           queryKey: trpcOptions.accounts.aggregatedStats.queryOptions({})
             .queryKey,

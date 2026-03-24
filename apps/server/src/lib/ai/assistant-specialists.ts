@@ -1,7 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "../../db";
-import { backtestSession } from "../../db/schema/backtest";
 import { journalEntry } from "../../db/schema/journal";
 import {
   propAlert,
@@ -9,7 +8,6 @@ import {
   tradingAccount,
 } from "../../db/schema/trading";
 import type { CondensedProfile } from "./engine/types";
-import { compareBacktestToLive } from "../backtest-profile-comparison";
 import { isAllAccountsScope } from "../account-scope";
 import { checkPropRules } from "../prop-rule-monitor";
 import { getChallengeRuleById, getPropFirmById } from "../prop-firm-detection";
@@ -17,7 +15,6 @@ import { getChallengeRuleById, getPropFirmById } from "../prop-firm-detection";
 export type AssistantSurface =
   | "dashboard"
   | "journal"
-  | "backtest"
   | "prop-tracker"
   | "psychology"
   | "trades"
@@ -28,7 +25,6 @@ export type AssistantSurface =
 export interface AssistantPageContext {
   pathname?: string;
   surface?: AssistantSurface;
-  backtestSessionId?: string | null;
   propAccountId?: string | null;
   journalEntryId?: string | null;
   dashboardWidgetIds?: string[];
@@ -64,7 +60,6 @@ type AssistantDomain =
   | "session"
   | "prop"
   | "journal"
-  | "backtest"
   | "dashboard";
 
 const SUMMARY_QUERY_RE =
@@ -96,13 +91,7 @@ export function inferAssistantSurface(
 ): AssistantSurface {
   if (!pathname) return "unknown";
   if (pathname === "/assistant") return "assistant";
-  if (pathname.startsWith("/dashboard/psychology")) return "psychology";
   if (pathname.startsWith("/dashboard/prop-tracker")) return "prop-tracker";
-  if (
-    pathname.startsWith("/dashboard/backtest") ||
-    pathname.startsWith("/backtest")
-  )
-    return "backtest";
   if (pathname.startsWith("/dashboard/journal")) return "journal";
   if (pathname.startsWith("/dashboard/trades")) return "trades";
   if (pathname.startsWith("/dashboard/settings")) return "settings";
@@ -190,18 +179,6 @@ function isJournalQuery(
   );
 }
 
-function isBacktestQuery(
-  message: string,
-  pageContext: AssistantPageContext
-): boolean {
-  return (
-    /\b(backtest|backtesting|replay|simulated|session review|drift|compare to live|practice session|historical session)\b/i.test(
-      message
-    ) ||
-    (pageContext.surface === "backtest" && isBroadSummaryQuery(message))
-  );
-}
-
 function isDashboardQuery(
   message: string,
   pageContext: AssistantPageContext
@@ -238,7 +215,6 @@ export function detectAssistantDomain(
   }
   if (isPropQuery(message, normalized)) return "prop";
   if (isJournalQuery(message, normalized)) return "journal";
-  if (isBacktestQuery(message, normalized)) return "backtest";
   if (isDashboardQuery(message, normalized)) return "dashboard";
   if (isSessionQuery(message)) return "session";
   return null;
@@ -362,13 +338,13 @@ function buildUnsupportedResponse(): AssistantSpecialistResult {
     handled: true,
     domain: "unsupported",
     message:
-      "I can answer from your trading data, journal, backtests, psychology, and prop tracking. I can't reliably answer live market-price, news, or trade-signal questions from this engine alone.",
+      "I can answer from your trading data, journal, psychology, and prop tracking. I can't reliably answer live market-price, news, or trade-signal questions from this engine alone.",
     analysisBlocks: [
       {
         type: "callout",
         tone: "warning",
         title: "Outside current coverage",
-        body: "Ask about your edge, leaks, session behavior, journal patterns, backtest drift, or prop-risk status. For live market/news questions, this assistant needs a separate market-data source.",
+        body: "Ask about your edge, leaks, session behavior, journal patterns, psychology, or prop-risk status. For live market/news questions, this assistant needs a separate market-data source.",
       },
     ],
   };
@@ -1113,178 +1089,6 @@ async function handleJournalQuery(
   };
 }
 
-async function handleBacktestQuery(
-  context: AssistantSpecialistContext,
-  pageContext: AssistantPageContext
-): Promise<AssistantSpecialistResult> {
-  const selectedSessionId = pageContext.backtestSessionId || null;
-  const sessionRows = await db
-    .select({
-      id: backtestSession.id,
-      name: backtestSession.name,
-      symbol: backtestSession.symbol,
-      timeframe: backtestSession.timeframe,
-      status: backtestSession.status,
-      totalTrades: backtestSession.totalTrades,
-      totalPnL: backtestSession.totalPnL,
-      winRate: backtestSession.winRate,
-      profitFactor: backtestSession.profitFactor,
-      averageRR: backtestSession.averageRR,
-      maxDrawdownPercent: backtestSession.maxDrawdownPercent,
-      updatedAt: backtestSession.updatedAt,
-      completedAt: backtestSession.completedAt,
-    })
-    .from(backtestSession)
-    .where(
-      and(
-        eq(backtestSession.userId, context.userId),
-        sql`${backtestSession.status} != 'archived'`
-      )
-    )
-    .orderBy(desc(backtestSession.updatedAt))
-    .limit(12);
-
-  if (sessionRows.length === 0) {
-    return {
-      handled: true,
-      domain: "backtest",
-      message:
-        "I can answer backtest questions once you have replay or backtest sessions saved. There isn't any backtest data yet.",
-      analysisBlocks: [
-        {
-          type: "callout",
-          tone: "warning",
-          title: "No backtest coverage yet",
-          body: "Run a few replay/backtest sessions first. Then I can compare practice performance to live execution and flag drift.",
-        },
-      ],
-    };
-  }
-
-  const selectedSession = selectedSessionId
-    ? sessionRows.find((session) => session.id === selectedSessionId) || null
-    : null;
-
-  const completedSessions = sessionRows.filter(
-    (session) => session.status === "completed"
-  );
-  const baseSessions = selectedSession ? [selectedSession] : sessionRows;
-  const totalTrades = baseSessions.reduce(
-    (sum, session) => sum + toNumber(session.totalTrades),
-    0
-  );
-  const totalPnL = baseSessions.reduce(
-    (sum, session) => sum + toNumber(session.totalPnL),
-    0
-  );
-  const avgWinRate =
-    baseSessions.length > 0
-      ? baseSessions.reduce(
-          (sum, session) => sum + toNumber(session.winRate),
-          0
-        ) / baseSessions.length
-      : 0;
-  const avgProfitFactor =
-    baseSessions.length > 0
-      ? baseSessions.reduce(
-          (sum, session) => sum + toNumber(session.profitFactor),
-          0
-        ) / baseSessions.length
-      : 0;
-
-  const bestSession = [...completedSessions].sort(
-    (a, b) => toNumber(b.totalPnL) - toNumber(a.totalPnL)
-  )[0];
-  const topSymbol = Array.from(
-    sessionRows
-      .reduce((map, session) => {
-        map.set(session.symbol, (map.get(session.symbol) || 0) + 1);
-        return map;
-      }, new Map<string, number>())
-      .entries()
-  ).sort((a, b) => b[1] - a[1])[0];
-
-  const drift = await compareBacktestToLive(
-    context.userId,
-    context.accountId,
-    selectedSession?.id
-  ).catch(() => null);
-
-  const severeDrift = drift?.driftItems
-    ?.filter((item) => item.severity === "significant")
-    .slice(0, 3)
-    .map((item) => item.insight);
-
-  const recommendations = severeDrift?.length
-    ? severeDrift
-    : [
-        selectedSession
-          ? "Compare this session's execution rhythm to your live trades before changing the setup."
-          : "Use completed session reviews to isolate where your live execution drifts from practice.",
-      ];
-
-  const message = [
-    selectedSession
-      ? `Backtest session ${selectedSession.name} (${selectedSession.symbol} ${
-          selectedSession.timeframe
-        }) logged ${toNumber(
-          selectedSession.totalTrades
-        )} trades and ${formatUsd(toNumber(selectedSession.totalPnL))}.`
-      : `Backtest book: ${sessionRows.length} sessions and ${totalTrades} closed trades across replay history.`,
-    `Average win rate is ${formatPct(
-      avgWinRate
-    )} with profit factor ${avgProfitFactor.toFixed(2)}.`,
-    bestSession
-      ? `Best completed session: ${bestSession.name} at ${formatUsd(
-          toNumber(bestSession.totalPnL)
-        )}.`
-      : null,
-    drift?.summary || recommendations[0],
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return {
-    handled: true,
-    domain: "backtest",
-    message,
-    data: { sessions: sessionRows, drift },
-    analysisBlocks: [
-      {
-        type: "stats",
-        title: selectedSession ? "Backtest session" : "Backtest performance",
-        rows: [
-          { label: "Sessions", value: String(sessionRows.length) },
-          { label: "Closed trades", value: String(totalTrades) },
-          { label: "Average win rate", value: formatPct(avgWinRate) },
-          { label: "Average profit factor", value: avgProfitFactor.toFixed(2) },
-          topSymbol
-            ? {
-                label: "Most tested symbol",
-                value: `${topSymbol[0]} (${topSymbol[1]} sessions)`,
-              }
-            : null,
-        ].filter(Boolean),
-      },
-      drift
-        ? {
-            type: "insights",
-            title: "Backtest vs live drift",
-            items:
-              drift.driftItems.length > 0
-                ? drift.driftItems.slice(0, 4).map((item) => item.insight)
-                : [drift.summary],
-          }
-        : null,
-      {
-        type: "recommendations",
-        title: "Backtest focus",
-        items: recommendations,
-      },
-    ].filter(Boolean),
-  };
-}
-
 function handleDashboardQuery(
   context: AssistantSpecialistContext,
   pageContext: AssistantPageContext
@@ -1439,8 +1243,6 @@ export async function maybeHandleSpecialistQuery(
       return handlePropQuery(context, pageContext);
     case "journal":
       return handleJournalQuery(context);
-    case "backtest":
-      return handleBacktestQuery(context, pageContext);
     case "dashboard":
       return handleDashboardQuery(context, pageContext);
     default:

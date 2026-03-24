@@ -205,6 +205,16 @@ export const QUERY_TEST_MATRIX: QueryTestCase[] = [
     query: "show margin level",
     expectedField: "entryMarginLevel",
   },
+  {
+    id: "field-edge-name",
+    query: "show edge",
+    expectedField: "edgeName",
+  },
+  {
+    id: "field-compliance-status",
+    query: "show compliance status",
+    expectedField: "complianceStatus",
+  },
   ...buildFieldTestCases(),
 ];
 

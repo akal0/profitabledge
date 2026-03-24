@@ -142,6 +142,7 @@ export function usePremiumAssistantController({
                 console.error("Failed to persist assistant message:", error);
               }
             });
+          void queryClient.invalidateQueries({ queryKey: ["ai.getReports"] });
         }
 
         return prev.map((message, index) =>
@@ -162,6 +163,7 @@ export function usePremiumAssistantController({
     setConversationHistory((prev) => [...prev, `assistant: ${content}`]);
   }, [
     currentReportId,
+    queryClient,
     state.analysisBlocks,
     state.isDone,
     state.lineBuffer,
@@ -208,6 +210,7 @@ export function usePremiumAssistantController({
           });
           reportId = report.id;
           setCurrentReportId(reportId);
+          void queryClient.invalidateQueries({ queryKey: ["ai.getReports"] });
         } catch (error) {
           if (process.env.NODE_ENV !== "production") {
             console.error("Failed to create report:", error);

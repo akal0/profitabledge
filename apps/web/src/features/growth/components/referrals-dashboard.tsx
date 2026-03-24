@@ -179,7 +179,10 @@ function StatCard({
 }
 
 export function ReferralsDashboard() {
-  const billingStateQuery = trpc.billing.getState.useQuery();
+  const billingStateQuery = trpc.billing.getState.useQuery(undefined, {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
 
   const referral = billingStateQuery.data?.referral;
   const affiliate = billingStateQuery.data?.affiliate;

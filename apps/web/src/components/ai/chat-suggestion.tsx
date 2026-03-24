@@ -57,6 +57,10 @@ const typeLabels: Record<string, string> = {
   Temporal: "Temporal",
   States: "States",
   Persona: "Persona",
+  Intersections: "Intersections",
+  Journal: "Journal",
+  Prop: "Prop",
+  Coaching: "Coaching",
   metric: "Metrics",
   filter: "Filters",
 };
@@ -82,6 +86,10 @@ const typeDescriptions: Record<string, string> = {
   Temporal: "Pre/post cohort comparisons",
   States: "Hidden state clustering",
   Persona: "Longitudinal persona tracking",
+  Intersections: "Cross-column and combo analysis",
+  Journal: "Journal reflections and recurring themes",
+  Prop: "Prop-firm survival and rule headroom",
+  Coaching: "Action-oriented coaching prompts",
   Intent: "Common intent patterns",
 };
 
@@ -101,6 +109,10 @@ const typeOrder = [
   "Temporal",
   "States",
   "Persona",
+  "Intersections",
+  "Journal",
+  "Prop",
+  "Coaching",
   "Intent",
   "Core",
   "Tags",

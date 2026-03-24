@@ -52,7 +52,6 @@ type EntryTypeFilter =
   | "comparison"
   | "trade_review"
   | "strategy"
-  | "backtest"
   | null;
 type DateRangeFilter = "all" | "today" | "week" | "month";
 type SortField = "updatedAt" | "createdAt" | "title";

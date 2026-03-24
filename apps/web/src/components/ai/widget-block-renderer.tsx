@@ -56,7 +56,7 @@ export function WidgetBlockRenderer({
   const { type, data, title, subtitle, style, mode } = viz;
   const cardTitle = formatCardTitle(title);
 
-  if (type === "weekday_performance") {
+  if (type === "weekday_performance" && !(data.rows && data.rows.length > 0)) {
     return (
       <PerformanceWeekdayCard
         accountId={accountId}
@@ -66,7 +66,7 @@ export function WidgetBlockRenderer({
     );
   }
 
-  if (type === "daily_pnl") {
+  if (type === "daily_pnl" && !(data.rows && data.rows.length > 0)) {
     return <DailyNetCard accountId={accountId} hideComparison={true} />;
   }
 

@@ -52,8 +52,6 @@ export type BillingPlanDefinition = {
   includedAiCredits: number;
   includedLiveSyncSlots: number;
   includesPropTracker: boolean;
-  includesBacktest: boolean;
-  includesCopier: boolean;
   isFree: boolean;
   upgradeOfferBasisPoints: number | null;
   stripePriceId?: string;
@@ -82,14 +80,12 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
         "1 manual or CSV account",
         "Core dashboard, trades, journal, and goals",
         "Starter history and storage limits",
-        "No hosted sync, no copier",
+        "No hosted sync",
       ],
       accountAllowanceLabel: "1 manual / CSV",
       includedAiCredits: 0,
       includedLiveSyncSlots: 0,
       includesPropTracker: false,
-      includesBacktest: false,
-      includesCopier: false,
       isFree: true,
       upgradeOfferBasisPoints: null,
     },
@@ -97,14 +93,14 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
       key: "professional",
       title: "Professional",
       summary:
-        "Unlock the full trading workflow with deeper analytics, backtesting, prop tracking, and a live sync allowance.",
+        "Unlock the full trading workflow with deeper analytics, prop tracking, and a live sync allowance.",
       priceLabel: "$29 / month",
       monthlyPriceCents: 2900,
       highlight: "Best offer",
       ctaLabel: "Select plan",
       features: [
         "Up to 5 accounts",
-        "Prop tracker and backtest access",
+        "Prop tracker access",
         "1 live sync slot",
         "250 Edge credits every month",
       ],
@@ -112,8 +108,6 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
       includedAiCredits: 250,
       includedLiveSyncSlots: 1,
       includesPropTracker: true,
-      includesBacktest: true,
-      includesCopier: false,
       isFree: false,
       upgradeOfferBasisPoints: 1000,
       stripePriceId: env.STRIPE_PRICE_PROFESSIONAL_MONTHLY_ID,
@@ -123,14 +117,13 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
       key: "institutional",
       title: "Institutional",
       summary:
-        "For advanced traders who want the broadest toolkit, heavier automation, and more room for live workflows.",
+        "For advanced traders who want the broadest toolkit and more room for live workflows.",
       priceLabel: "$59 / month",
       monthlyPriceCents: 5900,
       highlight: "Full data access",
       ctaLabel: "Select plan",
       features: [
         "Unlimited accounts",
-        "Trade copier access",
         "5 live sync slots",
         "1,500 Edge credits every month",
       ],
@@ -138,8 +131,6 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
       includedAiCredits: 1500,
       includedLiveSyncSlots: 5,
       includesPropTracker: true,
-      includesBacktest: true,
-      includesCopier: true,
       isFree: false,
       upgradeOfferBasisPoints: 1500,
       stripePriceId: env.STRIPE_PRICE_INSTITUTIONAL_MONTHLY_ID,

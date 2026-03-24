@@ -15,14 +15,13 @@ describe("buildContextFromPath", () => {
     expect(context.source).toBe("floating-assistant");
   });
 
-  it("captures replay session context from the route", () => {
+  it("captures journal route context from the path", () => {
     const context = buildContextFromPath(
-      "/backtest/session-42/review",
+      "/dashboard/journal/entry-42",
       null,
       "premium-assistant"
     );
 
-    expect(context.surface).toBe("backtest");
-    expect(context.backtestSessionId).toBe("session-42");
+    expect(context.surface).toBe("journal");
   });
 });

@@ -134,7 +134,6 @@ function JournalPageContent() {
       "trade_review",
       "strategy",
       "comparison",
-      "backtest",
       "edge",
     ].includes(entryTypeFromQuery)
       ? entryTypeFromQuery

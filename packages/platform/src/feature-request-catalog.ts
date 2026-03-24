@@ -62,11 +62,6 @@ export const FEATURE_REQUEST_CATALOG: readonly FeatureRequestArea[] = [
         ],
       },
       {
-        id: "psychology",
-        label: "Psychology",
-        routePrefixes: ["/dashboard/psychology"],
-      },
-      {
         id: "goals",
         label: "Goals",
         routePrefixes: ["/dashboard/goals"],
@@ -126,7 +121,11 @@ export const FEATURE_REQUEST_CATALOG: readonly FeatureRequestArea[] = [
         label: "Achievements",
         routePrefixes: ["/dashboard/achievements"],
       },
-      { id: "news", label: "News", routePrefixes: ["/dashboard/news"] },
+      {
+        id: "news",
+        label: "News",
+        routePrefixes: ["/dashboard/calendar", "/dashboard/news"],
+      },
     ],
   },
   {
@@ -137,52 +136,6 @@ export const FEATURE_REQUEST_CATALOG: readonly FeatureRequestArea[] = [
         id: "ai-assistant",
         label: "AI Assistant",
         routePrefixes: ["/assistant", "/dashboard/assistant"],
-      },
-      {
-        id: "trade-copier",
-        label: "Trade copier",
-        routePrefixes: ["/dashboard/copier"],
-        subfeatures: [
-          { id: "copier-overview", label: "Copier overview" },
-          { id: "groups", label: "Groups and assignments" },
-          { id: "health", label: "Health and issues" },
-        ],
-      },
-      {
-        id: "backtest",
-        label: "Backtest",
-        routePrefixes: ["/backtest", "/dashboard/backtest"],
-        subfeatures: [
-          {
-            id: "replay",
-            label: "Replay",
-            routePrefixes: ["/backtest/replay", "/dashboard/backtest/replay"],
-          },
-          {
-            id: "sessions",
-            label: "Sessions",
-            routePrefixes: ["/backtest/sessions", "/dashboard/backtest/sessions"],
-          },
-          {
-            id: "analytics",
-            label: "Analytics",
-            routePrefixes: [
-              "/backtest/analytics",
-              "/dashboard/backtest/analytics",
-            ],
-          },
-          {
-            id: "compare",
-            label: "Compare",
-            routePrefixes: ["/backtest/compare", "/dashboard/backtest/compare"],
-          },
-          { id: "review", label: "Review" },
-          {
-            id: "journal",
-            label: "Backtest journal",
-            routePrefixes: ["/dashboard/backtest/journal"],
-          },
-        ],
       },
     ],
   },

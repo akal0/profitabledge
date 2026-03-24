@@ -2,7 +2,6 @@ export type AlphaFeatureKey =
   | "aiAssistant"
   | "community"
   | "connections"
-  | "backtest"
   | "feedback"
   | "supportDiagnostics"
   | "scheduledSync"
@@ -40,12 +39,6 @@ export const ALPHA_FLAG_DEFINITIONS: Record<
     publicEnv: "NEXT_PUBLIC_ALPHA_ENABLE_CONNECTIONS",
     description:
       "Controls broker/platform connection UI and connection mutation paths.",
-  },
-  backtest: {
-    defaultValue: true,
-    serverEnv: "ALPHA_ENABLE_BACKTEST",
-    publicEnv: "NEXT_PUBLIC_ALPHA_ENABLE_BACKTEST",
-    description: "Controls backtest and replay surfaces.",
   },
   feedback: {
     defaultValue: true,
@@ -148,8 +141,6 @@ export function getAlphaFeatureDisabledMessage(feature: AlphaFeatureKey) {
       return "Community surfaces are currently held back for this alpha environment.";
     case "connections":
       return "Broker and platform connections are temporarily unavailable in this alpha environment.";
-    case "backtest":
-      return "Backtest is temporarily unavailable for this alpha environment.";
     case "feedback":
       return "Feedback capture is temporarily unavailable right now.";
     case "supportDiagnostics":

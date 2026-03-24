@@ -192,7 +192,7 @@ const systemTemplates = [
         content:
           "Position size: \nStop loss: \nTake profit: \nMax daily loss: ",
       },
-      { id: "13", type: "heading2", content: "Backtesting Results" },
+      { id: "13", type: "heading2", content: "Performance Results" },
       {
         id: "14",
         type: "paragraph",

@@ -20,12 +20,10 @@ describe("alpha-flags", () => {
     const flags = resolvePublicAlphaFlags({
       NEXT_PUBLIC_ALPHA_ENABLE_AI_ASSISTANT: "false",
       NEXT_PUBLIC_ALPHA_ENABLE_COMMUNITY: "true",
-      NEXT_PUBLIC_ALPHA_ENABLE_BACKTEST: "0",
     });
 
     expect(flags.aiAssistant).toBe(false);
     expect(flags.community).toBe(true);
-    expect(flags.backtest).toBe(false);
   });
 
   it("returns short operator-facing disabled messages", () => {

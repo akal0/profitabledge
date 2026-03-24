@@ -2002,8 +2002,6 @@ export const billingRouter = router({
       includedAiCredits: plan.includedAiCredits,
       includedLiveSyncSlots: plan.includedLiveSyncSlots,
       includesPropTracker: plan.includesPropTracker,
-      includesBacktest: plan.includesBacktest,
-      includesCopier: plan.includesCopier,
       isFree: plan.isFree,
       isConfigured:
         plan.isFree ||

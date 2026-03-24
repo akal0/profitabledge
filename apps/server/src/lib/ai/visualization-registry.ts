@@ -222,7 +222,9 @@ export function buildVizSpec(
 function resolveVizType(plan: TradeQueryPlan): VizType {
   const explicit = plan.vizType;
   const inferred = inferVizType(plan);
-  const hasSymbolGroup = plan.groupBy?.some((group) => group.field === "symbol");
+  const hasSymbolGroup =
+    plan.groupBy?.length === 1 &&
+    plan.groupBy?.some((group) => group.field === "symbol");
   const hasProfitAggregate = plan.aggregates?.some(
     (aggregate) => aggregate.field === "profit" && aggregate.fn === "sum"
   );
@@ -279,6 +281,10 @@ function inferVizType(plan: TradeQueryPlan): VizType {
 
   // Aggregate with groupBy → bar chart or table
   if (plan.groupBy && plan.groupBy.length > 0) {
+    if ((plan.groupBy.length > 1 || (plan.aggregates?.length || 0) > 1) && !plan.temporal) {
+      return (plan.aggregates?.length || 0) > 1 ? "breakdown_table" : "bar_chart";
+    }
+
     const groupField = plan.groupBy[0].field;
 
     // Asset grouping → asset profitability
@@ -364,14 +370,16 @@ function buildKpiSingleData(
   if (keys.length === 0) {
     const groups = result.meta?.groups || result.data || [];
     if (Array.isArray(groups) && groups.length > 0) {
-      const groupField = plan.groupBy?.[0]?.field || Object.keys(groups[0])[0];
+      const groupFields =
+        plan.groupBy?.map((group) => group.field) || [Object.keys(groups[0])[0]];
+      const groupField = groupFields[0] || Object.keys(groups[0])[0];
       const valueField =
         plan.aggregates?.[0]?.as ||
-        Object.keys(groups[0]).find((key) => key !== groupField) ||
+        Object.keys(groups[0]).find((key) => !groupFields.includes(key)) ||
         "";
 
       const top = groups[0] || {};
-      const groupValue = top[groupField];
+      const groupValue = buildGroupLabel(top, groupFields);
       const value = valueField ? top[valueField] : undefined;
 
       const formattedValue = formatMetricValue(valueField, value);
@@ -436,7 +444,8 @@ function buildBarChartData(
   plan: TradeQueryPlan
 ): VizDataConfig {
   const groups = result.meta?.groups || [];
-  const groupField = plan.groupBy?.[0]?.field || "group";
+  const groupFields = plan.groupBy?.map((group) => group.field) || ["group"];
+  const groupField = groupFields[0] || "group";
   const valueField = plan.aggregates?.[0]?.as || "value";
 
   // Respect limit for singular/plural display
@@ -455,7 +464,7 @@ function buildBarChartData(
         ? rawValue
         : Number(String(rawValue).replace(/[^0-9.-]/g, ""));
     return {
-      label: g[groupField] || "Unknown",
+      label: buildGroupLabel(g, groupFields) || "Unknown",
       value: Number.isNaN(numericValue) ? 0 : numericValue,
     };
   });
@@ -490,7 +499,8 @@ function buildAreaChartData(
   plan: TradeQueryPlan
 ): VizDataConfig {
   const groups = result.meta?.groups || [];
-  const groupField = plan.groupBy?.[0]?.field || "x";
+  const groupFields = plan.groupBy?.map((group) => group.field) || ["x"];
+  const groupField = groupFields[0] || "x";
   const valueField = plan.aggregates?.[0]?.as || "y";
 
   const rows = groups.map((g: any) => {
@@ -609,6 +619,14 @@ function formatFieldLabel(key: string): string {
     .trim();
   if (!cleaned) return "";
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+}
+
+function buildGroupLabel(row: Record<string, any>, groupFields: string[]): string {
+  return groupFields
+    .map((field) => row[field])
+    .filter((value) => value !== null && value !== undefined && String(value).trim() !== "")
+    .map((value) => String(value))
+    .join(" / ");
 }
 
 function formatMetricValue(

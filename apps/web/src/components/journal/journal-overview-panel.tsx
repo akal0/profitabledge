@@ -97,7 +97,6 @@ export function JournalOverviewPanel({
       trade_review: "Trade Review",
       strategy: "Strategy",
       comparison: "Comparison",
-      backtest: "Backtest",
     };
 
     return labelMap[topType.entryType || "general"] ?? "General";

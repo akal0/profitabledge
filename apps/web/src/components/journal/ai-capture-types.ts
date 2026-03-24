@@ -7,8 +7,7 @@ export type JournalAICaptureEntryType =
   | "monthly"
   | "trade_review"
   | "strategy"
-  | "comparison"
-  | "backtest";
+  | "comparison";
 
 export type JournalAICapturePsychologyPatch = Partial<PsychologySnapshot>;
 export type JournalAICaptureOutcome =

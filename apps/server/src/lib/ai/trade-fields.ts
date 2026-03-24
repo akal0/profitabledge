@@ -291,6 +291,15 @@ export const TRADE_FIELDS: TradeField[] = [
     filterOps: ["eq", "in", "contains"],
   },
   {
+    key: "edgeName",
+    label: "Edge",
+    type: "string",
+    description: "Assigned Edge name for the trade, falling back to model tag",
+    synonyms: ["edge", "edge name", "playbook", "setup edge"],
+    aggregations: ["count"],
+    filterOps: ["eq", "in", "contains"],
+  },
+  {
     key: "protocolAlignment",
     label: "Protocol Alignment",
     type: "enum",
@@ -304,6 +313,22 @@ export const TRADE_FIELDS: TradeField[] = [
     ],
     aggregations: ["count"],
     filterOps: ["eq", "in"],
+  },
+  {
+    key: "complianceStatus",
+    label: "Compliance Status",
+    type: "enum",
+    description: "Latest rules evaluation result for the trade",
+    synonyms: [
+      "compliance",
+      "compliance status",
+      "rule pass",
+      "rule fail",
+      "passed compliance",
+      "failed compliance",
+    ],
+    aggregations: ["count"],
+    filterOps: ["eq", "in", "contains"],
   },
 
   // ===== INTENT/PLAN METRICS =====
@@ -1026,6 +1051,10 @@ export const CONCEPT_SYNONYMS: Record<string, string[]> = {
   "ny session": ["sessionTag"],
   "new york session": ["sessionTag"],
   "asia session": ["sessionTag"],
+  edge: ["edgeName"],
+  edges: ["edgeName"],
+  compliance: ["complianceStatus"],
+  "compliance status": ["complianceStatus"],
 };
 
 /**

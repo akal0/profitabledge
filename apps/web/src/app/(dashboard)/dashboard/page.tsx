@@ -51,8 +51,14 @@ function DashboardPageContent() {
   const setAllAccountsPreferredCurrencyCode = useAccountStore(
     (state) => state.setAllAccountsPreferredCurrencyCode
   );
-  const { data: me } = useQuery(trpcOptions.users.me.queryOptions());
-  const { data: accounts } = useQuery(trpcOptions.accounts.list.queryOptions());
+  const { data: me } = useQuery({
+    ...trpcOptions.users.me.queryOptions(),
+    staleTime: 5 * 60_000,
+  });
+  const { data: accounts } = useQuery({
+    ...trpcOptions.accounts.list.queryOptions(),
+    staleTime: 30_000,
+  });
   const selectedAccount = accounts?.find(
     (account) => account.id === accountId
   ) as
@@ -74,6 +80,7 @@ function DashboardPageContent() {
   const { data: rawConnections } = useQuery({
     ...trpcOptions.connections.list.queryOptions(),
     enabled: shouldLoadConnections,
+    staleTime: 15_000,
   });
 
   const {

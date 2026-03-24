@@ -250,6 +250,10 @@ async function executeAggregate(
   const computedMetricAggs = (plan.aggregates || []).filter(agg => agg.field && isComputedMetric(agg.field));
   const regularAggs = (plan.aggregates || []).filter(agg => agg.field && !isComputedMetric(agg.field));
 
+  if (plan.groupBy && plan.groupBy.length > 0) {
+    return await executeGroupedAggregate(plan, context, conditions);
+  }
+
   // Handle computed metrics by fetching all trades
   if (computedMetricAggs.length > 0) {
     const trades = await db
@@ -328,11 +332,6 @@ async function executeAggregate(
     };
   }
 
-  // Handle groupBy queries
-  if (plan.groupBy && plan.groupBy.length > 0) {
-    return await executeGroupedAggregate(plan, context, conditions);
-  }
-
   // Build aggregation SQL for regular aggregates
   const selectFields: Record<string, SQL> = {};
   
@@ -401,6 +400,13 @@ async function executeGroupedAggregate(
     return { success: false, error: "GroupBy requires aggregates" };
   }
 
+  const computedMetricAggs = plan.aggregates.filter(
+    (agg) => agg.field && isComputedMetric(agg.field)
+  );
+  if (computedMetricAggs.length > 0) {
+    return await executeGroupedComputedAggregate(plan, baseConditions);
+  }
+
   // Build select fields
   const selectFields: Record<string, SQL> = {};
   
@@ -464,6 +470,161 @@ async function executeGroupedAggregate(
       timeframe: formatTimeframe(plan.timeframe),
     },
   };
+}
+
+async function executeGroupedComputedAggregate(
+  plan: TradeQueryPlan,
+  baseConditions: SQL[]
+): Promise<ExecutionResult> {
+  if (!plan.groupBy || !plan.aggregates) {
+    return { success: false, error: "GroupBy requires aggregates" };
+  }
+
+  const directFieldSet = new Set<string>();
+
+  for (const group of plan.groupBy) {
+    if (isDerivedField(group.field)) continue;
+    directFieldSet.add(group.field);
+  }
+
+  for (const agg of plan.aggregates) {
+    if (!agg.field) continue;
+
+    if (isComputedMetric(agg.field)) {
+      const metricDef = getComputedMetric(agg.field);
+      metricDef?.dependsOn.forEach((field) => directFieldSet.add(field));
+      continue;
+    }
+
+    directFieldSet.add(agg.field);
+  }
+
+  const selectFields: Record<string, SQL | any> = {
+    ...buildTradeSelectShape(Array.from(directFieldSet)),
+  };
+
+  for (const group of plan.groupBy) {
+    if (isDerivedField(group.field)) {
+      selectFields[group.field] = DERIVED_FIELDS[group.field].getSelectSQL();
+    }
+  }
+
+  const rows = (await db
+    .select(selectFields)
+    .from(trade)
+    .where(and(...baseConditions))) as Record<string, any>[];
+
+  const grouped = new Map<
+    string,
+    {
+      groupValues: Record<string, any>;
+      trades: Record<string, any>[];
+    }
+  >();
+
+  for (const row of rows) {
+    const groupValues = Object.fromEntries(
+      plan.groupBy.map((group) => [
+        group.field,
+        resolveGroupedFieldValue(row, group.field),
+      ])
+    );
+    const key = JSON.stringify(
+      plan.groupBy.map((group) => groupValues[group.field])
+    );
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.trades.push(row);
+      continue;
+    }
+
+    grouped.set(key, {
+      groupValues,
+      trades: [row],
+    });
+  }
+
+  const groupedRows = Array.from(grouped.values()).map(
+    ({ groupValues, trades }) => {
+      const row: Record<string, any> = { ...groupValues };
+
+      for (const agg of plan.aggregates || []) {
+        if (!agg.field) continue;
+
+        if (isComputedMetric(agg.field)) {
+          const metricDef = getComputedMetric(agg.field);
+          row[agg.as] = metricDef ? metricDef.compute(trades) : null;
+          continue;
+        }
+
+        row[agg.as] = computeAggregateFromTrades(trades, {
+          field: agg.field,
+          agg: agg.fn,
+        });
+      }
+
+      return row;
+    }
+  );
+
+  const fullSortedGroups = applyGroupSortAndLimit(groupedRows, {
+    ...plan,
+    limit: undefined,
+  });
+  const sortedGroups = applyGroupSortAndLimit(groupedRows, plan);
+
+  return {
+    success: true,
+    data: sortedGroups,
+    meta: {
+      rowCount: rows.length,
+      groups: fullSortedGroups,
+      explanation: plan.explanation,
+      filters: formatFilters(plan.filters),
+      timeframe: formatTimeframe(plan.timeframe),
+      caveats: generateCaveats(rows.length),
+    },
+  };
+}
+
+function resolveGroupedFieldValue(row: Record<string, any>, field: string): any {
+  if (row[field] !== undefined) {
+    return row[field];
+  }
+
+  const openTime =
+    row.openTime instanceof Date
+      ? row.openTime
+      : row.openTime
+      ? new Date(row.openTime)
+      : null;
+
+  if (!openTime || Number.isNaN(openTime.getTime())) {
+    return "Unknown";
+  }
+
+  switch (field) {
+    case "weekday":
+      return openTime.toLocaleDateString("en-US", { weekday: "long" });
+    case "hour":
+      return openTime.getUTCHours();
+    case "month":
+      return openTime.toLocaleDateString("en-US", { month: "long" });
+    case "quarter":
+      return `Q${Math.floor(openTime.getUTCMonth() / 3) + 1}`;
+    case "year":
+      return openTime.getUTCFullYear();
+    case "timeOfDay": {
+      const hour = openTime.getUTCHours();
+      if (hour >= 6 && hour <= 11) return "Morning";
+      if (hour >= 12 && hour <= 17) return "Afternoon";
+      if (hour >= 18 && hour <= 23) return "Evening";
+      return "Night";
+    }
+    default:
+      return row[field] ?? "Unknown";
+  }
 }
 
 function applyGroupSortAndLimit(
@@ -595,24 +756,6 @@ async function executeCompare(
   );
   addTimeframeConditions(conditionsA, plan.timeframe);
 
-  const aggSQL = buildAggregationSQL({
-    fn: metric.agg,
-    field: metric.field,
-    as: "value",
-  });
-
-  if (!aggSQL) {
-    return { success: false, error: "Invalid aggregation" };
-  }
-
-  const resultA = await db
-    .select({
-      value: aggSQL,
-      count: sql<number>`count(*)`,
-    })
-    .from(trade)
-    .where(and(...conditionsA));
-
   // Execute for cohort B
   const conditionsB = buildWhereConditions(
     [...plan.filters, ...b.filters],
@@ -620,18 +763,60 @@ async function executeCompare(
   );
   addTimeframeConditions(conditionsB, plan.timeframe);
 
-  const resultB = await db
-    .select({
-      value: aggSQL,
-      count: sql<number>`count(*)`,
-    })
-    .from(trade)
-    .where(and(...conditionsB));
+  let valueA = 0;
+  let valueB = 0;
+  let countA = 0;
+  let countB = 0;
 
-  const valueA = Number(resultA[0]?.value) || 0;
-  const valueB = Number(resultB[0]?.value) || 0;
-  const countA = Number(resultA[0]?.count) || 0;
-  const countB = Number(resultB[0]?.count) || 0;
+  if (isComputedMetric(metric.field)) {
+    const metricDef = getComputedMetric(metric.field);
+    if (!metricDef) {
+      return { success: false, error: "Invalid aggregation" };
+    }
+
+    const selectFields = buildTradeSelectShape(metricDef.dependsOn);
+    const [rowsA, rowsB] = await Promise.all([
+      db.select(selectFields).from(trade).where(and(...conditionsA)),
+      db.select(selectFields).from(trade).where(and(...conditionsB)),
+    ]);
+
+    countA = rowsA.length;
+    countB = rowsB.length;
+    valueA = Number(metricDef.compute(rowsA) || 0);
+    valueB = Number(metricDef.compute(rowsB) || 0);
+  } else {
+    const aggSQL = buildAggregationSQL({
+      fn: metric.agg,
+      field: metric.field,
+      as: "value",
+    });
+
+    if (!aggSQL) {
+      return { success: false, error: "Invalid aggregation" };
+    }
+
+    const [resultA, resultB] = await Promise.all([
+      db
+        .select({
+          value: aggSQL,
+          count: sql<number>`count(*)`,
+        })
+        .from(trade)
+        .where(and(...conditionsA)),
+      db
+        .select({
+          value: aggSQL,
+          count: sql<number>`count(*)`,
+        })
+        .from(trade)
+        .where(and(...conditionsB)),
+    ]);
+
+    valueA = Number(resultA[0]?.value) || 0;
+    valueB = Number(resultB[0]?.value) || 0;
+    countA = Number(resultA[0]?.count) || 0;
+    countB = Number(resultB[0]?.count) || 0;
+  }
 
   const field = FIELD_MAP.get(metric.field);
   const delta = valueA - valueB;

@@ -14,8 +14,6 @@ export type EventType =
   | "notification:created"
   | "journal:entry_created"
   | "leaderboard:updated"
-  | "copier:signal_sent"
-  | "copier:signal_executed"
   | "prop:phase_advanced"
   | "prop:rule_violated"
   | "cache:invalidated";
@@ -119,18 +117,6 @@ export type EventPayloadMap = {
     category: string;
     period: string;
     entriesCount: number;
-  };
-  "copier:signal_sent": {
-    signalId: string;
-    masterAccountId: string;
-    slaveAccountId: string;
-    signalType: string;
-  };
-  "copier:signal_executed": {
-    signalId: string;
-    slaveAccountId: string;
-    success: boolean;
-    profit?: number;
   };
   "prop:phase_advanced": {
     accountId: string;

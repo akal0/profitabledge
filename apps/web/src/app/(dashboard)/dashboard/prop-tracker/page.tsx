@@ -510,9 +510,10 @@ function PropAccountCard({
 }
 
 export default function PropTrackerIndexPage() {
-  const { data: accounts = [], isLoading } = useQuery(
-    trpcOptions.accounts.list.queryOptions()
-  );
+  const { data: accounts = [], isLoading } = useQuery({
+    ...trpcOptions.accounts.list.queryOptions(),
+    staleTime: 30_000,
+  });
 
   const propAccounts = useMemo(
     () =>
@@ -530,8 +531,8 @@ export default function PropTrackerIndexPage() {
         trpcClient.propFirms.getTrackerDashboard.query({
           accountId: account.id,
         }),
-      staleTime: 10000,
-      refetchInterval: 15000,
+      staleTime: 15_000,
+      refetchInterval: 15_000,
       retry: false,
     })),
   });

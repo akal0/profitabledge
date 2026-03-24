@@ -11,8 +11,7 @@ type JournalAICaptureEntryType =
   | "monthly"
   | "trade_review"
   | "strategy"
-  | "comparison"
-  | "backtest";
+  | "comparison";
 
 type JournalAICaptureOutcome =
   | "win"
@@ -222,7 +221,7 @@ Return JSON with these keys only:
   "title": "short title",
   "journalDate": "ISO date string or null",
   "tags": ["tag"],
-  "entryType": "general|daily|weekly|monthly|trade_review|strategy|comparison|backtest|null",
+  "entryType": "general|daily|weekly|monthly|trade_review|strategy|comparison|null",
   "tradePhase": "pre-trade|during-trade|post-trade|null",
   "psychology": {
     "mood": 1-10,
@@ -339,7 +338,7 @@ Keep the contentBlocks concise and useful for inserting directly into the journa
         : fallback.tags,
       entryType:
         parsed.entryType &&
-        ["general", "daily", "weekly", "monthly", "trade_review", "strategy", "comparison", "backtest"].includes(parsed.entryType)
+        ["general", "daily", "weekly", "monthly", "trade_review", "strategy", "comparison"].includes(parsed.entryType)
           ? parsed.entryType
           : fallback.entryType,
       tradePhase:

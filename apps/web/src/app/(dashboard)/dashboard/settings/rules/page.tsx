@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   ClipboardList,
   Lightbulb,
@@ -589,8 +587,8 @@ export default function RulesPage() {
           Rulebook and checklists
         </h2>
         <p className="text-xs text-white/40">
-          One place for live trading rules, compliance guardrails, replay
-          rulebooks, and pre-trade checklists.
+          One place for live trading rules, compliance guardrails, rulebooks,
+          and pre-trade checklists.
         </p>
       </div>
 
@@ -649,7 +647,7 @@ export default function RulesPage() {
                   {configuredGuardrailCount}
                 </div>
                 <p className="mt-1 text-xs text-white/40">
-                  Saved audit thresholds that also seed replay rulebooks.
+                  Saved audit thresholds that also seed rulebooks.
                 </p>
               </div>
 
@@ -657,7 +655,7 @@ export default function RulesPage() {
                 <div className="flex items-center gap-2 text-white/70">
                   <ClipboardList className="size-4 text-blue-300" />
                   <span className="text-xs uppercase tracking-[0.18em]">
-                    Replay rulebooks
+                    Rulebooks
                   </span>
                 </div>
                 <div className="mt-3 text-2xl font-semibold text-white">
@@ -805,7 +803,7 @@ export default function RulesPage() {
               </div>
               <p className="mt-1 text-xs text-white/40">
                 These account-level constraints power compliance scoring today
-                and can be promoted into replay rulebooks.
+                and can be promoted into rulebooks.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -925,10 +923,10 @@ export default function RulesPage() {
             <div className={cn(PANEL_CLASS, "p-4")}>
               <div className="space-y-1">
                 <h4 className="text-sm font-medium text-white">
-                  Replay rulebooks
+                  Rulebooks
                 </h4>
                 <p className="text-xs text-white/40">
-                  Create replay-ready rulebooks from your current guardrails.
+                  Create rulebooks from your current guardrails.
                 </p>
               </div>
 
@@ -952,7 +950,7 @@ export default function RulesPage() {
                     onChange={(event) =>
                       setRulebookDescription(event.target.value)
                     }
-                    placeholder="How this replay rulebook should be used"
+                    placeholder="How this rulebook should be used"
                     className="min-h-24"
                   />
                 </div>
@@ -963,12 +961,6 @@ export default function RulesPage() {
                   >
                     <Plus className="size-4" />
                     Create from guardrails
-                  </Button>
-                  <Button asChild variant="outline">
-                    <Link href="/dashboard/backtest/replay">
-                      Open replay
-                      <ArrowRight className="size-4" />
-                    </Link>
                   </Button>
                 </div>
               </div>
@@ -1103,11 +1095,10 @@ export default function RulesPage() {
             <div>
               <div className="flex items-center gap-2 text-white">
                 <Lightbulb className="size-4 text-violet-300" />
-                <h3 className="text-sm font-semibold">Replay rulebooks</h3>
+                <h3 className="text-sm font-semibold">Rulebooks</h3>
               </div>
               <p className="mt-1 text-xs text-white/40">
-                These rule sets are available in replay and should mirror the
-                process you expect live.
+                These rule sets should mirror the process you expect live.
               </p>
             </div>
             <Badge variant="outline" className="text-[10px]">
@@ -1125,8 +1116,8 @@ export default function RulesPage() {
               </>
             ) : replayRulebooks.length === 0 ? (
               <div className={cn(PANEL_CLASS, "p-4 text-sm text-white/45")}>
-                No replay rulebooks saved yet. Create one from your guardrails
-                above so backtest replay evaluates the same process.
+                No rulebooks saved yet. Create one from your guardrails above
+                so reviews evaluate the same process.
               </div>
             ) : (
               replayRulebooks.map((rulebook) => (
@@ -1144,7 +1135,7 @@ export default function RulesPage() {
                           checks
                         </span>
                         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/55">
-                          {rulebook.isActive ? "Active in replay" : "Paused"}
+                          {rulebook.isActive ? "Active" : "Paused"}
                         </span>
                       </div>
 

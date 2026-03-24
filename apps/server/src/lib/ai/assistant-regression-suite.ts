@@ -7,6 +7,7 @@ import {
 import type { CondensedProfile } from "./engine/types";
 import type { TradeQueryPlan } from "./query-plan";
 import { buildVizSpec } from "./visualization-registry";
+import { buildDeterministicTradePlan } from "./deterministic-plan-builder";
 
 type AssistantRegressionCase = {
   id: string;
@@ -130,6 +131,66 @@ function buildDashboardContext() {
 }
 
 export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
+  {
+    id: "deterministic-intersection-plan-groups-session-and-direction",
+    run: () => {
+      const plan = buildDeterministicTradePlan(
+        "Which session-direction combo has my highest win rate?"
+      );
+
+      const failures: string[] = [];
+      if (!plan) {
+        failures.push("plan missing");
+        return failures;
+      }
+      const groupFields = (plan.groupBy || []).map((group) => group.field);
+      if (!groupFields.includes("sessionTag")) {
+        failures.push("missing sessionTag group");
+      }
+      if (!groupFields.includes("tradeType")) {
+        failures.push("missing tradeType group");
+      }
+      if (!plan.aggregates?.some((agg) => agg.field === "winRate")) {
+        failures.push("missing winRate aggregate");
+      }
+      if (plan.limit !== 1) {
+        failures.push(`limit ${plan.limit ?? "none"} !== 1`);
+      }
+      return failures;
+    },
+  },
+  {
+    id: "deterministic-edge-protocol-plan-filters-against-and-groups-edge",
+    run: () => {
+      const plan = buildDeterministicTradePlan(
+        "Which Edge has the most against-protocol trades?"
+      );
+
+      const failures: string[] = [];
+      if (!plan) {
+        failures.push("plan missing");
+        return failures;
+      }
+      const groupFields = (plan.groupBy || []).map((group) => group.field);
+      if (!groupFields.includes("edgeName")) {
+        failures.push("missing edgeName group");
+      }
+      if (
+        !(plan.filters || []).some(
+          (filter) =>
+            filter.field === "protocolAlignment" &&
+            filter.op === "eq" &&
+            filter.value === "against"
+        )
+      ) {
+        failures.push("missing against protocol filter");
+      }
+      if (!plan.aggregates?.some((agg) => agg.as === "trade_count")) {
+        failures.push("missing trade_count aggregate");
+      }
+      return failures;
+    },
+  },
   {
     id: "singular-symbol-ranking-uses-asset-visual",
     run: () => {
@@ -322,6 +383,90 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
     },
   },
   {
+    id: "multi-group-visualization-combines-labels",
+    run: () => {
+      const plan: TradeQueryPlan = {
+        intent: "aggregate",
+        filters: [],
+        groupBy: [{ field: "sessionTag" }, { field: "tradeType" }],
+        aggregates: [{ fn: "avg", field: "winRate", as: "win_rate" }],
+        sort: { field: "win_rate", dir: "desc" },
+        limit: 1,
+        explanation: "Rank session and direction combos by win rate",
+        vizType: "bar_chart",
+        componentHint: "auto",
+        displayMode: "singular",
+        vizTitle: "Best session-direction combo",
+      };
+      const viz = buildVizSpec(plan, {
+        data: [],
+        meta: {
+          rowCount: 36,
+          groups: [
+            { sessionTag: "London", tradeType: "short", win_rate: 68 },
+            { sessionTag: "New York", tradeType: "long", win_rate: 61 },
+          ],
+          filters: [],
+          timeframe: "Last 30 days",
+        },
+      });
+
+      const failures: string[] = [];
+      if (viz.type !== "bar_chart") {
+        failures.push(`viz type ${viz.type} !== bar_chart`);
+      }
+      if ((viz.data.rows || [])[0]?.label !== "London / short") {
+        failures.push(`unexpected top label ${(viz.data.rows || [])[0]?.label ?? "none"}`);
+      }
+      return failures;
+    },
+  },
+  {
+    id: "multi-group-answer-combines-labels",
+    run: () => {
+      const plan: TradeQueryPlan = {
+        intent: "aggregate",
+        filters: [],
+        groupBy: [{ field: "sessionTag" }, { field: "tradeType" }],
+        aggregates: [{ fn: "avg", field: "winRate", as: "win_rate" }],
+        sort: { field: "win_rate", dir: "desc" },
+        limit: 1,
+        explanation: "Rank session and direction combos by win rate",
+        vizType: "bar_chart",
+        componentHint: "auto",
+        displayMode: "singular",
+        vizTitle: "Best session-direction combo",
+      };
+      const answer = assembleAnswer(
+        {
+          success: true,
+          data: [],
+          meta: {
+            rowCount: 36,
+            groups: [
+              { sessionTag: "London", tradeType: "short", win_rate: 68 },
+              { sessionTag: "New York", tradeType: "long", win_rate: 61 },
+              { sessionTag: "Asia", tradeType: "long", win_rate: 42 },
+            ],
+            explanation: "Rank session and direction combos by win rate",
+            filters: [],
+            timeframe: "Last 30 days",
+          },
+        },
+        plan
+      );
+
+      const failures: string[] = [];
+      if (!answer.markdown.includes("London / short")) {
+        failures.push("missing combined top label");
+      }
+      if (!answer.markdown.includes("New York / long")) {
+        failures.push("missing combined runner-up label");
+      }
+      return failures;
+    },
+  },
+  {
     id: "singular-time-of-day-answer-includes-context",
     run: () => {
       const plan = buildRankingPlan("timeOfDay");
@@ -391,13 +536,6 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       }),
   },
   {
-    id: "backtest-surface-summary-routes-to-backtest",
-    run: () =>
-      expectDomain("What stands out here?", "backtest", {
-        surface: "backtest",
-      }),
-  },
-  {
     id: "prop-surface-summary-routes-to-prop",
     run: () =>
       expectDomain("What matters most here?", "prop", {
@@ -415,13 +553,6 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
     id: "journal-query-routes-to-journal-domain",
     run: () =>
       expectDomain("What did I learn in my journal lately?", "journal", {
-        surface: "assistant",
-      }),
-  },
-  {
-    id: "backtest-query-routes-to-backtest-domain",
-    run: () =>
-      expectDomain("Compare my backtest sessions to live results", "backtest", {
         surface: "assistant",
       }),
   },

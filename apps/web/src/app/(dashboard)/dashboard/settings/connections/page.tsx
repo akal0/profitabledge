@@ -185,7 +185,7 @@ export default function ConnectionsSettingsPage() {
       const result = (await syncNow.mutateAsync({
         connectionId,
       })) as SyncNowOutput;
-      if (result.queued) {
+      if (result.status === "queued") {
         toast.success(
           "Sync queued. The MT5 worker will attach shortly and release the terminal after the refresh completes."
         );

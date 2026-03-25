@@ -120,13 +120,22 @@ class ControlPlaneClient:
     def ping(self) -> dict[str, Any]:
         return self._request("GET", "/api/mt5-worker/ping")
 
-    def claim_connections(self, worker_host_id: str, limit: int) -> list[dict[str, Any]]:
+    def claim_connections(
+        self,
+        *,
+        host_id: str,
+        worker_id: str,
+        limit: int,
+        host: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         response = self._request(
             "POST",
             "/api/mt5-worker/claim",
             {
-                "workerHostId": worker_host_id,
+                "hostId": host_id,
+                "workerId": worker_id,
                 "limit": limit,
+                "host": host or {},
             },
         )
         return response.get("connections", [])
@@ -150,6 +159,7 @@ class ControlPlaneClient:
         connection_id: str,
         worker_host_id: str,
         status: str,
+        host_id: str | None = None,
         session_key: str | None = None,
         last_error: str | None = None,
         meta: dict[str, Any] | None = None,
@@ -160,6 +170,8 @@ class ControlPlaneClient:
             {
                 "connectionId": connection_id,
                 "workerHostId": worker_host_id,
+                "hostId": host_id,
+                "workerId": worker_host_id,
                 "status": status,
                 "sessionKey": session_key,
                 "lastError": last_error,

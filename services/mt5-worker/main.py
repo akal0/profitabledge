@@ -12,6 +12,7 @@ from client import ControlPlaneClient, is_retryable_control_plane_error
 from config import WorkerConfig, load_config
 from adapters.mock import MockMtAdapter
 from adapters.meta_trader5 import MetaTrader5Adapter
+from hosting_policy import build_worker_host_policy_meta, validate_connection_host_policy
 from runtime import to_api_timestamp
 from status_files import WorkerStatusWriter
 
@@ -52,6 +53,7 @@ def best_effort_report_status(
     *,
     connection_id: str,
     worker_host_id: str,
+    host_id: str | None = None,
     status: str,
     session_key: str | None = None,
     last_error: str | None = None,
@@ -61,6 +63,7 @@ def best_effort_report_status(
         client.report_status(
             connection_id=connection_id,
             worker_host_id=worker_host_id,
+            host_id=host_id,
             status=status,
             session_key=session_key,
             last_error=last_error,
@@ -152,6 +155,26 @@ def build_adapter(config: WorkerConfig):
     raise RuntimeError(f"Unsupported MT5 worker mode: {mode}")
 
 
+def build_claim_host_payload(config: WorkerConfig) -> dict[str, Any]:
+    worker_host_meta = build_worker_host_policy_meta(config)
+    payload: dict[str, Any] = {
+        "label": config.worker_label,
+        "environment": config.host_environment,
+        "provider": config.host_provider,
+        "region": config.host_region,
+        "regionGroup": worker_host_meta.get("hostRegionGroup"),
+        "countryCode": config.host_country_code,
+        "city": config.host_city,
+        "timezone": config.host_timezone,
+        "publicIp": config.host_public_ip,
+        "tags": config.host_tags,
+        "deviceIsolationMode": config.device_isolation_mode,
+        "reservedUserId": config.reserved_user_id,
+    }
+
+    return {key: value for key, value in payload.items() if value is not None}
+
+
 def serialize_active_connections(
     active_connections: dict[str, ActiveConnectionState],
 ) -> list[dict[str, Any]]:
@@ -178,9 +201,11 @@ def write_worker_status(
     last_error: str | None = None,
     pinned_connection_id: str | None = None,
 ) -> None:
+    worker_host_meta = build_worker_host_policy_meta(config)
     status_writer.write(
         {
             "workerId": config.worker_id,
+            "hostId": config.host_id,
             "pid": os.getpid(),
             "mode": config.mode,
             "state": state,
@@ -194,6 +219,11 @@ def write_worker_status(
             "tickReplaySeconds": config.tick_replay_seconds,
             "fullReconcileMinutes": config.full_reconcile_minutes,
             "postExitTrackingSeconds": config.post_exit_tracking_seconds,
+            "hostCountryCode": config.host_country_code,
+            "hostRegionGroup": worker_host_meta.get("hostRegionGroup"),
+            "hostTimezone": config.host_timezone,
+            "deviceIsolationMode": config.device_isolation_mode,
+            "deviceProfileId": config.device_profile_id,
             "sessionsRoot": config.sessions_root,
             "statusRoot": config.status_root,
             "terminalPath": config.terminal_path,
@@ -209,7 +239,7 @@ def write_worker_status(
 def process_connection(
     client: ControlPlaneClient,
     adapter: Any,
-    worker_id: str,
+    config: WorkerConfig,
     connection_id: str,
     lookback_days: int,
     *,
@@ -218,28 +248,43 @@ def process_connection(
     bootstrap = client.get_connection(connection_id)
     if enforce_live_lease:
         assert_connection_is_live(bootstrap, connection_id)
+    host_policy_violation = validate_connection_host_policy(config, bootstrap)
+    if host_policy_violation is not None:
+        raise InactiveConnectionError(
+            connection_id,
+            reason="host_policy_mismatch",
+            meta=host_policy_violation,
+        )
 
-    session_key = f"{worker_id}:{connection_id}"
+    session_key = f"{config.worker_id}:{connection_id}"
+    worker_host_meta = build_worker_host_policy_meta(config)
 
     best_effort_report_status(
         client,
-        worker_id,
+        config.worker_id,
         connection_id=connection_id,
-        worker_host_id=worker_id,
+        worker_host_id=config.worker_id,
+        host_id=config.host_id,
         status="bootstrapping",
         session_key=session_key,
         meta={
             "phase": "bootstrap",
+            **worker_host_meta,
         },
     )
 
     frame = adapter.collect_frame(bootstrap, lookback_days=lookback_days)
+    session_meta = frame.get("session", {}).get("meta", {}) or {}
     frame["session"] = {
         **frame.get("session", {}),
-        "workerHostId": worker_id,
+        "workerHostId": config.worker_id,
         "sessionKey": session_key,
         "status": "syncing",
         "heartbeatAt": to_api_timestamp(datetime.now(timezone.utc)),
+        "meta": {
+            **session_meta,
+            **worker_host_meta,
+        },
     }
 
     result = client.ingest_sync(frame)
@@ -283,26 +328,17 @@ def process_connection(
         1 for copy_result in copy_results if copy_result.get("success") is True
     )
     copy_failure_count = len(copy_results) - copy_success_count
-    best_effort_report_status(
-        client,
-        worker_id,
-        connection_id=connection_id,
-        worker_host_id=worker_id,
-        status="active",
-        session_key=session_key,
-        meta={
-            "phase": "idle",
-            **session_meta,
-            "lastSyncedAt": synced_at.isoformat(),
-            "lastResult": result,
-            "copySignalsFetched": len(copy_signals),
-            "copySignalsExecuted": copy_success_count,
-            "copySignalsFailed": copy_failure_count,
-        },
-    )
+    final_meta = {
+        **session_meta,
+        "lastSyncedAt": synced_at.isoformat(),
+        "lastResult": result,
+        "copySignalsFetched": len(copy_signals),
+        "copySignalsExecuted": copy_success_count,
+        "copySignalsFailed": copy_failure_count,
+    }
 
     print(
-        f"[mt5-worker {worker_id}] synced {connection_id}: "
+        f"[mt5-worker {config.worker_id}] synced {connection_id}: "
         f"deals={result.get('dealEventsInserted', 0)} "
         f"trades={result.get('tradesProjected', 0)} "
         f"positions={result.get('openPositionsUpserted', 0)} "
@@ -314,7 +350,7 @@ def process_connection(
     return ActiveConnectionState(
         connection_id=connection_id,
         session_key=session_key,
-        last_meta=session_meta,
+        last_meta=final_meta,
         last_synced_at=synced_at,
         last_heartbeat_at=synced_at,
     )
@@ -325,6 +361,7 @@ def emit_idle_heartbeats(
     adapter: Any,
     active_connections: dict[str, ActiveConnectionState],
     worker_id: str,
+    host_id: str,
     heartbeat_seconds: int,
     processed_connection_ids: set[str],
 ) -> None:
@@ -350,6 +387,7 @@ def emit_idle_heartbeats(
             worker_id,
             connection_id=connection_id,
             worker_host_id=worker_id,
+            host_id=host_id,
             status="active",
             session_key=state.session_key,
             meta={
@@ -405,31 +443,26 @@ def main() -> int:
     )
 
     try:
+        exit_after_cycle = bool(args.connection_id) or args.once
         while True:
-            processed_connection_ids: set[str] = set()
             loop_error: str | None = None
+            fatal_error = False
             try:
+                claimed = []
                 if args.connection_id:
-                    state = process_connection(
-                        client=client,
-                        adapter=adapter,
-                        worker_id=config.worker_id,
-                        connection_id=args.connection_id,
-                        lookback_days=config.lookback_days,
-                        enforce_live_lease=False,
-                    )
-                    active_connections[args.connection_id] = state
-                    processed_connection_ids.add(args.connection_id)
+                    claimed = [
+                        {
+                            "connectionId": args.connection_id,
+                            "claimMode": "cold",
+                            "enforceLiveLease": False,
+                        }
+                    ]
                 else:
-                    connection_ids_to_process = list(active_connections.keys())
-                    remaining_capacity = max(
-                        0,
-                        config.claim_limit - len(connection_ids_to_process),
-                    )
-                    claimed = (
-                        client.claim_connections(config.worker_id, remaining_capacity)
-                        if remaining_capacity > 0
-                        else []
+                    claimed = client.claim_connections(
+                        host_id=config.host_id,
+                        worker_id=config.worker_id,
+                        limit=config.claim_limit,
+                        host=build_claim_host_payload(config),
                     )
                     if claimed:
                         log_message(
@@ -437,91 +470,110 @@ def main() -> int:
                             f"claimed {len(claimed)} connection(s)",
                         )
 
-                    for connection in claimed:
-                        connection_id = connection["connectionId"]
-                        if connection_id not in connection_ids_to_process:
-                            connection_ids_to_process.append(connection_id)
-
-                    for connection_id in connection_ids_to_process:
-                        try:
-                            state = process_connection(
-                                client=client,
-                                adapter=adapter,
-                                worker_id=config.worker_id,
-                                connection_id=connection_id,
-                                lookback_days=config.lookback_days,
-                                enforce_live_lease=True,
-                            )
-                            active_connections[connection_id] = state
-                            processed_connection_ids.add(connection_id)
-                        except InactiveConnectionError as error:
-                            previous_state = active_connections.pop(connection_id, None)
-                            best_effort_release_connection(
-                                adapter,
-                                config.worker_id,
-                                connection_id,
-                            )
+                for connection in claimed:
+                    connection_id = connection["connectionId"]
+                    claim_mode = str(connection.get("claimMode", "cold"))
+                    enforce_live_lease = bool(connection.get("enforceLiveLease", False))
+                    try:
+                        state = process_connection(
+                            client=client,
+                            adapter=adapter,
+                            config=config,
+                            connection_id=connection_id,
+                            lookback_days=config.lookback_days,
+                            enforce_live_lease=enforce_live_lease,
+                        )
+                        best_effort_release_connection(
+                            adapter,
+                            config.worker_id,
+                            connection_id,
+                        )
+                        best_effort_report_status(
+                            client,
+                            config.worker_id,
+                            connection_id=connection_id,
+                            worker_host_id=config.worker_id,
+                            host_id=config.host_id,
+                            status="idle",
+                            session_key=state.session_key,
+                            meta={
+                                **state.last_meta,
+                                "phase": "queued",
+                                "sleepReason": "short_sync_complete",
+                                "claimMode": claim_mode,
+                                "enforceLiveLease": enforce_live_lease,
+                                "queuedAt": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        log_message(
+                            config.worker_id,
+                            f"synced and queued {connection_id}",
+                        )
+                    except InactiveConnectionError as error:
+                        best_effort_release_connection(
+                            adapter,
+                            config.worker_id,
+                            connection_id,
+                        )
+                        best_effort_report_status(
+                            client,
+                            config.worker_id,
+                            connection_id=connection_id,
+                            worker_host_id=config.worker_id,
+                            host_id=config.host_id,
+                            status="sleeping",
+                            session_key=f"{config.worker_id}:{connection_id}",
+                            meta={
+                                **error.meta,
+                                "phase": "queued",
+                                "sleepReason": error.reason,
+                                "claimMode": claim_mode,
+                                "enforceLiveLease": enforce_live_lease,
+                                "queuedAt": datetime.now(timezone.utc).isoformat(),
+                            },
+                        )
+                        log_message(
+                            config.worker_id,
+                            f"released {connection_id}: {error.reason}",
+                        )
+                    except Exception as error:  # noqa: BLE001
+                        retryable_control_plane_error = is_retryable_control_plane_error(
+                            error
+                        )
+                        best_effort_release_connection(
+                            adapter,
+                            config.worker_id,
+                            connection_id,
+                        )
+                        if not retryable_control_plane_error:
                             best_effort_report_status(
                                 client,
                                 config.worker_id,
                                 connection_id=connection_id,
                                 worker_host_id=config.worker_id,
-                                status="sleeping",
-                                session_key=(
-                                    previous_state.session_key
-                                    if previous_state
-                                    else f"{config.worker_id}:{connection_id}"
-                                ),
-                                meta=error.meta,
+                                host_id=config.host_id,
+                                status="error",
+                                session_key=f"{config.worker_id}:{connection_id}",
+                                last_error=str(error),
+                                meta={
+                                    "phase": "error",
+                                    **build_worker_host_policy_meta(config),
+                                    "claimMode": claim_mode,
+                                    "enforceLiveLease": enforce_live_lease,
+                                },
                             )
                             log_message(
                                 config.worker_id,
-                                f"released {connection_id}: {error.reason}",
+                                f"failed {connection_id}: {error}",
+                                error=True,
                             )
-                        except Exception as error:  # noqa: BLE001
-                            retryable_control_plane_error = is_retryable_control_plane_error(
-                                error
-                            )
-                            if not retryable_control_plane_error:
-                                active_connections.pop(connection_id, None)
-                                best_effort_release_connection(
-                                    adapter,
-                                    config.worker_id,
-                                    connection_id,
-                                )
+                        else:
                             loop_error = str(error)
-                            if not retryable_control_plane_error:
-                                best_effort_report_status(
-                                    client,
-                                    config.worker_id,
-                                    connection_id=connection_id,
-                                    worker_host_id=config.worker_id,
-                                    status="error",
-                                    session_key=f"{config.worker_id}:{connection_id}",
-                                    last_error=str(error),
-                                    meta={
-                                        "phase": "error",
-                                    },
-                                )
-                                log_message(
-                                    config.worker_id,
-                                    f"failed {connection_id}: {error}",
-                                    error=True,
-                                )
-                            else:
-                                log_message(
-                                    config.worker_id,
-                                    f"temporary control-plane error for {connection_id}: {error}",
-                                )
-
-                    emit_idle_heartbeats(
-                        client=client,
-                        adapter=adapter,
-                        active_connections=active_connections,
-                        worker_id=config.worker_id,
-                        heartbeat_seconds=config.heartbeat_seconds,
-                        processed_connection_ids=processed_connection_ids,
-                    )
+                            log_message(
+                                config.worker_id,
+                                f"temporary control-plane error for {connection_id}: {error}",
+                            )
+                        fatal_error = fatal_error or not retryable_control_plane_error
 
                 last_error = loop_error
                 write_worker_status(
@@ -529,8 +581,8 @@ def main() -> int:
                     config,
                     started_at=started_at,
                     active_connections=active_connections,
-                    state="running",
-                    phase="idle",
+                    state="running" if not fatal_error else "degraded",
+                    phase="idle" if not fatal_error else "error",
                     last_error=last_error,
                     pinned_connection_id=args.connection_id,
                 )
@@ -557,7 +609,7 @@ def main() -> int:
                     last_error=last_error,
                     pinned_connection_id=args.connection_id,
                 )
-                if args.once:
+                if exit_after_cycle:
                     write_worker_status(
                         status_writer,
                         config,
@@ -570,24 +622,20 @@ def main() -> int:
                     )
                     return 1
 
-            if args.once:
+            if exit_after_cycle:
                 write_worker_status(
                     status_writer,
                     config,
                     started_at=started_at,
                     active_connections=active_connections,
-                    state="stopped",
-                    phase="idle",
+                    state="stopped" if not fatal_error else "degraded",
+                    phase="idle" if not fatal_error else "error",
                     last_error=last_error,
                     pinned_connection_id=args.connection_id,
                 )
-                return 0
+                return 1 if fatal_error else 0
 
-            sleep_seconds = config.poll_seconds
-            if not args.connection_id and len(active_connections) == 0:
-                sleep_seconds = min(config.poll_seconds, 10)
-
-            time.sleep(sleep_seconds)
+            time.sleep(config.poll_seconds)
     finally:
         try:
             adapter.close()

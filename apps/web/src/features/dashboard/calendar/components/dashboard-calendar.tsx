@@ -105,6 +105,13 @@ async function loadLiveTrades(accountId: string) {
 
 type DashboardCalendarProps = {
   accountId?: string;
+  initialRange?: CalendarRange | null;
+  initialViewMode?: ViewMode;
+  initialHeatmapEnabled?: boolean;
+  initialGoalOverlay?: boolean;
+  showPresets?: boolean;
+  showShareButton?: boolean;
+  readOnly?: boolean;
   summaryWidgets?: CalendarWidgetType[];
   summaryWidgetSpans?: Partial<Record<CalendarWidgetType, number>>;
   onApplyPreset?: (
@@ -115,6 +122,13 @@ type DashboardCalendarProps = {
 
 export default function DashboardCalendar({
   accountId,
+  initialRange = null,
+  initialViewMode = "month",
+  initialHeatmapEnabled = false,
+  initialGoalOverlay = false,
+  showPresets = true,
+  showShareButton = true,
+  readOnly = false,
   summaryWidgets = DEFAULT_CALENDAR_WIDGETS,
   summaryWidgetSpans = DEFAULT_CALENDAR_WIDGET_SPANS,
   onApplyPreset,
@@ -122,16 +136,16 @@ export default function DashboardCalendar({
   const exportRef = useRef<HTMLDivElement | null>(null);
   const [days, setDays] = useState<DayRow[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState<CalendarRange | null>(null);
+  const [range, setRange] = useState<CalendarRange | null>(initialRange);
   const [bounds, setBounds] = useState<{
     minISO: string;
     maxISO: string;
   } | null>(null);
   const [initialBalance, setInitialBalance] = useState<number | null>(null);
   const [hoveredISO, setHoveredISO] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("month");
-  const [heatmapEnabled, setHeatmapEnabled] = useState(false);
-  const [goalOverlay, setGoalOverlay] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
+  const [heatmapEnabled, setHeatmapEnabled] = useState(initialHeatmapEnabled);
+  const [goalOverlay, setGoalOverlay] = useState(initialGoalOverlay);
   const [goals, setGoals] = useState<CalendarGoal[]>([]);
   const [rangeSummary, setRangeSummary] = useState<RangeSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -388,34 +402,41 @@ export default function DashboardCalendar({
           nextBounds;
         const minDate = new Date(nextEffectiveBounds.minISO);
         const maxDate = new Date(nextEffectiveBounds.maxISO);
-        const visibleRange =
-          viewMode === "month"
+        const preferredRange =
+          readOnly && initialRange
             ? clampRange(
-                startOfMonth(maxDate),
-                endOfMonth(maxDate),
+                initialRange.start,
+                initialRange.end,
                 minDate,
                 maxDate
               )
-            : clampRange(
-                startOfWeek(maxDate),
-                endOfWeek(maxDate),
-                minDate,
-                maxDate
-              );
+            : viewMode === "month"
+              ? clampRange(
+                  startOfMonth(maxDate),
+                  endOfMonth(maxDate),
+                  minDate,
+                  maxDate
+                )
+              : clampRange(
+                  startOfWeek(maxDate),
+                  endOfWeek(maxDate),
+                  minDate,
+                  maxDate
+                );
         const fetchRange =
           viewMode === "month"
             ? {
-                start: startOfMonth(visibleRange.start),
-                end: addDays(endOfMonth(visibleRange.start), 14),
+                start: startOfMonth(preferredRange.start),
+                end: addDays(endOfMonth(preferredRange.start), 14),
               }
-            : visibleRange;
+            : preferredRange;
 
         if (mounted) {
           setBounds(nextBounds);
-          setRange(visibleRange);
+          setRange(preferredRange);
           useDateRangeStore
             .getState()
-            .setRange(visibleRange.start, visibleRange.end);
+            .setRange(preferredRange.start, preferredRange.end);
           useDateRangeStore.getState().setBounds(minDate, maxDate);
         }
 
@@ -441,7 +462,7 @@ export default function DashboardCalendar({
     return () => {
       mounted = false;
     };
-  }, [accountId, viewMode]);
+  }, [accountId, initialRange, readOnly, viewMode]);
 
   useEffect(() => {
     if (!accountId) {
@@ -546,6 +567,7 @@ export default function DashboardCalendar({
     end: Date,
     nextViewMode: ViewMode = viewMode
   ) => {
+    if (readOnly) return;
     if (!accountId) return;
 
     let nextStart = new Date(start);
@@ -591,6 +613,7 @@ export default function DashboardCalendar({
   };
 
   const handleViewChange = (mode: ViewMode) => {
+    if (readOnly) return;
     if (mode === viewMode) return;
 
     setViewMode(mode);
@@ -627,6 +650,7 @@ export default function DashboardCalendar({
   };
 
   const handleDayClick = (dateISO: string) => {
+    if (readOnly) return;
     const day = fromDateISO(dateISO);
     const start = startOfDay(day);
     const end = endOfDay(day);
@@ -639,6 +663,7 @@ export default function DashboardCalendar({
   };
 
   const handlePeriodStep = (direction: -1 | 1) => {
+    if (readOnly) return;
     if (!range || !effectiveBounds) return;
 
     const minDate = new Date(effectiveBounds.minISO);
@@ -683,7 +708,7 @@ export default function DashboardCalendar({
   };
 
   return (
-    <div ref={exportRef} className="flex w-full flex-col gap-3">
+    <div ref={exportRef} className="flex w-full flex-col gap-4">
       <CalendarControls
         days={calendarDays}
         bounds={effectiveBounds}
@@ -696,6 +721,9 @@ export default function DashboardCalendar({
         heatmapEnabled={heatmapEnabled}
         goalOverlay={goalOverlay}
         exportTargetRef={exportRef}
+        showPresets={showPresets}
+        showShareButton={showShareButton}
+        readOnly={readOnly}
         summaryWidgets={summaryWidgets}
         summaryWidgetSpans={summaryWidgetSpans}
         onRangeChange={handleRangeChange}

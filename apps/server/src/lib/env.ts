@@ -25,6 +25,7 @@ const stripeBillingPortalConfigurationSchema = z
 const serverEnvSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   BETTER_AUTH_SECRET: z.string().min(1).optional(),
+  SHARE_VERIFICATION_SECRET: z.string().min(1).optional(),
   BETTER_AUTH_URL: z.string().min(1).optional(),
   CREDENTIAL_ENCRYPTION_KEY: z.string().min(1).optional(),
   BROKER_WORKER_SECRET: z.string().min(1).optional(),

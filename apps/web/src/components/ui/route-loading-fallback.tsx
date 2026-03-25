@@ -27,6 +27,7 @@ const ROUTE_LOADING_COPY = {
   propTracker: "Checking limits, phases, and prop account pace...",
   publicProof: "Pulling together the public track record and account proof...",
   publicProofTrades: "Loading the public trade ledger and execution history...",
+  verification: "Validating the signature and resolving the verification record...",
   referrals: "Counting invites, clicks, and referral momentum...",
   reports: "Compiling the breakdowns, scorecards, and report views...",
   settings: "Opening the control room and loading your settings...",

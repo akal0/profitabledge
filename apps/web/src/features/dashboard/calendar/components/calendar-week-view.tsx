@@ -152,8 +152,8 @@ export function CalendarWeekView({
             className={cn(
               "flex min-h-[180px] w-full cursor-pointer flex-col border-black/10 bg-white p-5 transition-colors duration-250 hover:bg-sidebar-accent dark:border-white/5 dark:bg-sidebar",
               isSingleDayView
-                ? "rounded-sm border"
-                : "first:rounded-l-sm last:rounded-r-sm first:border not-first:border not-last:border-l-0 last:border-l-0"
+                ? "rounded-md border"
+                : "first:rounded-l-md last:rounded-r-md first:border not-first:border not-last:border-l-0 last:border-l-0"
             )}
             role="button"
             tabIndex={0}

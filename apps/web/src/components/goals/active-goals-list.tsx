@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { MoreVertical, Trash2, Edit, Pause, Play } from "lucide-react";
+import { MoreVertical, Plus, Trash2, Edit, Pause, Play } from "lucide-react";
 import { ProgressRing } from "./progress-ring";
 import { goalTemplates } from "./goal-templates";
 import { toSentenceCaseTitle } from "./goal-text";
@@ -16,6 +16,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
+import { parseGoalDate } from "@/lib/goals-dates";
 
 interface Goal {
   id: string;
@@ -72,6 +75,8 @@ interface ActiveGoalsListProps {
   onResume?: (id: string) => void;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyActionLabel?: string;
+  onEmptyAction?: () => void;
 }
 
 export function ActiveGoalsList({
@@ -82,6 +87,8 @@ export function ActiveGoalsList({
   onResume,
   emptyTitle = "No active goals yet",
   emptyDescription = "Create a goal to get started",
+  emptyActionLabel,
+  onEmptyAction,
 }: ActiveGoalsListProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
@@ -94,7 +101,8 @@ export function ActiveGoalsList({
   const getDeadlineText = (goal: Goal) => {
     if (!goal.deadline) return "No deadline";
 
-    const deadline = new Date(goal.deadline);
+    const deadline = parseGoalDate(goal.deadline);
+    if (!deadline) return "No deadline";
     const now = new Date();
     const diff = deadline.getTime() - now.getTime();
     const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
@@ -118,6 +126,20 @@ export function ActiveGoalsList({
         <div className="py-12 text-center">
           <p className="text-sm text-white/40">{emptyTitle}</p>
           <p className="mt-2 text-xs text-white/30">{emptyDescription}</p>
+          {onEmptyAction ? (
+            <Button
+              type="button"
+              onClick={onEmptyAction}
+              className={getPropAssignActionButtonClassName({
+                tone: "neutral",
+                size: "default",
+                className: "mt-4 gap-1.5 text-white",
+              })}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {emptyActionLabel ?? "Create goal"}
+            </Button>
+          ) : null}
         </div>
       </GoalSurface>
     );
@@ -125,17 +147,14 @@ export function ActiveGoalsList({
 
   return (
     <div className="space-y-4">
-      {goals.map((goal, index) => {
+      {goals.map((goal) => {
         const progress = getProgress(goal);
         const color = getColorForType(goal.targetType);
         const isHovered = hoveredId === goal.id;
 
         return (
-          <motion.div
+          <div
             key={goal.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.05 }}
             onMouseEnter={() => setHoveredId(goal.id)}
             onMouseLeave={() => setHoveredId(null)}
           >
@@ -252,7 +271,7 @@ export function ActiveGoalsList({
                 </div>
               </div>
             </GoalSurface>
-          </motion.div>
+          </div>
         );
       })}
     </div>

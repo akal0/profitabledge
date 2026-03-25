@@ -27,6 +27,7 @@ import { billingRouter } from "./billing";
 import { symbolMappingsRouter } from "./symbol-mappings";
 import { proofRouter } from "./proof";
 import { reportsRouter } from "./reports";
+import { verificationRouter } from "./verification";
 
 export const appRouter = router({
   upload: uploadRouter,
@@ -57,5 +58,6 @@ export const appRouter = router({
   symbolMappings: symbolMappingsRouter,
   proof: proofRouter,
   reports: reportsRouter,
+  verification: verificationRouter,
 });
 export type AppRouter = typeof appRouter;

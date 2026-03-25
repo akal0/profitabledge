@@ -49,8 +49,11 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   formatSizingNumber,
   getEstimatedPipSize,
+  inferManualTradeAssetClass,
   mergeManualTradeSizingPreferences,
   resolveManualTradeSizing,
+  type ManualTradeAssetClass,
+  type ManualTradeSizingProfile,
   type ManualTradeSizingPreferences,
 } from "@/lib/manual-trade-sizing";
 import {
@@ -83,6 +86,13 @@ type NamedTradeTag = {
 
 type WorkspaceTab = "single" | "capture" | "bulk" | "open";
 type EntryMode = "closed" | "open";
+type ManualTradeMarketType =
+  | "auto"
+  | "forex"
+  | "indices"
+  | "commodities"
+  | "crypto"
+  | "futures";
 
 type ManualOpenTradeRow = {
   id: string;
@@ -120,6 +130,125 @@ const COMMON_SYMBOLS = [
   "BTCUSD",
   "ETHUSD",
 ];
+
+const MANUAL_FUTURES_SYMBOL_PATTERN = /^([A-Z0-9]{1,5})([FGHJKMNQUVXZ])(\d{1,4})$/;
+
+const MANUAL_MARKET_OPTIONS: Array<{
+  value: ManualTradeMarketType;
+  label: string;
+}> = [
+  { value: "auto", label: "Auto" },
+  { value: "forex", label: "Forex" },
+  { value: "indices", label: "Indices" },
+  { value: "commodities", label: "Commodities" },
+  { value: "crypto", label: "Crypto" },
+  { value: "futures", label: "Futures" },
+];
+
+function formatMarketTypeLabel(value: ManualTradeMarketType) {
+  switch (value) {
+    case "auto":
+      return "Auto";
+    case "forex":
+      return "Forex";
+    case "indices":
+      return "Indices";
+    case "commodities":
+      return "Commodities";
+    case "crypto":
+      return "Crypto";
+    case "futures":
+      return "Futures";
+    default:
+      return "Auto";
+  }
+}
+
+function inferMarketTypeFromSymbol(symbol: string): ManualTradeMarketType {
+  const normalized = symbol.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!normalized) {
+    return "auto";
+  }
+
+  if (MANUAL_FUTURES_SYMBOL_PATTERN.test(normalized)) {
+    return "futures";
+  }
+
+  switch (inferManualTradeAssetClass(symbol)) {
+    case "forex":
+      return "forex";
+    case "crypto":
+      return "crypto";
+    case "indices":
+      return "indices";
+    case "metals":
+    case "energy":
+      return "commodities";
+    case "rates":
+    case "agriculture":
+      return "futures";
+    default:
+      return "auto";
+  }
+}
+
+function buildMarketSizingProfile(
+  marketType: ManualTradeMarketType,
+  profiles: Record<ManualTradeAssetClass, ManualTradeSizingProfile>
+): { assetClass: ManualTradeAssetClass; profile: ManualTradeSizingProfile } {
+  switch (marketType) {
+    case "forex":
+      return { assetClass: "forex", profile: profiles.forex };
+    case "indices":
+      return { assetClass: "indices", profile: profiles.indices };
+    case "commodities":
+      return {
+        assetClass: "metals",
+        profile: {
+          ...profiles.metals,
+          label: "Commodities",
+          unitLabel: "lots",
+          quickSizes: profiles.metals.quickSizes,
+        },
+      };
+    case "crypto":
+      return { assetClass: "crypto", profile: profiles.crypto };
+    case "futures":
+      return {
+        assetClass: "other",
+        profile: {
+          label: "Futures",
+          unitLabel: "contracts",
+          defaultVolume: 1,
+          minVolume: 1,
+          volumeStep: 1,
+          contractSize: 1,
+          quickSizes: [1, 2, 3, 5],
+        },
+      };
+    case "auto":
+    default:
+      return { assetClass: "forex", profile: profiles.forex };
+  }
+}
+
+function getCustomSymbolPlaceholder(marketType: ManualTradeMarketType) {
+  switch (marketType) {
+    case "forex":
+      return "Enter symbol (e.g. EURUSD)";
+    case "indices":
+      return "Enter symbol (e.g. NAS100)";
+    case "commodities":
+      return "Enter symbol (e.g. XAUUSD)";
+    case "crypto":
+      return "Enter symbol (e.g. BTCUSD)";
+    case "futures":
+      return "Enter contract (e.g. NQM26)";
+    case "auto":
+    default:
+      return "Enter symbol (e.g. EURUSD)";
+  }
+}
 
 function createRoundedNow() {
   const now = new Date();
@@ -250,6 +379,8 @@ export function QuickTradeEntry({
   const [activeOpenTradeId, setActiveOpenTradeId] = useState<string | null>(
     null
   );
+  const [manualMarketType, setManualMarketType] =
+    useState<ManualTradeMarketType>("auto");
 
   const [symbol, setSymbol] = useState("");
   const [customSymbol, setCustomSymbol] = useState("");
@@ -352,6 +483,24 @@ export function QuickTradeEntry({
 
     return result;
   }, [recentSymbols]);
+  const filteredSymbolOptions = useMemo(() => {
+    const matchingOptions =
+      manualMarketType === "auto"
+        ? symbolOptions
+        : symbolOptions.filter(
+            (option) => inferMarketTypeFromSymbol(option) === manualMarketType
+          );
+
+    if (
+      symbol &&
+      symbol !== "custom" &&
+      !matchingOptions.includes(symbol.toUpperCase())
+    ) {
+      return [symbol.toUpperCase(), ...matchingOptions];
+    }
+
+    return matchingOptions;
+  }, [manualMarketType, symbol, symbolOptions]);
 
   const effectiveSymbol =
     symbol === "custom" ? customSymbol.trim().toUpperCase() : symbol;
@@ -364,16 +513,73 @@ export function QuickTradeEntry({
       )?.manualTradeSizing ?? {},
     [advancedPrefsQuery.data]
   );
-  const fallbackSizingProfile = useMemo(
-    () => mergeManualTradeSizingPreferences(manualTradeSizing).forex,
+  const mergedSizingProfiles = useMemo(
+    () => mergeManualTradeSizingPreferences(manualTradeSizing),
     [manualTradeSizing]
   );
-  const resolvedSizing = useMemo(
+  const marketSizing = useMemo(
+    () => buildMarketSizingProfile(manualMarketType, mergedSizingProfiles),
+    [manualMarketType, mergedSizingProfiles]
+  );
+  const symbolSizing = useMemo(
     () =>
       effectiveSymbol
         ? resolveManualTradeSizing(effectiveSymbol, manualTradeSizing)
-        : { assetClass: "forex" as const, profile: fallbackSizingProfile },
-    [effectiveSymbol, fallbackSizingProfile, manualTradeSizing]
+        : null,
+    [effectiveSymbol, manualTradeSizing]
+  );
+  const resolvedSizing = useMemo(() => {
+    if (!symbolSizing) {
+      return marketSizing;
+    }
+
+    if (
+      symbol === "custom" &&
+      manualMarketType !== "auto" &&
+      symbolSizing.assetClass === "other"
+    ) {
+      return marketSizing;
+    }
+
+    return symbolSizing;
+  }, [manualMarketType, marketSizing, symbol, symbolSizing]);
+  const customSymbolNeedsResolution = Boolean(
+    symbol === "custom" &&
+      effectiveSymbol &&
+      symbolSizing &&
+      symbolSizing.assetClass === "other"
+  );
+  const sizingContextLabel = useMemo(() => {
+    if (resolvedSizing === marketSizing) {
+      return manualMarketType === "auto"
+        ? "Forex"
+        : formatMarketTypeLabel(manualMarketType);
+    }
+
+    return formatAssetClassLabel(resolvedSizing.assetClass);
+  }, [manualMarketType, marketSizing, resolvedSizing]);
+  const volumeHint = useMemo(() => {
+    if (customSymbolNeedsResolution) {
+      return manualMarketType === "auto"
+        ? "Use a recognizable symbol so the exact pip and contract sizing can be calculated."
+        : `${formatMarketTypeLabel(
+            manualMarketType
+          )} sizing is active until the custom symbol resolves to a more specific market.`;
+    }
+
+    if (!effectiveSymbol && manualMarketType === "futures") {
+      return "Choose a contract symbol to apply the exact contract size.";
+    }
+
+    if (!effectiveSymbol && manualMarketType === "commodities") {
+      return "Choose a spot symbol to refine the contract size for metals or energy.";
+    }
+
+    return null;
+  }, [customSymbolNeedsResolution, effectiveSymbol, manualMarketType]);
+  const customSymbolPlaceholder = useMemo(
+    () => getCustomSymbolPlaceholder(manualMarketType),
+    [manualMarketType]
   );
   const volumeQuickSizes = useMemo(
     () =>
@@ -448,6 +654,9 @@ export function QuickTradeEntry({
     if (!effectiveSymbol || !parsedOpenPrice || !parsedVolume) {
       return null;
     }
+    if (customSymbolNeedsResolution) {
+      return null;
+    }
 
     if (entryMode === "open" && !parsedClosePrice) {
       return 0;
@@ -468,6 +677,7 @@ export function QuickTradeEntry({
     entryMode,
     effectiveSymbol,
     parsedClosePrice,
+    customSymbolNeedsResolution,
     parsedOpenPrice,
     parsedVolume,
     resolvedSizing.profile.contractSize,
@@ -478,6 +688,9 @@ export function QuickTradeEntry({
 
   const estimatedPips = useMemo(() => {
     if (!effectiveSymbol || !parsedOpenPrice) {
+      return null;
+    }
+    if (customSymbolNeedsResolution) {
       return null;
     }
 
@@ -495,7 +708,14 @@ export function QuickTradeEntry({
         : parsedOpenPrice - parsedClosePrice;
 
     return priceDiff / getEstimatedPipSize(effectiveSymbol);
-  }, [effectiveSymbol, entryMode, parsedClosePrice, parsedOpenPrice, tradeType]);
+  }, [
+    customSymbolNeedsResolution,
+    effectiveSymbol,
+    entryMode,
+    parsedClosePrice,
+    parsedOpenPrice,
+    tradeType,
+  ]);
 
   const plannedRR = useMemo(() => {
     if (!parsedOpenPrice || parsedSl === null || parsedTp === null) {
@@ -595,13 +815,12 @@ export function QuickTradeEntry({
     setWorkspaceTab("single");
     setEntryMode("closed");
     setActiveOpenTradeId(null);
+    setManualMarketType("auto");
     setSymbol("");
     setCustomSymbol("");
     setTradeType("long");
     setVolume(
-      formatVolumeInputValue(
-        mergeManualTradeSizingPreferences(manualTradeSizing).forex.defaultVolume
-      )
+      formatVolumeInputValue(mergeManualTradeSizingPreferences(manualTradeSizing).forex.defaultVolume)
     );
     setOpenPrice("");
     setClosePrice("");
@@ -682,6 +901,9 @@ export function QuickTradeEntry({
     setWorkspaceTab("single");
     setActiveOpenTradeId(null);
     setEntryMode(result.derived.isOpenTrade.value ? "open" : "closed");
+    setManualMarketType(
+      detectedSymbol ? inferMarketTypeFromSymbol(detectedSymbol) : "auto"
+    );
     setSymbol(
       detectedSymbol
         ? useCustomSymbol
@@ -721,6 +943,9 @@ export function QuickTradeEntry({
     setWorkspaceTab("single");
     setEntryMode("closed");
     setActiveOpenTradeId(row.id);
+    setManualMarketType(
+      detectedSymbol ? inferMarketTypeFromSymbol(detectedSymbol) : "auto"
+    );
     setSymbol(
       detectedSymbol
         ? useCustomSymbol
@@ -1125,19 +1350,53 @@ export function QuickTradeEntry({
 
           <div className="px-6 py-3">
             <h3 className="text-xs font-semibold tracking-wide text-white/70">
-              Symbol & direction
+              Market, symbol & direction
             </h3>
           </div>
           <Separator />
           <div className="space-y-4 px-6 py-5">
             <div className="space-y-2">
+              <Label className="text-xs text-white/50">Asset type</Label>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {MANUAL_MARKET_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={cn(
+                      TRADE_SURFACE_CARD_CLASS,
+                      "flex min-h-9 cursor-pointer items-center justify-center px-3 py-2 text-xs font-semibold transition-colors",
+                      manualMarketType === option.value
+                        ? TRADE_IDENTIFIER_TONES.info
+                        : "text-white/45 hover:text-white/70"
+                    )}
+                    onClick={() => setManualMarketType(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-5 text-white/35">
+                Pick a market first to get the right default size and the most
+                common quick sizes before you lock in the symbol.
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label className="text-xs text-white/50">Symbol</Label>
-              <Select value={symbol} onValueChange={setSymbol}>
+              <Select
+                value={symbol}
+                onValueChange={(nextValue) => {
+                  setSymbol(nextValue);
+                  if (nextValue !== "custom") {
+                    setManualMarketType(inferMarketTypeFromSymbol(nextValue));
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select symbol" />
                 </SelectTrigger>
                 <SelectContent>
-                  {symbolOptions.map((option) => (
+                  {filteredSymbolOptions.map((option) => (
                     <SelectItem key={option} value={option}>
                       {option}
                     </SelectItem>
@@ -1147,7 +1406,7 @@ export function QuickTradeEntry({
               </Select>
               {symbol === "custom" && (
                 <Input
-                  placeholder="Enter symbol (e.g. EURUSD)"
+                  placeholder={customSymbolPlaceholder}
                   value={customSymbol}
                   onChange={(event) =>
                     setCustomSymbol(event.target.value.toUpperCase())
@@ -1213,14 +1472,24 @@ export function QuickTradeEntry({
                   onChange={(event) => setVolume(event.target.value)}
                 />
                 <p className="text-[11px] leading-5 text-white/40">
-                  {formatAssetClassLabel(resolvedSizing.assetClass)} default{" "}
+                  {sizingContextLabel} default{" "}
                   {formatSizingNumber(resolvedSizing.profile.defaultVolume)}{" "}
                   {resolvedSizing.profile.unitLabel}. Min{" "}
                   {formatSizingNumber(resolvedSizing.profile.minVolume)} and
                   step {formatSizingNumber(resolvedSizing.profile.volumeStep)}.
-                  Contract size{" "}
-                  {formatSizingNumber(resolvedSizing.profile.contractSize)}.
+                  {effectiveSymbol ? (
+                    <>
+                      {" "}
+                      Contract size{" "}
+                      {formatSizingNumber(resolvedSizing.profile.contractSize)}.
+                    </>
+                  ) : null}
                 </p>
+                {volumeHint ? (
+                  <p className="text-[11px] leading-5 text-white/35">
+                    {volumeHint}
+                  </p>
+                ) : null}
                 <SuggestionChips
                   suggestions={volumeQuickSizes}
                   activeValue={volume}

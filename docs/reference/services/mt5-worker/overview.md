@@ -55,8 +55,30 @@ In `terminal` mode, the worker uses the last persisted sync checkpoint to fetch 
   - Optional host provider label, for example `self-hosted`, `hetzner`, `aws`, `azure`
 - `MT5_WORKER_REGION`
   - Optional region label, for example `lon1`, `eu-west-2`, `nyc3`
+- `MT5_HOST_COUNTRY_CODE`
+  - Optional host country code or label, for example `GB`, `CA`, `US`
+- `MT5_HOST_TIMEZONE`
+  - Optional host timezone, for example `Europe/London`, `America/Toronto`
+- `MT5_HOST_CITY`
+  - Optional host city label, for example `London`, `Toronto`, `Frankfurt`
+- `MT5_HOST_PUBLIC_IP`
+  - Optional operator label for the public egress identity, for example `vps-eu-west-2-01`
 - `MT5_WORKER_TAGS`
   - Optional comma-separated tags for the host, for example `mt5,ftmo,primary`
+- `MT5_WORKER_CAPABILITIES`
+  - Optional comma-separated capability labels, for example `shared,terminal-farm,vps`
+- `MT5_WORKER_ROLE`
+  - Optional host role, for example `shared` or `dedicated`. Defaults to shared-host behavior unless explicitly overridden
+- `MT5_RESERVED_USER_ID`
+  - Optional. Set this only when you want the host reserved to one Profitabledge user
+- `MT5_TRADER_ID`
+  - Optional trader or account-cluster label used by operators for human-facing notes. This does not reserve the host
+- `MT5_TRADER_COUNTRY`
+  - Optional operator note for manual runbooks
+- `MT5_TRADER_TIMEZONE`
+  - Optional operator note for manual runbooks
+- `MT5_DEVICE_PROFILE_ID`
+  - Optional stable device-profile label for the VPS host or pool. Keep it unique per logical pool, but do not assume a copied portable MT5 runtime alone creates a broker-visible new device fingerprint
 - `MT5_POLL_SECONDS`
   - Optional, default `30`
 - `MT5_HEARTBEAT_SECONDS`
@@ -102,6 +124,37 @@ In `terminal` mode, the worker uses the last persisted sync checkpoint to fetch 
   - Optional child Python executable override
 - `MT5_SUPERVISOR_CHILD_SCRIPT`
   - Optional child worker script override
+
+## VPS Hosting
+
+For production MT5 work, the default model is a shared regional VPS pool with explicit geo metadata. Do not reuse the same device profile across VPS hosts. Keep the placement metadata explicit so the operator can prove where a session is meant to live, and only reserve a host to one user when a stricter workflow requires it.
+
+The worker already copies the base MT5 install into a per-connection portable runtime directory, which isolates data folders and logs per session. That helps operationally, but it is not a guaranteed broker-visible unique device fingerprint for every trader on a shared host.
+
+Full runbook: [vps-hosting.md](./vps-hosting.md).
+
+Use the VPS wrapper when you are provisioning a new host:
+
+```powershell
+cd services/mt5-worker/windows
+.\setup-vps.ps1 `
+  -ServerUrl "http://<server>:3000" `
+  -WorkerSecret "your-shared-secret" `
+  -TerminalPath "C:\Program Files\MetaTrader 5\terminal64.exe" `
+  -DeviceProfileId "lon-shared-01" `
+  -HostLabel "mt5-lon-shared-01" `
+  -HostProvider "vps" `
+  -HostRegion "eu-west-2" `
+  -HostCountry "GB" `
+  -HostTimezone "Europe/London" `
+  -HostCity "London" `
+  -HostRole "shared" `
+  -Children 2
+```
+
+That wrapper writes the same `.env.windows` file as `setup.ps1`, but it also makes the host role, region, country, timezone, and device profile explicit. It defaults the host to `production`, `shared`, and `MT5_SUPERVISOR_CHILDREN=2` so one VPS can run a small regional pool efficiently.
+
+Canada and London should not be treated as interchangeable, and the same logic applies globally. If a trader belongs in North America, Asia, or another region and the currently available MT5 hosts are only in London or another mismatch region, the product should warn them before the MT5 connection is created. If they confirm, the connection is stored with best-effort placement. If they do not, it keeps strict regional preference and waits for a suitable host.
 
 ## Run
 
@@ -249,6 +302,8 @@ This will:
 - write `services/mt5-worker/.env.windows`
 - set a moderate terminal poll cadence for near-live updates
 - enable overlap polling plus periodic full reconciles for reliability and raw-payload backfills
+
+For a VPS that is dedicated to a single trader, use `setup-vps.ps1` instead of `setup.ps1`. The VPS wrapper requires a `DeviceProfileId`, `HostRegion`, `HostCountry`, and `HostTimezone` so the placement policy is not implicit.
 
 ### 2. Run a single real connection smoke test
 

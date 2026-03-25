@@ -23,7 +23,7 @@ function toCsvCell(value: string | number | boolean | null | undefined) {
     normalized.includes("\"") ||
     normalized.includes("\n")
   ) {
-    return `"${normalized.replaceAll("\"", "\"\"")}"`;
+    return `"${normalized.replace(/"/g, "\"\"")}"`;
   }
 
   return normalized;

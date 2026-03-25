@@ -12,6 +12,7 @@ import {
   generateMorningBriefing,
   generateSessionSummary,
   getAllMemories,
+  getLatestBriefingReviewSnapshot,
   getCurrentSessionState,
   getFullProfile,
   getPositionSizeRecommendations,
@@ -84,7 +85,25 @@ export const aiIntelligenceProcedures = {
         .orderBy(desc(traderDigest.createdAt))
         .limit(1);
 
-      return digest || null;
+      if (!digest) {
+        return null;
+      }
+
+      const fullProfile = await getFullProfile(
+        input.accountId,
+        ctx.session.user.id
+      );
+
+      const reviewSnapshot = await getLatestBriefingReviewSnapshot(
+        input.accountId,
+        fullProfile?.edges ?? [],
+        fullProfile?.leaks ?? []
+      );
+
+      return {
+        ...digest,
+        reviewSnapshot,
+      };
     }),
 
   markDigestRead: protectedProcedure

@@ -78,6 +78,74 @@ const SPOT_INDEX_ALIASES = [
 ];
 
 const FUTURES_ROOT_PATTERN = /^([A-Z0-9]{1,5})([FGHJKMNQUVXZ])(\d{1,4})$/;
+const INDEX_FUTURES_ROOTS = new Set([
+  "NQ",
+  "MNQ",
+  "ES",
+  "MES",
+  "YM",
+  "MYM",
+  "RTY",
+  "M2K",
+  "FDAX",
+  "DAX",
+  "FDXM",
+  "FESX",
+  "NKD",
+  "NIY",
+  "NK",
+  "HSI",
+  "MHI",
+  "AP",
+  "FCE",
+  "FIB",
+  "VX",
+  "VXM",
+  "DX",
+]);
+const METAL_FUTURES_ROOTS = new Set([
+  "GC",
+  "MGC",
+  "SI",
+  "SIL",
+  "PL",
+  "PA",
+  "HG",
+  "MHG",
+]);
+const ENERGY_FUTURES_ROOTS = new Set(["CL", "MCL", "BRN", "BZ", "NG", "QG"]);
+const CRYPTO_FUTURES_ROOTS = new Set(["BTC", "MBT", "ETH", "MET"]);
+const FOREX_FUTURES_ROOTS = new Set([
+  "6E",
+  "M6E",
+  "6B",
+  "M6B",
+  "6A",
+  "M6A",
+  "6N",
+  "M6N",
+  "6C",
+  "M6C",
+  "6J",
+  "MJY",
+  "6S",
+  "M6S",
+]);
+const RATE_FUTURES_ROOTS = new Set(["ZN", "ZF", "ZT", "ZB", "UB"]);
+const AGRICULTURE_FUTURES_ROOTS = new Set([
+  "ZC",
+  "XC",
+  "ZW",
+  "KE",
+  "ZS",
+  "XK",
+  "KC",
+  "SB",
+  "CC",
+  "CT",
+  "LE",
+  "HE",
+]);
 
 const DEFAULT_MANUAL_TRADE_SIZING: Record<
   ManualTradeAssetClass,
@@ -354,6 +422,402 @@ const SYMBOL_SIZING_OVERRIDES: Array<{
       quickSizes: [1, 2, 5, 10],
     },
   },
+  {
+    match: (_symbol, _loose, root) => root === "PL",
+    override: {
+      assetClass: "metals",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 50,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "PA",
+    override: {
+      assetClass: "metals",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 100,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "HG",
+    override: {
+      assetClass: "metals",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 25_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "MHG",
+    override: {
+      assetClass: "metals",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 10_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "BRN" || root === "BZ",
+    override: {
+      assetClass: "energy",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 1_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6E",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 125_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "M6E",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 12_500,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6B",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 62_500,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "M6B",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 6_250,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6A",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 100_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "M6A",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 10_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6N",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 100_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "M6N",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 10_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6C",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 100_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "M6C",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 10_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6J",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 12_500_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "MJY",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 1_250_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "6S",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 125_000,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "M6S",
+    override: {
+      assetClass: "forex",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 12_500,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ZN" || root === "ZF",
+    override: {
+      assetClass: "rates",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 1_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ZT",
+    override: {
+      assetClass: "rates",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 2_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ZB" || root === "UB",
+    override: {
+      assetClass: "rates",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 1_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ZC",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 5_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "XC",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 1_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ZW" || root === "KE",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 5_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ZS",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 5_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "XK",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 1_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "KC",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 37_500,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "SB",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 112_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "CC",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 10,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "CT",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 50_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "LE" || root === "HE",
+    override: {
+      assetClass: "agriculture",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 40_000,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "BTC",
+    override: {
+      assetClass: "crypto",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 5,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "MBT",
+    override: {
+      assetClass: "crypto",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 0.1,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "ETH",
+    override: {
+      assetClass: "crypto",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 50,
+      quickSizes: [1, 2, 3, 5],
+    },
+  },
+  {
+    match: (_symbol, _loose, root) => root === "MET",
+    override: {
+      assetClass: "crypto",
+      unitLabel: "contracts",
+      minVolume: 1,
+      volumeStep: 1,
+      contractSize: 0.1,
+      quickSizes: [1, 2, 5, 10],
+    },
+  },
 ];
 
 function extractFuturesRoot(symbol: string) {
@@ -371,6 +835,34 @@ export function inferManualTradeAssetClass(symbol: string): ManualTradeAssetClas
   );
   if (override) {
     return override.override.assetClass;
+  }
+
+  if (root && INDEX_FUTURES_ROOTS.has(root)) {
+    return "indices";
+  }
+
+  if (root && METAL_FUTURES_ROOTS.has(root)) {
+    return "metals";
+  }
+
+  if (root && ENERGY_FUTURES_ROOTS.has(root)) {
+    return "energy";
+  }
+
+  if (root && CRYPTO_FUTURES_ROOTS.has(root)) {
+    return "crypto";
+  }
+
+  if (root && FOREX_FUTURES_ROOTS.has(root)) {
+    return "forex";
+  }
+
+  if (root && RATE_FUTURES_ROOTS.has(root)) {
+    return "rates";
+  }
+
+  if (root && AGRICULTURE_FUTURES_ROOTS.has(root)) {
+    return "agriculture";
   }
 
   if (
@@ -414,19 +906,6 @@ export function inferManualTradeAssetClass(symbol: string): ManualTradeAssetClas
     normalized.endsWith("USDC")
   ) {
     return "crypto";
-  }
-
-  if (root && ["ZN", "ZF", "ZT", "ZB", "UB"].includes(root)) {
-    return "rates";
-  }
-
-  if (
-    root &&
-    ["ZC", "XC", "ZW", "KE", "ZS", "XK", "KC", "SB", "CC", "CT", "LE", "HE"].includes(
-      root
-    )
-  ) {
-    return "agriculture";
   }
 
   const base = loose.slice(0, 3);
@@ -476,8 +955,8 @@ export function resolveManualTradeSizing(
     assetClass,
     profile: {
       ...baseProfile,
-      ...(override ?? {}),
       ...((preferences?.[assetClass] as object | undefined) ?? {}),
+      ...(override ?? {}),
       quickSizes: override?.quickSizes ?? baseProfile.quickSizes,
     } satisfies ManualTradeSizingProfile,
   };
@@ -485,13 +964,27 @@ export function resolveManualTradeSizing(
 
 export function getEstimatedPipSize(symbol: string) {
   const normalized = normalizeSymbol(symbol);
+  const root = extractFuturesRoot(symbol);
   const assetClass = inferManualTradeAssetClass(symbol);
 
-  if (normalized.includes("JPY")) return 0.01;
-  if (normalized.startsWith("XAU")) return 0.1;
-  if (normalized.startsWith("XAG")) return 0.01;
+  if (normalized.includes("JPY") || root === "6J" || root === "MJY") {
+    return 0.01;
+  }
+
+  if (
+    normalized.startsWith("XAU") ||
+    root === "GC" ||
+    root === "MGC" ||
+    root === "PL" ||
+    root === "PA"
+  ) {
+    return 0.1;
+  }
+
+  if (assetClass === "metals") return 0.01;
   if (assetClass === "indices") return 1;
   if (assetClass === "energy") return 0.01;
+  if (assetClass === "rates" || assetClass === "agriculture") return 0.01;
   if (assetClass === "crypto") {
     return normalized.includes("BTC") ? 1 : 0.01;
   }

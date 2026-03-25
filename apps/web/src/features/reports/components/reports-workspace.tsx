@@ -31,6 +31,7 @@ import {
   Radar,
   Legend,
   LineChart,
+  ResponsiveContainer,
 } from "recharts";
 import {
   BarChart3,
@@ -102,7 +103,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsListUnderlined, TabsTriggerUnderlined } from "@/components/ui/tabs";
+import {
+  Tabs,
+  TabsListUnderlined,
+  TabsTriggerUnderlined,
+} from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
@@ -113,7 +118,8 @@ type LensOverviewData = RouterOutputs["reports"]["getLensOverview"];
 type HeroChartData = RouterOutputs["reports"]["getHeroChart"];
 type BreakdownTableData = RouterOutputs["reports"]["getBreakdownTable"];
 type PanelData = RouterOutputs["reports"]["getPanelData"];
-type UpdateReportsPreferencesInput = RouterInputs["users"]["updateReportsPreferences"];
+type UpdateReportsPreferencesInput =
+  RouterInputs["users"]["updateReportsPreferences"];
 type ReportPanelStat = {
   id: string;
   label: string;
@@ -152,7 +158,9 @@ type ReportsWorkspaceContextValue = {
   setActiveDimension: (dimension: ReportDimensionId) => void;
   toggleMetric: (metric: ReportMetricId) => void;
   setChartType: (chartType: ReportChartType) => void;
-  setDrilldown: (drilldown: { dimension: ReportDimensionId; value: string } | null) => void;
+  setDrilldown: (
+    drilldown: { dimension: ReportDimensionId; value: string } | null
+  ) => void;
   resetLensState: () => void;
   togglePanelsEdit: () => void;
   reorderPanels: (fromIndex: number, toIndex: number) => void;
@@ -179,11 +187,20 @@ const HERO_METRIC_COLORS: Record<ReportMetricId, string> = {
 const REPORT_PANEL_DEFAULT_SPANS: Partial<Record<ReportPanelId, number>> = {
   equityCurve: 2,
   drawdown: 2,
+  rollingPerformance: 2,
   performanceHeatmap: 2,
   entryExitWindow: 2,
   correlationMatrix: 2,
+  radarComparison: 2,
   monteCarlo: 2,
   maeMfeScatter: 2,
+  captureEfficiency: 2,
+};
+
+const REPORT_PANEL_HEIGHT_CLASSNAMES: Partial<Record<ReportPanelId, string>> = {
+  radarComparison: "h-[28rem]",
+  monteCarlo: "h-[28rem]",
+  maeMfeScatter: "h-[28rem]",
 };
 
 const REPORT_QUERY_STALE_TIME = 30_000;
@@ -200,7 +217,9 @@ const LENS_STAT_CARD_METRICS: Record<ReportLensId, ReportMetricId[]> = {
 function useReportsWorkspace() {
   const context = useContext(ReportsWorkspaceContext);
   if (!context) {
-    throw new Error("useReportsWorkspace must be used within ReportsWorkspaceProvider");
+    throw new Error(
+      "useReportsWorkspace must be used within ReportsWorkspaceProvider"
+    );
   }
 
   return context;
@@ -296,7 +315,9 @@ function formatReportDateLabel(value: string) {
   const day = date.getUTCDate();
   const year = String(date.getUTCFullYear()).slice(-2);
 
-  return `${weekday}\u00A0${day}${getOrdinalSuffix(day)}\u00A0${month}\u00A0'${year}`;
+  return `${weekday}\u00A0${day}${getOrdinalSuffix(
+    day
+  )}\u00A0${month}\u00A0'${year}`;
 }
 
 function formatReportLabel(value: string | number | null | undefined) {
@@ -307,15 +328,26 @@ function formatReportLabel(value: string | number | null | undefined) {
   return formatReportDateLabel(value);
 }
 
-function isReportLensId(value: string | null | undefined): value is ReportLensId {
-  return typeof value === "string" && REPORT_LENS_IDS.some((item) => item === value);
+function isReportLensId(
+  value: string | null | undefined
+): value is ReportLensId {
+  return (
+    typeof value === "string" && REPORT_LENS_IDS.some((item) => item === value)
+  );
 }
 
-function isReportChartType(value: string | null | undefined): value is ReportChartType {
-  return typeof value === "string" && REPORT_CHART_TYPES.some((item) => item === value);
+function isReportChartType(
+  value: string | null | undefined
+): value is ReportChartType {
+  return (
+    typeof value === "string" &&
+    REPORT_CHART_TYPES.some((item) => item === value)
+  );
 }
 
-function isReportDimensionId(value: string | null | undefined): value is ReportDimensionId {
+function isReportDimensionId(
+  value: string | null | undefined
+): value is ReportDimensionId {
   return (
     typeof value === "string" &&
     REPORT_DIMENSION_IDS.some((item) => item === value)
@@ -429,12 +461,12 @@ function segmentedButtonClassName(
   options?: { action?: boolean }
 ) {
   return cn(
-    "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
+    "cursor-pointer flex transform items-center justify-center gap-1 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
     isActive
       ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
       : options?.action
-        ? "bg-[#222225]/50 text-white/70 hover:bg-[#222225] hover:!brightness-110 hover:text-white ring ring-white/5"
-        : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
+      ? "bg-[#222225]/50 text-white/70 hover:bg-[#222225] hover:!brightness-110 hover:text-white ring ring-white/5"
+      : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
   );
 }
 
@@ -442,20 +474,20 @@ function StatCard({
   label,
   value,
   tone,
+  caption,
 }: {
   label: string;
   value: ReactNode;
   tone?: "positive" | "negative" | "default";
+  caption?: ReactNode;
 }) {
   return (
     <WidgetWrapper
-      className="!h-auto rounded-lg p-1"
-      contentClassName="flex h-auto flex-col rounded-sm px-4 py-4"
+      className="!h-auto w-full rounded-lg p-1"
+      contentClassName="flex h-full min-h-[8.5rem] flex-col rounded-sm px-4 py-4"
     >
       <div className="flex items-center justify-between gap-4">
-        <span className="text-xs text-white/35">
-          {label}
-        </span>
+        <span className="text-xs text-white/35">{label}</span>
       </div>
       <div
         className={cn(
@@ -466,13 +498,18 @@ function StatCard({
       >
         {value}
       </div>
+      {caption ? (
+        <div className="mt-auto pt-3 text-xs leading-5 text-white/45">
+          {caption}
+        </div>
+      ) : null}
     </WidgetWrapper>
   );
 }
 
 function EmptyPanel({ message }: { message: string }) {
   return (
-    <div className="flex h-full min-h-[14rem] items-center justify-center rounded-sm border border-dashed border-white/10 bg-black/10 px-4 text-center text-xs text-white/40">
+    <div className="flex h-full min-h-[14rem] items-center justify-center rounded-sm ring ring-dashed ring-white/10 bg-black/10 px-4 text-center text-xs text-white/40">
       {message}
     </div>
   );
@@ -548,18 +585,17 @@ function ReportsHeroChart({
             tickMargin={8}
             tick={{ fontSize: 10, fill: "rgba(255,255,255,0.35)" }}
             tickFormatter={(value: number) =>
-              formatMetricValue(
-                secondaryMetrics[0],
-                value,
-                currencyCode,
-                { digits: 0 }
-              )
+              formatMetricValue(secondaryMetrics[0], value, currencyCode, {
+                digits: 0,
+              })
             }
           />
         ) : null}
         <ChartTooltip
           content={({ active, payload, label }) => {
-            const row = payload?.[0]?.payload as HeroChartData["rows"][number] | undefined;
+            const row = payload?.[0]?.payload as
+              | HeroChartData["rows"][number]
+              | undefined;
             if (!active || !row) return null;
 
             return (
@@ -635,18 +671,22 @@ function PanelHeaderActions({
       </span>
       <Button
         type="button"
-        className="h-7 rounded-sm border border-white/5 bg-sidebar px-2 text-[11px] text-white/70 hover:bg-sidebar-accent"
+        className="h-7 rounded-sm ring ring-white/5 bg-sidebar px-2 text-[11px] text-white/70 hover:bg-sidebar-accent"
         onClick={(event) => {
           event.stopPropagation();
           onResize(span === 2 ? 1 : 2);
         }}
       >
-        {span === 2 ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+        {span === 2 ? (
+          <Minimize2 className="size-3.5" />
+        ) : (
+          <Maximize2 className="size-3.5" />
+        )}
       </Button>
       {canRemove ? (
         <Button
           type="button"
-          className="h-7 rounded-sm border border-white/5 bg-sidebar px-2 text-[11px] text-white/70 hover:bg-sidebar-accent"
+          className="h-7 rounded-sm ring ring-white/5 bg-sidebar px-2 text-[11px] text-white/70 hover:bg-sidebar-accent"
           onClick={(event) => {
             event.stopPropagation();
             onRemove();
@@ -704,8 +744,7 @@ function HeatmapPanel({
             {columns.map((column) => {
               const cell =
                 cells.find(
-                  (current) =>
-                    current.row === row && current.column === column
+                  (current) => current.row === row && current.column === column
                 ) ?? null;
               const value = cell?.value ?? 0;
               const intensity = Math.min(Math.abs(value) / maxAbs, 1);
@@ -713,7 +752,7 @@ function HeatmapPanel({
               return (
                 <div
                   key={`${row}-${column}`}
-                  className="flex h-16 flex-col items-center justify-center rounded-sm border border-white/5 text-center"
+                  className="flex h-16 flex-col items-center justify-center rounded-sm ring ring-white/5 text-center"
                   style={{
                     backgroundColor:
                       value === 0
@@ -725,7 +764,9 @@ function HeatmapPanel({
                 >
                   <span className="text-[10px] text-white/45">{column}</span>
                   <span className="mt-1 text-xs font-semibold text-white">
-                    {formatMetricValue(metric, value, currencyCode, { digits: 0 })}
+                    {formatMetricValue(metric, value, currencyCode, {
+                      digits: 0,
+                    })}
                   </span>
                 </div>
               );
@@ -743,7 +784,12 @@ function RankedPanel({
   secondaryMetric,
   currencyCode,
 }: {
-  rows: Array<{ label: string; primary: number; secondary?: number | null; tertiary?: number | null }>;
+  rows: Array<{
+    label: string;
+    primary: number;
+    secondary?: number | null;
+    tertiary?: number | null;
+  }>;
   primaryMetric: ReportMetricId;
   secondaryMetric?: ReportMetricId;
   currencyCode?: string | null;
@@ -764,8 +810,14 @@ function RankedPanel({
   };
 
   return (
-    <ChartContainer config={config} className="h-full w-full overflow-visible px-3.5 pb-3.5">
-      <ComposedChart data={rows} margin={{ top: 16, right: 20, left: 0, bottom: 4 }}>
+    <ChartContainer
+      config={config}
+      className="h-full w-full overflow-visible px-3.5 pb-3.5"
+    >
+      <ComposedChart
+        data={rows}
+        margin={{ top: 16, right: 20, left: 0, bottom: 4 }}
+      >
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
         <XAxis
           dataKey="label"
@@ -816,7 +868,11 @@ function RankedPanel({
               <DashboardChartTooltipFrame title={formatReportLabel(label)}>
                 <DashboardChartTooltipRow
                   label={REPORT_METRIC_LABELS[primaryMetric]}
-                  value={formatMetricValue(primaryMetric, row.primary, currencyCode)}
+                  value={formatMetricValue(
+                    primaryMetric,
+                    row.primary,
+                    currencyCode
+                  )}
                   indicatorColor={HERO_METRIC_COLORS[primaryMetric]}
                 />
                 {secondaryMetric && row.secondary != null ? (
@@ -862,12 +918,19 @@ function TimeseriesPanel({
   primaryMetric,
   secondaryMetric,
   tertiaryMetric,
+  primaryColorOverride,
   currencyCode,
 }: {
-  rows: Array<{ label: string; primary: number; secondary?: number | null; tertiary?: number | null }>;
+  rows: Array<{
+    label: string;
+    primary: number;
+    secondary?: number | null;
+    tertiary?: number | null;
+  }>;
   primaryMetric: ReportMetricId;
   secondaryMetric?: ReportMetricId;
   tertiaryMetric?: ReportMetricId;
+  primaryColorOverride?: string;
   currencyCode?: string | null;
 }) {
   if (rows.length === 0) {
@@ -877,7 +940,7 @@ function TimeseriesPanel({
   const config: ChartConfig = {
     primary: {
       label: REPORT_METRIC_LABELS[primaryMetric],
-      color: HERO_METRIC_COLORS[primaryMetric],
+      color: primaryColorOverride ?? HERO_METRIC_COLORS[primaryMetric],
     },
     secondary: {
       label: secondaryMetric ? REPORT_METRIC_LABELS[secondaryMetric] : "",
@@ -890,8 +953,14 @@ function TimeseriesPanel({
   };
 
   return (
-    <ChartContainer config={config} className="h-full w-full overflow-visible px-3.5 pb-3.5">
-      <ComposedChart data={rows} margin={{ top: 16, right: 20, left: 0, bottom: 4 }}>
+    <ChartContainer
+      config={config}
+      className="h-full w-full overflow-visible px-3.5 pb-3.5"
+    >
+      <ComposedChart
+        data={rows}
+        margin={{ top: 16, right: 20, left: 0, bottom: 4 }}
+      >
         <CartesianGrid vertical={false} strokeDasharray="3 3" />
         <XAxis
           dataKey="label"
@@ -914,7 +983,12 @@ function TimeseriesPanel({
         <ChartTooltip
           content={({ active, payload, label }) => {
             const row = payload?.[0]?.payload as
-              | { label: string; primary: number; secondary?: number | null; tertiary?: number | null }
+              | {
+                  label: string;
+                  primary: number;
+                  secondary?: number | null;
+                  tertiary?: number | null;
+                }
               | undefined;
             if (!active || !row) return null;
 
@@ -922,8 +996,14 @@ function TimeseriesPanel({
               <DashboardChartTooltipFrame title={formatReportLabel(label)}>
                 <DashboardChartTooltipRow
                   label={REPORT_METRIC_LABELS[primaryMetric]}
-                  value={formatMetricValue(primaryMetric, row.primary, currencyCode)}
-                  indicatorColor={HERO_METRIC_COLORS[primaryMetric]}
+                  value={formatMetricValue(
+                    primaryMetric,
+                    row.primary,
+                    currencyCode
+                  )}
+                  indicatorColor={
+                    primaryColorOverride ?? HERO_METRIC_COLORS[primaryMetric]
+                  }
                 />
                 {secondaryMetric && row.secondary != null ? (
                   <DashboardChartTooltipRow
@@ -951,7 +1031,12 @@ function TimeseriesPanel({
             );
           }}
         />
-        <Bar dataKey="primary" fill="var(--color-primary)" fillOpacity={0.35} radius={[4, 4, 0, 0]} />
+        <Bar
+          dataKey="primary"
+          fill="var(--color-primary)"
+          fillOpacity={0.35}
+          radius={[4, 4, 0, 0]}
+        />
         {secondaryMetric ? (
           <Line
             type="monotone"
@@ -980,7 +1065,14 @@ function ScatterPanel({
   xLabel,
   yLabel,
 }: {
-  points: Array<{ id: string; label: string; x: number; y: number; z?: number | null; tone: "positive" | "negative" | "neutral" }>;
+  points: Array<{
+    id: string;
+    label: string;
+    x: number;
+    y: number;
+    z?: number | null;
+    tone: "positive" | "negative" | "neutral";
+  }>;
   xLabel: string;
   yLabel: string;
 }) {
@@ -989,96 +1081,125 @@ function ScatterPanel({
   }
 
   return (
-    <div className="h-full w-full px-3.5 pb-3.5">
-      <ScatterChart margin={{ top: 16, right: 12, bottom: 4, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis
-          type="number"
-          dataKey="x"
-          name={xLabel}
-          axisLine={false}
-          tickLine={false}
-          tickMargin={8}
-          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-        />
-        <YAxis
-          type="number"
-          dataKey="y"
-          name={yLabel}
-          axisLine={false}
-          tickLine={false}
-          tickMargin={8}
-          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-        />
-        <ChartTooltip
-          content={({ active, payload }) => {
-            const point = payload?.[0]?.payload as
-              | { label: string; x: number; y: number; z?: number | null }
-              | undefined;
-            if (!active || !point) return null;
+    <div className="h-full min-h-[22rem] w-full px-3.5 pb-3.5">
+      <ResponsiveContainer width="100%" height="100%">
+        <ScatterChart margin={{ top: 16, right: 12, bottom: 4, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name={xLabel}
+            axisLine={false}
+            tickLine={false}
+            tickMargin={8}
+            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            name={yLabel}
+            axisLine={false}
+            tickLine={false}
+            tickMargin={8}
+            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
+          />
+          <ChartTooltip
+            content={({ active, payload }) => {
+              const point = payload?.[0]?.payload as
+                | { label: string; x: number; y: number; z?: number | null }
+                | undefined;
+              if (!active || !point) return null;
 
-            return (
-              <DashboardChartTooltipFrame title={point.label}>
-                <DashboardChartTooltipRow label={xLabel} value={point.x.toFixed(1)} />
-                <DashboardChartTooltipRow label={yLabel} value={point.y.toFixed(1)} />
-                {point.z != null ? (
-                  <DashboardChartTooltipRow label="RR" value={`${point.z.toFixed(2)}R`} />
-                ) : null}
-              </DashboardChartTooltipFrame>
-            );
-          }}
-        />
-        <Scatter
-          data={points}
-          fill="#38bdf8"
-          shape={(props: any) => (
-            <circle
-              cx={props.cx}
-              cy={props.cy}
-              r={4}
-              fill={
-                props.payload.tone === "positive"
-                  ? "#14b8a6"
-                  : props.payload.tone === "negative"
-                  ? "#f43f5e"
-                  : "#94a3b8"
-              }
-              fillOpacity={0.85}
-            />
-          )}
-        />
-      </ScatterChart>
+              return (
+                <DashboardChartTooltipFrame title={point.label}>
+                  <DashboardChartTooltipRow
+                    label={xLabel}
+                    value={point.x.toFixed(1)}
+                  />
+                  <DashboardChartTooltipRow
+                    label={yLabel}
+                    value={point.y.toFixed(1)}
+                  />
+                  {point.z != null ? (
+                    <DashboardChartTooltipRow
+                      label="RR"
+                      value={`${point.z.toFixed(2)}R`}
+                    />
+                  ) : null}
+                </DashboardChartTooltipFrame>
+              );
+            }}
+          />
+          <Scatter
+            data={points}
+            fill="#38bdf8"
+            shape={(props: any) => (
+              <circle
+                cx={props.cx}
+                cy={props.cy}
+                r={4}
+                fill={
+                  props.payload.tone === "positive"
+                    ? "#14b8a6"
+                    : props.payload.tone === "negative"
+                    ? "#f43f5e"
+                    : "#94a3b8"
+                }
+                fillOpacity={0.85}
+              />
+            )}
+          />
+        </ScatterChart>
+      </ResponsiveContainer>
     </div>
   );
 }
 
-function RadarPanel({ rows }: { rows: Array<{ label: string; winRate: number; avgRR: number; expectancy: number; rrCaptureEfficiency: number; tradeCountScore: number }> }) {
+function RadarPanel({
+  rows,
+}: {
+  rows: Array<{
+    label: string;
+    winRate: number;
+    avgRR: number;
+    expectancy: number;
+    rrCaptureEfficiency: number;
+    tradeCountScore: number;
+  }>;
+}) {
   if (rows.length === 0) {
     return <EmptyPanel message="Not enough data for this comparison yet." />;
   }
 
   return (
-    <div className="h-full w-full px-3.5 pb-3.5">
-      <RadarChart outerRadius="70%" data={rows}>
-        <PolarGrid stroke="rgba(255,255,255,0.12)" />
-        <PolarAngleAxis dataKey="label" tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }} />
-        <PolarRadiusAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} />
-        <Radar
-          name="Win rate"
-          dataKey="winRate"
-          stroke="#14b8a6"
-          fill="#14b8a6"
-          fillOpacity={0.2}
-        />
-        <Radar
-          name="Capture"
-          dataKey="rrCaptureEfficiency"
-          stroke="#60a5fa"
-          fill="#60a5fa"
-          fillOpacity={0.12}
-        />
-        <Legend wrapperStyle={{ fontSize: 11 }} />
-      </RadarChart>
+    <div className="h-full min-h-[22rem] w-full px-3.5 pb-3.5">
+      <ResponsiveContainer width="100%" height="100%">
+        <RadarChart outerRadius="70%" data={rows}>
+          <PolarGrid stroke="rgba(255,255,255,0.12)" />
+          <PolarAngleAxis
+            dataKey="label"
+            tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 10 }}
+          />
+          <PolarRadiusAxis
+            tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }}
+          />
+          <Radar
+            name="Win rate"
+            dataKey="winRate"
+            stroke="#14b8a6"
+            fill="#14b8a6"
+            fillOpacity={0.2}
+          />
+          <Radar
+            name="Capture"
+            dataKey="rrCaptureEfficiency"
+            stroke="#60a5fa"
+            fill="#60a5fa"
+            fillOpacity={0.12}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+        </RadarChart>
+      </ResponsiveContainer>
     </div>
   );
 }
@@ -1123,11 +1244,9 @@ function StatGridPanel({
       {stats.map((stat) => (
         <div
           key={stat.id}
-          className="rounded-sm border border-white/5 bg-black/10 px-3 py-3"
+          className="rounded-sm ring ring-white/5 bg-black/10 px-3 py-3"
         >
-          <div className="text-xs text-white/35">
-            {stat.label}
-          </div>
+          <div className="text-xs text-white/35">{stat.label}</div>
           <div className="mt-3 text-xl font-semibold text-white">
             {formatStatValue(stat)}
           </div>
@@ -1188,7 +1307,7 @@ function StandaloneStatCardsRow({
             {canRemove ? (
               <Button
                 type="button"
-                className="h-7 rounded-sm border border-white/5 bg-sidebar px-2 text-[11px] text-white/70 hover:bg-sidebar-accent"
+                className="h-7 rounded-sm ring ring-white/5 bg-sidebar px-2 text-[11px] text-white/70 hover:bg-sidebar-accent"
                 onClick={(event) => {
                   event.stopPropagation();
                   onRemove();
@@ -1228,7 +1347,9 @@ function MonteCarloPanel({
   currencyCode?: string | null;
 }) {
   if (envelope.length === 0) {
-    return <EmptyPanel message="Not enough trade history for Monte Carlo yet." />;
+    return (
+      <EmptyPanel message="Not enough trade history for Monte Carlo yet." />
+    );
   }
 
   const rows = envelope.map((point) => {
@@ -1245,79 +1366,104 @@ function MonteCarloPanel({
   });
 
   return (
-    <div className="h-full w-full px-3.5 pb-3.5">
-      <LineChart data={rows} margin={{ top: 16, right: 12, left: 0, bottom: 4 }}>
-        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-        <XAxis
-          dataKey="step"
-          axisLine={false}
-          tickLine={false}
-          tickMargin={8}
-          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-        />
-        <YAxis
-          axisLine={false}
-          tickLine={false}
-          tickMargin={8}
-          tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
-          tickFormatter={(value: number) =>
-            formatSignedCurrencyValue(value, currencyCode, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            })
-          }
-        />
-        <ChartTooltip
-          content={({ active, payload, label }) => {
-            if (!active || !payload?.length) return null;
-            const row = payload[0]?.payload as
-              | { p10: number; p50: number; p90: number }
-              | undefined;
-            if (!row) return null;
+    <div className="h-full min-h-[22rem] w-full px-3.5 pb-3.5">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart
+          data={rows}
+          margin={{ top: 16, right: 12, left: 0, bottom: 4 }}
+        >
+          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+          <XAxis
+            dataKey="step"
+            axisLine={false}
+            tickLine={false}
+            tickMargin={8}
+            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            tickMargin={8}
+            tick={{ fontSize: 10, fill: "rgba(255,255,255,0.45)" }}
+            tickFormatter={(value: number) =>
+              formatSignedCurrencyValue(value, currencyCode, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })
+            }
+          />
+          <ChartTooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              const row = payload[0]?.payload as
+                | { p10: number; p50: number; p90: number }
+                | undefined;
+              if (!row) return null;
 
-            return (
-              <DashboardChartTooltipFrame title={`Trade ${label}`}>
-                <DashboardChartTooltipRow
-                  label="10th percentile"
-                  value={formatSignedCurrencyValue(row.p10, currencyCode)}
-                  indicatorColor="#94a3b8"
-                />
-                <DashboardChartTooltipRow
-                  label="Median"
-                  value={formatSignedCurrencyValue(row.p50, currencyCode)}
-                  indicatorColor="#14b8a6"
-                />
-                <DashboardChartTooltipRow
-                  label="90th percentile"
-                  value={formatSignedCurrencyValue(row.p90, currencyCode)}
-                  indicatorColor="#60a5fa"
-                />
-              </DashboardChartTooltipFrame>
-            );
-          }}
-        />
-        {paths.map((path) => (
+              return (
+                <DashboardChartTooltipFrame title={`Trade ${label}`}>
+                  <DashboardChartTooltipRow
+                    label="10th percentile"
+                    value={formatSignedCurrencyValue(row.p10, currencyCode)}
+                    indicatorColor="#94a3b8"
+                  />
+                  <DashboardChartTooltipRow
+                    label="Median"
+                    value={formatSignedCurrencyValue(row.p50, currencyCode)}
+                    indicatorColor="#14b8a6"
+                  />
+                  <DashboardChartTooltipRow
+                    label="90th percentile"
+                    value={formatSignedCurrencyValue(row.p90, currencyCode)}
+                    indicatorColor="#60a5fa"
+                  />
+                </DashboardChartTooltipFrame>
+              );
+            }}
+          />
+          {paths.map((path) => (
+            <Line
+              key={path.id}
+              type="monotone"
+              dataKey={path.id}
+              stroke="rgba(255,255,255,0.14)"
+              strokeWidth={1}
+              dot={false}
+            />
+          ))}
           <Line
-            key={path.id}
             type="monotone"
-            dataKey={path.id}
-            stroke="rgba(255,255,255,0.14)"
-            strokeWidth={1}
+            dataKey="p10"
+            stroke="#94a3b8"
+            strokeWidth={1.5}
             dot={false}
           />
-        ))}
-        <Line type="monotone" dataKey="p10" stroke="#94a3b8" strokeWidth={1.5} dot={false} />
-        <Line type="monotone" dataKey="p50" stroke="#14b8a6" strokeWidth={2.5} dot={false} />
-        <Line type="monotone" dataKey="p90" stroke="#60a5fa" strokeWidth={1.5} dot={false} />
-      </LineChart>
+          <Line
+            type="monotone"
+            dataKey="p50"
+            stroke="#14b8a6"
+            strokeWidth={2.5}
+            dot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="p90"
+            stroke="#60a5fa"
+            strokeWidth={1.5}
+            dot={false}
+          />
+        </LineChart>
+      </ResponsiveContainer>
     </div>
   );
 }
 
 function ReportPanelRenderer({
+  panelId,
   data,
   currencyCode,
 }: {
+  panelId: ReportPanelId;
   data: PanelData | undefined;
   currencyCode?: string | null;
 }) {
@@ -1341,6 +1487,7 @@ function ReportPanelRenderer({
               ? (data.tertiaryMetric as ReportMetricId | undefined)
               : undefined
           }
+          primaryColorOverride={panelId === "drawdown" ? "#f43f5e" : undefined}
           currencyCode={currencyCode}
         />
       );
@@ -1386,7 +1533,9 @@ function ReportPanelRenderer({
         />
       );
     default:
-      return <EmptyPanel message="No renderer is available for this panel yet." />;
+      return (
+        <EmptyPanel message="No renderer is available for this panel yet." />
+      );
   }
 }
 
@@ -1422,7 +1571,8 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
   });
 
   const rawReportPreferences =
-    (me as any)?.widgetPreferences?.reportsV1 ?? ({} as Record<string, unknown>);
+    (me as any)?.widgetPreferences?.reportsV1 ??
+    ({} as Record<string, unknown>);
   const userId = (me as any)?.id as string | undefined;
   const activeTimezone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -1432,9 +1582,9 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
     buildInitialLensLayouts(rawReportPreferences)
   );
   const hydratedUserIdRef = useRef<string | null>(null);
-  const [lensLayouts, setLensLayouts] = useState<Record<ReportLensId, LensLayoutState>>(
-    initialLayoutsRef.current
-  );
+  const [lensLayouts, setLensLayouts] = useState<
+    Record<ReportLensId, LensLayoutState>
+  >(initialLayoutsRef.current);
   const [isEditingPanels, setIsEditingPanels] = useState(false);
 
   useEffect(() => {
@@ -1475,12 +1625,12 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
     typeof rawLensPrefs?.heroDimension === "string"
       ? (rawLensPrefs.heroDimension as ReportDimensionId)
       : null;
-  const activeDimension =
-    isLensDimensionAllowed(activeLens, dimensionParam)
-      ? dimensionParam
-      : persistedDimension && isLensDimensionAllowed(activeLens, persistedDimension)
-        ? persistedDimension
-        : lensConfig.defaultDimension;
+  const activeDimension = isLensDimensionAllowed(activeLens, dimensionParam)
+    ? dimensionParam
+    : persistedDimension &&
+      isLensDimensionAllowed(activeLens, persistedDimension)
+    ? persistedDimension
+    : lensConfig.defaultDimension;
   const persistedMetrics = Array.isArray(rawLensPrefs?.heroMetrics)
     ? (rawLensPrefs.heroMetrics as ReportMetricId[]).filter((metric) =>
         isLensMetricAllowed(activeLens, metric)
@@ -1495,16 +1645,20 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
     parsedMetricSelection.length > 0
       ? parsedMetricSelection.slice(0, 3)
       : persistedMetrics.length > 0
-        ? persistedMetrics.slice(0, 3)
-        : [...lensConfig.defaultMetrics];
+      ? persistedMetrics.slice(0, 3)
+      : [...lensConfig.defaultMetrics];
   const activeChartType = isReportChartType(chartTypeParam)
     ? chartTypeParam
-    : isReportChartType(rawLensPrefs?.heroChartType as string | null | undefined)
-      ? (rawLensPrefs.heroChartType as ReportChartType)
-      : "composed";
+    : isReportChartType(
+        rawLensPrefs?.heroChartType as string | null | undefined
+      )
+    ? (rawLensPrefs.heroChartType as ReportChartType)
+    : "composed";
   const drilldown = parseDrilldown(drilldownParam);
   const activeLayout = lensLayouts[activeLens];
-  const activePanels = activeLayout?.activePanels ?? [...lensConfig.defaultPanels];
+  const activePanels = activeLayout?.activePanels ?? [
+    ...lensConfig.defaultPanels,
+  ];
   const panelSpans = activeLayout?.panelSpans ?? {};
 
   const filters = dashboardTradeFilters?.filters;
@@ -1670,10 +1824,14 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
       setLensLayouts((current) => {
         const existing = current[activeLens];
         const nextPanels = existing.activePanels.includes(panelId)
-          ? existing.activePanels.filter((currentPanelId) => currentPanelId !== panelId)
+          ? existing.activePanels.filter(
+              (currentPanelId) => currentPanelId !== panelId
+            )
           : [...existing.activePanels, panelId];
         const safePanels =
-          nextPanels.length > 0 ? nextPanels : [...REPORT_LENS_CONFIG[activeLens].defaultPanels];
+          nextPanels.length > 0
+            ? nextPanels
+            : [...REPORT_LENS_CONFIG[activeLens].defaultPanels];
         const next = {
           ...current,
           [activeLens]: {
@@ -1790,64 +1948,57 @@ function ReportsWorkspaceContent() {
   } = useReportsWorkspace();
   const lensConfig = REPORT_LENS_CONFIG[activeLens];
   const hiddenPanels = lensConfig.optionalPanels.filter(
-    (panelId) => !activePanels.some((activePanelId) => activePanelId === panelId)
+    (panelId) =>
+      !activePanels.some((activePanelId) => activePanelId === panelId)
   );
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 6 },
     })
   );
-  const heroQuery = useQuery(
-    {
-      ...trpcOptions.reports.getHeroChart.queryOptions({
+  const heroQuery = useQuery({
+    ...trpcOptions.reports.getHeroChart.queryOptions({
+      ...filtersInput,
+      lens: activeLens,
+      dimension: activeDimension,
+    }),
+    staleTime: REPORT_QUERY_STALE_TIME,
+    gcTime: REPORT_QUERY_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+  const overviewQuery = useQuery({
+    ...trpcOptions.reports.getLensOverview.queryOptions({
+      ...filtersInput,
+      lens: activeLens,
+      dimension: activeDimension,
+      drilldown,
+    }),
+    staleTime: REPORT_QUERY_STALE_TIME,
+    gcTime: REPORT_QUERY_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+  const breakdownQuery = useQuery({
+    ...trpcOptions.reports.getBreakdownTable.queryOptions({
+      ...filtersInput,
+      lens: activeLens,
+      dimension: activeDimension,
+    }),
+    staleTime: REPORT_QUERY_STALE_TIME,
+    gcTime: REPORT_QUERY_GC_TIME,
+    refetchOnWindowFocus: false,
+  });
+  const panelQueries = useQueries({
+    queries: activePanels.map((panelId) => ({
+      ...trpcOptions.reports.getPanelData.queryOptions({
         ...filtersInput,
         lens: activeLens,
-        dimension: activeDimension,
-      }),
-      staleTime: REPORT_QUERY_STALE_TIME,
-      gcTime: REPORT_QUERY_GC_TIME,
-      refetchOnWindowFocus: false,
-    }
-  );
-  const overviewQuery = useQuery(
-    {
-      ...trpcOptions.reports.getLensOverview.queryOptions({
-        ...filtersInput,
-        lens: activeLens,
-        dimension: activeDimension,
+        panelId,
         drilldown,
       }),
       staleTime: REPORT_QUERY_STALE_TIME,
       gcTime: REPORT_QUERY_GC_TIME,
       refetchOnWindowFocus: false,
-    }
-  );
-  const breakdownQuery = useQuery(
-    {
-      ...trpcOptions.reports.getBreakdownTable.queryOptions({
-        ...filtersInput,
-        lens: activeLens,
-        dimension: activeDimension,
-      }),
-      staleTime: REPORT_QUERY_STALE_TIME,
-      gcTime: REPORT_QUERY_GC_TIME,
-      refetchOnWindowFocus: false,
-    }
-  );
-  const panelQueries = useQueries({
-    queries: activePanels.map((panelId) =>
-      ({
-        ...trpcOptions.reports.getPanelData.queryOptions({
-          ...filtersInput,
-          lens: activeLens,
-          panelId,
-          drilldown,
-        }),
-        staleTime: REPORT_QUERY_STALE_TIME,
-        gcTime: REPORT_QUERY_GC_TIME,
-        refetchOnWindowFocus: false,
-      })
-    ),
+    })),
   });
   const panelDataById = useMemo(
     () =>
@@ -1860,10 +2011,9 @@ function ReportsWorkspaceContent() {
     [activePanels, panelQueries]
   );
   const breakdownRows = breakdownQuery.data?.rows ?? [];
-  const {
-    table,
-    setRowSelection,
-  } = useDataTable<BreakdownTableData["rows"][number]>({
+  const { table, setRowSelection } = useDataTable<
+    BreakdownTableData["rows"][number]
+  >({
     data: breakdownRows,
     columns: useMemo<ColumnDef<BreakdownTableData["rows"][number]>[]>(
       () => [
@@ -1966,12 +2116,12 @@ function ReportsWorkspaceContent() {
     >
       <div className="shrink-0 bg-background dark:bg-sidebar">
         <div className="overflow-x-auto px-4 sm:px-6 lg:px-8">
-          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
+          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 ring-b-0">
             {REPORT_LENS_IDS.map((lens) => (
               <TabsTriggerUnderlined
                 key={lens}
                 value={lens}
-                className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
               >
                 {REPORT_LENS_CONFIG[lens].label}
               </TabsTriggerUnderlined>
@@ -1993,46 +2143,39 @@ function ReportsWorkspaceContent() {
                 Advanced reports workspace
               </h1>
               <p className="mt-1 text-sm text-white/45">
-                One connected analysis surface. Compare multiple metrics on the hero chart,
-                click into a bucket, and let the rest of the lens react in-place.
+                One connected analysis surface. Compare multiple metrics on the
+                hero chart, click into a bucket, and let the rest of the lens
+                react in-place.
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <DashboardTradeFiltersBar mode="button" />
-              <Button
-                type="button"
-                className="h-[38px] rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
-                onClick={togglePanelsEdit}
-              >
-                <LayoutGrid className="mr-2 size-3.5" />
-                {isEditingPanels ? "Done" : "Customize panels"}
-              </Button>
             </div>
           </div>
         </WidgetWrapper>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
+        <div className="">
+          <div className="flex min-w-max items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     type="button"
-                    className="h-8 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+                    className="h-9! rounded-sm bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
                   >
-                    <ListFilter className="mr-2 size-3.5" />
+                    <ListFilter className=" size-3" />
                     {REPORT_DIMENSION_LABELS[activeDimension]}
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   align="start"
-                  className="w-56 rounded-sm border border-white/5 bg-sidebar p-1 text-white"
+                  className="w-56 rounded-sm bg-sidebar p-1 text-white"
                 >
                   {lensConfig.allowedDimensions.map((dimension) => (
                     <DropdownMenuItem
                       key={dimension}
-                      className="text-xs text-white/75 focus:bg-sidebar-accent focus:text-white"
+                      className="text-xs text-white/75 focus:bg-sidebar-accent focus:text-white cursor-pointer"
                       onClick={() => setActiveDimension(dimension)}
                     >
                       {REPORT_DIMENSION_LABELS[dimension]}
@@ -2044,13 +2187,32 @@ function ReportsWorkspaceContent() {
               {drilldown ? (
                 <Button
                   type="button"
-                  className="h-7 whitespace-nowrap rounded-sm border border-teal-400/20 bg-teal-400/10 px-2 text-[11px] text-teal-300 hover:bg-teal-400/15"
+                  className="h-7 whitespace-nowrap rounded-sm ring ring-teal-400/20 bg-teal-400/10 px-2 text-[11px] text-teal-300 hover:bg-teal-400/15"
                   onClick={() => setDrilldown(null)}
                 >
                   Focused on {formatReportLabel(drilldown.value)}
                   <X className="ml-2 size-3" />
                 </Button>
               ) : null}
+
+              <div className="bg-white dark:bg-muted/15 flex w-max items-center gap-1 rounded-md p-[3px] ring ring-white/5">
+                {lensConfig.allowedMetrics.map((metric) => (
+                  <Button
+                    key={metric}
+                    type="button"
+                    className={segmentedButtonClassName(
+                      selectedMetrics.includes(metric)
+                    )}
+                    onClick={() => toggleMetric(metric)}
+                  >
+                    <span
+                      className="size-2 rounded-full"
+                      style={{ backgroundColor: HERO_METRIC_COLORS[metric] }}
+                    />
+                    <span className="px-1">{REPORT_METRIC_LABELS[metric]}</span>
+                  </Button>
+                ))}
+              </div>
             </div>
 
             <div className="bg-white dark:bg-muted/15 flex h-max w-max items-center gap-1 rounded-md p-[3px] ring ring-white/5">
@@ -2067,8 +2229,8 @@ function ReportsWorkspaceContent() {
                     {nextChartType === "bar"
                       ? "Bar"
                       : nextChartType === "line"
-                        ? "Line"
-                        : "Composed"}
+                      ? "Line"
+                      : "Composed"}
                   </span>
                 </Button>
               ))}
@@ -2077,296 +2239,291 @@ function ReportsWorkspaceContent() {
                 className={segmentedButtonClassName(false, { action: true })}
                 onClick={resetLensState}
               >
-                <RefreshCw className="size-3.5" />
+                <RefreshCw className="size-3" />
                 <span className="px-1">Reset lens</span>
               </Button>
             </div>
           </div>
-
-          <div className="bg-white dark:bg-muted/15 flex w-max max-w-full flex-wrap items-center gap-1 rounded-md p-[3px] ring ring-white/5">
-            {lensConfig.allowedMetrics.map((metric) => (
-              <Button
-                key={metric}
-                type="button"
-                className={segmentedButtonClassName(
-                  selectedMetrics.includes(metric)
-                )}
-                onClick={() => toggleMetric(metric)}
-              >
-                <span
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: HERO_METRIC_COLORS[metric] }}
-                />
-                <span className="px-1">{REPORT_METRIC_LABELS[metric]}</span>
-              </Button>
-            ))}
-          </div>
         </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {LENS_STAT_CARD_METRICS[activeLens].map((metric) => (
-          <StatCard
-            key={metric}
-            label={REPORT_METRIC_LABELS[metric]}
-            value={formatMetricValue(
-              metric,
-              overviewQuery.data?.metrics[metric],
-              currencyCode
-            )}
-            tone={
-              metric === "netPnl"
-                ? Number(overviewQuery.data?.metrics.netPnl ?? 0) >= 0
-                  ? "positive"
-                  : "negative"
-                : "default"
-            }
-          />
-        ))}
-      </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {LENS_STAT_CARD_METRICS[activeLens].map((metric) => (
+            <StatCard
+              key={metric}
+              label={REPORT_METRIC_LABELS[metric]}
+              value={formatMetricValue(
+                metric,
+                overviewQuery.data?.metrics[metric],
+                currencyCode
+              )}
+              tone={
+                metric === "netPnl"
+                  ? Number(overviewQuery.data?.metrics.netPnl ?? 0) >= 0
+                    ? "positive"
+                    : "negative"
+                  : "default"
+              }
+            />
+          ))}
+        </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_24rem]">
-        <WidgetWrapper
-          showHeader
-          icon={BarChart3}
-          title={`${REPORT_LENS_CONFIG[activeLens].label} hero chart`}
-          className="h-auto rounded-lg p-1"
-          contentClassName="flex min-h-0 flex-col rounded-sm px-3.5 pb-3.5 pt-3"
-        >
-          <ReportsHeroChart
-            data={heroQuery.data}
-            selectedMetrics={selectedMetrics}
-            chartType={chartType}
-            currencyCode={currencyCode}
-            onSelectRow={(value) =>
-              setDrilldown(
-                drilldown?.dimension === activeDimension &&
-                  drilldown.value === value
-                  ? null
-                  : { dimension: activeDimension, value }
-              )
-            }
-          />
-        </WidgetWrapper>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+          <WidgetWrapper
+            showHeader
+            icon={BarChart3}
+            title={`${REPORT_LENS_CONFIG[activeLens].label} hero chart`}
+            className="h-auto rounded-lg p-1"
+            contentClassName="flex min-h-0 flex-col rounded-sm px-3.5 pb-3.5 pt-3"
+          >
+            <ReportsHeroChart
+              data={heroQuery.data}
+              selectedMetrics={selectedMetrics}
+              chartType={chartType}
+              currencyCode={currencyCode}
+              onSelectRow={(value) =>
+                setDrilldown(
+                  drilldown?.dimension === activeDimension &&
+                    drilldown.value === value
+                    ? null
+                    : { dimension: activeDimension, value }
+                )
+              }
+            />
+          </WidgetWrapper>
 
-        <WidgetWrapper
-          showHeader
-          title="Lens signal"
-          className="h-auto rounded-lg p-1"
-          contentClassName="flex h-full flex-col rounded-sm px-4 py-4"
-        >
-          <div className="space-y-4">
-            <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-3">
-              <p className="text-xs text-white/35">
-                Best bucket
-              </p>
-              <p className="mt-2 text-base font-semibold text-white">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+            <StatCard
+              label="Best bucket"
+              value={
                 <span className="whitespace-nowrap">
                   {formatReportLabel(overviewQuery.data?.bestRow?.label)}
                 </span>
-              </p>
-              <p className="mt-1 text-sm text-teal-400">
-                {overviewQuery.data?.bestRow
+              }
+              tone="positive"
+              caption={
+                overviewQuery.data?.bestRow
                   ? formatSignedCurrencyValue(
                       overviewQuery.data.bestRow.netPnl,
                       currencyCode
                     )
-                  : "—"}
-              </p>
-            </div>
-            <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-3">
-              <p className="text-xs text-white/35">
-                Weakest bucket
-              </p>
-              <p className="mt-2 text-base font-semibold text-white">
+                  : "—"
+              }
+            />
+            <StatCard
+              label="Weakest bucket"
+              value={
                 <span className="whitespace-nowrap">
                   {formatReportLabel(overviewQuery.data?.weakestRow?.label)}
                 </span>
-              </p>
-              <p className="mt-1 text-sm text-rose-400">
-                {overviewQuery.data?.weakestRow
+              }
+              tone="negative"
+              caption={
+                overviewQuery.data?.weakestRow
                   ? formatSignedCurrencyValue(
                       overviewQuery.data.weakestRow.netPnl,
                       currencyCode
                     )
-                  : "—"}
-              </p>
-            </div>
-            <div className="rounded-sm border border-white/5 bg-black/10 px-3 py-3">
-              <p className="text-xs text-white/35">
-                Active dimension
-              </p>
-              <p className="mt-2 text-base font-semibold text-white">
-                {REPORT_DIMENSION_LABELS[activeDimension]}
-              </p>
-              <p className="mt-1 text-sm text-white/45">
-                {drilldown
+                  : "—"
+              }
+            />
+            <StatCard
+              label="Active dimension"
+              value={REPORT_DIMENSION_LABELS[activeDimension]}
+              caption={
+                drilldown
                   ? `Panels and summary are focused on ${formatReportLabel(
                       drilldown.value
                     )}.`
-                  : "Select a chart bar or table row to focus the supporting panels."}
+                  : "Select a chart bar or table row to focus the supporting panels."
+              }
+            />
+          </div>
+        </div>
+
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">Breakdown table</p>
+              <p className="text-xs text-white/45">
+                Standalone, paginated, and linked to the hero chart drilldown.
               </p>
             </div>
-          </div>
-        </WidgetWrapper>
-      </div>
-
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-white">Breakdown table</p>
             <p className="text-xs text-white/45">
-              Standalone, paginated, and linked to the hero chart drilldown.
+              {totalRows === 0
+                ? "Showing 0 of 0"
+                : `Showing ${pageStart}-${pageEnd} of ${totalRows}`}
             </p>
           </div>
-          <p className="text-xs text-white/45">
-            {totalRows === 0
-              ? "Showing 0 of 0"
-              : `Showing ${pageStart}-${pageEnd} of ${totalRows}`}
-          </p>
-        </div>
 
-        <div className="overflow-hidden rounded-lg">
-          <DataTable
-            table={table}
-            className="rounded-b-none border-b-0"
-            usePaginationRows
-            onRowClick={(row: BreakdownTableData["rows"][number]) =>
-              setDrilldown(
-                drilldown?.dimension === activeDimension &&
-                  drilldown.value === row.key
-                  ? null
-                  : { dimension: activeDimension, value: row.key }
-              )
-            }
-            emptyState={
-              <div className="px-6 py-8 text-sm text-white/45">
-                No rows for the current filters.
+          <div className="overflow-hidden rounded-lg">
+            <DataTable
+              table={table}
+              className="rounded-b-none ring-b-0"
+              usePaginationRows
+              onRowClick={(row: BreakdownTableData["rows"][number]) =>
+                setDrilldown(
+                  drilldown?.dimension === activeDimension &&
+                    drilldown.value === row.key
+                    ? null
+                    : { dimension: activeDimension, value: row.key }
+                )
+              }
+              emptyState={
+                <div className="px-6 py-8 text-sm text-white/45">
+                  No rows for the current filters.
+                </div>
+              }
+            />
+            <div className="flex items-center justify-between gap-3 ring ring-white/5 bg-sidebar/70 px-4 py-3">
+              <p className="text-xs text-white/45">
+                Page {Math.max(pageIndex + 1, 1)} of{" "}
+                {Math.max(table.getPageCount(), 1)}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  className="h-8 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!table.getCanPreviousPage()}
+                  onClick={() => table.previousPage()}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  className="h-8 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  disabled={!table.getCanNextPage()}
+                  onClick={() => table.nextPage()}
+                >
+                  Next
+                </Button>
               </div>
-            }
-          />
-          <div className="flex items-center justify-between gap-3 border border-white/5 bg-sidebar/70 px-4 py-3">
-            <p className="text-xs text-white/45">
-              Page {Math.max(pageIndex + 1, 1)} of {Math.max(table.getPageCount(), 1)}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                className="h-8 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!table.getCanPreviousPage()}
-                onClick={() => table.previousPage()}
-              >
-                Previous
-              </Button>
-              <Button
-                type="button"
-                className="h-8 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={!table.getCanNextPage()}
-                onClick={() => table.nextPage()}
-              >
-                Next
-              </Button>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-white">Supporting panels</p>
-          <p className="text-xs text-white/45">
-            Reorder and resize panels for this lens without turning reports into a blank canvas.
-          </p>
-        </div>
-
-        {isEditingPanels && hiddenPanels.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                className="h-8 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
-              >
-                <Plus className="mr-2 size-3.5" />
-                Add panel
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-52 rounded-sm border border-white/5 bg-sidebar p-1 text-white"
-            >
-              {hiddenPanels.map((panelId) => (
-                <DropdownMenuItem
-                  key={panelId}
-                  className="text-xs text-white/75 focus:bg-sidebar-accent focus:text-white"
-                  onClick={() => togglePanel(panelId)}
-                >
-                  {REPORT_PANEL_LABELS[panelId]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </div>
-
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <SortableContext items={activePanels} strategy={rectSortingStrategy}>
-          <div className="grid gap-4 xl:grid-cols-2">
-            {activePanels.map((panelId) => {
-              const panelData = panelDataById[panelId];
-              const span = Math.max(1, Math.min(2, panelSpans[panelId] ?? REPORT_PANEL_DEFAULT_SPANS[panelId] ?? 1));
-              const isStandaloneRiskAdjustedRow =
-                panelId === "riskAdjusted" && panelData?.kind === "stat-grid";
-              return (
-                <SortableWidget
-                  key={panelId}
-                  id={panelId}
-                  disabled={!isEditingPanels}
-                  style={{
-                    gridColumn: isStandaloneRiskAdjustedRow
-                      ? "span 2 / span 2"
-                      : `span ${span} / span ${span}`,
-                  }}
-                >
-                  {isStandaloneRiskAdjustedRow ? (
-                    <StandaloneStatCardsRow
-                      title={REPORT_PANEL_LABELS[panelId]}
-                      stats={panelData.stats}
-                      currencyCode={currencyCode}
-                      isEditing={isEditingPanels}
-                      canRemove={activePanels.length > 1}
-                      onRemove={() => togglePanel(panelId)}
-                    />
-                  ) : (
-                    <WidgetWrapper
-                      showHeader
-                      icon={LayoutGrid}
-                      title={REPORT_PANEL_LABELS[panelId]}
-                      className={cn(
-                        "h-[24rem] rounded-lg p-1",
-                        span === 2 && "xl:col-span-2"
-                      )}
-                      headerRight={
-                        <PanelHeaderActions
-                          span={span}
-                          isEditing={isEditingPanels}
-                          canRemove={activePanels.length > 1}
-                          onRemove={() => togglePanel(panelId)}
-                          onResize={(nextSpan) => resizePanel(panelId, nextSpan)}
-                        />
-                      }
-                      contentClassName="flex min-h-0 flex-col rounded-sm"
-                    >
-                      <ReportPanelRenderer
-                        data={panelData}
-                        currencyCode={currencyCode}
-                      />
-                    </WidgetWrapper>
-                  )}
-                </SortableWidget>
-              );
-            })}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-white">Supporting panels</p>
+            <p className="text-xs text-white/45">
+              Reorder and resize panels for this lens without turning reports
+              into a blank canvas.
+            </p>
           </div>
-        </SortableContext>
-      </DndContext>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              className="h-8 rounded-sm bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+              onClick={togglePanelsEdit}
+            >
+              <LayoutGrid className="size-3" />
+              {isEditingPanels ? "Done" : "Customize panels"}
+            </Button>
+
+            {isEditingPanels && hiddenPanels.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    className="h-8 rounded-sm bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+                  >
+                    <Plus className="size-3" />
+                    Add panel
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-52 rounded-sm bg-sidebar p-1 text-white"
+                >
+                  {hiddenPanels.map((panelId) => (
+                    <DropdownMenuItem
+                      key={panelId}
+                      className="text-xs text-white/75 focus:bg-sidebar-accent focus:text-white"
+                      onClick={() => togglePanel(panelId)}
+                    >
+                      {REPORT_PANEL_LABELS[panelId]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
+        </div>
+
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+          <SortableContext items={activePanels} strategy={rectSortingStrategy}>
+            <div className="grid gap-4 xl:grid-cols-2">
+              {activePanels.map((panelId) => {
+                const panelData = panelDataById[panelId];
+                const span = Math.max(
+                  1,
+                  Math.min(
+                    2,
+                    panelSpans[panelId] ??
+                      REPORT_PANEL_DEFAULT_SPANS[panelId] ??
+                      1
+                  )
+                );
+                const isStandaloneRiskCardRow =
+                  (panelId === "riskAdjusted" || panelId === "riskBalance") &&
+                  panelData?.kind === "stat-grid";
+                return (
+                  <SortableWidget
+                    key={panelId}
+                    id={panelId}
+                    disabled={!isEditingPanels}
+                    style={{
+                      gridColumn: isStandaloneRiskCardRow
+                        ? "span 2 / span 2"
+                        : `span ${span} / span ${span}`,
+                    }}
+                  >
+                    {isStandaloneRiskCardRow ? (
+                      <StandaloneStatCardsRow
+                        title={REPORT_PANEL_LABELS[panelId]}
+                        stats={panelData.stats}
+                        currencyCode={currencyCode}
+                        isEditing={isEditingPanels}
+                        canRemove={activePanels.length > 1}
+                        onRemove={() => togglePanel(panelId)}
+                      />
+                    ) : (
+                      <WidgetWrapper
+                        showHeader
+                        icon={LayoutGrid}
+                        title={REPORT_PANEL_LABELS[panelId]}
+                        className={cn(
+                          REPORT_PANEL_HEIGHT_CLASSNAMES[panelId] ??
+                            "h-[24rem]",
+                          "rounded-lg p-1",
+                          span === 2 && "xl:col-span-2"
+                        )}
+                        headerRight={
+                          <PanelHeaderActions
+                            span={span}
+                            isEditing={isEditingPanels}
+                            canRemove={activePanels.length > 1}
+                            onRemove={() => togglePanel(panelId)}
+                            onResize={(nextSpan) =>
+                              resizePanel(panelId, nextSpan)
+                            }
+                          />
+                        }
+                        contentClassName="flex min-h-0 flex-col rounded-sm"
+                      >
+                        <ReportPanelRenderer
+                          panelId={panelId}
+                          data={panelData}
+                          currencyCode={currencyCode}
+                        />
+                      </WidgetWrapper>
+                    )}
+                  </SortableWidget>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       </main>
     </Tabs>
   );

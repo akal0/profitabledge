@@ -49,7 +49,7 @@ import {
   StreakDistributionCard,
 } from "@/features/dashboard/charts/components/comparison-chart-cards";
 
-const chartCardComponents = {
+export const chartWidgetCardComponents = {
   "daily-net": DailyNetCard,
   "performance-weekday": PerformanceWeekdayCard,
   "performing-assets": PerformingAssetsCard,
@@ -71,16 +71,16 @@ const chartCardComponents = {
 
 export const CHART_WIDGET_KEY_ALIASES: Record<
   string,
-  keyof typeof chartCardComponents
+  keyof typeof chartWidgetCardComponents
 > = {
   daily: "daily-net",
   performance: "performance-weekday",
   performingAssets: "performing-assets",
 };
 
-export type ChartWidgetType = keyof typeof chartCardComponents;
+export type ChartWidgetType = keyof typeof chartWidgetCardComponents;
 export const ALL_CHART_WIDGET_TYPES = Object.keys(
-  chartCardComponents
+  chartWidgetCardComponents
 ) as ChartWidgetType[];
 export const DEFAULT_CHART_WIDGETS: ChartWidgetType[] = [
   "daily-net",
@@ -92,6 +92,9 @@ export interface ChartWidgetsProps {
   enabledWidgets: ChartWidgetType[];
   accountId?: string;
   isEditing?: boolean;
+  showPresets?: boolean;
+  showShareButton?: boolean;
+  showEditButton?: boolean;
   onToggleWidget?: (type: ChartWidgetType) => void;
   onReorder?: (fromIndex: number, toIndex: number) => void;
   onEnterEdit?: () => void;
@@ -103,7 +106,7 @@ const ACTION_BUTTON_CLASS =
   "flex h-[38px] w-max items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
 
 const ACTION_GROUP_CLASS =
-  "flex items-center overflow-hidden rounded-sm ring ring-white/5 bg-sidebar";
+  "flex items-center overflow-visible rounded-sm ring ring-white/5 bg-sidebar";
 
 const ACTION_GROUP_BUTTON_CLASS =
   "h-[38px] rounded-none ring-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
@@ -158,6 +161,9 @@ export function ChartWidgets({
   enabledWidgets,
   accountId,
   isEditing = false,
+  showPresets = true,
+  showShareButton = true,
+  showEditButton = true,
   onToggleWidget,
   onReorder,
   onEnterEdit,
@@ -383,30 +389,40 @@ export function ChartWidgets({
           </div>
         ) : null}
 
-        <div data-widget-share-ignore="true">
-          <ChartWidgetPresets
-            currentWidgets={enabledWidgets}
-            onApplyPreset={onApplyPreset || (() => undefined)}
-          />
-        </div>
-        {!isEditing ? (
+        {showPresets ? (
+          <div data-widget-share-ignore="true">
+            <ChartWidgetPresets
+              currentWidgets={enabledWidgets}
+              onApplyPreset={onApplyPreset || (() => undefined)}
+            />
+          </div>
+        ) : null}
+        {!isEditing && showShareButton ? (
           <WidgetShareButton
             targetRef={exportRef}
-            title="chart-widgets"
+            title="Chart widgets"
+            verificationSurface={{
+              kind: "chart",
+              widgets: enabledWidgets,
+              start: resolvedRange?.start ? resolvedRange.start.toISOString() : null,
+              end: resolvedRange?.end ? resolvedRange.end.toISOString() : null,
+            }}
             successMessage="Chart widgets PNG downloaded"
             errorMessage="Failed to export chart widgets PNG"
             buttonLabel="Share"
             className={ACTION_BUTTON_CLASS}
           />
         ) : null}
-        <Button
-          className={ACTION_BUTTON_CLASS}
-          data-widget-share-ignore="true"
-          onClick={onToggleEdit}
-        >
-          <EditWidgets className="size-3.5 fill-white/75" />
-          <span>{isEditing ? "Save" : "Customize widgets"}</span>
-        </Button>
+        {showEditButton ? (
+          <Button
+            className={ACTION_BUTTON_CLASS}
+            data-widget-share-ignore="true"
+            onClick={onToggleEdit}
+          >
+            <EditWidgets className="size-3.5 fill-white/75" />
+            <span>{isEditing ? "Save" : "Customize widgets"}</span>
+          </Button>
+        ) : null}
       </div>
 
       <div>
@@ -417,7 +433,7 @@ export function ChartWidgets({
                 displayWidgets.map((widgetType, index) => {
                   const resolvedKey =
                     CHART_WIDGET_KEY_ALIASES[widgetType] ?? widgetType;
-                  const CardComponent = chartCardComponents[resolvedKey] as
+                  const CardComponent = chartWidgetCardComponents[resolvedKey] as
                     | ComponentType<ChartWidgetCardProps>
                     | undefined;
                   if (!CardComponent) return null;
@@ -533,7 +549,7 @@ export function ChartWidgets({
 
               {isEditing
                 ? availableWidgets.map((widgetType, index) => {
-                    const CardComponent = chartCardComponents[widgetType];
+                    const CardComponent = chartWidgetCardComponents[widgetType];
                     return (
                       <div
                         key={`available-${widgetType}-${index}`}

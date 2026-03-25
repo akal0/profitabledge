@@ -2,6 +2,8 @@
 
 import type { ComponentType } from "react";
 import { BookOpen, CheckSquare, Shield, TimerReset, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { GoalContentSeparator, GoalPanel, GoalSurface } from "./goal-surface";
 import { toSentenceCaseTitle } from "./goal-text";
 
@@ -38,7 +40,8 @@ type ProcessScorecardProps = {
     title: string;
     description: string;
     targetValue: number;
-  }) => void;
+  }) => void | Promise<void>;
+  creatingGoalType?: string | null;
 };
 
 function getStatus(value: number, target = 80) {
@@ -52,6 +55,7 @@ export function ProcessScorecard({
   recommendedGoals = [],
   existingGoalTypes = [],
   onCreateGoal,
+  creatingGoalType = null,
 }: ProcessScorecardProps) {
   const metricCards: ProcessMetric[] = [
     {
@@ -166,6 +170,7 @@ export function ProcessScorecard({
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
             {recommendedGoals.map((goal) => {
               const disabled = existingGoalTypes.includes(goal.targetType);
+              const isCreating = creatingGoalType === goal.targetType;
               return (
                 <div
                   key={goal.targetType}
@@ -175,14 +180,18 @@ export function ProcessScorecard({
                     {toSentenceCaseTitle(goal.title)}
                   </div>
                   <p className="mt-1 text-[11px] leading-4 text-white/40">{goal.description}</p>
-                  <button
+                  <Button
                     type="button"
-                    disabled={disabled}
-                    onClick={() => onCreateGoal(goal)}
-                    className="mt-2.5 text-[11px] font-medium text-teal-300 disabled:text-white/25"
+                    disabled={disabled || isCreating}
+                    onClick={() => void onCreateGoal(goal)}
+                    className={getPropAssignActionButtonClassName({
+                      tone: "neutral",
+                      size: "sm",
+                      className: "mt-3 gap-1.5 text-white",
+                    })}
                   >
-                    {disabled ? "Already active" : "Create goal"}
-                  </button>
+                    {disabled ? "Already active" : isCreating ? "Creating..." : "Create goal"}
+                  </Button>
                 </div>
               );
             })}

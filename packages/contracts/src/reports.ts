@@ -151,7 +151,7 @@ export const REPORT_LENS_CONFIG = {
   },
   setup: {
     label: "Setup",
-    description: "Compare symbols, sessions, models, and tags to find where your edge actually lives.",
+    description: "Compare symbols, sessions, Edges, and tags to find where your edge actually lives.",
     defaultDimension: "model",
     allowedDimensions: [
       "model",
@@ -291,7 +291,7 @@ export const REPORT_DIMENSION_LABELS = {
   month: "Month",
   symbol: "Symbol",
   session: "Session",
-  model: "Model",
+  model: "Edge",
   customTag: "Trade tag",
   protocolAlignment: "Protocol alignment",
   hour: "Hour",

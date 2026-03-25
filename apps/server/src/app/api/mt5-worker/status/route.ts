@@ -6,6 +6,8 @@ import { assertWorkerRequest } from "../_utils";
 const requestSchema = z.object({
   connectionId: z.string().min(1),
   workerHostId: z.string().min(1),
+  hostId: z.string().min(1).optional(),
+  workerId: z.string().min(1).optional(),
   status: z.string().min(1),
   sessionKey: z.string().min(1).optional(),
   lastError: z.string().nullable().optional(),

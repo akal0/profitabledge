@@ -1,7 +1,13 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { db } from "../../db";
 import { platformConnection } from "../../db/schema/connections";
+import { user as userTable } from "../../db/schema/auth";
+import {
+  billingEntitlementOverride,
+  billingOrder,
+  billingSubscription,
+} from "../../db/schema/billing";
 import {
   brokerDealEvent,
   brokerOrderEvent,
@@ -9,6 +15,11 @@ import {
   brokerSyncCheckpoint,
 } from "../../db/schema/mt5-sync";
 import { openTrade } from "../../db/schema/trading";
+import {
+  getBillingPlanDefinition,
+  getHigherBillingPlanKey,
+  type BillingPlanKey,
+} from "../billing/config";
 import {
   decryptCredentials,
   encryptCredentials,
@@ -18,8 +29,32 @@ import { isMtTerminalProvider } from "./constants";
 import { buildMtConnectionCompleteness } from "./completeness";
 import { getServerEnv } from "../env";
 import { getMt5LiveLeaseSnapshot } from "./live-lease";
+import {
+  evaluateMt5HostPlacement,
+  getUserTimezoneFromWidgetPreferences,
+  mergeMt5ConnectionHostingMeta,
+  type Mt5ClaimHostInput,
+  type Mt5HostProfile,
+  resolveMt5ClaimHostProfile,
+  resolveMt5ConnectionHostingPolicy,
+  withStrictMt5HostingGeoPolicy,
+} from "./hosting-policy";
+import {
+  isMtWorkerHostSnapshotFresh,
+  listMtWorkerHostSnapshots,
+} from "./host-status";
+import {
+  selectMt5Claims,
+  type Mt5ClaimSchedulingCandidate,
+} from "./claim-scheduler";
 
 const ACTIVE_LEASE_MS = 60 * 1000;
+const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
+const LIVE_QUEUE_REFRESH_MS = 15 * 1000;
+const COLD_QUEUE_SOFT_AGING_FLOOR_MS = 60 * 1000;
+const COLD_QUEUE_HARD_AGING_FLOOR_MS = 5 * 60 * 1000;
+
+type Mt5ClaimMode = "live" | "cold";
 
 function toPlatformConnectionStatus(
   workerStatus: string,
@@ -47,6 +82,246 @@ function toPlatformConnectionStatus(
     default:
       return "pending";
   }
+}
+
+function isActiveSubscriptionStatus(status?: string | null) {
+  return status === "active" || status === "trialing";
+}
+
+function isActiveSessionHeartbeat(
+  heartbeatAt: Date | null | undefined,
+  now: number
+) {
+  if (!heartbeatAt) {
+    return false;
+  }
+
+  return now - heartbeatAt.getTime() <= ACTIVE_LEASE_MS;
+}
+
+function isClaimOccupyingSessionStatus(status?: string | null) {
+  return (
+    status === "bootstrapping" ||
+    status === "syncing" ||
+    status === "active" ||
+    status === "running"
+  );
+}
+
+function isClaimOccupyingSession(
+  session:
+    | {
+        heartbeatAt?: Date | null;
+        status?: string | null;
+      }
+    | null
+    | undefined,
+  now: number
+) {
+  return (
+    isActiveSessionHeartbeat(session?.heartbeatAt, now) &&
+    isClaimOccupyingSessionStatus(session?.status)
+  );
+}
+
+function getLatestSyncActivityAt(connection: {
+  lastSyncAttemptAt?: Date | null;
+  lastSyncSuccessAt?: Date | null;
+}) {
+  return Math.max(
+    connection.lastSyncAttemptAt?.getTime() ?? 0,
+    connection.lastSyncSuccessAt?.getTime() ?? 0
+  );
+}
+
+function resolveMt5ConcurrentSlotCap(
+  planKey: BillingPlanKey,
+  claimMode: Mt5ClaimMode
+) {
+  const includedLiveSyncSlots =
+    getBillingPlanDefinition(planKey)?.includedLiveSyncSlots ?? 0;
+
+  if (claimMode === "live") {
+    return includedLiveSyncSlots;
+  }
+
+  return Math.max(1, includedLiveSyncSlots);
+}
+
+function resolveColdQueueTier(input: {
+  lastActivityAt: number;
+  dueAt: number;
+  coldIntervalMs: number;
+  now: number;
+}) {
+  if (input.lastActivityAt <= 0) {
+    return 0;
+  }
+
+  const overdueMs = Math.max(input.now - input.dueAt, 0);
+  const softThresholdMs = Math.max(
+    input.coldIntervalMs,
+    COLD_QUEUE_SOFT_AGING_FLOOR_MS
+  );
+  const hardThresholdMs = Math.max(
+    input.coldIntervalMs * 2,
+    COLD_QUEUE_HARD_AGING_FLOOR_MS
+  );
+
+  if (overdueMs >= hardThresholdMs) {
+    return 2;
+  }
+
+  if (overdueMs >= softThresholdMs) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function resolveMt5ClaimQueueSelection(
+  connection: {
+    lastSyncAttemptAt?: Date | null;
+    lastSyncSuccessAt?: Date | null;
+    syncIntervalMinutes?: number | null;
+  },
+  liveLease: ReturnType<typeof getMt5LiveLeaseSnapshot>,
+  now: number
+): {
+  claimMode: Mt5ClaimMode;
+  queueTier: number;
+  dueAt: string;
+  lastRequestedAt: string | null;
+} | null {
+  const lastActivityAt = getLatestSyncActivityAt(connection);
+
+  if (liveLease.active) {
+    const dueAt = lastActivityAt + LIVE_QUEUE_REFRESH_MS;
+    if (lastActivityAt > 0 && dueAt > now) {
+      return null;
+    }
+
+    return {
+      claimMode: "live",
+      queueTier: 1,
+      dueAt: new Date(lastActivityAt > 0 ? dueAt : now).toISOString(),
+      lastRequestedAt: liveLease.lastHeartbeatAt,
+    };
+  }
+
+  const coldIntervalMinutes = Math.max(connection.syncIntervalMinutes ?? 1, 1);
+  const coldIntervalMs = coldIntervalMinutes * 60 * 1000;
+  const dueAt = lastActivityAt + coldIntervalMs;
+  if (lastActivityAt > 0 && dueAt > now) {
+    return null;
+  }
+
+  return {
+    claimMode: "cold",
+    queueTier: resolveColdQueueTier({
+      lastActivityAt,
+      dueAt,
+      coldIntervalMs,
+      now,
+    }),
+    dueAt: new Date(lastActivityAt > 0 ? dueAt : now).toISOString(),
+    lastRequestedAt: null,
+  };
+}
+
+async function resolveMt5UserPlanKeys(userIds: string[]) {
+  const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
+  if (uniqueUserIds.length === 0) {
+    return new Map<string, BillingPlanKey>();
+  }
+
+  const now = new Date();
+  const recentPaidThreshold = new Date(
+    now.getTime() - CHECKOUT_ORDER_GRACE_WINDOW_MS
+  );
+
+  const [subscriptions, overrides, paidOrders] = await Promise.all([
+    db
+      .select({
+        userId: billingSubscription.userId,
+        planKey: billingSubscription.planKey,
+        status: billingSubscription.status,
+      })
+      .from(billingSubscription)
+      .where(inArray(billingSubscription.userId, uniqueUserIds)),
+    db
+      .select({
+        userId: billingEntitlementOverride.userId,
+        planKey: billingEntitlementOverride.planKey,
+      })
+      .from(billingEntitlementOverride)
+      .where(
+        and(
+          inArray(billingEntitlementOverride.userId, uniqueUserIds),
+          lte(billingEntitlementOverride.startsAt, now),
+          gte(billingEntitlementOverride.endsAt, now)
+        )
+      ),
+    db
+      .select({
+        userId: billingOrder.userId,
+        planKey: billingOrder.planKey,
+      })
+      .from(billingOrder)
+      .where(
+        and(
+          inArray(billingOrder.userId, uniqueUserIds),
+          eq(billingOrder.paid, true),
+          gte(billingOrder.paidAt, recentPaidThreshold)
+        )
+      ),
+  ]);
+
+  const planByUserId = new Map<string, BillingPlanKey>(
+    uniqueUserIds.map((userId) => [userId, "student"])
+  );
+
+  for (const subscription of subscriptions) {
+    if (!isActiveSubscriptionStatus(subscription.status)) {
+      continue;
+    }
+
+    const planKey = subscription.planKey as BillingPlanKey;
+    if (!getBillingPlanDefinition(planKey)) {
+      continue;
+    }
+
+    planByUserId.set(
+      subscription.userId,
+      getHigherBillingPlanKey(planByUserId.get(subscription.userId) ?? "student", planKey)
+    );
+  }
+
+  for (const order of paidOrders) {
+    const planKey = order.planKey as BillingPlanKey;
+    if (!getBillingPlanDefinition(planKey)) {
+      continue;
+    }
+
+    planByUserId.set(
+      order.userId,
+      getHigherBillingPlanKey(planByUserId.get(order.userId) ?? "student", planKey)
+    );
+  }
+
+  for (const override of overrides) {
+    const planKey = override.planKey as BillingPlanKey;
+    if (!getBillingPlanDefinition(planKey)) {
+      continue;
+    }
+
+    planByUserId.set(
+      override.userId,
+      getHigherBillingPlanKey(planByUserId.get(override.userId) ?? "student", planKey)
+    );
+  }
+
+  return planByUserId;
 }
 
 export interface MtWorkerBootstrapPayload {
@@ -137,6 +412,23 @@ export async function createMtTerminalConnection(input: {
     provider: input.provider,
     displayName: input.displayName,
   });
+  const userRow = await db.query.user.findFirst({
+    where: eq(userTable.id, input.userId),
+    columns: {
+      widgetPreferences: true,
+    },
+  });
+  const userTimezone = getUserTimezoneFromWidgetPreferences(
+    userRow?.widgetPreferences
+  );
+  const mergedMeta = mergeMt5ConnectionHostingMeta({
+    rawMeta:
+      input.meta && typeof input.meta === "object"
+        ? (input.meta as Record<string, unknown>)
+        : {},
+    userId: input.userId,
+    userTimezone,
+  });
 
   const [conn] = await db
     .insert(platformConnection)
@@ -145,7 +437,7 @@ export async function createMtTerminalConnection(input: {
       provider: input.provider,
       displayName,
       meta: {
-        ...(input.meta ?? {}),
+        ...mergedMeta,
         login,
         platform: "mt5",
         serverName: server,
@@ -166,62 +458,226 @@ export async function createMtTerminalConnection(input: {
 }
 
 export async function claimMtConnections(input: {
-  workerHostId: string;
+  hostId?: string;
+  workerId?: string;
+  workerHostId?: string;
   limit: number;
+  host?: Mt5ClaimHostInput;
 }) {
+  const workerId =
+    input.workerId?.trim() || input.workerHostId?.trim() || input.hostId?.trim();
+  if (!workerId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "workerId is required",
+    });
+  }
+
+  const hostId = input.hostId?.trim() || workerId;
+  const hostProfile = resolveMt5ClaimHostProfile({
+    hostId,
+    host: input.host ?? null,
+  });
   const connections = await db.query.platformConnection.findMany({
     where: inArray(platformConnection.provider, ["mt5-terminal"]),
     orderBy: desc(platformConnection.updatedAt),
   });
+  const now = Date.now();
 
-  const candidates = connections.filter((connection) => {
-    if (connection.isPaused) {
-      return false;
-    }
-
-    return getMt5LiveLeaseSnapshot(connection.meta).active;
-  });
+  const candidates = connections.filter((connection) => !connection.isPaused);
   if (candidates.length === 0) {
     return [];
   }
+  const userRows = await db
+    .select({
+      id: userTable.id,
+      widgetPreferences: userTable.widgetPreferences,
+    })
+    .from(userTable)
+    .where(inArray(userTable.id, candidates.map((connection) => connection.userId)));
+  const userTimezoneById = new Map(
+    userRows.map((row) => [
+      row.id,
+      getUserTimezoneFromWidgetPreferences(row.widgetPreferences),
+    ])
+  );
 
   const sessions = await db.query.brokerSession.findMany({
     where: inArray(
       brokerSession.connectionId,
-      candidates.map((connection) => connection.id)
+      connections.map((connection) => connection.id)
     ),
   });
-
+  const planByUserId = await resolveMt5UserPlanKeys(
+    candidates.map((connection) => connection.userId)
+  );
+  const connectionById = new Map(
+    connections.map((connection) => [connection.id, connection])
+  );
   const sessionByConnection = new Map(
     sessions.map((session) => [session.connectionId, session])
   );
-  const now = Date.now();
+  const activeSlotCountByUserId = new Map<string, number>();
+  for (const session of sessions) {
+    if (!isClaimOccupyingSession(session, now)) {
+      continue;
+    }
+
+    const connection = connectionById.get(session.connectionId);
+    if (!connection) {
+      continue;
+    }
+
+    activeSlotCountByUserId.set(
+      connection.userId,
+      (activeSlotCountByUserId.get(connection.userId) ?? 0) + 1
+    );
+  }
+  const freshHostProfiles: Mt5HostProfile[] = (
+    await listMtWorkerHostSnapshots()
+  )
+    .filter(
+      ({ row, snapshot }) =>
+        isMtWorkerHostSnapshotFresh(row.lastSeenAt) &&
+        snapshot.ok &&
+        snapshot.healthyChildren > 0
+    )
+    .map(({ snapshot }) =>
+      resolveMt5ClaimHostProfile({
+        hostId: snapshot.workerHostId,
+        host: {
+          label: snapshot.host?.label ?? undefined,
+          environment: snapshot.host?.environment ?? undefined,
+          provider: snapshot.host?.provider ?? undefined,
+          region: snapshot.host?.region ?? undefined,
+          regionGroup: snapshot.host?.regionGroup ?? undefined,
+          countryCode: snapshot.host?.countryCode ?? undefined,
+          city: snapshot.host?.city ?? undefined,
+          timezone: snapshot.host?.timezone ?? undefined,
+          publicIp: snapshot.host?.publicIp ?? undefined,
+          tags: snapshot.host?.tags ?? [],
+          deviceIsolationMode:
+            snapshot.host?.deviceIsolationMode === "dedicated-user-host"
+              ? "dedicated-user-host"
+              : "shared-host",
+          reservedUserId: snapshot.host?.reservedUserId ?? undefined,
+        },
+      })
+    );
+  const schedulableCandidates: Array<
+    Mt5ClaimSchedulingCandidate<{
+      connection: (typeof candidates)[number];
+      nextConnectionStatus: "pending" | "active" | "error";
+      claimPlacement: Record<string, unknown>;
+      claimMode: Mt5ClaimMode;
+      enforceLiveLease: boolean;
+    }>
+  > = [];
   const claimed: Array<{
     connectionId: string;
     provider: string;
     displayName: string;
     status: string;
     accountId: string | null;
+    hostId: string;
+    workerId: string;
+    claimPlacement: Record<string, unknown>;
+    claimMode: Mt5ClaimMode;
+    enforceLiveLease: boolean;
   }> = [];
 
   for (const connection of candidates) {
-    if (claimed.length >= input.limit) {
-      break;
+    const liveLease = getMt5LiveLeaseSnapshot(connection.meta);
+    const policy = resolveMt5ConnectionHostingPolicy({
+      userId: connection.userId,
+      userTimezone: userTimezoneById.get(connection.userId) ?? null,
+      connectionMeta: connection.meta,
+    });
+    const placement = evaluateMt5HostPlacement({
+      policy,
+      host: hostProfile,
+    });
+    if (!placement.eligible) {
+      continue;
+    }
+
+    const strictGeoPolicy = withStrictMt5HostingGeoPolicy(policy);
+    const strictGeoPlacement =
+      strictGeoPolicy === policy
+        ? placement
+        : evaluateMt5HostPlacement({
+            policy: strictGeoPolicy,
+            host: hostProfile,
+          });
+    const preferredRegionalHostAvailable =
+      strictGeoPolicy !== policy &&
+      !strictGeoPlacement.eligible &&
+      freshHostProfiles.some((candidateHost) =>
+        evaluateMt5HostPlacement({
+          policy: strictGeoPolicy,
+          host: candidateHost,
+        }).eligible
+      );
+    if (preferredRegionalHostAvailable) {
+      continue;
     }
 
     const session = sessionByConnection.get(connection.id);
-    const isLeasedToSameWorker = session?.workerHostId === input.workerHostId;
-    const leaseExpired =
-      !session?.heartbeatAt ||
-      now - session.heartbeatAt.getTime() > ACTIVE_LEASE_MS;
+    if (isClaimOccupyingSession(session, now)) {
+      continue;
+    }
 
-    if (session && !isLeasedToSameWorker && !leaseExpired) {
+    const planKey = planByUserId.get(connection.userId) ?? "student";
+    const queueSelection = resolveMt5ClaimQueueSelection(
+      connection,
+      liveLease,
+      now
+    );
+    if (!queueSelection) {
+      continue;
+    }
+
+    const concurrentSlotCap = resolveMt5ConcurrentSlotCap(
+      planKey,
+      queueSelection.claimMode
+    );
+    if (concurrentSlotCap <= 0) {
       continue;
     }
 
     const nextSessionStatus =
       connection.status === "active" ? "syncing" : "bootstrapping";
     const nextConnectionStatus = toPlatformConnectionStatus(nextSessionStatus);
+    schedulableCandidates.push({
+      connectionId: connection.id,
+      userId: connection.userId,
+      planKey,
+      concurrentSlotCap,
+      currentActiveSlots: activeSlotCountByUserId.get(connection.userId) ?? 0,
+      queueTier: queueSelection.queueTier,
+      dueAt: queueSelection.dueAt,
+      lastRequestedAt: queueSelection.lastRequestedAt,
+      updatedAt: connection.updatedAt,
+      connection: {
+        connection,
+        nextConnectionStatus,
+        claimPlacement: strictGeoPlacement.assignment,
+        claimMode: queueSelection.claimMode,
+        enforceLiveLease: queueSelection.claimMode === "live",
+      },
+    });
+  }
+
+  const selectedCandidates = selectMt5Claims(schedulableCandidates, input.limit);
+
+  for (const candidate of selectedCandidates) {
+    const {
+      connection,
+      nextConnectionStatus,
+      claimPlacement,
+      claimMode,
+      enforceLiveLease,
+    } = candidate.connection;
 
     await db
       .insert(brokerSession)
@@ -229,9 +685,17 @@ export async function claimMtConnections(input: {
         connectionId: connection.id,
         accountId: connection.accountId ?? null,
         platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
-        workerHostId: input.workerHostId,
-        status: nextSessionStatus,
+        workerHostId: workerId,
+        status: connection.status === "active" ? "syncing" : "bootstrapping",
         heartbeatAt: new Date(),
+        meta: {
+          hostId,
+          workerId,
+          claimPlacement,
+          planKey: candidate.planKey,
+          claimMode,
+          enforceLiveLease,
+        },
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -239,9 +703,17 @@ export async function claimMtConnections(input: {
         set: {
           accountId: connection.accountId ?? null,
           platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
-          workerHostId: input.workerHostId,
-          status: nextSessionStatus,
+          workerHostId: workerId,
+          status: connection.status === "active" ? "syncing" : "bootstrapping",
           heartbeatAt: new Date(),
+          meta: {
+            hostId,
+            workerId,
+            claimPlacement,
+            planKey: candidate.planKey,
+            claimMode,
+            enforceLiveLease,
+          },
           updatedAt: new Date(),
         },
       });
@@ -255,12 +727,17 @@ export async function claimMtConnections(input: {
       })
       .where(eq(platformConnection.id, connection.id));
 
-      claimed.push({
+    claimed.push({
       connectionId: connection.id,
       provider: connection.provider,
       displayName: connection.displayName,
       status: nextConnectionStatus,
       accountId: connection.accountId ?? null,
+      hostId,
+      workerId,
+      claimPlacement,
+      claimMode,
+      enforceLiveLease,
     });
   }
 
@@ -338,8 +815,22 @@ export async function getMtConnectionBootstrap(connectionId: string) {
     connection.meta && typeof connection.meta === "object"
       ? (connection.meta as Record<string, unknown>)
       : {};
-  const liveLease = getMt5LiveLeaseSnapshot(connectionMeta);
-  const { mt5LiveLeases: _, ...bootstrapMeta } = connectionMeta;
+  const userRow = await db.query.user.findFirst({
+    where: eq(userTable.id, connection.userId),
+    columns: {
+      widgetPreferences: true,
+    },
+  });
+  const userTimezone = getUserTimezoneFromWidgetPreferences(
+    userRow?.widgetPreferences
+  );
+  const enrichedConnectionMeta = mergeMt5ConnectionHostingMeta({
+    rawMeta: connectionMeta,
+    userId: connection.userId,
+    userTimezone,
+  });
+  const liveLease = getMt5LiveLeaseSnapshot(enrichedConnectionMeta);
+  const { mt5LiveLeases: _, ...bootstrapMeta } = enrichedConnectionMeta;
 
   return {
     connectionId: connection.id,
@@ -379,6 +870,8 @@ export async function getMtConnectionBootstrap(connectionId: string) {
 export async function reportMtConnectionStatus(input: {
   connectionId: string;
   workerHostId: string;
+  hostId?: string;
+  workerId?: string;
   status: string;
   sessionKey?: string;
   lastError?: string | null;
@@ -399,6 +892,12 @@ export async function reportMtConnectionStatus(input: {
     connection.meta && typeof connection.meta === "object"
       ? (connection.meta as Record<string, unknown>)
       : {};
+  const workerId = input.workerId ?? input.workerHostId;
+  const sessionMeta = {
+    ...(input.meta ?? {}),
+    hostId: input.hostId ?? null,
+    workerId,
+  };
 
   await db
     .insert(brokerSession)
@@ -406,12 +905,12 @@ export async function reportMtConnectionStatus(input: {
       connectionId: input.connectionId,
       accountId: connection.accountId ?? null,
       platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
-      workerHostId: input.workerHostId,
+      workerHostId: workerId,
       sessionKey: input.sessionKey ?? null,
       status: input.status,
       heartbeatAt: new Date(),
       lastError: input.lastError ?? null,
-      meta: input.meta ?? null,
+      meta: sessionMeta,
       updatedAt: new Date(),
     })
     .onConflictDoUpdate({
@@ -419,12 +918,12 @@ export async function reportMtConnectionStatus(input: {
       set: {
         accountId: connection.accountId ?? null,
         platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
-        workerHostId: input.workerHostId,
+        workerHostId: workerId,
         sessionKey: input.sessionKey ?? null,
         status: input.status,
         heartbeatAt: new Date(),
         lastError: input.lastError ?? null,
-        meta: input.meta ?? null,
+        meta: sessionMeta,
         updatedAt: new Date(),
       },
     });
@@ -438,10 +937,10 @@ export async function reportMtConnectionStatus(input: {
       meta: {
         ...currentMeta,
         mt5Worker: {
-          workerHostId: input.workerHostId,
+          workerHostId: workerId,
           sessionKey: input.sessionKey ?? null,
           reportedAt: new Date().toISOString(),
-          ...(input.meta ?? {}),
+          ...sessionMeta,
         },
       },
     })

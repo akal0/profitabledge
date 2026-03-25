@@ -6,7 +6,7 @@ import { authClient } from "@/lib/auth-client";
 import { useTabAttentionStore } from "@/stores/tab-attention";
 import { useTRPC } from "@/utils/trpc";
 
-const AWAY_TITLE = "Come back to find your profitable edge";
+const AWAY_TITLE = "Come back to find your profitabledge";
 const BADGE_COLORS = {
   unread: "#ef4444",
   running: "#f97316",
@@ -47,7 +47,8 @@ function getIconLinks() {
 
 export function TabAttentionController() {
   const trpc = useTRPC();
-  const { data: session, isPending: isSessionPending } = authClient.useSession();
+  const { data: session, isPending: isSessionPending } =
+    authClient.useSession();
   const activeActivityCount = useTabAttentionStore(
     (state) => state.activeActivityCount
   );

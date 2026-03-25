@@ -10,6 +10,8 @@ import {
   buildPublicProofPath,
 } from "../../lib/public-proof/share-slug";
 
+export { buildPublicProofPath };
+
 export async function ensureOwnedProofAccount(
   userId: string,
   accountId: string
@@ -144,6 +146,49 @@ export async function loadPublicShareBySlug(publicAccountSlug: string) {
       eq(tradingAccount.id, publicAccountShare.accountId)
     )
     .where(eq(publicAccountShare.publicAccountSlug, publicAccountSlug))
+    .limit(1);
+
+  return share ?? null;
+}
+
+export async function loadPublicShareById(shareId: string) {
+  const [share] = await db
+    .select({
+      id: publicAccountShare.id,
+      userId: publicAccountShare.userId,
+      accountId: publicAccountShare.accountId,
+      publicAccountSlug: publicAccountShare.publicAccountSlug,
+      isActive: publicAccountShare.isActive,
+      revokedAt: publicAccountShare.revokedAt,
+      viewCount: publicAccountShare.viewCount,
+      lastViewedAt: publicAccountShare.lastViewedAt,
+      createdAt: publicAccountShare.createdAt,
+      updatedAt: publicAccountShare.updatedAt,
+      username: userTable.username,
+      traderName: userTable.name,
+      traderImage: userTable.image,
+      traderBannerUrl: userTable.profileBannerUrl,
+      traderBannerPosition: userTable.profileBannerPosition,
+      traderProfileEffects: userTable.profileEffects,
+      accountName: tradingAccount.name,
+      broker: tradingAccount.broker,
+      brokerType: tradingAccount.brokerType,
+      brokerServer: tradingAccount.brokerServer,
+      accountNumber: tradingAccount.accountNumber,
+      preferredDataSource: tradingAccount.preferredDataSource,
+      verificationLevel: tradingAccount.verificationLevel,
+      isVerified: tradingAccount.isVerified,
+      lastSyncedAt: tradingAccount.lastSyncedAt,
+      initialBalance: tradingAccount.initialBalance,
+      initialCurrency: tradingAccount.initialCurrency,
+    })
+    .from(publicAccountShare)
+    .innerJoin(userTable, eq(userTable.id, publicAccountShare.userId))
+    .innerJoin(
+      tradingAccount,
+      eq(tradingAccount.id, publicAccountShare.accountId)
+    )
+    .where(eq(publicAccountShare.id, shareId))
     .limit(1);
 
   return share ?? null;

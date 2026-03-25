@@ -57,9 +57,10 @@ function getOrCreateLeaseId() {
 }
 
 function normalizeMt5ConnectionIds(
-  connections: Mt5LeaseConnection[] | undefined
+  connections: Mt5LeaseConnection[] | undefined,
+  maxConnectionCount?: number
 ) {
-  return Array.from(
+  const normalized = Array.from(
     new Set(
       (connections ?? [])
         .filter(
@@ -70,6 +71,16 @@ function normalizeMt5ConnectionIds(
         .filter((connectionId): connectionId is string => Boolean(connectionId))
     )
   ).sort();
+
+  if (typeof maxConnectionCount !== "number") {
+    return normalized;
+  }
+
+  if (maxConnectionCount <= 0) {
+    return [];
+  }
+
+  return normalized.slice(0, maxConnectionCount);
 }
 
 async function sendLeaseMutation(
@@ -91,10 +102,12 @@ async function sendLeaseMutation(
 export function useMt5LiveLeaseHeartbeat({
   connections,
   enabled,
+  maxConnectionCount,
   route,
 }: {
   connections: Mt5LeaseConnection[] | undefined;
   enabled: boolean;
+  maxConnectionCount?: number;
   route?: string | null;
 }) {
   const leaseIdRef = useRef<string>(getOrCreateLeaseId());
@@ -118,8 +131,8 @@ export function useMt5LiveLeaseHeartbeat({
   });
 
   const connectionIds = useMemo(
-    () => normalizeMt5ConnectionIds(connections),
-    [connections]
+    () => normalizeMt5ConnectionIds(connections, maxConnectionCount),
+    [connections, maxConnectionCount]
   );
   const connectionIdsKey = useMemo(() => connectionIds.join("|"), [connectionIds]);
   const isLeaseActive = enabled && isVisible && isOnline && connectionIds.length > 0;

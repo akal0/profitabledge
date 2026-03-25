@@ -2,6 +2,7 @@
 
 import React, { forwardRef } from "react";
 import { formatDistance } from "date-fns";
+import QRCode from "react-qr-code";
 
 export interface PnlCardData {
   symbol: string;
@@ -47,10 +48,14 @@ interface PnlCardRendererProps {
   data: PnlCardData;
   config: PnlCardConfig;
   className?: string;
+  verification?: {
+    url: string;
+    code: string;
+  } | null;
 }
 
 export const PnlCardRenderer = forwardRef<HTMLDivElement, PnlCardRendererProps>(
-  ({ data, config, className }, ref) => {
+  ({ data, config, className, verification }, ref) => {
     const { layout } = config;
 
     // Determine background style
@@ -376,6 +381,49 @@ export const PnlCardRenderer = forwardRef<HTMLDivElement, PnlCardRendererProps>(
               </div>
             </div>
           )}
+
+          {verification ? (
+            <div className="absolute bottom-4 right-4">
+              <div className="rounded-2xl border border-white/12 bg-black/45 p-2.5 shadow-2xl backdrop-blur-md">
+                <div className="flex items-center gap-2.5">
+                  <div className="rounded-xl bg-white p-1.5 shadow-lg">
+                    <QRCode
+                      value={verification.url}
+                      size={52}
+                      bgColor="#ffffff"
+                      fgColor="#0a0e14"
+                    />
+                  </div>
+                  <div className="max-w-[126px]">
+                    <p
+                      className="uppercase tracking-[0.2em] text-white/52"
+                      style={{ fontSize: `${Math.max(9, layout.fontSize.label - 2)}px` }}
+                    >
+                      Verified by
+                    </p>
+                    <p
+                      className="mt-1 font-bold text-white"
+                      style={{ fontSize: `${Math.max(12, layout.fontSize.label)}px` }}
+                    >
+                      profitabledge
+                    </p>
+                    <p
+                      className="mt-1 text-white/62"
+                      style={{ fontSize: `${Math.max(9, layout.fontSize.label - 2)}px` }}
+                    >
+                      Scan to verify
+                    </p>
+                    <p
+                      className="mt-1 font-mono text-white/52"
+                      style={{ fontSize: `${Math.max(8, layout.fontSize.label - 3)}px` }}
+                    >
+                      {verification.code}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
     );

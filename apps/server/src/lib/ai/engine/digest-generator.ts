@@ -5,7 +5,7 @@
  * and milestone reports for the proactive AI coaching system.
  *
  * Features:
- * - Morning briefing (yesterday review + today outlook + weekly progress + focus item)
+ * - Morning briefing (latest closed-trade-day review + today outlook + weekly progress + focus item)
  * - Post-trade instant feedback (score, edge/leak match, comparisons, what-if)
  * - Milestone reports (at 10, 25, 50, 100, 250, 500 trades)
  */
@@ -24,6 +24,19 @@ import type {
 } from "./types";
 
 type ClosedTrade = typeof tradeTable.$inferSelect;
+
+export type BriefingReviewSnapshot = {
+  tradeCount: number;
+  wins: number;
+  winRate: number;
+  pnl: number;
+  bestTrade?: string;
+  worstTrade?: string;
+  edgeMatches: number;
+  leakMatches: number;
+  reviewedAt: string;
+  reviewLabel: "Today's review" | "Yesterday's review" | "Latest trading day";
+};
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -58,6 +71,147 @@ function holdSeconds(t: ClosedTrade): number {
   return 0;
 }
 
+function tradeNetPnl(trade: ClosedTrade): number {
+  return (
+    toNum(trade.profit) + toNum(trade.commissions) + toNum(trade.swap)
+  );
+}
+
+function startOfLocalDay(date: Date): Date {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function formatTradeSummary(trade: ClosedTrade, pnl: number): string {
+  return `${trade.symbol} ${trade.tradeType} → ${formatDollar(pnl)}`;
+}
+
+function reviewLabelNarrativePrefix(
+  reviewLabel: BriefingReviewSnapshot["reviewLabel"]
+) {
+  switch (reviewLabel) {
+    case "Today's review":
+      return "Today";
+    case "Yesterday's review":
+      return "Yesterday";
+    default:
+      return "On your latest trading day";
+  }
+}
+
+async function getMorningReviewTrades(accountId: string) {
+  const now = new Date();
+  const todayStart = startOfLocalDay(now);
+  const yesterdayStart = addDays(todayStart, -1);
+
+  const [latestClosedTrade] = await db
+    .select({
+      closeTime: tradeTable.closeTime,
+    })
+    .from(tradeTable)
+    .where(
+      and(
+        eq(tradeTable.accountId, accountId),
+        sql`${tradeTable.closeTime} IS NOT NULL`
+      )
+    )
+    .orderBy(desc(tradeTable.closeTime))
+    .limit(1);
+
+  if (!latestClosedTrade?.closeTime) {
+    return null;
+  }
+
+  const latestCloseTime = new Date(latestClosedTrade.closeTime);
+  const latestTradeDayStart = startOfLocalDay(latestCloseTime);
+  const latestTradeIsYesterday =
+    latestCloseTime >= yesterdayStart && latestCloseTime < todayStart;
+
+  const reviewDayStart = latestTradeIsYesterday
+    ? yesterdayStart
+    : latestTradeDayStart;
+  const reviewDayEnd = addDays(reviewDayStart, 1);
+
+  const reviewTrades = await db
+    .select()
+    .from(tradeTable)
+    .where(
+      and(
+        eq(tradeTable.accountId, accountId),
+        sql`${tradeTable.closeTime} IS NOT NULL`,
+        gte(tradeTable.closeTime, reviewDayStart),
+        sql`${tradeTable.closeTime} < ${reviewDayEnd}`
+      )
+    )
+    .orderBy(desc(tradeTable.closeTime));
+
+  const reviewLabel: BriefingReviewSnapshot["reviewLabel"] =
+    reviewDayStart.getTime() === todayStart.getTime()
+      ? "Today's review"
+      : latestTradeIsYesterday
+        ? "Yesterday's review"
+        : "Latest trading day";
+
+  return {
+    reviewTrades,
+    reviewDayStart,
+    reviewLabel,
+  };
+}
+
+export async function getLatestBriefingReviewSnapshot(
+  accountId: string,
+  edges: EdgeCondition[] = [],
+  leaks: LeakCondition[] = []
+): Promise<BriefingReviewSnapshot | null> {
+  const reviewData = await getMorningReviewTrades(accountId);
+  if (!reviewData) {
+    return null;
+  }
+
+  const { reviewTrades, reviewDayStart, reviewLabel } = reviewData;
+  const reviewWins = reviewTrades.filter((trade) => tradeNetPnl(trade) > 0);
+  const reviewPnL = reviewTrades.reduce(
+    (sum, trade) => sum + tradeNetPnl(trade),
+    0
+  );
+
+  let bestTrade: string | undefined;
+  let worstTrade: string | undefined;
+  if (reviewTrades.length > 0) {
+    const sortedByPnl = [...reviewTrades].sort(
+      (left, right) => tradeNetPnl(right) - tradeNetPnl(left)
+    );
+    const best = sortedByPnl[0];
+    const worst = sortedByPnl[sortedByPnl.length - 1];
+    bestTrade = formatTradeSummary(best, tradeNetPnl(best));
+    worstTrade = formatTradeSummary(worst, tradeNetPnl(worst));
+  }
+
+  return {
+    tradeCount: reviewTrades.length,
+    wins: reviewWins.length,
+    winRate:
+      reviewTrades.length > 0
+        ? (reviewWins.length / reviewTrades.length) * 100
+        : 0,
+    pnl: reviewPnL,
+    bestTrade,
+    worstTrade,
+    edgeMatches: countEdgeMatches(reviewTrades, edges),
+    leakMatches: countLeakMatches(reviewTrades, leaks),
+    reviewedAt: reviewDayStart.toISOString(),
+    reviewLabel,
+  };
+}
+
 // ─── Morning Briefing ───────────────────────────────────────────
 
 export async function generateMorningBriefing(
@@ -68,26 +222,12 @@ export async function generateMorningBriefing(
   if (!fullProfile || fullProfile.profile.totalTrades < 5) return null;
 
   const { profile, edges, leaks } = fullProfile;
-
-  // Get yesterday's trades
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  yesterday.setHours(0, 0, 0, 0);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const yesterdayTrades = await db
-    .select()
-    .from(tradeTable)
-    .where(
-      and(
-        eq(tradeTable.accountId, accountId),
-        sql`${tradeTable.closeTime} IS NOT NULL`,
-        gte(tradeTable.closeTime, yesterday),
-        sql`${tradeTable.closeTime} < ${today}`
-      )
-    )
-    .orderBy(desc(tradeTable.closeTime));
+  const reviewSnapshot = await getLatestBriefingReviewSnapshot(
+    accountId,
+    edges,
+    leaks
+  );
+  if (!reviewSnapshot) return null;
 
   // Get last 7 days of trades for weekly progress
   const weekAgo = new Date();
@@ -102,27 +242,6 @@ export async function generateMorningBriefing(
         gte(tradeTable.closeTime, weekAgo)
       )
     );
-
-  // Build review
-  const yesterdayWins = yesterdayTrades.filter((t) => toNum(t.profit) > 0);
-  const yesterdayPnL = yesterdayTrades.reduce(
-    (s, t) => s + toNum(t.profit),
-    0
-  );
-  const yesterdayEdgeMatches = countEdgeMatches(yesterdayTrades, edges);
-  const yesterdayLeakMatches = countLeakMatches(yesterdayTrades, leaks);
-
-  let bestTrade: string | undefined;
-  let worstTrade: string | undefined;
-  if (yesterdayTrades.length > 0) {
-    const sorted = [...yesterdayTrades].sort(
-      (a, b) => toNum(b.profit) - toNum(a.profit)
-    );
-    const best = sorted[0];
-    const worst = sorted[sorted.length - 1];
-    bestTrade = `${best.symbol} ${best.tradeType} → ${formatDollar(toNum(best.profit))}`;
-    worstTrade = `${worst.symbol} ${worst.tradeType} → ${formatDollar(toNum(worst.profit))}`;
-  }
 
   // Build outlook
   const bestSessions = profile.sessions
@@ -171,10 +290,10 @@ export async function generateMorningBriefing(
     type: "edge" | "leak" | "rule" | "psychology";
   };
 
-  if (leaks.length > 0 && yesterdayLeakMatches > 0) {
+  if (leaks.length > 0 && reviewSnapshot.leakMatches > 0) {
     focusItem = {
       title: `Stop the leak: ${leaks[0].label}`,
-      message: `Yesterday you took ${yesterdayLeakMatches} trade(s) matching your worst leak pattern. This pattern has a ${formatPct(leaks[0].winRate)} win rate. Avoid it today.`,
+      message: `${reviewLabelNarrativePrefix(reviewSnapshot.reviewLabel)} you took ${reviewSnapshot.leakMatches} trade(s) matching your worst leak pattern. This pattern has a ${formatPct(leaks[0].winRate)} win rate. Avoid it today.`,
       type: "leak",
     };
   } else if (edges.length > 0) {
@@ -194,12 +313,12 @@ export async function generateMorningBriefing(
 
   // Build narrative
   const parts: string[] = [];
-  if (yesterdayTrades.length > 0) {
+  if (reviewSnapshot.tradeCount > 0) {
     parts.push(
-      `Yesterday: ${yesterdayTrades.length} trades, ${yesterdayWins.length} wins (${formatPct(yesterdayTrades.length > 0 ? (yesterdayWins.length / yesterdayTrades.length) * 100 : 0)}), ${formatDollar(yesterdayPnL)} P&L.`
+      `${reviewSnapshot.reviewLabel}: ${reviewSnapshot.tradeCount} trades, ${reviewSnapshot.wins} wins (${formatPct(reviewSnapshot.winRate)}), ${formatDollar(reviewSnapshot.pnl)} P&L.`
     );
   } else {
-    parts.push("No trades yesterday — rest days are part of the process.");
+    parts.push("No recent closed trades to review — rest days are part of the process.");
   }
   parts.push(
     `This week: ${formatPct(weeklyWR)} win rate, ${formatDollar(weeklyPnL)} total. ${trend === "improving" ? "Trending up." : trend === "declining" ? "Watch the downtrend." : "Holding steady."}`
@@ -212,16 +331,15 @@ export async function generateMorningBriefing(
     digestType: "morning",
     content: {
       review: {
-        tradesToday: yesterdayTrades.length,
-        winRate:
-          yesterdayTrades.length > 0
-            ? (yesterdayWins.length / yesterdayTrades.length) * 100
-            : 0,
-        pnl: yesterdayPnL,
-        bestTrade,
-        worstTrade,
-        edgeMatches: yesterdayEdgeMatches,
-        leakMatches: yesterdayLeakMatches,
+        tradesToday: reviewSnapshot.tradeCount,
+        winRate: reviewSnapshot.winRate,
+        pnl: reviewSnapshot.pnl,
+        bestTrade: reviewSnapshot.bestTrade,
+        worstTrade: reviewSnapshot.worstTrade,
+        edgeMatches: reviewSnapshot.edgeMatches,
+        leakMatches: reviewSnapshot.leakMatches,
+        reviewedAt: reviewSnapshot.reviewedAt,
+        label: reviewSnapshot.reviewLabel,
       },
       outlook: {
         recommendedSessions: bestSessions,

@@ -8,8 +8,8 @@ import { cn } from "@/lib/utils";
 
 const AUTO_COLUMN_CONTENT_BUFFER_PX = 8;
 const DEFAULT_ROW_VIRTUALIZER_OVERSCAN = 14;
-const DATA_TABLE_CELL_HORIZONTAL_PADDING_PX = 48;
-const DATA_TABLE_HEADER_CONTENT_MAX_WIDTH_PX = 220;
+const DATA_TABLE_CELL_HORIZONTAL_PADDING_PX = 32;
+const DATA_TABLE_HEADER_CONTENT_MAX_WIDTH_PX = 360;
 
 type DataRowRenderItem<TData> = {
   key: string;
@@ -48,6 +48,7 @@ export function DataTable<TData>({
   enableRowVirtualization,
   usePaginationRows,
   rowVirtualizerOverscan = DEFAULT_ROW_VIRTUALIZER_OVERSCAN,
+  measureVirtualRows = false,
 }: {
   table: Table<TData>;
   children?: React.ReactNode;
@@ -72,6 +73,7 @@ export function DataTable<TData>({
   enableRowVirtualization?: boolean;
   usePaginationRows?: boolean;
   rowVirtualizerOverscan?: number;
+  measureVirtualRows?: boolean;
 }) {
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const resizeGuideRef = React.useRef<HTMLDivElement | null>(null);
@@ -79,6 +81,7 @@ export function DataTable<TData>({
   const measurementFrameRef = React.useRef<number | null>(null);
   const measuredColumnMinWidthsRef = React.useRef<Record<string, number>>({});
   const lastRenderedRowIdsSignatureRef = React.useRef<string>("");
+  const renderedRowIdsFrameRef = React.useRef<number | null>(null);
   const resizeSessionRef = React.useRef<{
     columnId: string;
     startX: number;
@@ -507,7 +510,7 @@ export function DataTable<TData>({
       resizeObserver?.disconnect();
       window.removeEventListener("resize", updateTableOffsetTop);
     };
-  }, [enableRowVirtualization, rowCount, visibleColumnIds]);
+  }, [enableRowVirtualization, visibleColumnIds]);
 
   const groupedRows = React.useMemo(() => {
     if (!getRowGroupKey || !renderRowGroupHeader) {
@@ -591,14 +594,16 @@ export function DataTable<TData>({
             key: row.id,
             kind: "row",
             row,
-            className: "animate-in fade-in-0 slide-in-from-top-1 duration-200",
+            className: enableRowVirtualization
+              ? undefined
+              : "animate-in fade-in-0 slide-in-from-top-1 duration-200",
           });
         });
       }
     });
 
     return nextItems;
-  }, [collapsedGroupKeys, groupedRows, tableRows]);
+  }, [collapsedGroupKeys, enableRowVirtualization, groupedRows, tableRows]);
 
   const windowVirtualizer = useWindowVirtualizer<HTMLTableRowElement>({
     count: bodyItems.length,
@@ -610,13 +615,10 @@ export function DataTable<TData>({
     getItemKey: (index) => bodyItems[index]?.key ?? index,
   });
 
-  const virtualRows = React.useMemo(
-    () =>
-      enableRowVirtualization && bodyItems.length > 0
-        ? windowVirtualizer.getVirtualItems()
-        : [],
-    [bodyItems, enableRowVirtualization, windowVirtualizer]
-  );
+  const virtualRows =
+    enableRowVirtualization && bodyItems.length > 0
+      ? windowVirtualizer.getVirtualItems()
+      : [];
   const totalVirtualHeight = enableRowVirtualization
     ? windowVirtualizer.getTotalSize()
     : 0;
@@ -627,8 +629,7 @@ export function DataTable<TData>({
   const virtualPaddingBottom =
     enableRowVirtualization && virtualRows.length > 0
       ? Math.max(
-          totalVirtualHeight -
-            (virtualRows[virtualRows.length - 1]!.end - tableOffsetTop),
+          totalVirtualHeight - virtualRows[virtualRows.length - 1]!.end,
           0
         )
       : 0;
@@ -663,8 +664,25 @@ export function DataTable<TData>({
     }
 
     lastRenderedRowIdsSignatureRef.current = nextSignature;
-    onRenderedRowIdsChange(renderedRowIds);
+    if (renderedRowIdsFrameRef.current != null) {
+      window.cancelAnimationFrame(renderedRowIdsFrameRef.current);
+    }
+
+    renderedRowIdsFrameRef.current = window.requestAnimationFrame(() => {
+      renderedRowIdsFrameRef.current = null;
+      onRenderedRowIdsChange(renderedRowIds);
+    });
   }, [onRenderedRowIdsChange, renderedRowIds]);
+
+  React.useEffect(
+    () => () => {
+      if (renderedRowIdsFrameRef.current != null) {
+        window.cancelAnimationFrame(renderedRowIdsFrameRef.current);
+        renderedRowIdsFrameRef.current = null;
+      }
+    },
+    []
+  );
 
   const renderBodyItem = React.useCallback(
     (
@@ -740,16 +758,17 @@ export function DataTable<TData>({
             <td
               key={cell.id}
               data-column-id={cell.column.id}
-              className="overflow-hidden px-6 py-6 select-none whitespace-nowrap"
+              className="overflow-visible px-4 py-6 text-left align-middle select-none whitespace-nowrap"
               style={{ width: cell.column.getSize() }}
             >
               <div
                 data-column-content
-                className="flex min-w-0 w-full max-w-full items-center overflow-hidden"
+                className="flex min-w-0 w-full items-center justify-start overflow-visible text-left"
                 style={{
                   maxWidth: Math.max(
                     0,
-                    cell.column.getSize() - DATA_TABLE_CELL_HORIZONTAL_PADDING_PX
+                    cell.column.getSize() -
+                      DATA_TABLE_CELL_HORIZONTAL_PADDING_PX
                   ),
                 }}
               >
@@ -808,7 +827,7 @@ export function DataTable<TData>({
                     key={h.id}
                     data-column-id={h.column.id}
                     draggable={canReorderColumn(h.column.id)}
-                    className="group relative cursor-pointer border-r border-white/5 bg-sidebar-accent px-6 py-4 text-left font-medium whitespace-nowrap text-white/70 last:border-r-0"
+                    className="group relative cursor-pointer border-r border-white/5 bg-sidebar-accent px-4 py-4 text-left font-medium whitespace-nowrap text-white/70 last:border-r-0"
                     style={{ width: h.getSize() }}
                     onDragStart={(event) => {
                       if (!canReorderColumn(h.column.id)) {
@@ -874,7 +893,7 @@ export function DataTable<TData>({
                         shouldMeasureColumns ? true : undefined
                       }
                       className={cn(
-                        "relative inline-flex min-w-0 max-w-full items-center overflow-hidden",
+                        "relative inline-flex min-w-0 max-w-full items-center overflow-visible",
                         canReorderColumn(h.column.id) && "cursor-grab",
                         draggedColumnId === h.column.id && "opacity-50",
                         dragOverColumnId === h.column.id &&
@@ -939,11 +958,13 @@ export function DataTable<TData>({
                 ) : null}
                 {virtualRows.map((virtualRow) =>
                   renderBodyItem(bodyItems[virtualRow.index]!, {
-                    measureRef: (node) => {
-                      if (node) {
-                        windowVirtualizer.measureElement(node);
-                      }
-                    },
+                    measureRef: measureVirtualRows
+                      ? (node) => {
+                          if (node) {
+                            windowVirtualizer.measureElement(node);
+                          }
+                        }
+                      : undefined,
                   })
                 )}
                 {virtualPaddingBottom > 0 ? (

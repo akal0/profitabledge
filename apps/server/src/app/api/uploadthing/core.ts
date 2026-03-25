@@ -26,6 +26,24 @@ export const ourFileRouter: FileRouter = {
     .onUploadComplete(async ({ metadata, file }) => {
       return { uploadedBy: metadata.userId, url: file.ufsUrl } as any;
     }),
+  widgetSnapshotUploader: f({
+    text: {
+      maxFileSize: "1MB",
+      maxFileCount: 1,
+    },
+  })
+    .middleware(async ({ req }) => {
+      const session = await auth.api.getSession({
+        headers: req.headers,
+      });
+      const userId = session?.user?.id;
+
+      if (!userId) throw new UploadThingError("Unauthorized");
+      return { userId };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      return { uploadedBy: metadata.userId, url: file.ufsUrl } as any;
+    }),
   videoUploader: f({
     video: {
       maxFileSize: "64MB",

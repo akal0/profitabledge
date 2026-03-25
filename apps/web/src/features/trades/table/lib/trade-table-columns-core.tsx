@@ -74,8 +74,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     ),
     enableSorting: false,
     enableHiding: false,
-    size: 32,
-    minSize: 32,
+    size: 36,
+    minSize: 36,
     maxSize: 56,
   },
   {
@@ -133,8 +133,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         />
       );
     },
-    size: 112,
-    minSize: 104,
+    size: 128,
+    minSize: 116,
   },
   {
     accessorKey: "sessionTag",
@@ -153,8 +153,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         />
       );
     },
-    size: 152,
-    minSize: 136,
+    size: 164,
+    minSize: 148,
   },
   {
     accessorKey: "modelTag",
@@ -177,8 +177,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         />
       );
     },
-    size: 172,
-    minSize: 156,
+    size: 188,
+    minSize: 172,
   },
   {
     accessorKey: "customTags",
@@ -197,8 +197,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
       );
     },
     enableSorting: false,
-    size: 220,
-    minSize: 180,
+    size: 240,
+    minSize: 208,
   },
   {
     accessorKey: "protocolAlignment",
@@ -210,8 +210,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         isLive={row.original.isLive}
       />
     ),
-    size: 148,
-    minSize: 132,
+    size: 156,
+    minSize: 144,
   },
   {
     accessorKey: "outcome",
@@ -253,7 +253,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         </span>
       );
     },
-    size: 118,
+    size: 112,
     minSize: 104,
   },
   {
@@ -292,8 +292,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
         </Tooltip>
       );
     },
-    size: 118,
-    minSize: 104,
+    size: 124,
+    minSize: 112,
   },
   {
     id: "streak",

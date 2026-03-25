@@ -16,6 +16,8 @@ import { normalizeGoalTargetType } from "@/features/ai/premium-assistant/lib/pre
 import type { ChatMessage } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import { usePremiumAssistantSuggestions } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-suggestions";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
+import { getGoalSchedule } from "@/lib/goals-dates";
+import { invalidateGoalQueries } from "@/lib/goals-query";
 
 interface UsePremiumAssistantControllerOptions {
   accountId?: string;
@@ -338,45 +340,29 @@ export function usePremiumAssistantController({
       }
 
       try {
-        const startDate = new Date();
-        let deadline: Date | null = null;
-
-        switch (type) {
-          case "daily":
-            deadline = new Date(startDate);
-            deadline.setDate(deadline.getDate() + 1);
-            break;
-          case "weekly":
-            deadline = new Date(startDate);
-            deadline.setDate(deadline.getDate() + 7);
-            break;
-          case "monthly":
-            deadline = new Date(startDate);
-            deadline.setMonth(deadline.getMonth() + 1);
-            break;
-          default:
-            break;
-        }
+        const normalizedType =
+          type === "daily" ||
+          type === "weekly" ||
+          type === "monthly" ||
+          type === "milestone"
+            ? type
+            : "weekly";
+        const { startDate, deadline } = getGoalSchedule(normalizedType);
 
         await trpcClient.goals.create.mutate({
           accountId,
-          type: type as "daily" | "weekly" | "monthly" | "milestone",
+          type: normalizedType,
           targetType: normalizeGoalTargetType(criteria.metric),
           targetValue: criteria.targetValue,
-          startDate: startDate.toISOString(),
-          deadline: deadline?.toISOString() || null,
+          startDate,
+          deadline,
           title,
           description: criteria.description || `Track ${criteria.metric}`,
           isCustom: true,
           customCriteria: criteria,
         });
 
-        await queryClient.invalidateQueries({
-          predicate: (query) => {
-            const key = query.queryKey[0];
-            return typeof key === "string" && key.startsWith("goals.");
-          },
-        });
+        await invalidateGoalQueries(queryClient);
 
         setShowGoalDialog(false);
         setMessages((prev) => [

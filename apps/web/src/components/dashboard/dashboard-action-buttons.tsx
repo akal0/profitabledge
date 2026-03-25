@@ -180,7 +180,22 @@ const DashboardActionButtons: React.FC<Props> = ({
       {!isEditing && widgetsExportTargetRef ? (
         <WidgetShareButton
           targetRef={widgetsExportTargetRef}
-          title="dashboard-widgets"
+          title="Dashboard widgets"
+          verificationSurface={{
+            kind: "dashboard",
+            widgets,
+            widgetSpans: Object.fromEntries(
+              Object.entries(widgetSpans).map(([key, value]) => [
+                key,
+                Math.max(1, Math.round(Number(value ?? 1))),
+              ])
+            ),
+            valueMode,
+            currencyCode:
+              currencyLabel && currencyLabel !== "Currency"
+                ? currencyLabel
+                : null,
+          }}
           successMessage="Widgets PNG downloaded"
           errorMessage="Failed to export widgets PNG"
           buttonLabel="Share"

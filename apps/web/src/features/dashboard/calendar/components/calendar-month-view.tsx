@@ -82,7 +82,7 @@ export function CalendarMonthView({
   onLeaveDay,
 }: CalendarMonthViewProps) {
   return (
-    <div className="border border-white/5 bg-white dark:bg-sidebar rounded-sm overflow-hidden">
+    <div className="border border-white/5 bg-white dark:bg-sidebar rounded-md overflow-hidden">
       <div className="grid grid-cols-7 gap-[1px] bg-sidebar-accent">
         {monthGrid.map((day) => {
           const key = toYMD(day);

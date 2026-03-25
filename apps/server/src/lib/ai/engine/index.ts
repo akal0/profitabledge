@@ -102,6 +102,7 @@ export type {
 // Digest Generator
 export {
   generateMorningBriefing,
+  getLatestBriefingReviewSnapshot,
   generateTradeFeedback,
   checkAndGenerateMilestone,
   saveDigest,

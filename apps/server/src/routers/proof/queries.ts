@@ -21,6 +21,7 @@ import {
 } from "../../db/schema/trading";
 import { listPublicProofLiveTrades } from "../../lib/public-proof/live-trades";
 import { buildPublicProofPageData } from "../../lib/public-proof/page-data";
+import { issuePublicProofVerification } from "../../lib/verification/share-verification";
 import {
   getTradeOriginLabel,
   resolveTradeOriginType,
@@ -190,17 +191,24 @@ export const proofQueryProcedures = {
       ]);
       return {
         ...buildPublicProofPageData({
-        share,
-        username: input.username,
-        publicAccountSlug: input.publicAccountSlug,
-        lastImportedAt: lastImportedRow[0]?.lastImportedAt ?? null,
-        storedTradeRows: tradeRows.map((row) => ({
-          ...row,
-          brokerMeta: row.brokerMeta as Record<string, unknown> | null,
-        })),
-        liveTradeRows,
-        editedTradesCount: Number(editedSummary[0]?.count ?? 0),
-        removedTradesCount: Number(removedSummary[0]?.count ?? 0),
+          share,
+          username: input.username,
+          publicAccountSlug: input.publicAccountSlug,
+          lastImportedAt: lastImportedRow[0]?.lastImportedAt ?? null,
+          storedTradeRows: tradeRows.map((row) => ({
+            ...row,
+            brokerMeta: row.brokerMeta as Record<string, unknown> | null,
+          })),
+          liveTradeRows,
+          editedTradesCount: Number(editedSummary[0]?.count ?? 0),
+          removedTradesCount: Number(removedSummary[0]?.count ?? 0),
+        }),
+        verification: issuePublicProofVerification({
+          shareId: share.id,
+          username: input.username,
+          publicAccountSlug: input.publicAccountSlug,
+          accountName: share.accountName,
+          broker: share.broker,
         }),
         affiliate,
       };

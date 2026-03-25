@@ -11,6 +11,12 @@ export type ConnectionProviderDefinition = {
   betaNote?: string;
 };
 
+export type ConnectionRegionOption = {
+  value: string;
+  label: string;
+  hint: string | null;
+};
+
 export type ConnectionRow = {
   id: string;
   accountId: string | null;
@@ -112,6 +118,9 @@ export type TerminalHostRow = {
   environment: string | null;
   provider: string | null;
   region: string | null;
+  regionGroup: string | null;
+  countryCode: string | null;
+  timezone: string | null;
   status: string;
   ok: boolean;
   mode: string;

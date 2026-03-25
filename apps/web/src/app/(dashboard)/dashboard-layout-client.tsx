@@ -470,6 +470,12 @@ const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
   { prefix: "/assistant", plan: "professional" },
 ];
 
+const MT5_LIVE_LEASE_SLOTS: Record<PlanKey, number> = {
+  student: 0,
+  professional: 1,
+  institutional: 5,
+};
+
 function DashboardGateFallback({
   route,
   message,
@@ -578,6 +584,11 @@ export default function DashboardLayoutClient({
   const hasIncompleteOnboarding = Boolean(
     billingState && !billingState.onboarding.isComplete
   );
+  const activePlanKey = (billingState?.billing?.activePlanKey ??
+    null) as PlanKey | null;
+  const mt5LiveLeaseLimit = activePlanKey
+    ? MT5_LIVE_LEASE_SLOTS[activePlanKey]
+    : 0;
   const connectionsEnabled = isPublicAlphaFeatureEnabled("connections");
   const mt5IngestionEnabled = isPublicAlphaFeatureEnabled("mt5Ingestion");
   const canLoadDashboardShellData =
@@ -648,6 +659,7 @@ export default function DashboardLayoutClient({
     connections,
     enabled:
       canLoadDashboardShellData && connectionsEnabled && mt5IngestionEnabled,
+    maxConnectionCount: mt5LiveLeaseLimit,
     route: safePathname,
   });
   const currentAccountConnection =
@@ -718,8 +730,6 @@ export default function DashboardLayoutClient({
   );
   const hasBlockedCommunityAccess = isHeldBackDashboardRoute(safePathname);
 
-  const activePlanKey = (billingState?.billing?.activePlanKey ??
-    null) as PlanKey | null;
   const hasBlockedPlanAccess = Boolean(
     activePlanKey &&
       safePathname &&

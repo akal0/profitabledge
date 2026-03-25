@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { motion } from "motion/react";
-import { Award, Target, TrendingUp, type LucideIcon } from "lucide-react";
+import { Award, Plus, Target, TrendingUp, type LucideIcon } from "lucide-react";
 
 import { CreateGoalDialog } from "@/components/goals/create-goal-dialog";
 import { ActiveGoalsList } from "@/components/goals/active-goals-list";
@@ -20,9 +19,13 @@ import {
   TabsListUnderlined,
   TabsTriggerUnderlined,
 } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { useGoalDialog } from "@/stores/goal-dialog";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
+import { getGoalSchedule, type GoalType } from "@/lib/goals-dates";
+import { invalidateGoalQueries } from "@/lib/goals-query";
 
 type GoalRow = {
   id: string;
@@ -86,6 +89,19 @@ function isProcessGoal(goal: GoalRow) {
   return PROCESS_TARGET_TYPES.has(goal.targetType);
 }
 
+function getSuggestedGoalType(targetType: string): GoalType {
+  switch (targetType) {
+    case "ruleCompliance":
+    case "edgeTradeRate":
+    case "breakAfterLoss":
+      return "weekly";
+    case "journalRate":
+    case "checklistCompletion":
+    default:
+      return "monthly";
+  }
+}
+
 function OverviewStatCard({
   icon: Icon,
   label,
@@ -111,15 +127,6 @@ function OverviewStatCard({
   );
 }
 
-function invalidateGoals(queryClient: ReturnType<typeof useQueryClient>) {
-  return queryClient.invalidateQueries({
-    predicate: (query) => {
-      const key = query.queryKey[0];
-      return typeof key === "string" && key.startsWith("goals.");
-    },
-  });
-}
-
 export default function GoalsPage() {
   const selectedAccountId = useAccountStore((state) => state.selectedAccountId);
   const scopedAccountId =
@@ -131,6 +138,8 @@ export default function GoalsPage() {
     useGoalDialog();
   const [goalStatusTab, setGoalStatusTab] =
     useState<GoalLifecycleStatus>("active");
+  const [creatingSuggestedGoalType, setCreatingSuggestedGoalType] =
+    useState<string | null>(null);
   const [celebrationData, setCelebrationData] = useState<{
     show: boolean;
     milestone: {
@@ -235,7 +244,7 @@ export default function GoalsPage() {
 
       try {
         await Promise.all(refreshes);
-        await invalidateGoals(queryClient);
+        await invalidateGoalQueries(queryClient);
       } catch (error) {
         console.error("Failed to refresh goals state:", error);
       }
@@ -247,7 +256,7 @@ export default function GoalsPage() {
   const handleDeleteGoal = async (id: string) => {
     try {
       await trpcClient.goals.delete.mutate({ id });
-      await invalidateGoals(queryClient);
+      await invalidateGoalQueries(queryClient);
     } catch (error) {
       console.error("Failed to delete goal:", error);
     }
@@ -256,7 +265,7 @@ export default function GoalsPage() {
   const handlePauseGoal = async (id: string) => {
     try {
       await trpcClient.goals.update.mutate({ id, status: "paused" });
-      await invalidateGoals(queryClient);
+      await invalidateGoalQueries(queryClient);
     } catch (error) {
       console.error("Failed to pause goal:", error);
     }
@@ -265,7 +274,7 @@ export default function GoalsPage() {
   const handleResumeGoal = async (id: string) => {
     try {
       await trpcClient.goals.update.mutate({ id, status: "active" });
-      await invalidateGoals(queryClient);
+      await invalidateGoalQueries(queryClient);
     } catch (error) {
       console.error("Failed to resume goal:", error);
     }
@@ -277,14 +286,19 @@ export default function GoalsPage() {
     description: string;
     targetValue: number;
   }) => {
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
+    if (creatingSuggestedGoalType === goal.targetType) {
+      return;
+    }
 
+    const goalType = getSuggestedGoalType(goal.targetType);
+    const { startDate, deadline } = getGoalSchedule(goalType);
+
+    setCreatingSuggestedGoalType(goal.targetType);
+
+    try {
       await trpcClient.goals.create.mutate({
         accountId: scopedAccountId || null,
-        type: "monthly",
+        type: goalType,
         targetType: goal.targetType as
           | "profit"
           | "winRate"
@@ -299,15 +313,17 @@ export default function GoalsPage() {
           | "breakAfterLoss"
           | "checklistCompletion",
         targetValue: goal.targetValue,
-        startDate: today,
-        deadline: nextMonth.toISOString().split("T")[0],
+        startDate,
+        deadline,
         title: goal.title,
         description: goal.description,
       });
 
-      await invalidateGoals(queryClient);
+      await invalidateGoalQueries(queryClient);
     } catch (error) {
       console.error("Failed to create suggested goal:", error);
+    } finally {
+      setCreatingSuggestedGoalType(null);
     }
   };
 
@@ -332,6 +348,26 @@ export default function GoalsPage() {
   return (
     <>
       <main className="space-y-6 p-6 py-4">
+        <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-white">Goals</h1>
+            <p className="mt-1 text-sm text-white/50">
+              Set targets, track discipline, and keep progress visible across every account scope.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => setCreateDialogOpen(true)}
+            className={getPropAssignActionButtonClassName({
+              tone: "neutral",
+              className: "self-start gap-1.5 px-4 text-white",
+            })}
+          >
+            <Plus className="h-4 w-4" />
+            Create goal
+          </Button>
+        </section>
+
         {stats ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
             {[
@@ -359,21 +395,16 @@ export default function GoalsPage() {
                 value: `${stats.achievementRate.toFixed(0)}%`,
                 color: "text-orange-400",
               },
-            ].map((card, index) => {
+            ].map((card) => {
               return (
-                <motion.div
-                  key={card.label}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 * (index + 1) }}
-                >
+                <div key={card.label}>
                   <OverviewStatCard
                     icon={card.icon}
                     label={card.label}
                     value={card.value}
                     color={card.color}
                   />
-                </motion.div>
+                </div>
               );
             })}
           </div>
@@ -393,12 +424,7 @@ export default function GoalsPage() {
               longestStreak={streaks.longestGreenDays}
               streakType="greenDays"
             />
-            <motion.div
-              className="h-full min-h-[220px]"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-            >
+            <div className="h-full min-h-[220px]">
               <GoalSurface className="h-full">
                 <div className="flex h-full flex-col p-3.5">
                   <div className="flex items-center gap-2">
@@ -417,7 +443,7 @@ export default function GoalsPage() {
                   </div>
                 </div>
               </GoalSurface>
-            </motion.div>
+            </div>
           </div>
         ) : null}
 
@@ -427,6 +453,7 @@ export default function GoalsPage() {
             recommendedGoals={processScorecard.recommendedGoals}
             existingGoalTypes={processGoalTypes}
             onCreateGoal={handleCreateSuggestedGoal}
+            creatingGoalType={creatingSuggestedGoalType}
           />
         ) : (
           <GoalSurface>
@@ -478,6 +505,8 @@ export default function GoalsPage() {
                   onResume={handleResumeGoal}
                   emptyTitle="No active outcome goals"
                   emptyDescription="Outcome targets like profit, win rate, or streaks will show here."
+                  emptyActionLabel="Create outcome goal"
+                  onEmptyAction={() => setCreateDialogOpen(true)}
                 />
               </section>
 
@@ -492,6 +521,8 @@ export default function GoalsPage() {
                   onResume={handleResumeGoal}
                   emptyTitle="No active process goals"
                   emptyDescription="Process-driven targets like journal rate or rule compliance will show here."
+                  emptyActionLabel="Create process goal"
+                  onEmptyAction={() => setCreateDialogOpen(true)}
                 />
               </section>
             </div>

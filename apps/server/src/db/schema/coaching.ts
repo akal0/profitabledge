@@ -277,6 +277,8 @@ export const traderDigest = pgTable(
         worstTrade?: string;
         edgeMatches: number;
         leakMatches: number;
+        reviewedAt?: string;
+        label?: "Today's review" | "Yesterday's review" | "Latest trading day";
       };
       outlook?: {
         recommendedSessions: string[];

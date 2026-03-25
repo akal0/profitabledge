@@ -115,18 +115,6 @@ export const connectionsRouter = router({
       isMtTerminalProvider(connection.provider)
     );
 
-    if (terminalConnections.length === 0) {
-      return {
-        available: false,
-        error: null,
-        summary: null,
-        hosts: [],
-        workers: [],
-        sessions: [],
-        pendingConnections: [],
-      };
-    }
-
     const connectionById = new Map(
       terminalConnections.map((connection) => [connection.id, connection])
     );
@@ -250,15 +238,20 @@ export const connectionsRouter = router({
       const freshHostSnapshots = hostSnapshots.filter(({ row }) =>
         isMtWorkerHostSnapshotFresh(row.lastSeenAt)
       );
-      const relevantHosts = freshHostSnapshots.filter(({ snapshot }) =>
-        snapshot.workers.some(
-          (worker) =>
-            sessionRows.some((session) => session.workerHostId === worker.workerId) ||
-            worker.activeConnections.some((connection) =>
-              visibleConnectionIds.has(connection.connectionId)
+      const relevantHosts =
+        terminalConnections.length > 0
+          ? freshHostSnapshots.filter(({ snapshot }) =>
+              snapshot.workers.some(
+                (worker) =>
+                  sessionRows.some(
+                    (session) => session.workerHostId === worker.workerId
+                  ) ||
+                  worker.activeConnections.some((connection) =>
+                    visibleConnectionIds.has(connection.connectionId)
+                  )
+              )
             )
-        )
-      );
+          : freshHostSnapshots;
 
       const workers = relevantHosts.flatMap(({ snapshot }) =>
         snapshot.workers
@@ -325,6 +318,7 @@ export const connectionsRouter = router({
           }))
           .filter(
             (worker) =>
+              terminalConnections.length === 0 ||
               worker.activeConnections.length > 0 ||
               sessionRows.some((session) => session.workerHostId === worker.workerId)
           )
@@ -384,50 +378,52 @@ export const connectionsRouter = router({
       );
 
       const summary =
-        relevantHosts.length > 0
+        freshHostSnapshots.length > 0
           ? {
-              ok: relevantHosts.every(({ snapshot }) => snapshot.ok),
-              status: relevantHosts.every(({ snapshot }) => snapshot.ok)
+              ok: freshHostSnapshots.every(({ snapshot }) => snapshot.ok),
+              status: freshHostSnapshots.every(({ snapshot }) => snapshot.ok)
                 ? "ok"
                 : "degraded",
               mode:
-                relevantHosts.length === 1
-                  ? relevantHosts[0]!.snapshot.mode
-                  : `${relevantHosts.length} hosts`,
-              desiredChildren: relevantHosts.reduce(
+                freshHostSnapshots.length === 1
+                  ? freshHostSnapshots[0]!.snapshot.mode
+                  : `${freshHostSnapshots.length} hosts`,
+              desiredChildren: freshHostSnapshots.reduce(
                 (sum, { snapshot }) => sum + snapshot.desiredChildren,
                 0
               ),
-              runningChildren: relevantHosts.reduce(
+              runningChildren: freshHostSnapshots.reduce(
                 (sum, { snapshot }) => sum + snapshot.runningChildren,
                 0
               ),
-              healthyChildren: relevantHosts.reduce(
+              healthyChildren: freshHostSnapshots.reduce(
                 (sum, { snapshot }) => sum + snapshot.healthyChildren,
                 0
               ),
-              hostCount: relevantHosts.length,
+              hostCount: freshHostSnapshots.length,
               startedAt:
-                relevantHosts.length === 1
-                  ? relevantHosts[0]!.snapshot.startedAt ?? null
+                freshHostSnapshots.length === 1
+                  ? freshHostSnapshots[0]!.snapshot.startedAt ?? null
                   : null,
               updatedAt:
-                relevantHosts
+                freshHostSnapshots
                   .map(({ snapshot }) => snapshot.updatedAt ?? null)
                   .filter((value): value is string => Boolean(value))
                   .sort()
                   .at(-1) ?? null,
               uptimeSeconds: Math.max(
-                ...relevantHosts.map(({ snapshot }) => snapshot.uptimeSeconds ?? 0),
+                ...freshHostSnapshots.map(
+                  ({ snapshot }) => snapshot.uptimeSeconds ?? 0
+                ),
                 0
               ),
               adminHost:
-                relevantHosts.length === 1
-                  ? relevantHosts[0]!.snapshot.admin?.host ?? null
+                freshHostSnapshots.length === 1
+                  ? freshHostSnapshots[0]!.snapshot.admin?.host ?? null
                   : null,
               adminPort:
-                relevantHosts.length === 1
-                  ? relevantHosts[0]!.snapshot.admin?.port ?? null
+                freshHostSnapshots.length === 1
+                  ? freshHostSnapshots[0]!.snapshot.admin?.port ?? null
                   : null,
               historyGapConnections: [...completenessByConnectionId.values()].filter(
                 (completeness) => completeness.historyGapDetected
@@ -445,13 +441,16 @@ export const connectionsRouter = router({
             }
           : null;
 
-      const hosts = relevantHosts.map(({ snapshot }) => ({
+      const hosts = freshHostSnapshots.map(({ snapshot }) => ({
         workerHostId: snapshot.workerHostId,
         label: snapshot.host?.label ?? snapshot.workerHostId,
         machineName: snapshot.host?.machineName ?? snapshot.workerHostId,
         environment: snapshot.host?.environment ?? null,
         provider: snapshot.host?.provider ?? null,
         region: snapshot.host?.region ?? null,
+        regionGroup: snapshot.host?.regionGroup ?? null,
+        countryCode: snapshot.host?.countryCode ?? null,
+        timezone: snapshot.host?.timezone ?? null,
         status: snapshot.status,
         ok: snapshot.ok,
         mode: snapshot.mode,

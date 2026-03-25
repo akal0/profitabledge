@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useInView } from "react-intersection-observer";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { DataTable } from "@/components/data-table/index";
+import { Button } from "@/components/ui/button";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { useDataTable } from "@/hooks/use-data-table";
 import { useAccountStore } from "@/stores/account";
@@ -61,11 +62,12 @@ export default function TradeTableInfinite() {
   return <TradeTableInfiniteContent accountId={accountId} />;
 }
 
-function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
-  const { ref, inView } = useInView({ rootMargin: "200px" });
+const TRADE_TABLE_PAGE_SIZE = 10;
 
+function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
   // View management state
   const [manageViewsOpen, setManageViewsOpen] = React.useState(false);
+  const [advanceAfterFetch, setAdvanceAfterFetch] = React.useState(false);
   const {
     q,
     idsParam,
@@ -261,17 +263,21 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
       | undefined,
     hasMergedFilterConflict,
   });
+  const displayRowById = React.useMemo(
+    () => new Map(displayRows.map((trade) => [trade.id, trade])),
+    [displayRows]
+  );
   const [renderedTradeIds, setRenderedTradeIds] = React.useState<string[]>([]);
   const drawdownVisibleRows = React.useMemo(() => {
     if (!renderedTradeIds.length) {
       return [] as string[];
     }
 
-    const visibleTradeIds = new Set(renderedTradeIds);
-    return displayRows
-      .filter((trade) => visibleTradeIds.has(trade.id) && !trade.isLive)
-      .map((trade) => trade.id);
-  }, [displayRows, renderedTradeIds]);
+    return renderedTradeIds.filter((tradeId) => {
+      const trade = displayRowById.get(tradeId);
+      return Boolean(trade && !trade.isLive);
+    });
+  }, [displayRowById, renderedTradeIds]);
   const { drawdownByTradeId, isLoading: isDrawdownLoading } =
     useTradeDrawdownMap({
       tradeIds: drawdownVisibleRows,
@@ -296,10 +302,6 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
     [updateTradeMutation]
   );
 
-  React.useEffect(() => {
-    if (inView && hasNextPage && !isFetchingNextPage) fetchNextPage();
-  }, [inView, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
   const initialVisibility = React.useMemo(
     () =>
       viewParam
@@ -309,11 +311,12 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
   );
   const initialSizing = React.useMemo(() => buildTradeTableInitialSizing(), []);
 
-  const { table, sorting, setSorting, setColumnVisibility } =
+  const { table, sorting, setSorting, setColumnVisibility, setRowSelection } =
     useDataTable<TradeRow>({
       data: displayRows,
       columns: tradeTableColumns,
       tableId: "trades",
+      initialPageSize: TRADE_TABLE_PAGE_SIZE,
       disablePreferences: Boolean(viewParam),
       meta: {
         totalTradesCount,
@@ -332,9 +335,53 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
       initialSizing,
       getRowId: (row) => row.id, // Use trade ID as row ID
       enableFilteringRowModel: false,
-      enablePaginationRowModel: false,
+      enablePaginationRowModel: true,
       enableColumnResizing: false,
     });
+  const isDrawdownVisible =
+    table.getColumn("drawdown")?.getIsVisible() ?? false;
+
+  React.useEffect(() => {
+    if (!isDrawdownVisible && renderedTradeIds.length > 0) {
+      setRenderedTradeIds([]);
+    }
+  }, [isDrawdownVisible, renderedTradeIds.length]);
+
+  const paginationState = table.getState().pagination;
+  const pageIndex = paginationState.pageIndex;
+  const pageSize = paginationState.pageSize;
+  const currentPageRows = table.getRowModel().rows.length;
+  const loadedPageCount = table.getPageCount();
+  const pageStart = displayRows.length === 0 ? 0 : pageIndex * pageSize + 1;
+  const pageEnd =
+    displayRows.length === 0
+      ? 0
+      : Math.min(pageStart + currentPageRows - 1, displayRows.length);
+
+  React.useEffect(() => {
+    if (!advanceAfterFetch) {
+      return;
+    }
+
+    if (table.getPageCount() - 1 > pageIndex) {
+      table.nextPage();
+      setAdvanceAfterFetch(false);
+      return;
+    }
+
+    if (!hasNextPage && !isFetchingNextPage) {
+      setAdvanceAfterFetch(false);
+    }
+  }, [advanceAfterFetch, hasNextPage, isFetchingNextPage, pageIndex, table]);
+
+  React.useEffect(() => {
+    const maxPageIndex = Math.max(loadedPageCount - 1, 0);
+    if (pageIndex <= maxPageIndex) {
+      return;
+    }
+
+    table.setPageIndex(maxPageIndex);
+  }, [loadedPageCount, pageIndex, table]);
 
   // Update column visibility when view changes
   React.useEffect(() => {
@@ -386,17 +433,46 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
 
   // Note: URL is updated by toolbar callbacks; no sorting->URL effect to avoid loops
 
+  const handleDragSelectionChange = React.useCallback(
+    (selectedTradeIds: Set<string>) => {
+      const nextRowSelection: Record<string, boolean> = {};
+      selectedTradeIds.forEach((tradeId) => {
+        nextRowSelection[tradeId] = true;
+      });
+      setRowSelection(nextRowSelection);
+    },
+    [setRowSelection]
+  );
+
   // Drag select functionality
   const dragSelect = useDragSelect({
-    onSelectionChange: (selectedTradeIds) => {
-      // selectedTradeIds are now actual trade IDs (since we use getRowId)
-      const rowSelection: Record<string, boolean> = {};
-      selectedTradeIds.forEach((tradeId) => {
-        rowSelection[tradeId] = true;
-      });
-      table.setRowSelection(rowSelection);
-    },
+    onSelectionChange: handleDragSelectionChange,
   });
+  const clearDragSelection = dragSelect.clearSelection;
+
+  React.useEffect(() => {
+    setRowSelection({});
+    clearDragSelection();
+  }, [clearDragSelection, pageIndex, setRowSelection]);
+
+  const handleNextPage = React.useCallback(async () => {
+    if (pageIndex < loadedPageCount - 1) {
+      table.nextPage();
+      return;
+    }
+
+    if (hasNextPage && !isFetchingNextPage) {
+      setAdvanceAfterFetch(true);
+      await fetchNextPage();
+    }
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    loadedPageCount,
+    pageIndex,
+    table,
+  ]);
 
   // Get selected trade IDs from table selection
   const rowSelection = table.getState().rowSelection;
@@ -413,18 +489,18 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
       return [];
     }
 
-    const tradeById = new Map(displayRows.map((trade) => [trade.id, trade]));
     return selectedTradeIdList
-      .map((tradeId) => tradeById.get(tradeId))
+      .map((tradeId) => displayRowById.get(tradeId))
       .filter((trade): trade is TradeRow => Boolean(trade));
-  }, [displayRows, selectedTradeIdList]);
+  }, [displayRowById, selectedTradeIdList]);
   const singleSelectedTrade =
     selectedTradeIdList.length === 1 && selectedTrades.length === 1
       ? selectedTrades[0]
       : null;
+  const deferredDisplayRows = React.useDeferredValue(displayRows);
   const summary = React.useMemo(
-    () => summarizeTradeRows(displayRows),
-    [displayRows]
+    () => summarizeTradeRows(deferredDisplayRows),
+    [deferredDisplayRows]
   );
   const visibleColumnIds = React.useMemo(
     () =>
@@ -764,15 +840,16 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
 
       <DataTable
         table={table}
+        usePaginationRows
+        fitColumnsToContent
         onRowDoubleClick={handleRowDoubleClick}
         onRowMouseDown={dragSelect.handleMouseDown}
         onRowMouseEnter={dragSelect.handleMouseEnter}
         containerRef={dragSelect.containerRef}
         emptyState={emptyState}
-        enableMeasuredColumnSizing
-        enableRowVirtualization
-        rowVirtualizerOverscan={18}
-        onRenderedRowIdsChange={setRenderedTradeIds}
+        onRenderedRowIdsChange={
+          isDrawdownVisible ? setRenderedTradeIds : undefined
+        }
         getRowGroupKey={
           groupBy
             ? (row) => getTradeTableGroupKey(groupBy, row.original)
@@ -793,6 +870,48 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
             : undefined
         }
       />
+
+      {!isLoading && (displayRows.length > 0 || hasNextPage) ? (
+        <div className="flex items-center justify-between gap-3 border border-t-0 border-white/5 bg-sidebar/70 px-4 py-3">
+          <p className="text-xs text-white/40">
+            {displayRows.length === 0
+              ? "Showing 0 of 0"
+              : `Showing ${pageStart}-${pageEnd} of ${displayRows.length}`}
+          </p>
+          <div className="flex items-center gap-4">
+            <Button
+              type="button"
+              className="h-8 rounded-sm bg-sidebar px-2! text-xs text-white/70 hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={pageIndex === 0}
+              onClick={() => table.previousPage()}
+            >
+              <ChevronLeft className=" size-3" />
+            </Button>
+
+            <div className="text-xs text-white/48">
+              Page {Math.max(pageIndex + 1, 1)} of{" "}
+              {Math.max(loadedPageCount + (hasNextPage ? 1 : 0), 1)}
+            </div>
+
+            <Button
+              type="button"
+              className="h-8 rounded-sm bg-sidebar px-2! text-xs text-white/70 hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={
+                displayRows.length === 0 ||
+                isFetchingNextPage ||
+                (!hasNextPage && pageIndex >= loadedPageCount - 1)
+              }
+              onClick={handleNextPage}
+            >
+              {isFetchingNextPage ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <ChevronRight className="size-3" />
+              )}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {!isLoading && displayRows.length > 0 ? (
         <PerformanceSummaryBar
@@ -837,16 +956,6 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
           }}
         />
       )}
-
-      {!isLoading && displayRows.length > 0 ? (
-        <div ref={ref} className="py-6 text-center text-xs text-white/40">
-          {isFetchingNextPage
-            ? "Loading more..."
-            : hasNextPage
-            ? "Scroll to load more"
-            : "You've reached the end of all trades for this account."}
-        </div>
-      ) : null}
 
       <TradeComparisonSheet
         open={compareOpen}

@@ -5,6 +5,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@profitabledge/contracts/trpc";
+import QRCode from "react-qr-code";
 import {
   Activity,
   AlertTriangle,
@@ -59,6 +60,7 @@ import { PublicProofEquityCurveCard } from "@/features/public-proof/components/p
 import { PublicProofMonthlyReturnsCard } from "@/features/public-proof/components/public-proof-monthly-returns-card";
 import { AffiliateNameEffectText } from "@/features/public-proof/components/affiliate-name-effect-text";
 import { PublicProofTopSymbolsCard } from "@/features/public-proof/components/public-proof-top-symbols-card";
+import { resolveAbsolutePublicUrl } from "@/components/verification/profitabledge-verification-card";
 import {
   PublicProofTradesTable,
   type PublicProofTradeRow,
@@ -464,33 +466,50 @@ export function PublicProofPage({
 
         <div className="relative px-4 md:px-6 lg:px-8">
           {/* Avatar overlapping banner */}
-          <div className="-mt-9 pb-4">
-            {profileEffects?.pfpEffect &&
-            profileEffects.pfpEffect !== "none" ? (
-              <div
-                className={cn(
-                  "inline-flex rounded-full",
-                  getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
-                )}
-              >
-                <Avatar
+          <div className="-mt-12 flex items-center justify-between gap-4 pb-4">
+            <div>
+              {profileEffects?.pfpEffect &&
+              profileEffects.pfpEffect !== "none" ? (
+                <div
                   className={cn(
-                    "size-[72px] rounded-full shadow-lg",
-                    getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
-                    profileEffects.pfpEffect === "custom" &&
-                      getCustomPfpAnimationClassName(
-                        (profileEffects as any).customRingEffect
-                      )
+                    "inline-flex rounded-full",
+                    getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
                   )}
-                  style={
-                    profileEffects.pfpEffect === "custom"
-                      ? getAffiliatePfpEffectStyle("custom", {
-                          from: (profileEffects as any).customRingFrom,
-                          to: (profileEffects as any).customRingTo,
-                        })
-                      : undefined
-                  }
                 >
+                  <Avatar
+                    className={cn(
+                      "size-[72px] rounded-full shadow-lg",
+                      getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
+                      profileEffects.pfpEffect === "custom" &&
+                        getCustomPfpAnimationClassName(
+                          (profileEffects as any).customRingEffect
+                        )
+                    )}
+                    style={
+                      profileEffects.pfpEffect === "custom"
+                        ? getAffiliatePfpEffectStyle("custom", {
+                            from: (profileEffects as any).customRingFrom,
+                            to: (profileEffects as any).customRingTo,
+                          })
+                        : undefined
+                    }
+                  >
+                    {page.trader.image ? (
+                      <AvatarImage
+                        src={page.trader.image}
+                        alt={page.trader.name ?? page.trader.username}
+                        className="object-cover"
+                      />
+                    ) : null}
+                    <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
+                      {(page.trader.name ?? page.trader.username)
+                        ?.charAt(0)
+                        ?.toUpperCase() ?? "T"}
+                    </AvatarFallback>
+                  </Avatar>
+                </div>
+              ) : (
+                <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
                   {page.trader.image ? (
                     <AvatarImage
                       src={page.trader.image}
@@ -504,23 +523,23 @@ export function PublicProofPage({
                       ?.toUpperCase() ?? "T"}
                   </AvatarFallback>
                 </Avatar>
+              )}
+            </div>
+
+            <Link
+              href={page.path}
+              aria-label="Open public proof page"
+              className="shrink-0 rounded-[1.35rem] bg-sidebar/72 p-2 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl transition-transform hover:scale-[1.02]"
+            >
+              <div className="rounded-[1rem] bg-white p-2 ring-1 ring-black/10">
+                <QRCode
+                  value={resolveAbsolutePublicUrl(page.path)}
+                  size={78}
+                  bgColor="#ffffff"
+                  fgColor="#0a0e14"
+                />
               </div>
-            ) : (
-              <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
-                {page.trader.image ? (
-                  <AvatarImage
-                    src={page.trader.image}
-                    alt={page.trader.name ?? page.trader.username}
-                    className="object-cover"
-                  />
-                ) : null}
-                <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
-                  {(page.trader.name ?? page.trader.username)
-                    ?.charAt(0)
-                    ?.toUpperCase() ?? "T"}
-                </AvatarFallback>
-              </Avatar>
-            )}
+            </Link>
           </div>
 
           {/* Account info + action buttons */}
@@ -613,15 +632,6 @@ export function PublicProofPage({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {/*<Button
-              variant="outline"
-              className="rounded-sm ring-white/8! text-white/75 bg-transparent! h-8! text-xs!"
-              onClick={copyLink}
-            >
-              <Copy className="size-3" />
-              Copy link
-            </Button>*/}
-
               <Link
                 href="/sign-up"
                 className={cn(

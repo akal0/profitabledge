@@ -104,12 +104,7 @@ export function StreakTracker({
           };
 
   return (
-    <motion.div
-      className={cn("h-full", className)}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
+    <div className={cn("h-full", className)}>
       <GoalSurface className="h-full">
         <div className="relative flex h-full flex-col overflow-hidden p-3.5">
           <div className="flex items-center gap-2">
@@ -120,14 +115,9 @@ export function StreakTracker({
           <GoalContentSeparator className="mb-4 mt-3.5" />
 
           <div className="mb-5">
-            <motion.div
-              className="mb-0.5 text-4xl font-semibold text-white"
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            >
+            <div className="mb-0.5 text-4xl font-semibold text-white">
               {currentStreak}
-            </motion.div>
+            </div>
             <div className="text-xs text-white/40">current {config.unit}</div>
           </div>
 
@@ -166,7 +156,7 @@ export function StreakTracker({
           )}
         </div>
       </GoalSurface>
-    </motion.div>
+    </div>
   );
 }
 

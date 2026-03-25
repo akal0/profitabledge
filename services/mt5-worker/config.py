@@ -67,13 +67,22 @@ def parse_terminal_path_map(raw_value: str) -> dict[str, str]:
 class WorkerConfig:
     server_url: str
     worker_secret: str
+    host_id: str
     worker_id: str
     worker_label: str
     machine_name: str
     host_environment: str
     host_provider: str | None
     host_region: str | None
+    host_region_group: str | None
+    host_country_code: str | None
+    host_city: str | None
+    host_timezone: str | None
+    host_public_ip: str | None
     host_tags: list[str]
+    device_isolation_mode: str
+    reserved_user_id: str | None
+    device_profile_id: str | None
     os_version: str
     python_version: str
     mode: str
@@ -117,6 +126,7 @@ def load_config() -> WorkerConfig:
 
     machine_name = socket.gethostname()
     worker_id = os.getenv("MT5_WORKER_ID", machine_name).strip() or machine_name
+    host_id = os.getenv("MT5_HOST_ID", worker_id).strip() or worker_id
     worker_label = os.getenv("MT5_WORKER_LABEL", worker_id).strip() or worker_id
     host_environment = (
         os.getenv("MT5_WORKER_ENVIRONMENT", "development").strip().lower()
@@ -124,24 +134,67 @@ def load_config() -> WorkerConfig:
     )
     host_provider = os.getenv("MT5_WORKER_PROVIDER", "").strip() or None
     host_region = os.getenv("MT5_WORKER_REGION", "").strip() or None
+    host_region_group = os.getenv("MT5_HOST_REGION_GROUP", "").strip() or None
+    host_country_code = (
+        os.getenv("MT5_HOST_COUNTRY_CODE", "")
+        or os.getenv("MT5_WORKER_COUNTRY", "")
+    ).strip().upper() or None
+    host_city = (
+        os.getenv("MT5_HOST_CITY", "")
+        or os.getenv("MT5_WORKER_CITY", "")
+    ).strip() or None
+    host_timezone = (
+        os.getenv("MT5_HOST_TIMEZONE", "")
+        or os.getenv("MT5_WORKER_TIMEZONE", "")
+    ).strip() or None
+    host_public_ip = (
+        os.getenv("MT5_HOST_PUBLIC_IP", "")
+        or os.getenv("MT5_WORKER_PUBLIC_IP_LABEL", "")
+    ).strip() or None
+    reserved_user_id = os.getenv("MT5_RESERVED_USER_ID", "").strip() or None
     host_tags = [
         value.strip()
         for value in os.getenv("MT5_WORKER_TAGS", "").split(",")
         if value.strip()
     ]
+    host_role = os.getenv("MT5_WORKER_ROLE", "").strip().lower()
+    device_isolation_mode = (
+        os.getenv("MT5_DEVICE_ISOLATION_MODE", "").strip().lower()
+        or (
+            "dedicated-user-host"
+            if host_role == "dedicated"
+            else "shared-host"
+            if host_role == "shared"
+            else "shared-host"
+        )
+    )
+    device_profile_id = os.getenv("MT5_DEVICE_PROFILE_ID", "").strip() or None
+    if reserved_user_id:
+        reserved_user_tag = f"user:{reserved_user_id}"
+        if reserved_user_tag not in host_tags:
+            host_tags.append(reserved_user_tag)
     raw_terminal_path_map = os.getenv("MT5_TERMINAL_PATH_MAP", "").strip()
     terminal_path_map = parse_terminal_path_map(raw_terminal_path_map)
 
     return WorkerConfig(
         server_url=os.getenv("PE_SERVER_URL", "http://localhost:3000").rstrip("/"),
         worker_secret=worker_secret,
+        host_id=host_id,
         worker_id=worker_id,
         worker_label=worker_label,
         machine_name=machine_name,
         host_environment=host_environment,
         host_provider=host_provider,
         host_region=host_region,
+        host_region_group=host_region_group,
+        host_country_code=host_country_code,
+        host_city=host_city,
+        host_timezone=host_timezone,
+        host_public_ip=host_public_ip,
         host_tags=host_tags,
+        device_isolation_mode=device_isolation_mode,
+        reserved_user_id=reserved_user_id,
+        device_profile_id=device_profile_id,
         os_version=platform.platform(),
         python_version=platform.python_version(),
         mode=os.getenv("MT5_WORKER_MODE", "mock").strip().lower(),

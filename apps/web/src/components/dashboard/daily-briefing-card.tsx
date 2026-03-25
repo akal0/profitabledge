@@ -35,6 +35,42 @@ import { useTabAttentionActivity } from "@/hooks/use-tab-attention-activity";
 
 const WIDGET_CONTENT_SEPARATOR_CLASS = "-mx-3.5 shrink-0 self-stretch";
 
+function getOrdinalSuffix(day: number) {
+  const mod100 = day % 100;
+  if (mod100 >= 11 && mod100 <= 13) return "th";
+
+  switch (day % 10) {
+    case 1:
+      return "st";
+    case 2:
+      return "nd";
+    case 3:
+      return "rd";
+    default:
+      return "th";
+  }
+}
+
+function formatBriefingDate(value: string | Date | null | undefined) {
+  if (!value) return "—";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  const weekday = date.toLocaleDateString("en-GB", {
+    weekday: "short",
+  });
+  const month = date.toLocaleDateString("en-GB", {
+    month: "long",
+  });
+  const day = date.getDate();
+  const year = date.toLocaleDateString("en-GB", {
+    year: "2-digit",
+  });
+
+  return `${weekday} ${day}${getOrdinalSuffix(day)} ${month} '${year}`;
+}
+
 function getSessionTone(session: string) {
   const normalized = session.toLowerCase();
 
@@ -89,11 +125,28 @@ export function DailyBriefingCard({
   useTabAttentionActivity("daily-briefing", generateMutation.isPending);
 
   const content = briefing?.content as any;
+  const reviewSnapshot = (briefing as any)?.reviewSnapshot as
+    | {
+        tradeCount?: number;
+        winRate?: number;
+        pnl?: number;
+        reviewedAt?: string;
+        reviewLabel?: string;
+        edgeMatches?: number;
+      }
+    | undefined;
+  const review = reviewSnapshot ?? content?.review;
   const hasBriefing = !!content;
   const focusMessage =
     content?.focusItem?.message ?? content?.focusItem?.description ?? null;
   const reviewTradeCount =
-    content?.review?.tradesToday ?? content?.review?.trades ?? 0;
+    review?.tradeCount ?? review?.tradesToday ?? review?.trades ?? 0;
+  const reviewWinRate = review?.winRate;
+  const reviewPnl = review?.pnl ?? 0;
+  const reviewLabel = review?.reviewLabel ?? review?.label ?? "Latest review";
+  const reviewDateLabel = review?.reviewedAt
+    ? formatBriefingDate(review.reviewedAt)
+    : null;
   const progressSummary =
     content?.progress?.summary ??
     (content?.progress
@@ -108,7 +161,7 @@ export function DailyBriefingCard({
           }
         )} P&L.`
       : "Steady performance");
-  const hasReview = Boolean(content?.review);
+  const hasReview = Boolean(review);
   const hasFocus = Boolean(content?.focusItem && focusMessage);
   const recommendedSessions: string[] =
     content?.outlook?.recommendedSessions ?? [];
@@ -127,9 +180,7 @@ export function DailyBriefingCard({
         headerRight={
           <>
             <span className="text-[10px] text-white/30">
-              {briefing?.createdAt
-                ? new Date(briefing.createdAt).toLocaleDateString()
-                : "—"}
+              {formatBriefingDate(briefing?.createdAt)}
             </span>
             {!isEditing ? (
               <WidgetShareButton targetRef={widgetRef} title="Daily briefing" />
@@ -180,8 +231,8 @@ export function DailyBriefingCard({
                 </div>
                 <div className="text-center">
                   <p className="text-lg font-bold text-white/90">
-                    {content.review.winRate
-                      ? `${Math.round(content.review.winRate)}%`
+                    {reviewTradeCount > 0 && typeof reviewWinRate === "number"
+                      ? `${Math.round(reviewWinRate)}%`
                       : "—"}
                   </p>
                   <p className="text-[10px] text-white/40">Win Rate</p>
@@ -190,19 +241,17 @@ export function DailyBriefingCard({
                   <p
                     className={cn(
                       "text-lg font-bold",
-                      (content.review.pnl ?? 0) >= 0
+                      reviewPnl >= 0
                         ? "text-teal-400"
                         : "text-rose-400"
                     )}
                   >
-                    {formatSignedCurrencyValue(
-                      content.review.pnl ?? 0,
-                      currencyCode,
-                      {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      }
-                    )}
+                    {reviewTradeCount > 0
+                      ? formatSignedCurrencyValue(reviewPnl, currencyCode, {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        })
+                      : "—"}
                   </p>
                   <p className="text-[10px] text-white/40">P&L</p>
                 </div>
@@ -285,7 +334,7 @@ export function DailyBriefingCard({
             </div>
             <SheetDescription className="text-xs">
               {briefing?.createdAt
-                ? `Generated ${new Date(briefing.createdAt).toLocaleString()}`
+                ? `Generated ${formatBriefingDate(briefing.createdAt)}`
                 : "Your personalized trading briefing"}
             </SheetDescription>
           </SheetHeader>
@@ -331,13 +380,20 @@ export function DailyBriefingCard({
               )}
 
               {/* Yesterday Review */}
-              {content?.review && (
+              {hasReview && (
                 <>
                   <Separator className="bg-white/10" />
                   <div>
-                    <h3 className="text-xs font-semibold text-white/70 uppercase tracking-wide mb-3">
-                      Yesterday&apos;s Review
-                    </h3>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h3 className="text-xs font-semibold text-white/70 uppercase tracking-wide">
+                        {reviewLabel}
+                      </h3>
+                      {reviewDateLabel ? (
+                        <span className="text-[10px] text-white/35">
+                          {reviewDateLabel}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-lg bg-white/3 p-3">
                         <p className="text-[10px] text-white/40 uppercase">
@@ -350,8 +406,9 @@ export function DailyBriefingCard({
                           Win Rate
                         </p>
                         <p className="text-xl font-bold">
-                          {content.review.winRate
-                            ? `${Math.round(content.review.winRate)}%`
+                          {reviewTradeCount > 0 &&
+                          typeof reviewWinRate === "number"
+                            ? `${Math.round(reviewWinRate)}%`
                             : "—"}
                         </p>
                       </div>
@@ -362,19 +419,17 @@ export function DailyBriefingCard({
                         <p
                           className={cn(
                             "text-xl font-bold",
-                            (content.review.pnl ?? 0) >= 0
+                            reviewPnl >= 0
                               ? "text-teal-400"
                               : "text-rose-400"
                           )}
                         >
-                          {formatSignedCurrencyValue(
-                            content.review.pnl ?? 0,
-                            currencyCode,
-                            {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            }
-                          )}
+                          {reviewTradeCount > 0
+                            ? formatSignedCurrencyValue(reviewPnl, currencyCode, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })
+                            : "—"}
                         </p>
                       </div>
                       <div className="rounded-lg bg-white/3 p-3">
@@ -382,7 +437,7 @@ export function DailyBriefingCard({
                           Edge Matches
                         </p>
                         <p className="text-xl font-bold text-teal-400">
-                          {content.review.edgeMatches ?? 0}
+                          {review?.edgeMatches ?? 0}
                         </p>
                       </div>
                     </div>

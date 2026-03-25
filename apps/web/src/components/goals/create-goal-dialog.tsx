@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Plus, Sparkles } from "lucide-react";
+import { X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { goalTemplates, type GoalTemplate } from "./goal-templates";
@@ -10,6 +10,9 @@ import { AIGoalGenerator } from "./ai-goal-generator";
 import type { CustomGoalCriteria } from "./custom-goal-builder";
 import { trpcClient } from "@/utils/trpc";
 import { useQueryClient } from "@tanstack/react-query";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
+import { getGoalSchedule, type GoalType } from "@/lib/goals-dates";
+import { invalidateGoalQueries } from "@/lib/goals-query";
 
 interface CreateGoalDialogProps {
   open: boolean;
@@ -17,7 +20,6 @@ interface CreateGoalDialogProps {
   accountId?: string;
 }
 
-type GoalType = "daily" | "weekly" | "monthly" | "milestone";
 type GoalTargetType =
   | "profit"
   | "winRate"
@@ -63,6 +65,16 @@ export function CreateGoalDialog({
   const [isCreating, setIsCreating] = useState(false);
   const queryClient = useQueryClient();
 
+  useEffect(() => {
+    if (open) return;
+
+    setMode("template");
+    setSelectedTemplate(null);
+    setCustomTitle("");
+    setCustomValue("");
+    setIsCreating(false);
+  }, [open]);
+
   const handleSelectTemplate = (template: GoalTemplate) => {
     setSelectedTemplate(template);
     setCustomTitle(template.title);
@@ -74,51 +86,20 @@ export function CreateGoalDialog({
 
     setIsCreating(true);
     try {
-      const today = new Date().toISOString().split("T")[0];
-      let deadline: string | null = null;
-
-      // Calculate deadline based on type
-      const now = new Date();
-      if (selectedTemplate.type === "daily") {
-        deadline = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() + 1
-        )
-          .toISOString()
-          .split("T")[0];
-      } else if (selectedTemplate.type === "weekly") {
-        deadline = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() + 7
-        )
-          .toISOString()
-          .split("T")[0];
-      } else if (selectedTemplate.type === "monthly") {
-        deadline = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-          .toISOString()
-          .split("T")[0];
-      }
+      const { startDate, deadline } = getGoalSchedule(selectedTemplate.type);
 
       await trpcClient.goals.create.mutate({
         accountId: accountId || null,
         type: selectedTemplate.type,
         targetType: selectedTemplate.targetType,
         targetValue: parseFloat(customValue),
-        startDate: today,
+        startDate,
         deadline,
         title: customTitle,
         description: selectedTemplate.description,
       });
 
-      // Invalidate all goals-related queries
-      await queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey[0];
-          return typeof key === 'string' && key.startsWith('goals.');
-        }
-      });
+      await invalidateGoalQueries(queryClient);
 
       // Reset and close
       setSelectedTemplate(null);
@@ -139,8 +120,6 @@ export function CreateGoalDialog({
   ) => {
     setIsCreating(true);
     try {
-      const today = new Date().toISOString().split("T")[0];
-      let deadline: string | null = null;
       const normalizedType: GoalType =
         type === "daily" ||
         type === "weekly" ||
@@ -148,37 +127,14 @@ export function CreateGoalDialog({
         type === "milestone"
           ? type
           : "weekly";
-
-      // Calculate deadline based on type
-      const now = new Date();
-      if (normalizedType === "daily") {
-        deadline = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() + 1
-        )
-          .toISOString()
-          .split("T")[0];
-      } else if (normalizedType === "weekly") {
-        deadline = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate() + 7
-        )
-          .toISOString()
-          .split("T")[0];
-      } else if (normalizedType === "monthly") {
-        deadline = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-          .toISOString()
-          .split("T")[0];
-      }
+      const { startDate, deadline } = getGoalSchedule(normalizedType);
 
       await trpcClient.goals.create.mutate({
         accountId: accountId || null,
         type: normalizedType,
         targetType: mapCustomMetricToTargetType(criteria.metric),
         targetValue: criteria.targetValue,
-        startDate: today,
+        startDate,
         deadline,
         title,
         description: criteria.description,
@@ -186,13 +142,7 @@ export function CreateGoalDialog({
         customCriteria: criteria as any,
       });
 
-      // Invalidate all goals-related queries
-      await queryClient.invalidateQueries({
-        predicate: (query) => {
-          const key = query.queryKey[0];
-          return typeof key === 'string' && key.startsWith('goals.');
-        }
-      });
+      await invalidateGoalQueries(queryClient);
 
       // Reset and close
       setMode("template");
@@ -400,14 +350,20 @@ export function CreateGoalDialog({
                       <div className="flex items-center gap-3">
                         <Button
                           onClick={() => setSelectedTemplate(null)}
-                          className="flex-1 cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                          className={getPropAssignActionButtonClassName({
+                            tone: "neutral",
+                            className: "flex-1 gap-2",
+                          })}
                         >
                           Back
                         </Button>
                         <Button
                           onClick={handleCreateGoal}
                           disabled={!customTitle || !customValue || isCreating}
-                          className="flex-1 cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
+                          className={getPropAssignActionButtonClassName({
+                            tone: "teal",
+                            className: "flex-1 gap-2",
+                          })}
                         >
                           {isCreating ? "Creating..." : "Create Goal"}
                         </Button>

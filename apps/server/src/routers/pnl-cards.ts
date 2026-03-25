@@ -1,4 +1,5 @@
 import { router, protectedProcedure, publicProcedure } from "../lib/trpc";
+import { issueSharedCardVerification } from "../lib/verification/share-verification";
 import { z } from "zod";
 import { db } from "../db";
 import { pnlCardTemplate, sharedPnlCard, trade, tradingAccount } from "../db/schema/trading";
@@ -317,7 +318,29 @@ export const pnlCardsRouter = router({
         })
         .where(eq(sharedPnlCard.id, card[0].id));
 
-      return card[0];
+      const cardData =
+        card[0].cardData && typeof card[0].cardData === "object"
+          ? (card[0].cardData as Record<string, unknown>)
+          : {};
+
+      return {
+        ...card[0],
+        verification: issueSharedCardVerification({
+          shareId: card[0].shareId,
+          symbol:
+            typeof cardData.symbol === "string" ? cardData.symbol : undefined,
+          tradeType:
+            typeof cardData.tradeType === "string"
+              ? cardData.tradeType
+              : undefined,
+          profit: Number(cardData.profit ?? 0),
+          realisedRR: Number(cardData.realisedRR ?? 0),
+          outcome:
+            typeof cardData.outcome === "string"
+              ? cardData.outcome
+              : undefined,
+        }),
+      };
     }),
 
   // List user's shared cards

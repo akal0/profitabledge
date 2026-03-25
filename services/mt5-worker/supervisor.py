@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 from client import ControlPlaneClient, is_retryable_control_plane_error
 from config import SupervisorConfig, load_supervisor_config
+from hosting_policy import build_worker_host_policy_meta
 from status_files import read_status_file, status_path_for_worker
 
 
@@ -118,9 +119,10 @@ class WorkerSupervisor:
         running_count = sum(1 for worker in workers if worker["alive"])
         healthy_count = sum(1 for worker in workers if worker["healthy"])
         healthy = running_count == self.config.children and healthy_count == self.config.children
+        host_policy_meta = build_worker_host_policy_meta(self.config.worker)
 
         return {
-            "workerHostId": self.config.worker.worker_id,
+            "workerHostId": self.config.worker.host_id,
             "ok": healthy,
             "status": "ok" if healthy else "degraded",
             "startedAt": self.started_at.isoformat(),
@@ -131,13 +133,22 @@ class WorkerSupervisor:
             "healthyChildren": healthy_count,
             "mode": self.config.worker.mode,
             "host": {
-                "id": self.config.worker.worker_id,
+                "id": self.config.worker.host_id,
                 "label": self.config.worker.worker_label,
                 "machineName": self.config.worker.machine_name,
                 "environment": self.config.worker.host_environment,
                 "provider": self.config.worker.host_provider,
                 "region": self.config.worker.host_region,
+                "regionGroup": host_policy_meta.get("hostRegionGroup"),
+                "countryCode": self.config.worker.host_country_code,
+                "city": self.config.worker.host_city,
+                "timezone": self.config.worker.host_timezone,
+                "publicIp": self.config.worker.host_public_ip,
                 "tags": self.config.worker.host_tags,
+                "deviceIsolationMode": self.config.worker.device_isolation_mode,
+                "reservedUserId": self.config.worker.reserved_user_id,
+                "deviceIdentityKey": host_policy_meta.get("deviceIdentityKey"),
+                "deviceProfileId": host_policy_meta.get("deviceProfileId"),
                 "os": self.config.worker.os_version,
                 "pythonVersion": self.config.worker.python_version,
                 "sessionsRoot": self.config.worker.sessions_root,
@@ -180,6 +191,7 @@ class WorkerSupervisor:
     def _build_child_env(self, worker: ManagedWorker) -> dict[str, str]:
         env = os.environ.copy()
         env["MT5_WORKER_ID"] = worker.worker_id
+        env["MT5_HOST_ID"] = self.config.worker.host_id
         env["MT5_CLAIM_LIMIT"] = "1"
         env["MT5_STATUS_ROOT"] = self.config.worker.status_root
         env["PYTHONUNBUFFERED"] = "1"
@@ -363,7 +375,7 @@ def report_supervisor_status(
     config: SupervisorConfig,
 ) -> None:
     snapshot = supervisor.health_snapshot()
-    client.report_host_status(config.worker.worker_id, snapshot)
+    client.report_host_status(config.worker.host_id, snapshot)
 
 
 def main() -> int:

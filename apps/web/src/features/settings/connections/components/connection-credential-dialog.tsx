@@ -6,7 +6,17 @@ import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import type { ConnectionProviderDefinition } from "@/features/settings/connections/lib/connection-types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type {
+  ConnectionProviderDefinition,
+  ConnectionRegionOption,
+} from "@/features/settings/connections/lib/connection-types";
 
 export function ConnectionCredentialDialog({
   open,
@@ -14,9 +24,14 @@ export function ConnectionCredentialDialog({
   provider,
   displayName,
   credentialForm,
+  regionSelectionEnabled = false,
+  regionOptions = [],
+  selectedRegion = "",
+  regionHint = null,
   isConnecting,
   onDisplayNameChange,
   onCredentialChange,
+  onRegionChange,
   onCancel,
   onSubmit,
 }: {
@@ -25,9 +40,14 @@ export function ConnectionCredentialDialog({
   provider: ConnectionProviderDefinition | undefined;
   displayName: string;
   credentialForm: Record<string, string>;
+  regionSelectionEnabled?: boolean;
+  regionOptions?: ConnectionRegionOption[];
+  selectedRegion?: string;
+  regionHint?: string | null;
   isConnecting: boolean;
   onDisplayNameChange: (value: string) => void;
   onCredentialChange: (field: string, value: string) => void;
+  onRegionChange?: (value: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
 }) {
@@ -72,6 +92,29 @@ export function ConnectionCredentialDialog({
                 onChange={(event) => onDisplayNameChange(event.target.value)}
               />
             </div>
+
+            {regionSelectionEnabled ? (
+              <div className="space-y-2">
+                <Label className="text-xs text-white/50">Preferred MT5 region</Label>
+                <Select value={selectedRegion} onValueChange={onRegionChange}>
+                  <SelectTrigger className="h-9 w-full border-white/10 bg-white/[0.03] text-white">
+                    <SelectValue placeholder="Choose a region" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-80 border-white/10 bg-sidebar text-white">
+                    {regionOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {regionHint ? (
+                  <p className="text-[11px] leading-relaxed text-white/35">
+                    {regionHint}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <Separator />

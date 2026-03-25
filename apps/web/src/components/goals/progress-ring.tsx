@@ -55,7 +55,7 @@ export function ProgressRing({
           strokeWidth={strokeWidth}
           fill="none"
           strokeDasharray={circumference}
-          strokeDashoffset={animated ? offset : 0}
+          strokeDashoffset={offset}
           strokeLinecap="round"
           initial={animated ? { strokeDashoffset: circumference } : false}
           animate={animated ? { strokeDashoffset: offset } : false}
@@ -70,15 +70,12 @@ export function ProgressRing({
       {/* Center label */}
       {showLabel && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <motion.span
+          <span
             className="font-semibold text-white"
             style={{ fontSize: size <= 80 ? size * 0.18 : size * 0.2 }}
-            initial={animated ? { opacity: 0, scale: 0.8 } : false}
-            animate={animated ? { opacity: 1, scale: 1 } : false}
-            transition={{ delay: 0.5, duration: 0.3 }}
           >
             {Math.round(progress)}%
-          </motion.span>
+          </span>
           {label && (
             <span className="text-xs text-white/60 mt-1">{label}</span>
           )}

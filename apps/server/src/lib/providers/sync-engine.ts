@@ -17,6 +17,7 @@ import { normalizeToTradeInsert } from "./trade-normalizer";
 import { notifyEarnedAchievements } from "../achievements";
 import { createNotification } from "../notifications";
 import { syncPropAccountState } from "../prop-rule-monitor";
+import { isMtTerminalProvider } from "../mt5/constants";
 
 export interface SyncResult {
   connectionId: string;
@@ -51,6 +52,19 @@ export async function syncConnection(
       tradesInserted: 0,
       tradesDuplicated: 0,
       errorMessage: "Sync paused by user",
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  if (isMtTerminalProvider(conn.provider)) {
+    return {
+      connectionId,
+      status: "skipped",
+      tradesFound: 0,
+      tradesInserted: 0,
+      tradesDuplicated: 0,
+      errorMessage:
+        "MT terminal connections are handled by the MT5 worker queue, not the generic sync engine.",
       durationMs: Date.now() - startTime,
     };
   }

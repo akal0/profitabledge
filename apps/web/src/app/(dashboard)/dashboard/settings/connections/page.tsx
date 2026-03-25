@@ -198,9 +198,10 @@ export default function ConnectionsSettingsPage() {
       } else {
         toast.error(result.errorMessage || "Sync failed");
       }
-      await refetchConnectionViews();
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Sync failed");
+    } finally {
+      void refetchConnectionViews().catch(() => undefined);
     }
   };
 

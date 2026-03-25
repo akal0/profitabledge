@@ -178,19 +178,6 @@ class ControlPlaneClient:
         )
         return response["connection"]
 
-    def get_copy_signals(self, connection_id: str) -> list[dict[str, Any]]:
-        try:
-            response = self._request(
-                "GET",
-                f"/api/mt5-worker/connections/{connection_id}/copy-signals",
-            )
-        except ControlPlaneRequestError as error:
-            if error.status_code == 404:
-                return []
-            raise
-
-        return response.get("signals", [])
-
     def report_status(
         self,
         connection_id: str,
@@ -239,36 +226,6 @@ class ControlPlaneClient:
             },
         )
         return response["result"]
-
-    def ack_copy_signal(
-        self,
-        *,
-        signal_id: str,
-        success: bool,
-        slave_ticket: str | None = None,
-        executed_price: float | None = None,
-        slippage_pips: float | None = None,
-        profit: float | None = None,
-        error_message: str | None = None,
-    ) -> dict[str, Any]:
-        try:
-            return self._request(
-                "POST",
-                "/api/mt5-worker/copy-signals/ack",
-                {
-                    "signalId": signal_id,
-                    "success": success,
-                    "slaveTicket": slave_ticket,
-                    "executedPrice": executed_price,
-                    "slippagePips": slippage_pips,
-                    "profit": profit,
-                    "errorMessage": error_message,
-                },
-            )
-        except ControlPlaneRequestError as error:
-            if error.status_code == 404:
-                return {"success": True, "acknowledged": False}
-            raise
 
 
 def is_retryable_control_plane_error(error: Exception) -> bool:

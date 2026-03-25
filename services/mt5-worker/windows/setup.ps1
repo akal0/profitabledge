@@ -72,8 +72,8 @@ Write-Host "[setup] creating virtual environment at $venvPath"
 Write-Host "[setup] upgrading pip"
 & $pythonExe -m pip install --upgrade pip
 
-Write-Host "[setup] installing MetaTrader5"
-& $pythonExe -m pip install MetaTrader5
+Write-Host "[setup] installing MetaTrader5 and CA bundle support"
+& $pythonExe -m pip install MetaTrader5 certifi
 
 $normalizedTags = @()
 if ($HostTags.Trim()) {

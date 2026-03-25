@@ -1,8 +1,15 @@
 import json
+import os
+import ssl
 import time
 import urllib.error
 import urllib.request
 from typing import Any
+
+try:
+    import certifi
+except ImportError:  # pragma: no cover - optional dependency in dev
+    certifi = None
 
 
 class ControlPlaneRequestError(RuntimeError):
@@ -26,6 +33,19 @@ class ControlPlaneClient:
         self.timeout_seconds = timeout_seconds
         self.retry_count = retry_count
         self.retry_backoff_seconds = retry_backoff_seconds
+        self.ssl_context = self._build_ssl_context()
+
+    def _build_ssl_context(self) -> ssl.SSLContext:
+        explicit_ca_file = os.getenv("PE_SSL_CERT_FILE", "").strip() or os.getenv(
+            "SSL_CERT_FILE", ""
+        ).strip()
+        if explicit_ca_file:
+            return ssl.create_default_context(cafile=explicit_ca_file)
+
+        if certifi is not None:
+            return ssl.create_default_context(cafile=certifi.where())
+
+        return ssl.create_default_context()
 
     def _should_retry_http_error(self, status_code: int) -> bool:
         return status_code in {408, 425, 429, 500, 502, 503, 504}
@@ -77,6 +97,7 @@ class ControlPlaneClient:
                 with urllib.request.urlopen(
                     request,
                     timeout=self.timeout_seconds,
+                    context=self.ssl_context,
                 ) as response:
                     raw = response.read().decode("utf-8")
                 break

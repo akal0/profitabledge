@@ -1,4 +1,14 @@
-import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  notInArray,
+  or,
+} from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { db } from "../../db";
 import { platformConnection } from "../../db/schema/connections";
@@ -128,6 +138,29 @@ function isClaimOccupyingSession(
     isActiveSessionHeartbeat(session?.heartbeatAt, now) &&
     isClaimOccupyingSessionStatus(session?.status)
   );
+}
+
+export function canMtWorkerTakeSessionOwnership(
+  session:
+    | {
+        workerHostId?: string | null;
+        heartbeatAt?: Date | null;
+        status?: string | null;
+      }
+    | null
+    | undefined,
+  workerId: string,
+  now: number
+) {
+  if (!session) {
+    return true;
+  }
+
+  if (session.workerHostId === workerId) {
+    return true;
+  }
+
+  return !isClaimOccupyingSession(session, now);
 }
 
 function getLatestSyncActivityAt(connection: {
@@ -714,58 +747,91 @@ export async function claimMtConnections(input: {
       claimMode,
       enforceLiveLease,
     } = candidate.connection;
+    const claimStatus = connection.status === "active" ? "syncing" : "bootstrapping";
+    const claimSessionKey = `${workerId}:${connection.id}`;
+    const claimTimestamp = new Date();
+    const staleHeartbeatBefore = new Date(claimTimestamp.getTime() - ACTIVE_LEASE_MS);
+    const claimSessionMeta = {
+      hostId,
+      workerId,
+      claimPlacement,
+      planKey: candidate.planKey,
+      claimMode,
+      enforceLiveLease,
+    };
 
-    await db
-      .insert(brokerSession)
-      .values({
-        connectionId: connection.id,
+    const updatedExistingSession = await db
+      .update(brokerSession)
+      .set({
         accountId: connection.accountId ?? null,
         platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
         workerHostId: workerId,
-        status: connection.status === "active" ? "syncing" : "bootstrapping",
-        heartbeatAt: new Date(),
-        meta: {
-          hostId,
-          workerId,
-          claimPlacement,
-          planKey: candidate.planKey,
-          claimMode,
-          enforceLiveLease,
-        },
-        updatedAt: new Date(),
+        sessionKey: claimSessionKey,
+        status: claimStatus,
+        heartbeatAt: claimTimestamp,
+        lastError: null,
+        meta: claimSessionMeta,
+        updatedAt: claimTimestamp,
       })
-      .onConflictDoUpdate({
-        target: brokerSession.connectionId,
-        set: {
+      .where(
+        and(
+          eq(brokerSession.connectionId, connection.id),
+          or(
+            eq(brokerSession.workerHostId, workerId),
+            notInArray(brokerSession.status, [
+              "bootstrapping",
+              "syncing",
+              "active",
+              "running",
+            ]),
+            isNull(brokerSession.heartbeatAt),
+            lte(brokerSession.heartbeatAt, staleHeartbeatBefore)
+          )
+        )
+      )
+      .returning({
+        connectionId: brokerSession.connectionId,
+      });
+
+    if (updatedExistingSession.length === 0) {
+      const insertedSession = await db
+        .insert(brokerSession)
+        .values({
+          connectionId: connection.id,
           accountId: connection.accountId ?? null,
           platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
           workerHostId: workerId,
-          status: connection.status === "active" ? "syncing" : "bootstrapping",
-          heartbeatAt: new Date(),
-          meta: {
-            hostId,
-            workerId,
-            claimPlacement,
-            planKey: candidate.planKey,
-            claimMode,
-            enforceLiveLease,
-          },
-          updatedAt: new Date(),
-        },
-      });
+          sessionKey: claimSessionKey,
+          status: claimStatus,
+          heartbeatAt: claimTimestamp,
+          lastError: null,
+          meta: claimSessionMeta,
+          updatedAt: claimTimestamp,
+        })
+        .onConflictDoNothing({
+          target: brokerSession.connectionId,
+        })
+        .returning({
+          connectionId: brokerSession.connectionId,
+        });
+
+      if (insertedSession.length === 0) {
+        continue;
+      }
+    }
 
     await db
       .update(platformConnection)
       .set({
         status: nextConnectionStatus,
-        lastSyncAttemptAt: new Date(),
+        lastSyncAttemptAt: claimTimestamp,
         meta: clearMt5ForceSyncRequest(
           connection.meta && typeof connection.meta === "object"
             ? (connection.meta as Record<string, unknown>)
             : {},
-          { claimedAt: new Date() }
+          { claimedAt: claimTimestamp }
         ),
-        updatedAt: new Date(),
+        updatedAt: claimTimestamp,
       })
       .where(eq(platformConnection.id, connection.id));
 
@@ -935,6 +1001,21 @@ export async function reportMtConnectionStatus(input: {
       ? (connection.meta as Record<string, unknown>)
       : {};
   const workerId = input.workerId ?? input.workerHostId;
+  const currentSession = await db.query.brokerSession.findFirst({
+    where: eq(brokerSession.connectionId, input.connectionId),
+  });
+  if (
+    !canMtWorkerTakeSessionOwnership(
+      currentSession,
+      workerId,
+      Date.now()
+    )
+  ) {
+    return {
+      success: true,
+      ignored: true,
+    };
+  }
   const sessionMeta = {
     ...(input.meta ?? {}),
     hostId: input.hostId ?? null,

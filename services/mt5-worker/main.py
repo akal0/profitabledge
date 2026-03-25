@@ -140,10 +140,11 @@ def build_adapter(config: WorkerConfig):
     if mode == "mock":
         return MockMtAdapter()
     if mode == "terminal":
+        sessions_root = os.path.join(config.sessions_root, config.worker_id)
         return MetaTrader5Adapter(
             terminal_path=config.terminal_path,
             terminal_path_map=config.terminal_path_map,
-            sessions_root=config.sessions_root,
+            sessions_root=sessions_root,
             initialize_timeout_ms=config.initialize_timeout_ms,
             connected_timeout_seconds=config.connected_timeout_seconds,
             history_overlap_seconds=config.history_overlap_seconds,
@@ -202,6 +203,7 @@ def write_worker_status(
     pinned_connection_id: str | None = None,
 ) -> None:
     worker_host_meta = build_worker_host_policy_meta(config)
+    sessions_root = os.path.join(config.sessions_root, config.worker_id)
     status_writer.write(
         {
             "workerId": config.worker_id,
@@ -224,7 +226,7 @@ def write_worker_status(
             "hostTimezone": config.host_timezone,
             "deviceIsolationMode": config.device_isolation_mode,
             "deviceProfileId": config.device_profile_id,
-            "sessionsRoot": config.sessions_root,
+            "sessionsRoot": sessions_root,
             "statusRoot": config.status_root,
             "terminalPath": config.terminal_path,
             "startedAt": started_at.isoformat(),

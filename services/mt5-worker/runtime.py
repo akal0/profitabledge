@@ -7,6 +7,7 @@ import platform
 import re
 import shutil
 import sys
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -299,6 +300,9 @@ class TerminalSessionManager:
         self._write_metadata(existing)
         return existing
 
+    def get_session(self, connection_id: str) -> TerminalSession | None:
+        return self.sessions.get(connection_id)
+
     def rebuild_installation(self, session: TerminalSession) -> None:
         if session.installation_root.exists():
             shutil.rmtree(session.installation_root, ignore_errors=True)
@@ -364,11 +368,25 @@ class TerminalSessionManager:
             return
 
         session.installation_root.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(
-            template_root,
-            session.installation_root,
-            dirs_exist_ok=True,
-        )
+        last_error: Exception | None = None
+        for attempt in range(5):
+            try:
+                shutil.copytree(
+                    template_root,
+                    session.installation_root,
+                    dirs_exist_ok=True,
+                )
+                return
+            except Exception as error:  # noqa: BLE001
+                last_error = error
+                if session.installation_root.exists():
+                    shutil.rmtree(session.installation_root, ignore_errors=True)
+                if attempt == 4:
+                    raise
+                time.sleep(1 + attempt)
+
+        if last_error is not None:
+            raise last_error
 
     def _write_metadata(
         self, session: TerminalSession, extra: dict[str, Any] | None = None

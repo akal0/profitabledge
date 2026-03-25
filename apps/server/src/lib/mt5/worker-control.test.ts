@@ -111,4 +111,36 @@ describe("assertWorkerSecret", () => {
       lastRequestedAt: null,
     });
   });
+
+  it("does not let a different worker take over a fresh active MT5 session", async () => {
+    const { canMtWorkerTakeSessionOwnership } = await import("./worker-control");
+
+    expect(
+      canMtWorkerTakeSessionOwnership(
+        {
+          workerHostId: "worker-a",
+          status: "syncing",
+          heartbeatAt: new Date("2026-03-25T02:10:00.000Z"),
+        },
+        "worker-b",
+        new Date("2026-03-25T02:10:30.000Z").getTime()
+      )
+    ).toBe(false);
+  });
+
+  it("lets the same worker reclaim its own MT5 session record", async () => {
+    const { canMtWorkerTakeSessionOwnership } = await import("./worker-control");
+
+    expect(
+      canMtWorkerTakeSessionOwnership(
+        {
+          workerHostId: "worker-a",
+          status: "syncing",
+          heartbeatAt: new Date("2026-03-25T02:10:00.000Z"),
+        },
+        "worker-a",
+        new Date("2026-03-25T02:10:30.000Z").getTime()
+      )
+    ).toBe(true);
+  });
 });

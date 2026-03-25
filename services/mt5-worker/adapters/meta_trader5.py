@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -1446,10 +1447,17 @@ class MetaTrader5Adapter(MtAdapter):
         return current_login == login and current_server == server
 
     def _reset_terminal_session(self) -> None:
+        session = (
+            self.session_manager.get_session(self.active_connection_id)
+            if self.active_connection_id
+            else None
+        )
         try:
             self.mt5.shutdown()
         except Exception:  # noqa: BLE001
             pass
+
+        self._terminate_session_processes(session)
 
         self.active_connection_id = None
         self.active_terminal_path = None
@@ -1459,6 +1467,46 @@ class MetaTrader5Adapter(MtAdapter):
     def release_connection(self, connection_id: str) -> None:
         if self.active_connection_id == connection_id:
             self._reset_terminal_session()
+            return
+
+        self._terminate_session_processes(self.session_manager.get_session(connection_id))
 
     def close(self) -> None:
         self._reset_terminal_session()
+
+    def _terminate_session_processes(self, session: TerminalSession | None) -> None:
+        if session is None or os.name != "nt":
+            return
+
+        installation_root = str(session.installation_root.resolve())
+        script = (
+            "$root = [System.IO.Path]::GetFullPath($args[0]);"
+            "$targets = Get-CimInstance Win32_Process | Where-Object { "
+            "$_.ExecutablePath -and "
+            "([System.IO.Path]::GetFullPath($_.ExecutablePath)).StartsWith("
+            "$root, [System.StringComparison]::OrdinalIgnoreCase) "
+            "};"
+            "foreach ($proc in $targets) { "
+            "Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue "
+            "}"
+        )
+
+        try:
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    script,
+                    installation_root,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+        time.sleep(1)

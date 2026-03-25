@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 export type ConnectionRow = {
+  id?: string | null;
   accountId: string | null;
   provider: string;
   status: string;

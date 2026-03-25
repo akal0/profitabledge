@@ -182,8 +182,14 @@ export default function ConnectionsSettingsPage() {
 
   const handleSync = async (connectionId: string) => {
     try {
-      const result = await syncNow.mutateAsync({ connectionId });
-      if (result.status === "success") {
+      const result = (await syncNow.mutateAsync({
+        connectionId,
+      })) as SyncNowOutput;
+      if (result.queued) {
+        toast.success(
+          "Sync queued. The MT5 worker will attach shortly and release the terminal after the refresh completes."
+        );
+      } else if (result.status === "success") {
         toast.success(
           `Synced ${result.tradesInserted} new trade${result.tradesInserted !== 1 ? "s" : ""}`
         );

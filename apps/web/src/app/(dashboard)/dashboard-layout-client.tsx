@@ -654,18 +654,40 @@ export default function DashboardLayoutClient({
     enabled: canLoadDashboardShellData,
   });
 
+  const mt5LeaseConnections =
+    (rawConnections as
+      | Array<{
+          id?: string | null;
+          accountId?: string | null;
+          provider: string;
+          isPaused: boolean;
+        }>
+      | undefined) ?? [];
   const connections = (rawConnections as ConnectionRow[] | undefined) ?? [];
-  useMt5LiveLeaseHeartbeat({
-    connections,
-    enabled:
-      canLoadDashboardShellData && connectionsEnabled && mt5IngestionEnabled,
-    maxConnectionCount: mt5LiveLeaseLimit,
-    route: safePathname,
-  });
   const currentAccountConnection =
     resolvedAccountId && resolvedAccountId !== ALL_ACCOUNTS_ID
       ? pickPreferredAccountConnection(connections, resolvedAccountId)
       : null;
+  const preferredMt5LeaseConnectionId =
+    resolvedAccountId && resolvedAccountId !== ALL_ACCOUNTS_ID
+      ? mt5LeaseConnections.find(
+          (connection) =>
+            connection.accountId === resolvedAccountId &&
+            connection.provider === "mt5-terminal" &&
+            !connection.isPaused &&
+            Boolean(connection.id)
+        )?.id
+      : undefined;
+  useMt5LiveLeaseHeartbeat({
+    connections: mt5LeaseConnections,
+    enabled:
+      canLoadDashboardShellData && connectionsEnabled && mt5IngestionEnabled,
+    maxConnectionCount: mt5LiveLeaseLimit,
+    preferredConnectionIds: preferredMt5LeaseConnectionId
+      ? [preferredMt5LeaseConnectionId]
+      : undefined,
+    route: safePathname,
+  });
   const pathSegments = safePathname.split("/").filter(Boolean);
   const rawEdgeDetailId =
     pathSegments[0] === "dashboard" && pathSegments[1] === "edges"

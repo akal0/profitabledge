@@ -13,9 +13,16 @@ except ImportError:  # pragma: no cover - optional dependency in dev
 
 
 class ControlPlaneRequestError(RuntimeError):
-    def __init__(self, message: str, *, retryable: bool) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        retryable: bool,
+        status_code: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.retryable = retryable
+        self.status_code = status_code
 
 
 class ControlPlaneClient:
@@ -57,10 +64,12 @@ class ControlPlaneClient:
         detail: str,
         *,
         retryable: bool,
+        status_code: int | None = None,
     ) -> ControlPlaneRequestError:
         return ControlPlaneRequestError(
             f"{method} {target} failed: {detail}",
             retryable=retryable,
+            status_code=status_code,
         )
 
     def _socket_error_hint(self, error: urllib.error.URLError) -> str:
@@ -108,6 +117,7 @@ class ControlPlaneClient:
                     target,
                     f"{error.code} {body}",
                     retryable=self._should_retry_http_error(error.code),
+                    status_code=error.code,
                 )
                 if (
                     attempt < self.retry_count
@@ -169,10 +179,16 @@ class ControlPlaneClient:
         return response["connection"]
 
     def get_copy_signals(self, connection_id: str) -> list[dict[str, Any]]:
-        response = self._request(
-            "GET",
-            f"/api/mt5-worker/connections/{connection_id}/copy-signals",
-        )
+        try:
+            response = self._request(
+                "GET",
+                f"/api/mt5-worker/connections/{connection_id}/copy-signals",
+            )
+        except ControlPlaneRequestError as error:
+            if error.status_code == 404:
+                return []
+            raise
+
         return response.get("signals", [])
 
     def report_status(
@@ -235,19 +251,24 @@ class ControlPlaneClient:
         profit: float | None = None,
         error_message: str | None = None,
     ) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            "/api/mt5-worker/copy-signals/ack",
-            {
-                "signalId": signal_id,
-                "success": success,
-                "slaveTicket": slave_ticket,
-                "executedPrice": executed_price,
-                "slippagePips": slippage_pips,
-                "profit": profit,
-                "errorMessage": error_message,
-            },
-        )
+        try:
+            return self._request(
+                "POST",
+                "/api/mt5-worker/copy-signals/ack",
+                {
+                    "signalId": signal_id,
+                    "success": success,
+                    "slaveTicket": slave_ticket,
+                    "executedPrice": executed_price,
+                    "slippagePips": slippage_pips,
+                    "profit": profit,
+                    "errorMessage": error_message,
+                },
+            )
+        except ControlPlaneRequestError as error:
+            if error.status_code == 404:
+                return {"success": True, "acknowledged": False}
+            raise
 
 
 def is_retryable_control_plane_error(error: Exception) -> bool:

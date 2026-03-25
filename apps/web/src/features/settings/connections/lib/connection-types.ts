@@ -170,6 +170,7 @@ export type SyncNowOutput = {
   status: "success" | "partial" | "error" | "skipped";
   tradesInserted: number;
   errorMessage: string | null;
+  queued?: boolean;
 };
 
 export type DeleteConnectionInput = {

@@ -58,29 +58,48 @@ function getOrCreateLeaseId() {
 
 function normalizeMt5ConnectionIds(
   connections: Mt5LeaseConnection[] | undefined,
-  maxConnectionCount?: number
+  maxConnectionCount?: number,
+  preferredConnectionIds?: string[]
 ) {
-  const normalized = Array.from(
-    new Set(
-      (connections ?? [])
-        .filter(
-          (connection) =>
-            connection.provider === "mt5-terminal" && !connection.isPaused
-        )
-        .map((connection) => connection.id)
-        .filter((connectionId): connectionId is string => Boolean(connectionId))
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const connection of connections ?? []) {
+    if (connection.provider !== "mt5-terminal" || connection.isPaused) {
+      continue;
+    }
+
+    const connectionId = connection.id;
+    if (!connectionId || seen.has(connectionId)) {
+      continue;
+    }
+
+    seen.add(connectionId);
+    normalized.push(connectionId);
+  }
+
+  const preferredSet = new Set(
+    (preferredConnectionIds ?? []).filter(
+      (connectionId): connectionId is string => Boolean(connectionId)
     )
-  ).sort();
+  );
+  const ordered =
+    preferredSet.size > 0
+      ? [
+          ...normalized.filter((connectionId) => preferredSet.has(connectionId)),
+          ...normalized.filter((connectionId) => !preferredSet.has(connectionId)),
+        ]
+      : normalized;
 
   if (typeof maxConnectionCount !== "number") {
-    return normalized;
+    return ordered;
   }
 
   if (maxConnectionCount <= 0) {
     return [];
   }
 
-  return normalized.slice(0, maxConnectionCount);
+  return ordered.slice(0, maxConnectionCount);
 }
 
 async function sendLeaseMutation(
@@ -103,11 +122,13 @@ export function useMt5LiveLeaseHeartbeat({
   connections,
   enabled,
   maxConnectionCount,
+  preferredConnectionIds,
   route,
 }: {
   connections: Mt5LeaseConnection[] | undefined;
   enabled: boolean;
   maxConnectionCount?: number;
+  preferredConnectionIds?: string[];
   route?: string | null;
 }) {
   const leaseIdRef = useRef<string>(getOrCreateLeaseId());
@@ -131,8 +152,13 @@ export function useMt5LiveLeaseHeartbeat({
   });
 
   const connectionIds = useMemo(
-    () => normalizeMt5ConnectionIds(connections, maxConnectionCount),
-    [connections, maxConnectionCount]
+    () =>
+      normalizeMt5ConnectionIds(
+        connections,
+        maxConnectionCount,
+        preferredConnectionIds
+      ),
+    [connections, maxConnectionCount, preferredConnectionIds]
   );
   const connectionIdsKey = useMemo(() => connectionIds.join("|"), [connectionIds]);
   const isLeaseActive = enabled && isVisible && isOnline && connectionIds.length > 0;

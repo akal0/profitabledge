@@ -47,10 +47,16 @@ import {
   selectMt5Claims,
   type Mt5ClaimSchedulingCandidate,
 } from "./claim-scheduler";
+import {
+  clearMt5ForceSyncRequest,
+  getMt5ForceSyncRequest,
+  withMt5ForceSyncRequest,
+} from "./queue-state";
 
 const ACTIVE_LEASE_MS = 60 * 1000;
 const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
 const LIVE_QUEUE_REFRESH_MS = 15 * 1000;
+const INITIAL_BOOTSTRAP_RETRY_MS = 30 * 1000;
 const COLD_QUEUE_SOFT_AGING_FLOOR_MS = 60 * 1000;
 const COLD_QUEUE_HARD_AGING_FLOOR_MS = 5 * 60 * 1000;
 
@@ -179,8 +185,11 @@ function resolveColdQueueTier(input: {
   return 0;
 }
 
-function resolveMt5ClaimQueueSelection(
+export function resolveMt5ClaimQueueSelection(
   connection: {
+    accountId?: string | null;
+    status?: string | null;
+    meta?: unknown;
     lastSyncAttemptAt?: Date | null;
     lastSyncSuccessAt?: Date | null;
     syncIntervalMinutes?: number | null;
@@ -194,6 +203,30 @@ function resolveMt5ClaimQueueSelection(
   lastRequestedAt: string | null;
 } | null {
   const lastActivityAt = getLatestSyncActivityAt(connection);
+  const forcedSyncRequest = getMt5ForceSyncRequest(connection.meta);
+
+  if (forcedSyncRequest) {
+    return {
+      claimMode: liveLease.active ? "live" : "cold",
+      queueTier: 3,
+      dueAt: forcedSyncRequest.requestedAt,
+      lastRequestedAt: forcedSyncRequest.requestedAt,
+    };
+  }
+
+  if (!connection.lastSyncSuccessAt) {
+    const dueAt = lastActivityAt + INITIAL_BOOTSTRAP_RETRY_MS;
+    if (lastActivityAt > 0 && dueAt > now) {
+      return null;
+    }
+
+    return {
+      claimMode: liveLease.active ? "live" : "cold",
+      queueTier: liveLease.active ? 1 : 0,
+      dueAt: new Date(lastActivityAt > 0 ? dueAt : now).toISOString(),
+      lastRequestedAt: liveLease.active ? liveLease.lastHeartbeatAt : null,
+    };
+  }
 
   if (liveLease.active) {
     const dueAt = lastActivityAt + LIVE_QUEUE_REFRESH_MS;
@@ -429,6 +462,9 @@ export async function createMtTerminalConnection(input: {
     userId: input.userId,
     userTimezone,
   });
+  const queuedMeta = withMt5ForceSyncRequest(mergedMeta, {
+    reason: "connection-created",
+  });
 
   const [conn] = await db
     .insert(platformConnection)
@@ -437,7 +473,7 @@ export async function createMtTerminalConnection(input: {
       provider: input.provider,
       displayName,
       meta: {
-        ...mergedMeta,
+        ...queuedMeta,
         login,
         platform: "mt5",
         serverName: server,
@@ -723,6 +759,12 @@ export async function claimMtConnections(input: {
       .set({
         status: nextConnectionStatus,
         lastSyncAttemptAt: new Date(),
+        meta: clearMt5ForceSyncRequest(
+          connection.meta && typeof connection.meta === "object"
+            ? (connection.meta as Record<string, unknown>)
+            : {},
+          { claimedAt: new Date() }
+        ),
         updatedAt: new Date(),
       })
       .where(eq(platformConnection.id, connection.id));

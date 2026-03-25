@@ -290,38 +290,59 @@ def process_connection(
     result = client.ingest_sync(frame)
     synced_at = datetime.now(timezone.utc)
     session_meta = frame.get("session", {}).get("meta", {})
-    copy_signals = client.get_copy_signals(connection_id)
-    copy_results = adapter.execute_copy_signals(bootstrap, copy_signals)
+    copy_signals: list[dict[str, Any]] = []
+    copy_results: list[dict[str, Any]] = []
+    copy_phase_error: str | None = None
+    copy_ack_failures = 0
 
-    for copy_result in copy_results:
-        client.ack_copy_signal(
-            signal_id=str(copy_result.get("signalId", "")),
-            success=bool(copy_result.get("success", False)),
-            slave_ticket=(
-                str(copy_result["slaveTicket"])
-                if copy_result.get("slaveTicket") is not None
-                else None
-            ),
-            executed_price=(
-                float(copy_result["executedPrice"])
-                if copy_result.get("executedPrice") is not None
-                else None
-            ),
-            slippage_pips=(
-                float(copy_result["slippagePips"])
-                if copy_result.get("slippagePips") is not None
-                else None
-            ),
-            profit=(
-                float(copy_result["profit"])
-                if copy_result.get("profit") is not None
-                else None
-            ),
-            error_message=(
-                str(copy_result["errorMessage"])
-                if copy_result.get("errorMessage") is not None
-                else None
-            ),
+    try:
+        copy_signals = client.get_copy_signals(connection_id)
+        copy_results = adapter.execute_copy_signals(bootstrap, copy_signals)
+
+        for copy_result in copy_results:
+            try:
+                client.ack_copy_signal(
+                    signal_id=str(copy_result.get("signalId", "")),
+                    success=bool(copy_result.get("success", False)),
+                    slave_ticket=(
+                        str(copy_result["slaveTicket"])
+                        if copy_result.get("slaveTicket") is not None
+                        else None
+                    ),
+                    executed_price=(
+                        float(copy_result["executedPrice"])
+                        if copy_result.get("executedPrice") is not None
+                        else None
+                    ),
+                    slippage_pips=(
+                        float(copy_result["slippagePips"])
+                        if copy_result.get("slippagePips") is not None
+                        else None
+                    ),
+                    profit=(
+                        float(copy_result["profit"])
+                        if copy_result.get("profit") is not None
+                        else None
+                    ),
+                    error_message=(
+                        str(copy_result["errorMessage"])
+                        if copy_result.get("errorMessage") is not None
+                        else None
+                    ),
+                )
+            except Exception as error:  # noqa: BLE001
+                copy_ack_failures += 1
+                log_message(
+                    config.worker_id,
+                    f"copy-signal ack failed for {connection_id}: {error}",
+                    error=not is_retryable_control_plane_error(error),
+                )
+    except Exception as error:  # noqa: BLE001
+        copy_phase_error = str(error)
+        log_message(
+            config.worker_id,
+            f"copy-signal phase skipped for {connection_id}: {error}",
+            error=not is_retryable_control_plane_error(error),
         )
 
     copy_success_count = sum(
@@ -335,7 +356,10 @@ def process_connection(
         "copySignalsFetched": len(copy_signals),
         "copySignalsExecuted": copy_success_count,
         "copySignalsFailed": copy_failure_count,
+        "copySignalsAckFailed": copy_ack_failures,
     }
+    if copy_phase_error:
+        final_meta["copySignalError"] = copy_phase_error
 
     print(
         f"[mt5-worker {config.worker_id}] synced {connection_id}: "
@@ -344,7 +368,8 @@ def process_connection(
         f"positions={result.get('openPositionsUpserted', 0)} "
         f"copySignals={len(copy_signals)} "
         f"copyExecuted={copy_success_count} "
-        f"copyFailed={copy_failure_count}"
+        f"copyFailed={copy_failure_count} "
+        f"copyAckFailed={copy_ack_failures}"
     )
 
     return ActiveConnectionState(

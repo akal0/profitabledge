@@ -497,6 +497,27 @@ class MetaTrader5Adapter(MtAdapter):
         trade_type = str(signal.get("tradeType", "") or "").strip().lower()
         master_ticket = str(signal.get("masterTicket", "") or "").strip()
         requested_volume = float(signal.get("volume") or 0.0)
+        existing_position = self._find_copied_position(
+            master_ticket,
+            symbol or None,
+        )
+
+        if existing_position is not None:
+            existing_ticket = str(int(getattr(existing_position, "ticket", 0) or 0))
+            if existing_ticket == "0":
+                existing_ticket = None
+
+            existing_open_price = float(
+                getattr(existing_position, "price_open", 0.0) or 0.0
+            )
+
+            return {
+                "signalId": signal_id,
+                "success": True,
+                "slaveTicket": existing_ticket,
+                "executedPrice": existing_open_price or None,
+                "slippagePips": None,
+            }
 
         if not symbol:
             return self._failed_signal(signal_id, "Missing symbol")

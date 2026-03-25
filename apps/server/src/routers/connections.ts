@@ -43,6 +43,7 @@ import {
   normalizeMt5LiveLeaseRoute,
   shouldRenewMt5LiveLease,
 } from "../lib/mt5/live-lease";
+import { withMt5ForceSyncRequest } from "../lib/mt5/queue-state";
 import {
   isMtWorkerHostSnapshotFresh,
   listMtWorkerHostSnapshots,
@@ -1015,14 +1016,22 @@ export const connectionsRouter = router({
           .update(platformConnection)
           .set({
             status: "pending",
-            lastSyncAttemptAt: new Date(),
+            lastError: null,
+            meta: withMt5ForceSyncRequest(
+              conn.meta && typeof conn.meta === "object"
+                ? (conn.meta as Record<string, unknown>)
+                : {},
+              {
+                reason: "manual-sync",
+              }
+            ),
             updatedAt: new Date(),
           })
           .where(eq(platformConnection.id, input.connectionId));
 
         return {
           connectionId: input.connectionId,
-          status: "success" as const,
+          status: "queued" as const,
           tradesFound: 0,
           tradesInserted: 0,
           tradesDuplicated: 0,

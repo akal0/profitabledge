@@ -2,6 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { formatDisplayCurrency } from "@/lib/format-display";
 import {
   Bar,
   BarChart,
@@ -9,13 +10,16 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
 } from "recharts";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+} from "@/components/dashboard/charts/dashboard-chart-ui";
 
 export interface BaseBarChartProps {
   data: Array<{ name: string; value: number; [k: string]: any }>;
-  height?: number;
+  height?: number | string;
   /** "singular" highlights only first bar */
   mode?: "singular" | "plural";
   /** Custom value formatter for Y axis & tooltip */
@@ -26,14 +30,12 @@ export interface BaseBarChartProps {
 }
 
 const defaultFormat = (v: number) => {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-$" : "$";
-  return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return formatDisplayCurrency(v);
 };
 
 export function BaseBarChart({
   data,
-  height = 192,
+  height = "100%",
   mode = "plural",
   formatValue: fmt = defaultFormat,
   summary,
@@ -42,11 +44,15 @@ export function BaseBarChart({
   const isSingular = mode === "singular";
 
   return (
-    <div className={cn("w-full", className)} style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="flex h-full min-h-0 flex-col">
+      <ChartContainer
+        config={{ value: { label: "Value", color: "#2dd4bf" } }}
+        className={cn("aspect-auto w-full min-h-[18rem] flex-1", className)}
+        style={{ height }}
+      >
         <BarChart
           data={data}
-          margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+          margin={{ top: 12, right: 8, left: 8, bottom: 4 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -63,24 +69,24 @@ export function BaseBarChart({
             tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
             axisLine={false}
             tickLine={false}
+            width={56}
+            tickMargin={8}
             tickFormatter={fmt}
           />
-          <Tooltip
+          <ChartTooltip
+            cursor={false}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const d = payload[0].payload;
               return (
-                <div className="bg-dashboard-background border border-white/10 rounded px-3 py-2 shadow-xl">
-                  <p className="text-white/70 text-xs">{d.name}</p>
-                  <p
-                    className={cn(
-                      "font-semibold",
-                      d.value >= 0 ? "text-teal-400" : "text-rose-400"
-                    )}
-                  >
-                    {fmt(d.value)}
-                  </p>
-                </div>
+                <DashboardChartTooltipFrame title="Value">
+                  <DashboardChartTooltipRow
+                    label={d.name}
+                    value={fmt(d.value)}
+                    tone={d.value >= 0 ? "positive" : "negative"}
+                    indicatorColor={d.value >= 0 ? "#2dd4bf" : "#fb7185"}
+                  />
+                </DashboardChartTooltipFrame>
               );
             }}
           />
@@ -94,7 +100,7 @@ export function BaseBarChart({
             ))}
           </Bar>
         </BarChart>
-      </ResponsiveContainer>
+      </ChartContainer>
 
       {summary?.best && (
         <div className="mt-2 text-xs text-white/50">

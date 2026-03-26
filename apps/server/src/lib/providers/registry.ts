@@ -36,7 +36,9 @@ export async function getProvider(name: string): Promise<TradingProvider> {
   const factory = providerFactories[name];
   if (!factory) {
     throw new Error(
-      `Unknown provider: "${name}". Supported: ${Object.keys(providerFactories).join(", ")}`
+      `Unknown provider: "${name}". Supported: ${Object.keys(
+        providerFactories
+      ).join(", ")}`
     );
   }
   return factory();
@@ -75,35 +77,40 @@ export const PROVIDER_INFO: Record<
   },
   ctrader: {
     name: "cTrader",
-    description: "Connect via OAuth2. Used by FTMO, FundedNext, E8 Markets, FundingPips, Alpha Capital, Maven Trading.",
+    description:
+      "Connect via OAuth2. Used by FTMO, FundedNext, E8 Markets, FundingPips, Alpha Capital, Maven Trading.",
     authType: "oauth",
     fields: [],
     status: "active",
   },
   "match-trader": {
     name: "Match-Trader",
-    description: "Connect with login credentials. Used by FTMO, FundedNext, E8 Markets, Maven Trading.",
+    description:
+      "Connect with login credentials. Used by FTMO, FundedNext, E8 Markets, Maven Trading.",
     authType: "credentials",
     fields: ["serverUrl", "login", "password"],
     status: "active",
   },
   tradelocker: {
     name: "TradeLocker",
-    description: "Connect with email & password. Used by FTMO, E8 Markets, Alpha Capital, DNA Funded.",
+    description:
+      "Connect with email & password. Used by FTMO, E8 Markets, Alpha Capital, DNA Funded.",
     authType: "credentials",
     fields: ["email", "password", "server"],
     status: "active",
   },
   dxtrade: {
     name: "DXTrade",
-    description: "Used by FundingPips, Alpha Capital, BrightFunded, FundedNext.",
+    description:
+      "Used by FundingPips, Alpha Capital, BrightFunded, FundedNext.",
     authType: "credentials",
     fields: ["serverUrl", "login", "password"],
     status: "coming_soon",
   },
   tradovate: {
     name: "Tradovate",
-    description: "Futures platform. Used by Apex Trader Funding, Topstep (legacy).",
+    description:
+      "Futures platform. Used by Apex Trader Funding, Topstep (legacy).",
     authType: "oauth",
     fields: [],
     status: "coming_soon",

@@ -56,7 +56,7 @@ export const MessageAvatar = ({
   >
     <AvatarImage alt="" className="mt-0 mb-0" src={src} />
     <AvatarFallback className="bg-sidebar/50 text-white/70 text-xs">
-      {name?.slice(0, 2) || "ME"}
+      {name?.trim().charAt(0).toUpperCase() || "M"}
     </AvatarFallback>
   </Avatar>
 );

@@ -56,7 +56,7 @@ export function PremiumAssistantAmbientOrbs({
   isTyping: boolean;
 }) {
   return (
-    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" style={{ contain: "strict" }}>
       {AMBIENT_ORBS.map((orb, index) => (
         <motion.div
           key={index}
@@ -70,6 +70,7 @@ export function PremiumAssistantAmbientOrbs({
             marginLeft: -(orb.w / 2),
             background: `radial-gradient(circle, ${orb.color} 0%, transparent 70%)`,
             filter: "blur(60px)",
+            willChange: "transform",
           }}
           initial={false}
           animate={isTyping ? { x: orb.drift.x, y: orb.drift.y } : { x: 0, y: 0 }}

@@ -16,19 +16,14 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-  FileText,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { SummaryCard } from "@/features/dashboard/calendar/components/summary-card";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  journalActionButtonClassName,
+  journalCompactActionButtonClassName,
   journalActionButtonMutedClassName,
 } from "./action-button-styles";
 
@@ -52,6 +47,26 @@ const calendarActionGroupClass =
 const calendarActionGroupButtonClass =
   "h-[38px] rounded-none border-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent";
 
+function getEntryDate(entry: CalendarEntry) {
+  return new Date(entry.journalDate ?? entry.createdAt);
+}
+
+function getEntryDayKey(entry: CalendarEntry) {
+  return format(getEntryDate(entry), "yyyy-MM-dd");
+}
+
+function toSentenceCase(value: string) {
+  if (!value) {
+    return "";
+  }
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getEntryTypeLabel(entryType: string | null | undefined) {
+  return toSentenceCase((entryType ?? "general").replace(/_/g, " "));
+}
+
 export function JournalCalendarTab({
   accountId,
   onSelectEntry,
@@ -65,6 +80,7 @@ export function JournalCalendarTab({
   const gridStart = startOfWeek(startOfMonth(visibleMonth), { weekStartsOn: 1 });
   const gridEnd = endOfWeek(endOfMonth(visibleMonth), { weekStartsOn: 1 });
   const calendarDays = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  const calendarRowCount = Math.max(1, Math.ceil(calendarDays.length / 7));
 
   const { data: calendarEntries = [], isLoading } =
     trpc.journal.calendarEntries.useQuery({
@@ -77,25 +93,42 @@ export function JournalCalendarTab({
     const map = new Map<string, CalendarEntry[]>();
 
     for (const entry of calendarEntries as CalendarEntry[]) {
-      const sourceDate = entry.journalDate ?? entry.createdAt;
-      const dayKey = format(new Date(sourceDate), "yyyy-MM-dd");
+      const dayKey = getEntryDayKey(entry);
       const current = map.get(dayKey) ?? [];
       current.push(entry);
       map.set(dayKey, current);
     }
 
+    for (const entries of map.values()) {
+      entries.sort(
+        (left, right) =>
+          getEntryDate(right).getTime() - getEntryDate(left).getTime()
+      );
+    }
+
     return map;
   }, [calendarEntries]);
 
-  const defaultSelectedDate = React.useMemo(() => {
-    const visibleMonthEntries = (calendarEntries as CalendarEntry[]).filter((entry) =>
-      isSameMonth(new Date(entry.journalDate ?? entry.createdAt), visibleMonth)
-    );
+  const visibleMonthEntries = React.useMemo(
+    () =>
+      [...(calendarEntries as CalendarEntry[])].filter((entry) =>
+        isSameMonth(getEntryDate(entry), visibleMonth)
+      ),
+    [calendarEntries, visibleMonth]
+  );
 
-    if (visibleMonthEntries.length > 0) {
-      return startOfDay(
-        new Date(visibleMonthEntries[0].journalDate ?? visibleMonthEntries[0].createdAt)
-      );
+  const visibleMonthEntriesSorted = React.useMemo(
+    () =>
+      [...visibleMonthEntries].sort(
+        (left, right) =>
+          getEntryDate(right).getTime() - getEntryDate(left).getTime()
+      ),
+    [visibleMonthEntries]
+  );
+
+  const defaultSelectedDate = React.useMemo(() => {
+    if (visibleMonthEntriesSorted.length > 0) {
+      return startOfDay(getEntryDate(visibleMonthEntriesSorted[0]));
     }
 
     if (isSameMonth(visibleMonth, new Date())) {
@@ -103,7 +136,7 @@ export function JournalCalendarTab({
     }
 
     return startOfMonth(visibleMonth);
-  }, [calendarEntries, visibleMonth]);
+  }, [visibleMonth, visibleMonthEntriesSorted]);
 
   React.useEffect(() => {
     const isSelectedVisible = calendarDays.some((day) => isSameDay(day, selectedDate));
@@ -115,10 +148,65 @@ export function JournalCalendarTab({
 
   const selectedEntries =
     entriesByDay.get(format(selectedDate, "yyyy-MM-dd")) ?? [];
+  const selectedLatestEntry = selectedEntries[0] ?? null;
+
+  const monthSummary = React.useMemo(() => {
+    const visibleMonthDayMap = new Map<string, CalendarEntry[]>();
+    const entryTypeCounts = new Map<string, number>();
+
+    for (const entry of visibleMonthEntriesSorted) {
+      const dayKey = getEntryDayKey(entry);
+      const currentDayEntries = visibleMonthDayMap.get(dayKey) ?? [];
+      currentDayEntries.push(entry);
+      visibleMonthDayMap.set(dayKey, currentDayEntries);
+
+      const entryTypeKey = entry.entryType ?? "general";
+      entryTypeCounts.set(entryTypeKey, (entryTypeCounts.get(entryTypeKey) ?? 0) + 1);
+    }
+
+    let busiestDayKey: string | null = null;
+    let busiestDayCount = 0;
+    let multiEntryDays = 0;
+
+    for (const [dayKey, dayEntries] of visibleMonthDayMap.entries()) {
+      if (dayEntries.length > busiestDayCount) {
+        busiestDayKey = dayKey;
+        busiestDayCount = dayEntries.length;
+      }
+
+      if (dayEntries.length > 1) {
+        multiEntryDays += 1;
+      }
+    }
+
+    let topEntryType: { label: string; count: number } | null = null;
+
+    for (const [entryTypeKey, count] of entryTypeCounts.entries()) {
+      if (!topEntryType || count > topEntryType.count) {
+        topEntryType = {
+          label: getEntryTypeLabel(entryTypeKey),
+          count,
+        };
+      }
+    }
+
+    return {
+      totalEntries: visibleMonthEntriesSorted.length,
+      activeDays: visibleMonthDayMap.size,
+      multiEntryDays,
+      busiestDayCount,
+      busiestDayDate:
+        busiestDayKey != null ? new Date(`${busiestDayKey}T00:00:00`) : null,
+      latestEntry: visibleMonthEntriesSorted[0] ?? null,
+      topEntryType,
+    };
+  }, [visibleMonthEntriesSorted]);
+
+  const visibleMonthDayCount = endOfMonth(visibleMonth).getDate();
 
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-4", className)}>
-      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+    <div className={cn("flex h-full min-h-0 flex-1 flex-col gap-4", className)}>
+      <div className="shrink-0 flex flex-wrap items-center gap-2 xl:justify-end">
         <Button
           size="sm"
           onClick={() => {
@@ -156,14 +244,19 @@ export function JournalCalendarTab({
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px]">
-        <div className="max-h-[760px] overflow-auto rounded-sm border border-white/5 bg-white dark:bg-sidebar">
-          <div className="grid grid-cols-7 gap-[1px] bg-sidebar-accent">
+      <div className="grid h-full min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1fr)_260px] xl:items-stretch">
+        <div className="h-full min-h-0 overflow-hidden rounded-sm border border-white/5 bg-white dark:bg-sidebar">
+          <div
+            className="grid h-full min-h-full grid-cols-7 gap-[1px] bg-sidebar-accent"
+            style={{
+              gridTemplateRows: `repeat(${calendarRowCount}, minmax(0, 1fr))`,
+            }}
+          >
             {isLoading
               ? Array.from({ length: calendarDays.length }).map((_, index) => (
                   <div
                     key={index}
-                    className="min-h-[120px] bg-white p-3 dark:bg-sidebar"
+                    className="h-full min-h-0 bg-white p-3 dark:bg-sidebar"
                   >
                     <div className="flex h-full flex-col justify-between gap-4">
                       <Skeleton className="h-4 w-10 rounded-none bg-sidebar-accent" />
@@ -189,7 +282,7 @@ export function JournalCalendarTab({
                       type="button"
                       onClick={() => setSelectedDate(day)}
                       className={cn(
-                        "bg-white dark:bg-sidebar p-3 min-h-[120px] flex flex-col gap-2 text-left transition-colors duration-250 hover:bg-sidebar-accent",
+                        "h-full min-h-0 bg-white p-3 dark:bg-sidebar flex flex-col gap-2 text-left transition-colors duration-250 hover:bg-sidebar-accent",
                         !inMonth && dayEntries.length === 0 && "opacity-40",
                         isSelected && "bg-sidebar-accent ring-1 ring-inset ring-teal-400/35",
                         !isSelected && isToday && "ring-1 ring-inset ring-white/10"
@@ -222,10 +315,10 @@ export function JournalCalendarTab({
                           {latestEntry
                             ? extraEntries > 0
                               ? `+${extraEntries} more on this day`
-                              : (latestEntry.entryType?.replace("_", " ") ?? "general")
+                              : getEntryTypeLabel(latestEntry.entryType)
                             : isToday
                               ? "Today"
-                              : "Open the day to inspect details"}
+                              : "Use the summary cards to inspect the month"}
                         </div>
                       </div>
                     </button>
@@ -234,67 +327,143 @@ export function JournalCalendarTab({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden rounded-sm border border-white/5 bg-white dark:bg-sidebar">
-          <div className="border-b border-white/5 px-5 py-4">
-            <div className="flex items-center gap-2 text-sm font-semibold text-white">
-              <CalendarDays className="h-4 w-4 text-teal-300" />
-              <span>{format(selectedDate, "EEEE, d MMMM yyyy")}</span>
-            </div>
-            <p className="mt-1 text-[10px] uppercase tracking-wide text-white/40">
-              {selectedEntries.length > 0
-                ? `${selectedEntries.length} entr${selectedEntries.length === 1 ? "y" : "ies"} on this day`
-                : "No entries on this day yet"}
-            </p>
-          </div>
+        <div className="grid h-full min-h-0 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2 xl:grid-cols-1 xl:grid-rows-6 xl:overflow-hidden">
+          <SummaryCard
+            title="Entries this month"
+            value={monthSummary.totalEntries}
+            subtext={
+              monthSummary.totalEntries > 0
+                ? `${monthSummary.activeDays} active day${monthSummary.activeDays === 1 ? "" : "s"}`
+                : `No entries in ${format(visibleMonth, "MMMM")}`
+            }
+            accentClass={
+              monthSummary.totalEntries > 0 ? "text-teal-400" : undefined
+            }
+            loading={isLoading}
+          />
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            {selectedEntries.length > 0 ? (
-              <div className="space-y-3">
-                {selectedEntries.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    onClick={() => onSelectEntry(entry.id)}
-                    className="w-full rounded-sm border border-white/5 bg-white/[0.02] p-3 text-left transition-colors hover:bg-sidebar-accent"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-white">
-                          {entry.emoji ? `${entry.emoji} ` : ""}
-                          {entry.title}
-                        </p>
-                        <p className="mt-1 text-xs text-white/45">
-                          {entry.entryType?.replace("_", " ") || "general"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs text-white/30">
-                        <Clock3 className="h-3 w-3" />
-                        {format(
-                          new Date(entry.journalDate ?? entry.createdAt),
-                          "HH:mm"
-                        )}
-                      </div>
+          <SummaryCard
+            title="Active days"
+            value={monthSummary.activeDays}
+            subtext={
+              monthSummary.activeDays > 0
+                ? `${monthSummary.multiEntryDays} day${monthSummary.multiEntryDays === 1 ? "" : "s"} with multiple entries`
+                : `${visibleMonthDayCount} day month`
+            }
+            loading={isLoading}
+          />
+
+          <SummaryCard
+            title="Busiest day"
+            value={
+              monthSummary.busiestDayCount > 0
+                ? `${monthSummary.busiestDayCount} ${monthSummary.busiestDayCount === 1 ? "entry" : "entries"}`
+                : "—"
+            }
+            subtext={
+              monthSummary.busiestDayDate
+                ? format(monthSummary.busiestDayDate, "EEE d MMM")
+                : `No activity in ${format(visibleMonth, "MMMM")}`
+            }
+            accentClass={
+              monthSummary.busiestDayCount > 0 ? "text-teal-400" : undefined
+            }
+            loading={isLoading}
+          />
+
+          <SummaryCard
+            title="Focus type"
+            value={monthSummary.topEntryType?.label ?? "—"}
+            subtext={
+              monthSummary.topEntryType
+                ? `${monthSummary.topEntryType.count} entr${monthSummary.topEntryType.count === 1 ? "y" : "ies"}`
+                : "No dominant entry type yet"
+            }
+            loading={isLoading}
+          />
+
+          {isLoading ? (
+            <SummaryCard title="Latest entry" loading />
+          ) : (
+            <SummaryCard title="Latest entry">
+              <div className="flex h-full w-full flex-col justify-center gap-3 text-left">
+                {monthSummary.latestEntry ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <p className="line-clamp-2 text-sm font-semibold tracking-tight text-white">
+                        {monthSummary.latestEntry.emoji
+                          ? `${monthSummary.latestEntry.emoji} `
+                          : ""}
+                        {monthSummary.latestEntry.title}
+                      </p>
+                      <p className="text-[11px] text-white/42">
+                        {format(getEntryDate(monthSummary.latestEntry), "EEE d MMM")}
+                        {" · "}
+                        {getEntryTypeLabel(monthSummary.latestEntry.entryType)}
+                      </p>
                     </div>
-                  </button>
-                ))}
+                    <p className="text-[11px] text-white/42">
+                      Most recent note in {format(visibleMonth, "MMMM")}
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex h-full w-full flex-col justify-center gap-3 text-left">
+                    <p className="text-sm font-medium text-white/70">
+                      Nothing logged yet
+                    </p>
+                    <p className="text-[11px] text-white/42">
+                      Entries added this month will show up here.
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-sm border border-dashed border-white/10 bg-white/[0.02] p-6 text-center">
-                <FileText className="mb-3 h-10 w-10 text-white/20" />
-                <p className="text-sm font-medium text-white">Nothing logged here</p>
-                <p className="mt-1 text-xs text-white/45">
-                  Use the entries tab to add a note, review, or setup to this date.
-                </p>
-                <Button
-                  size="sm"
-                  onClick={() => setVisibleMonth(startOfMonth(selectedDate))}
-                  className={cn(journalActionButtonClassName, "mt-4")}
-                >
-                  Jump to month
-                </Button>
+            </SummaryCard>
+          )}
+
+          {isLoading ? (
+            <SummaryCard title="Selected day" loading />
+          ) : (
+            <SummaryCard title="Selected day">
+              <div className="flex h-full w-full flex-col justify-center gap-3 text-left">
+                <div className="space-y-1.5">
+                  <p className="text-sm font-semibold tracking-tight text-white">
+                    {format(selectedDate, "EEEE d MMMM")}
+                  </p>
+                  <p className="text-[11px] text-white/42">
+                    {selectedEntries.length > 0
+                      ? `${selectedEntries.length} entr${selectedEntries.length === 1 ? "y" : "ies"} logged`
+                      : "No entries on this day"}
+                  </p>
+                  {selectedLatestEntry ? (
+                    <div className="rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-left">
+                      <p className="line-clamp-2 text-xs font-medium text-white">
+                        {selectedLatestEntry.emoji
+                          ? `${selectedLatestEntry.emoji} `
+                          : ""}
+                        {selectedLatestEntry.title}
+                      </p>
+                      <p className="mt-1 text-[11px] text-white/42">
+                        {getEntryTypeLabel(selectedLatestEntry.entryType)}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+
+                {selectedLatestEntry ? (
+                  <Button
+                    size="sm"
+                    onClick={() => onSelectEntry(selectedLatestEntry.id)}
+                    className={cn(
+                      journalCompactActionButtonClassName,
+                      "w-full justify-center text-white"
+                    )}
+                  >
+                    Open latest entry
+                  </Button>
+                ) : null}
               </div>
-            )}
-          </div>
+            </SummaryCard>
+          )}
         </div>
       </div>
     </div>

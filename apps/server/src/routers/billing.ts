@@ -981,6 +981,159 @@ async function findUserIdForStripeCustomer(input: {
     : null;
 }
 
+async function syncStripePaidInvoiceForSubscription(input: {
+  stripe: Stripe;
+  userId: string;
+  subscription: any;
+  subscriptionMetadata?: Record<string, unknown> | null;
+}) {
+  const latestInvoiceId =
+    typeof input.subscription.latest_invoice === "string"
+      ? input.subscription.latest_invoice
+      : input.subscription.latest_invoice?.id ?? null;
+
+  let invoice: any | null = null;
+  if (latestInvoiceId) {
+    invoice = await input.stripe.invoices.retrieve(latestInvoiceId);
+  }
+
+  const invoiceIsPaid = Boolean(
+    invoice &&
+      (invoice.status === "paid" || invoice.status_transitions?.paid_at != null)
+  );
+  if (!invoiceIsPaid) {
+    const invoices = await input.stripe.invoices.list({
+      subscription: input.subscription.id,
+      limit: 5,
+    });
+
+    invoice =
+      invoices.data.find(
+        (row: any) =>
+          row.status === "paid" || row.status_transitions?.paid_at != null
+      ) ?? invoice;
+  }
+
+  if (
+    !invoice ||
+    (invoice.status !== "paid" && invoice.status_transitions?.paid_at == null)
+  ) {
+    return null;
+  }
+
+  const line =
+    invoice.lines.data.find((item: any) => item.type === "subscription") ??
+    invoice.lines.data[0];
+  const subscriptionId =
+    typeof invoice.subscription === "string"
+      ? invoice.subscription
+      : invoice.subscription?.id ?? input.subscription.id ?? null;
+  const [subscriptionRow] = subscriptionId
+    ? await db
+        .select()
+        .from(billingSubscription)
+        .where(eq(billingSubscription.stripeSubscriptionId, subscriptionId))
+        .limit(1)
+    : [null];
+  const metadata = {
+    ...(normalizeBillingMetadata(subscriptionRow?.metadata) ?? {}),
+    ...(input.subscriptionMetadata ?? {}),
+    ...(normalizeBillingMetadata(invoice.metadata) ?? {}),
+  };
+  const affiliateOrderMetadata = extractAffiliateOrderMetadata(metadata);
+  const price = line?.price ?? null;
+  const discountAmount = Array.isArray(invoice.total_discount_amounts)
+    ? invoice.total_discount_amounts.reduce(
+        (sum: number, item: any) => sum + (item.amount ?? 0),
+        0
+      )
+    : 0;
+  const taxAmount =
+    (typeof invoice.tax === "number" ? invoice.tax : null) ??
+    (Array.isArray(invoice.total_taxes)
+      ? invoice.total_taxes.reduce(
+          (sum: number, item: any) => sum + (item.amount ?? 0),
+          0
+        )
+      : 0);
+  const paidAt =
+    fromStripeTimestamp(invoice.status_transitions?.paid_at) ??
+    fromStripeTimestamp(invoice.created) ??
+    fromStripeTimestamp(input.subscription.start_date) ??
+    new Date();
+  const order = await upsertBillingOrderFromStripe({
+    userId: input.userId,
+    providerOrderId: invoice.id,
+    stripeInvoiceId: invoice.id,
+    stripeCustomerId:
+      typeof invoice.customer === "string"
+        ? invoice.customer
+        : invoice.customer?.id ??
+          (typeof input.subscription.customer === "string"
+            ? input.subscription.customer
+            : input.subscription.customer?.id ?? null),
+    stripeSubscriptionId: subscriptionId,
+    stripePaymentIntentId:
+      typeof invoice.payment_intent === "string"
+        ? invoice.payment_intent
+        : invoice.payment_intent?.id ?? null,
+    stripeChargeId:
+      typeof invoice.charge === "string" ? invoice.charge : invoice.charge?.id ?? null,
+    stripePriceId: price?.id ?? subscriptionRow?.stripePriceId ?? null,
+    stripeProductId:
+      (typeof price?.product === "string" ? price.product : price?.product?.id) ??
+      subscriptionRow?.stripeProductId ??
+      null,
+    metadata,
+    status: invoice.status ?? "paid",
+    currency: invoice.currency?.toUpperCase() ?? null,
+    subtotalAmount: invoice.subtotal ?? null,
+    discountAmount,
+    taxAmount,
+    totalAmount: invoice.total ?? invoice.amount_paid ?? null,
+    paid: true,
+    paidAt,
+    createdAt: fromStripeTimestamp(invoice.created),
+  });
+
+  await markReferralConversionPaid({
+    referredUserId: input.userId,
+    orderId: invoice.id,
+    subscriptionId,
+    paidAt,
+  });
+
+  await recordAffiliateCommissionEvent({
+    provider: "stripe",
+    providerOrderId: invoice.id,
+    providerSubscriptionId: subscriptionId,
+    billingOrderId: order.id,
+    stripeInvoiceId: invoice.id,
+    stripeSubscriptionId: subscriptionId,
+    referredUserId: input.userId,
+    affiliateAttributionId: affiliateOrderMetadata.affiliateAttributionId,
+    planKey: order.planKey,
+    orderAmount: resolveCommissionableOrderAmount({
+      subtotalAmount: invoice.subtotal,
+      discountAmount,
+      totalAmount: invoice.total ?? invoice.amount_paid,
+    }),
+    subtotalAmount: invoice.subtotal ?? null,
+    discountAmount,
+    taxAmount,
+    currency: invoice.currency?.toUpperCase() ?? null,
+    commissionBps: affiliateOrderMetadata.commissionBps,
+    metadata,
+    occurredAt: paidAt,
+  });
+
+  if (affiliateOrderMetadata.rewardGrantId) {
+    await markReferralRewardGrantConsumed(affiliateOrderMetadata.rewardGrantId);
+  }
+
+  return order;
+}
+
 async function syncStripeBillingStateForUser(
   user: Awaited<ReturnType<typeof getUserRow>>
 ) {
@@ -1045,6 +1198,13 @@ async function syncStripeBillingStateForUser(
       startedAt: fromStripeTimestamp(subscription.start_date),
       endedAt: fromStripeTimestamp(subscription.ended_at),
       canceledAt: fromStripeTimestamp(subscription.canceled_at),
+    });
+
+    await syncStripePaidInvoiceForSubscription({
+      stripe,
+      userId: user.id,
+      subscription,
+      subscriptionMetadata,
     });
 
     if (subscription.status === "active" || subscription.status === "trialing") {

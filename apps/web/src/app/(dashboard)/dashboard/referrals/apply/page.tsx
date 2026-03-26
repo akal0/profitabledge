@@ -1,5 +1,5 @@
-import { AffiliateApplicationPage } from "@/features/growth/components/affiliate-application-page";
+import { redirect } from "next/navigation";
 
 export default function ReferralsAffiliateApplicationRoute() {
-  return <AffiliateApplicationPage />;
+  redirect("/apply/affiliate");
 }

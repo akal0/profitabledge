@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import {
-  LifeBuoy,
-  Plus,
-  Settings,
-} from "lucide-react";
+import { Bug, LifeBuoy, Lightbulb, Plus, Settings } from "lucide-react";
 
 import {
   Sidebar,
@@ -38,6 +34,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { trpcOptions } from "@/utils/trpc";
 import { useOnborda } from "onborda";
 import {
@@ -53,10 +55,12 @@ import NavUser from "@/components/nav-user";
 import { useQuery } from "@tanstack/react-query";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 import { RequestFeatureDialog } from "@/features/navigation/components/request-feature-dialog";
+import { ReportBugDialog } from "@/features/navigation/components/report-bug-dialog";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [createdAccounts, setCreatedAccounts] = useState<Account[]>([]);
   const [requestFeatureOpen, setRequestFeatureOpen] = useState(false);
+  const [reportBugOpen, setReportBugOpen] = useState(false);
   const [emptyStateAddAccountSheetOpen, setEmptyStateAddAccountSheetOpen] =
     useState(false);
   const requestedAddAccountSheetOpen = useTourStore(
@@ -75,7 +79,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     staleTime: 60_000,
   });
   // null while loading — don't lock anything until we know the plan
-  const activePlan = (billingState?.billing?.activePlanKey ?? null) as PlanKey | null;
+  const activePlan = (billingState?.billing?.activePlanKey ??
+    null) as PlanKey | null;
 
   function isLocked(requirement?: PlanKey): boolean {
     if (!requirement || activePlan === null) return false;
@@ -134,23 +139,17 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     ? SHEET_OPTION_BY_STEP[currentStep]
     : undefined;
   React.useEffect(() => {
-    if (
-      !isDashboardTourActive ||
-      currentStep > ADD_ACCOUNT_SHEET_LAST_STEP
-    ) {
+    if (!isDashboardTourActive || currentStep > ADD_ACCOUNT_SHEET_LAST_STEP) {
       setRequestedAddAccountSheetOpen(false);
     }
-  }, [
-    currentStep,
-    isDashboardTourActive,
-    setRequestedAddAccountSheetOpen,
-  ]);
+  }, [currentStep, isDashboardTourActive, setRequestedAddAccountSheetOpen]);
   const tourActiveUrl = isDashboardTourActive
-    ? (TOUR_STEP_URLS[currentStep] ?? null)
+    ? TOUR_STEP_URLS[currentStep] ?? null
     : null;
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
+  const canViewGrowthOverview = billingState?.admin?.isAdmin === true;
   const settingsActive =
     pathname === "/dashboard/settings" ||
     pathname?.startsWith("/dashboard/settings/");
@@ -163,29 +162,30 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     isSidebarTourStep ? "transition-none" : "transition-all duration-150"
   );
 
-  const sections = useMemo(
-    () => {
-      return getNavSections(canViewAffiliateDashboard).map((section) => ({
-        ...section,
-        items: section.items.map((item) => {
-          const isActive = tourActiveUrl !== null
+  const sections = useMemo(() => {
+    return getNavSections(
+      canViewAffiliateDashboard,
+      canViewGrowthOverview
+    ).map((section) => ({
+      ...section,
+      items: section.items.map((item) => {
+        const isActive =
+          tourActiveUrl !== null
             ? item.url === tourActiveUrl
             : item.url === "/dashboard"
-              ? pathname === item.url
-              : item.url === "/dashboard/settings"
-              ? pathname === "/dashboard/settings" ||
-                pathname?.startsWith("/dashboard/settings/")
-              : item.url === "/dashboard/growth"
-              ? pathname === item.url
-              : item.url === "/dashboard/growth-admin"
-              ? pathname === item.url
-              : pathname?.startsWith(item.url);
-          return { ...item, isActive };
-        }),
-      }));
-    },
-    [canViewAffiliateDashboard, pathname, tourActiveUrl]
-  );
+            ? pathname === item.url
+            : item.url === "/dashboard/settings"
+            ? pathname === "/dashboard/settings" ||
+              pathname?.startsWith("/dashboard/settings/")
+            : item.url === "/dashboard/growth"
+            ? pathname === item.url
+            : item.url === "/dashboard/growth-admin"
+            ? pathname === item.url
+            : pathname?.startsWith(item.url);
+        return { ...item, isActive };
+      }),
+    }));
+  }, [canViewAffiliateDashboard, canViewGrowthOverview, pathname, tourActiveUrl]);
 
   return (
     <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
@@ -221,16 +221,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 isTourDrivingAddAccountSheet || emptyStateAddAccountSheetOpen
               }
               onOpenChange={(open) => {
-                if (
-                  !isTourDrivingAddAccountSheet
-                ) {
+                if (!isTourDrivingAddAccountSheet) {
                   setEmptyStateAddAccountSheetOpen(open);
                 }
               }}
               contentClassName={
-                isTourDrivingAddAccountSheet
-                  ? "!z-[860]"
-                  : undefined
+                isTourDrivingAddAccountSheet ? "!z-[860]" : undefined
               }
               highlightedOption={highlightedTourOption}
             />
@@ -264,7 +260,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <item.icon
                       className={cn(
                         "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] size-[18px]",
-                        isSidebarTourStep ? "transition-none" : "transition-all duration-250",
+                        isSidebarTourStep
+                          ? "transition-none"
+                          : "transition-all duration-250",
                         locked
                           ? "opacity-35"
                           : "group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white",
@@ -276,7 +274,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <p
                       className={cn(
                         "text-xs font-normal min-w-max group-data-[collapsible=icon]:hidden",
-                        isSidebarTourStep ? "transition-none" : "transition-all duration-250",
+                        isSidebarTourStep
+                          ? "transition-none"
+                          : "transition-all duration-250",
                         locked || disabledByFeature
                           ? "text-[#8b8b97] opacity-35"
                           : "text-secondary dark:text-[#8b8b97] group-hover/navlink:!text-black dark:group-hover/navlink:!text-white",
@@ -291,16 +291,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </>
                 );
 
-                const onbordaId = `nav-${item.url.replace(/^\//, "").replace(/\//g, "-") || "dashboard"}`;
+                const onbordaId = `nav-${
+                  item.url.replace(/^\//, "").replace(/\//g, "-") || "dashboard"
+                }`;
 
                 if (disabledByFeature) {
                   return (
-                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex" data-onborda={onbordaId}>
+                    <SidebarMenuItem
+                      key={item.title}
+                      className="px-2 py-0.5 flex"
+                      data-onborda={onbordaId}
+                    >
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
                             asChild
-                            className={cn(navItemButtonClass, "cursor-not-allowed")}
+                            className={cn(
+                              navItemButtonClass,
+                              "cursor-not-allowed"
+                            )}
                           >
                             <div>{itemContent}</div>
                           </SidebarMenuButton>
@@ -315,7 +324,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                 if (locked) {
                   return (
-                    <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex" data-onborda={onbordaId}>
+                    <SidebarMenuItem
+                      key={item.title}
+                      className="px-2 py-0.5 flex"
+                      data-onborda={onbordaId}
+                    >
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton
@@ -336,7 +349,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 }
 
                 return (
-                  <SidebarMenuItem key={item.title} className="px-2 py-0.5 flex" data-onborda={onbordaId}>
+                  <SidebarMenuItem
+                    key={item.title}
+                    className="px-2 py-0.5 flex"
+                    data-onborda={onbordaId}
+                  >
                     <SidebarMenuButton
                       asChild
                       tooltip={item.title}
@@ -360,19 +377,55 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarFooter className="p-4 pt-5 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-3">
         <div className="mb-3 flex flex-col gap-1">
           <SidebarMenuItem className="px-2 py-0.5 flex">
-            <SidebarMenuButton
-              asChild
-              className={footerItemButtonClass}
-              tooltip="Request a feature"
-            >
-              <button type="button" onClick={() => setRequestFeatureOpen(true)}>
-                <LifeBuoy className="size-[18px] stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  className={footerItemButtonClass}
+                  tooltip="Support"
+                >
+                  <LifeBuoy className="size-[18px] stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white" />
 
-                <p className="text-xs text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden">
-                  Request a feature
-                </p>
-              </button>
-            </SidebarMenuButton>
+                  <p className="text-xs text-secondary dark:text-[#8b8b97] font-normal transition-all duration-250 group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden">
+                    Support
+                  </p>
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent
+                side="top"
+                align="start"
+                sideOffset={8}
+                className="w-64 rounded-sm border border-white/5 bg-sidebar p-1"
+              >
+                <DropdownMenuItem
+                  onSelect={() => {
+                    window.setTimeout(() => setRequestFeatureOpen(true), 0);
+                  }}
+                  className="cursor-pointer gap-2 rounded-sm px-3 py-2 text-white/80 focus:bg-white/10 focus:text-white"
+                >
+                  <Lightbulb className="size-4 text-white/45" />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-medium text-white">
+                      Request a feature
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onSelect={() => {
+                    window.setTimeout(() => setReportBugOpen(true), 0);
+                  }}
+                  className="cursor-pointer gap-2 rounded-sm px-3 py-2 text-white/80 focus:bg-white/10 focus:text-white"
+                >
+                  <Bug className="size-4 text-white/45" />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-medium text-white">
+                      Report a bug
+                    </span>
+                  </div>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
 
           <SidebarMenuItem className="px-2 py-0.5 flex">
@@ -385,7 +438,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               )}
               tooltip="Settings"
             >
-              <Link href="/dashboard/settings">
+              <Link href="/dashboard/settings/profile">
                 <Settings
                   className={cn(
                     "stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97] group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white size-[18px]",
@@ -397,7 +450,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <p
                   className={cn(
                     "text-xs text-secondary dark:text-[#8b8b97] font-normal group-hover/navlink:!text-black dark:group-hover/navlink:!text-white min-w-max group-data-[collapsible=icon]:hidden",
-                    isSidebarTourStep ? "transition-none" : "transition-all duration-250",
+                    isSidebarTourStep
+                      ? "transition-none"
+                      : "transition-all duration-250",
                     settingsActive && "text-black dark:text-white font-medium"
                   )}
                 >
@@ -413,6 +468,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <RequestFeatureDialog
           open={requestFeatureOpen}
           onOpenChange={setRequestFeatureOpen}
+          pagePath={pathname || "/dashboard"}
+        />
+        <ReportBugDialog
+          open={reportBugOpen}
+          onOpenChange={setReportBugOpen}
           pagePath={pathname || "/dashboard"}
         />
       </SidebarFooter>

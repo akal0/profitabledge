@@ -2,19 +2,23 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { formatDisplayCurrency } from "@/lib/format-display";
 import {
   Area,
   AreaChart,
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
 } from "recharts";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+} from "@/components/dashboard/charts/dashboard-chart-ui";
 
 export interface BaseAreaChartProps {
   data: Array<{ name: string; value: number }>;
-  height?: number;
+  height?: number | string;
   /** "daily_pnl" computes cumulative values */
   variant?: "default" | "daily_pnl";
   formatValue?: (v: number) => string;
@@ -24,14 +28,12 @@ export interface BaseAreaChartProps {
 }
 
 const defaultFormat = (v: number) => {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-$" : "$";
-  return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return formatDisplayCurrency(v);
 };
 
 export function BaseAreaChart({
   data,
-  height = 192,
+  height = "100%",
   variant = "default",
   formatValue: fmt = defaultFormat,
   gradientId = "areaGradient",
@@ -79,11 +81,14 @@ export function BaseAreaChart({
   }, [data, variant]);
 
   return (
-    <div className={cn("w-full", className)} style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
+    <ChartContainer
+      config={{ value: { label: "Value", color: strokeColor } }}
+      className={cn("aspect-auto w-full min-h-[18rem] flex-1", className)}
+      style={{ height }}
+    >
         <AreaChart
           data={chartData}
-          margin={{ top: 10, right: 12, left: 24, bottom: 8 }}
+          margin={{ top: 12, right: 8, left: 8, bottom: 4 }}
         >
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -108,26 +113,24 @@ export function BaseAreaChart({
             tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
             axisLine={false}
             tickLine={false}
-            width={36}
+            width={56}
             tickMargin={8}
             tickFormatter={fmt}
           />
-          <Tooltip
+          <ChartTooltip
+            cursor={false}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
               const d = payload[0].payload;
               return (
-                <div className="bg-dashboard-background border border-white/10 rounded px-3 py-2 shadow-xl">
-                  <p className="text-white/70 text-xs">{d.name}</p>
-                  <p
-                    className={cn(
-                      "font-semibold",
-                      d.value >= 0 ? "text-teal-400" : "text-rose-400"
-                    )}
-                  >
-                    {fmt(d.value)}
-                  </p>
-                </div>
+                <DashboardChartTooltipFrame title="Value">
+                  <DashboardChartTooltipRow
+                    label={d.name}
+                    value={fmt(d.value)}
+                    tone={d.value >= 0 ? "positive" : "negative"}
+                    indicatorColor={strokeColor}
+                  />
+                </DashboardChartTooltipFrame>
               );
             }}
           />
@@ -139,7 +142,6 @@ export function BaseAreaChart({
             strokeWidth={2}
           />
         </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    </ChartContainer>
   );
 }

@@ -341,7 +341,7 @@ function EmptyState({ onSuggestionClick }: { onSuggestionClick: (s: string) => v
           transition={{ duration: 0.5, delay: 0.2 }}
           className="w-full"
         >
-          <p className="text-xs font-medium mb-4 text-white/40 uppercase tracking-wider">
+          <p className="mb-4 text-xs font-medium text-white/40">
             Try asking
           </p>
           <Suggestions className="mb-4 justify-center flex-wrap gap-2">

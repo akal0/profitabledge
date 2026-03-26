@@ -313,7 +313,7 @@ export const ChatSuggestionList = forwardRef<
       <div ref={containerRef} className="max-h-[260px] overflow-y-auto p-1">
         {items.map((item, index) => (
           <button
-            key={item.id}
+            key={`${item.type}:${item.id}:${item.name}:${index}`}
             ref={(el) => {
               itemRefs.current[index] = el;
             }}
@@ -327,7 +327,7 @@ export const ChatSuggestionList = forwardRef<
             onClick={() => selectItem(index)}
           >
             {!expandedType && (
-              <span className="text-[10px] text-white/50 uppercase w-16">
+              <span className="w-16 text-[10px] text-white/50">
                 {item.type}
               </span>
             )}

@@ -89,6 +89,8 @@ type AffiliateTouchContext = {
   trackingLink: typeof affiliateTrackingLink.$inferSelect | null;
 };
 
+type PendingAttributionRow = typeof affiliatePendingAttribution.$inferSelect;
+
 function buildReferralCode() {
   return `PE${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
@@ -280,6 +282,15 @@ export function buildAffiliatePublicProofMetadata(
 function buildAttributionExpiryDate(from = new Date()) {
   return new Date(
     from.getTime() + AFFILIATE_ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  );
+}
+
+function isPendingAttributionActive(
+  pending: PendingAttributionRow,
+  now = new Date()
+) {
+  return (
+    pending.status === "pending" && pending.expiresAt.getTime() > now.getTime()
   );
 }
 
@@ -543,10 +554,24 @@ async function getApprovedAffiliateProfileByCode(code: string) {
 }
 
 export async function getAffiliatePublicProfile(code: string) {
-  const profile = await getApprovedAffiliateProfileByCode(code);
+  const resolvedProfile = await getApprovedAffiliateProfileByCode(code);
+  const resolvedOffer =
+    resolvedProfile ? null : await getAffiliateOfferByCode(code);
+  const profile =
+    resolvedProfile ??
+    (resolvedOffer
+      ? await getApprovedAffiliateProfile(resolvedOffer.affiliateUserId)
+      : null);
   if (!profile) {
     return null;
   }
+
+  const offers = await getAffiliateOfferRows(profile.userId);
+  const defaultOffer =
+    resolvedOffer ??
+    offers.find((row) => row.isDefault) ??
+    offers[0] ??
+    null;
 
   const [row] = await db
     .select({
@@ -566,6 +591,7 @@ export async function getAffiliatePublicProfile(code: string) {
     name: profile.displayName || row.name,
     username: row.username,
     image: row.image,
+    defaultOfferCode: defaultOffer?.code ?? null,
   };
 }
 
@@ -3410,6 +3436,30 @@ type ResolvedGrowthTouchTarget =
       affiliateGroupSlug: string | null;
     };
 
+function pendingAttributionMatchesResolvedTouch(
+  pending: PendingAttributionRow,
+  resolved: ResolvedGrowthTouchTarget
+) {
+  if (pending.touchType !== resolved.touchType) {
+    return false;
+  }
+
+  if (resolved.touchType === "referral") {
+    return (
+      pending.referralProfileId === resolved.referralProfile.id &&
+      pending.referralCode === resolved.referralCode
+    );
+  }
+
+  return (
+    pending.affiliateProfileId === resolved.affiliateProfile.id &&
+    pending.affiliateOfferId === (resolved.affiliateOffer?.id ?? null) &&
+    pending.affiliateTrackingLinkId === (resolved.trackingLink?.id ?? null) &&
+    pending.affiliateCode === resolved.affiliateCode &&
+    pending.affiliateGroupSlug === resolved.affiliateGroupSlug
+  );
+}
+
 async function resolveGrowthTouchTarget(input: {
   referralCode?: string | null;
   affiliateCode?: string | null;
@@ -3598,20 +3648,20 @@ export async function captureGrowthTouch(input: {
     .where(eq(affiliatePendingAttribution.visitorToken, input.visitorToken))
     .limit(1);
 
-  if (
-    existingPending &&
-    existingPending.status === "pending" &&
-    existingPending.expiresAt.getTime() > now.getTime()
-  ) {
-    await db
-      .update(affiliatePendingAttribution)
-      .set({
-        lastTouchedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(affiliatePendingAttribution.id, existingPending.id));
+  if (existingPending && isPendingAttributionActive(existingPending, now)) {
+    if (pendingAttributionMatchesResolvedTouch(existingPending, resolved)) {
+      const [updated] = await db
+        .update(affiliatePendingAttribution)
+        .set({
+          lastTouchedAt: now,
+          metadata: Object.keys(touchMetadata).length > 0 ? touchMetadata : null,
+          updatedAt: now,
+        })
+        .where(eq(affiliatePendingAttribution.id, existingPending.id))
+        .returning();
 
-    return existingPending;
+      return updated ?? existingPending;
+    }
   }
 
   const pendingPayload = {
@@ -3653,6 +3703,56 @@ export async function captureGrowthTouch(input: {
     .returning();
 
   return inserted ?? null;
+}
+
+function resolvePaidReferralOrderReference(order: {
+  id: string;
+  providerOrderId: string | null;
+  providerInvoiceId: string | null;
+  polarOrderId: string | null;
+  stripeInvoiceId: string | null;
+}) {
+  return (
+    order.providerOrderId ??
+    order.providerInvoiceId ??
+    order.polarOrderId ??
+    order.stripeInvoiceId ??
+    order.id
+  );
+}
+
+async function backfillReferralConversionPaidStatus(userId: string) {
+  const [paidOrder] = await db
+    .select({
+      id: billingOrder.id,
+      providerOrderId: billingOrder.providerOrderId,
+      providerInvoiceId: billingOrder.providerInvoiceId,
+      polarOrderId: billingOrder.polarOrderId,
+      stripeInvoiceId: billingOrder.stripeInvoiceId,
+      providerSubscriptionId: billingOrder.providerSubscriptionId,
+      paidAt: billingOrder.paidAt,
+      updatedAt: billingOrder.updatedAt,
+      createdAt: billingOrder.createdAt,
+    })
+    .from(billingOrder)
+    .where(and(eq(billingOrder.userId, userId), eq(billingOrder.paid, true)))
+    .orderBy(
+      desc(billingOrder.paidAt),
+      desc(billingOrder.updatedAt),
+      desc(billingOrder.createdAt)
+    )
+    .limit(1);
+
+  if (!paidOrder) {
+    return null;
+  }
+
+  return markReferralConversionPaid({
+    referredUserId: userId,
+    orderId: resolvePaidReferralOrderReference(paidOrder),
+    subscriptionId: paidOrder.providerSubscriptionId ?? null,
+    paidAt: paidOrder.paidAt ?? paidOrder.updatedAt ?? paidOrder.createdAt,
+  });
 }
 
 export async function claimPendingGrowthAttribution(input: {
@@ -3748,6 +3848,10 @@ export async function claimPendingGrowthAttribution(input: {
         };
       }
     }
+  }
+
+  if (referral && referral.status !== "paid") {
+    referral = (await backfillReferralConversionPaidStatus(input.userId)) ?? referral;
   }
 
   await db
@@ -3880,7 +3984,11 @@ export async function attachReferralConversionToUser(input: {
     .limit(1);
 
   if (existingReferral) {
-    return existingReferral;
+    return (
+      (existingReferral.status === "paid"
+        ? existingReferral
+        : await backfillReferralConversionPaidStatus(input.userId)) ?? existingReferral
+    );
   }
 
   const [existingAffiliate] = await db
@@ -3930,7 +4038,11 @@ export async function attachReferralConversionToUser(input: {
     })
     .returning();
 
-  return inserted ?? null;
+  if (!inserted) {
+    return null;
+  }
+
+  return (await backfillReferralConversionPaidStatus(input.userId)) ?? inserted;
 }
 
 async function joinAffiliateGroupIfNeeded(input: {
@@ -4338,7 +4450,7 @@ export async function markReferralConversionPaid(input: {
   }
 
   if (conversion.status !== "paid") {
-    await db
+    const [updated] = await db
       .update(referralConversion)
       .set({
         status: "paid",
@@ -4347,7 +4459,11 @@ export async function markReferralConversionPaid(input: {
         paidAt: input.paidAt ?? new Date(),
         updatedAt: new Date(),
       })
-      .where(eq(referralConversion.id, conversion.id));
+      .where(eq(referralConversion.id, conversion.id))
+      .returning();
+
+    await ensureReferralRewardsForUser(conversion.referrerUserId);
+    return updated ?? conversion;
   }
 
   await ensureReferralRewardsForUser(conversion.referrerUserId);

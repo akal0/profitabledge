@@ -45,7 +45,6 @@ body.tour-sheet-active-step [data-slot="sheet-content"] {
   transform: translateZ(0);
 }
 
-
 @custom-variant dark (&:where(.dark, .dark *));
 
 @keyframes slideInLeft {
@@ -555,7 +554,7 @@ html.dark body {
     pointer-events: none;
   }
   .widget-header {
-    @apply min-h-[52px] md:min-h-[52px] 3xl:min-h-[56px];
+    @apply min-h-[48px] md:min-h-[48px] 3xl:min-h-[48px];
   }
 }
 
@@ -731,12 +730,14 @@ html.dark body {
   0%,
   100% {
     box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
-      var(--tw-ring-shadow, 0 0 #0000), 0 0 20px var(--pfp-glow, rgba(255, 255, 255, 0.3)),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 20px var(--pfp-glow, rgba(255, 255, 255, 0.3)),
       0 0 40px var(--pfp-glow-outer, rgba(255, 255, 255, 0.1));
   }
   50% {
     box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000),
-      var(--tw-ring-shadow, 0 0 #0000), 0 0 30px var(--pfp-glow, rgba(255, 255, 255, 0.5)),
+      var(--tw-ring-shadow, 0 0 #0000),
+      0 0 30px var(--pfp-glow, rgba(255, 255, 255, 0.5)),
       0 0 60px var(--pfp-glow-outer, rgba(255, 255, 255, 0.2));
   }
 }
@@ -825,7 +826,9 @@ html.dark body {
 
 .name-sparkle-particle {
   color: var(--name-sparkle-color, rgba(255, 255, 255, 0.9));
-  filter: drop-shadow(0 0 6px var(--name-sparkle-glow, rgba(255, 255, 255, 0.35)));
+  filter: drop-shadow(
+    0 0 6px var(--name-sparkle-glow, rgba(255, 255, 255, 0.35))
+  );
   opacity: 0;
   transform: rotate(45deg);
   transform-origin: center;

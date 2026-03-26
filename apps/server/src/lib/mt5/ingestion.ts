@@ -39,6 +39,10 @@ import {
   type RemovedOpenTradeSeed,
 } from "./ingestion-types";
 import { syncPropAccountState } from "../prop-rule-monitor";
+import {
+  sanitizeMt5RuntimeState,
+  withMt5RuntimeState,
+} from "./runtime-state";
 
 export { mt5SyncFrameSchema };
 export type { Mt5SyncFrameInput } from "./ingestion-types";
@@ -51,6 +55,23 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
       ? "full-reconcile"
       : "incremental";
   const snapshotTime = parseDate(input.account.snapshotTime);
+  const sessionMeta =
+    input.session?.meta && typeof input.session.meta === "object"
+      ? (input.session.meta as Record<string, unknown>)
+      : {};
+  const hasSessionRuntimeState =
+    sessionMeta.mt5Runtime != null && typeof sessionMeta.mt5Runtime === "object";
+  const sessionRuntimeState = sanitizeMt5RuntimeState(
+    sessionMeta.mt5Runtime,
+    snapshotTime,
+  );
+  const postExitWindowSeconds =
+    sessionRuntimeState.postExitTrackingSeconds ??
+    (typeof sessionMeta.postExitTrackingSeconds === "number" &&
+    Number.isFinite(sessionMeta.postExitTrackingSeconds) &&
+    sessionMeta.postExitTrackingSeconds > 0
+      ? Math.trunc(sessionMeta.postExitTrackingSeconds)
+      : undefined);
   const { connection, accountId } = await ensureMt5TradingAccount(
     input.connectionId,
     input.account
@@ -165,10 +186,12 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
   const { tradesEnriched } = await enrichProjectedMt5Trades({
     accountId,
     tradeIds,
+    postExitWindowSeconds,
   });
   const { tradesRefreshed } = await refreshRecentMt5TradeAnalytics({
     accountId,
     asOf: snapshotTime,
+    postExitWindowSeconds,
   });
 
   await updateCheckpoint(input.connectionId, accountId, input);
@@ -177,6 +200,28 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
     connection.meta && typeof connection.meta === "object"
       ? (connection.meta as Record<string, unknown>)
       : {};
+  const currentMt5Meta =
+    currentMeta.mt5 && typeof currentMeta.mt5 === "object"
+      ? (currentMeta.mt5 as Record<string, unknown>)
+      : {};
+  const nextMetaBase = {
+    ...currentMeta,
+    mt5: {
+      ...currentMt5Meta,
+      login: input.account.login,
+      serverName: input.account.serverName,
+      brokerName: input.account.brokerName,
+      workerHostId: input.session?.workerHostId ?? null,
+      sessionKey: input.session?.sessionKey ?? null,
+      lastSnapshotAt: input.account.snapshotTime,
+    },
+  };
+  const nextMeta = hasSessionRuntimeState
+    ? withMt5RuntimeState(nextMetaBase, {
+        ...sessionRuntimeState,
+        updatedAt: snapshotTime.toISOString(),
+      })
+    : nextMetaBase;
 
   await db
     .update(platformConnection)
@@ -188,15 +233,7 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
       lastSyncSuccessAt: new Date(),
       lastSyncedTradeCount: tradesProjected,
       meta: {
-        ...currentMeta,
-        mt5: {
-          login: input.account.login,
-          serverName: input.account.serverName,
-          brokerName: input.account.brokerName,
-          workerHostId: input.session?.workerHostId ?? null,
-          sessionKey: input.session?.sessionKey ?? null,
-          lastSnapshotAt: input.account.snapshotTime,
-        },
+        ...nextMeta,
       },
       updatedAt: new Date(),
     })

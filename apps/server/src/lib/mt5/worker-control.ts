@@ -62,10 +62,12 @@ import {
   getMt5ForceSyncRequest,
   withMt5ForceSyncRequest,
 } from "./queue-state";
+import { getMt5RuntimeState } from "./runtime-state";
 
 const ACTIVE_LEASE_MS = 60 * 1000;
 const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
 const LIVE_QUEUE_REFRESH_MS = 15 * 1000;
+const POST_EXIT_QUEUE_REFRESH_MS = 30 * 1000;
 const INITIAL_BOOTSTRAP_RETRY_MS = 30 * 1000;
 const COLD_QUEUE_SOFT_AGING_FLOOR_MS = 60 * 1000;
 const COLD_QUEUE_HARD_AGING_FLOOR_MS = 5 * 60 * 1000;
@@ -275,7 +277,29 @@ export function resolveMt5ClaimQueueSelection(
     };
   }
 
-  const coldIntervalMinutes = Math.max(connection.syncIntervalMinutes ?? 1, 1);
+  const runtimeState = getMt5RuntimeState(connection.meta, new Date(now));
+  const postExitBoostUntilAt = runtimeState.postExitBoostUntil
+    ? new Date(runtimeState.postExitBoostUntil).getTime()
+    : 0;
+  if (postExitBoostUntilAt > now) {
+    const dueAt = lastActivityAt + POST_EXIT_QUEUE_REFRESH_MS;
+    if (lastActivityAt > 0 && dueAt > now) {
+      return null;
+    }
+
+    return {
+      claimMode: "cold",
+      queueTier: 1,
+      dueAt: new Date(lastActivityAt > 0 ? dueAt : now).toISOString(),
+      lastRequestedAt: null,
+    };
+  }
+
+  if ((connection.syncIntervalMinutes ?? 0) <= 0) {
+    return null;
+  }
+
+  const coldIntervalMinutes = Math.max(connection.syncIntervalMinutes ?? 0, 1);
   const coldIntervalMs = coldIntervalMinutes * 60 * 1000;
   const dueAt = lastActivityAt + coldIntervalMs;
   if (lastActivityAt > 0 && dueAt > now) {
@@ -519,7 +543,7 @@ export async function createMtTerminalConnection(input: {
       encryptedCredentials: encrypted,
       credentialIv: iv,
       status: "pending",
-      syncIntervalMinutes: 1,
+      syncIntervalMinutes: 0,
     })
     .returning();
 

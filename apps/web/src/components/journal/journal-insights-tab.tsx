@@ -23,7 +23,7 @@ export function JournalInsightsTab({
   className,
 }: JournalInsightsTabProps) {
   return (
-    <div className={cn("flex min-h-0 flex-1 flex-col gap-5", className)}>
+    <div className={cn("flex min-h-0 flex-1 flex-col gap-4 pb-4", className)}>
       <JournalInsightsSectionHeader
         icon={Sparkles}
         label="Workflow"
@@ -39,12 +39,12 @@ export function JournalInsightsTab({
       <JournalInsightsSectionHeader
         icon={Brain}
         label="Journal intelligence"
-        count={3}
+        count={2}
       />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <JournalInsightsPanel />
-        <PatternAnalysisCard />
+        <JournalInsightsPanel accountId={accountId} />
+        <PatternAnalysisCard accountId={accountId} />
       </div>
 
       <JournalInsightsSectionHeader

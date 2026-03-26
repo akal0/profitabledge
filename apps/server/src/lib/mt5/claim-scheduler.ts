@@ -35,6 +35,12 @@ function compareCandidates(
     return queueTierDelta;
   }
 
+  const rightHasLiveRequest = Boolean(right.lastRequestedAt);
+  const leftHasLiveRequest = Boolean(left.lastRequestedAt);
+  if (rightHasLiveRequest !== leftHasLiveRequest) {
+    return rightHasLiveRequest ? 1 : -1;
+  }
+
   const tierDelta = BILLING_PLAN_TIER[right.planKey] - BILLING_PLAN_TIER[left.planKey];
   if (tierDelta !== 0) {
     return tierDelta;

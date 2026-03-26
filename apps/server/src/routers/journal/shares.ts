@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
 
@@ -22,6 +22,7 @@ import {
   sendJournalShareApprovedEmail,
   sendJournalShareInviteEmail,
 } from "../../lib/journal-share-email";
+import { getEffectiveBillingState } from "../../lib/billing/growth";
 import { createNotification } from "../../lib/notifications";
 import { protectedProcedure, router } from "../../lib/trpc";
 
@@ -32,7 +33,7 @@ const shareTokenGenerator = customAlphabet(
 
 const shareNameSchema = z.string().trim().min(1).max(120);
 const shareEntryIdsSchema = z.array(z.string().min(1)).min(1).max(100);
-const shareEmailSchema = z.string().trim().email();
+const shareUsernameSchema = z.string().trim().min(1).max(64);
 
 type ShareOwnerRow = {
   id: string;
@@ -53,12 +54,17 @@ type ShareOwnerRow = {
 type ViewerIdentity = {
   id: string;
   name: string;
+  username: string | null;
   email: string;
   emailVerified: boolean;
 };
 
 function normalizeInviteEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizeInviteUsername(username: string) {
+  return username.trim().replace(/^@+/, "").toLowerCase();
 }
 
 function getOwnerLabel(share: Pick<ShareOwnerRow, "ownerDisplayName" | "ownerName" | "ownerEmail">) {
@@ -141,6 +147,10 @@ function buildShareSummary(share: ShareOwnerRow) {
   };
 }
 
+function buildOwnerJournalSharesPath() {
+  return "/dashboard/journal?tab=shares";
+}
+
 function sanitizeSharedEntryPayload(entry: typeof journalEntry.$inferSelect) {
   const content = sanitizeSharedBlocks(entry.content as JournalBlock[] | null);
 
@@ -180,6 +190,7 @@ async function getViewerIdentity(userId: string): Promise<ViewerIdentity> {
     .select({
       id: userTable.id,
       name: userTable.name,
+      username: userTable.username,
       email: userTable.email,
       emailVerified: userTable.emailVerified,
     })
@@ -216,6 +227,35 @@ async function getShareByIdForOwner(userId: string, shareId: string) {
     .where(
       and(eq(journalShare.id, shareId), eq(journalShare.ownerUserId, userId))
     )
+    .limit(1);
+
+  if (!share) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Share not found" });
+  }
+
+  return share satisfies ShareOwnerRow;
+}
+
+async function getShareById(shareId: string) {
+  const [share] = await db
+    .select({
+      id: journalShare.id,
+      ownerUserId: journalShare.ownerUserId,
+      name: journalShare.name,
+      shareToken: journalShare.shareToken,
+      isActive: journalShare.isActive,
+      revokedAt: journalShare.revokedAt,
+      viewCount: journalShare.viewCount,
+      lastViewedAt: journalShare.lastViewedAt,
+      createdAt: journalShare.createdAt,
+      updatedAt: journalShare.updatedAt,
+      ownerName: userTable.name,
+      ownerDisplayName: userTable.displayName,
+      ownerEmail: userTable.email,
+    })
+    .from(journalShare)
+    .innerJoin(userTable, eq(userTable.id, journalShare.ownerUserId))
+    .where(eq(journalShare.id, shareId))
     .limit(1);
 
   if (!share) {
@@ -379,6 +419,21 @@ async function claimPendingInvite(input: {
     })
     .where(eq(journalShareInvite.id, invite.id));
 
+  await createNotification({
+    userId: input.share.ownerUserId,
+    type: "journal_share_accepted",
+    title: `${input.viewer.name} accepted your journal share invite`,
+    body: `They can now open "${input.share.name}".`,
+    metadata: {
+      shareId: input.share.id,
+      shareToken: input.share.shareToken,
+      inviteId: invite.id,
+      viewerUserId: input.viewer.id,
+      url: buildOwnerJournalSharesPath(),
+    },
+    dedupeKey: `journal-share-accepted:${input.share.id}:${input.viewer.id}:${invite.id}`,
+  });
+
   return { claimed: true as const, inviteId: invite.id };
 }
 
@@ -507,49 +562,86 @@ async function requireApprovedShareAccess(input: {
 async function addInviteBatch(input: {
   share: ShareOwnerRow;
   inviter: ViewerIdentity;
-  emails: string[];
+  usernames: string[];
 }) {
-  const uniqueEmails = [...new Set(input.emails.map(normalizeInviteEmail))];
+  const uniqueUsernames = [
+    ...new Set(
+      input.usernames.map(normalizeInviteUsername).filter(Boolean)
+    ),
+  ];
   const results: Array<{
-    email: string;
+    username: string;
+    email?: string;
     inviteId?: string;
     emailSent: boolean;
     skipped?: boolean;
     reason?: string;
   }> = [];
 
-  for (const normalizedEmail of uniqueEmails) {
-    if (normalizedEmail === normalizeInviteEmail(input.inviter.email)) {
+  for (const normalizedUsername of uniqueUsernames) {
+    if (
+      input.inviter.username &&
+      normalizeInviteUsername(input.inviter.username) === normalizedUsername
+    ) {
       results.push({
-        email: normalizedEmail,
+        username: normalizedUsername,
         emailSent: false,
         skipped: true,
-        reason: "owner_email",
+        reason: "owner_username",
       });
       continue;
     }
 
+    const [invitedUser] = await db
+      .select({
+        id: userTable.id,
+        username: userTable.username,
+        email: userTable.email,
+      })
+      .from(userTable)
+      .where(sql`lower(${userTable.username}) = ${normalizedUsername}`)
+      .limit(1);
+
+    if (!invitedUser) {
+      results.push({
+        username: normalizedUsername,
+        emailSent: false,
+        skipped: true,
+        reason: "not_found",
+      });
+      continue;
+    }
+
+    if (invitedUser.id === input.inviter.id) {
+      results.push({
+        username: normalizedUsername,
+        email: invitedUser.email,
+        emailSent: false,
+        skipped: true,
+        reason: "owner_username",
+      });
+      continue;
+    }
+
+    const normalizedEmail = normalizeInviteEmail(invitedUser.email);
     const existingApprovedViewer = await db
       .select({
         id: journalShareViewer.id,
       })
       .from(journalShareViewer)
-      .innerJoin(
-        userTable,
-        eq(userTable.id, journalShareViewer.viewerUserId)
-      )
       .where(
         and(
           eq(journalShareViewer.shareId, input.share.id),
           eq(journalShareViewer.status, "approved"),
-          eq(userTable.email, normalizedEmail)
+          eq(journalShareViewer.viewerUserId, invitedUser.id)
         )
       )
       .limit(1);
 
     if (existingApprovedViewer.length > 0) {
       results.push({
-        email: normalizedEmail,
+        username: invitedUser.username || normalizedUsername,
+        email: invitedUser.email,
         emailSent: false,
         skipped: true,
         reason: "already_approved",
@@ -563,7 +655,7 @@ async function addInviteBatch(input: {
       .values({
         shareId: input.share.id,
         invitedByUserId: input.inviter.id,
-        invitedEmail: normalizedEmail,
+        invitedEmail: invitedUser.email,
         invitedEmailNormalized: normalizedEmail,
         status: "pending",
         revokedAt: null,
@@ -574,7 +666,7 @@ async function addInviteBatch(input: {
         target: [journalShareInvite.shareId, journalShareInvite.invitedEmailNormalized],
         set: {
           invitedByUserId: input.inviter.id,
-          invitedEmail: normalizedEmail,
+          invitedEmail: invitedUser.email,
           status: "pending",
           revokedAt: null,
           expiresAt: null,
@@ -587,14 +679,30 @@ async function addInviteBatch(input: {
       });
 
     const emailResult = await sendJournalShareInviteEmail({
-      recipientEmail: normalizedEmail,
+      recipientEmail: invitedUser.email,
       inviterName: input.inviter.name,
       shareName: input.share.name,
       shareToken: input.share.shareToken,
     });
 
+    await createNotification({
+      userId: invitedUser.id,
+      type: "journal_share_invite",
+      title: `${input.inviter.name} invited you to a journal share`,
+      body: `Open "${input.share.name}" to review it.`,
+      metadata: {
+        shareId: input.share.id,
+        shareToken: input.share.shareToken,
+        inviteId: invite?.id ?? null,
+        inviterUserId: input.inviter.id,
+        url: buildJournalSharePath(input.share.shareToken),
+      },
+      dedupeKey: `journal-share-invite:${invite?.id ?? `${input.share.id}:${invitedUser.id}`}:${now.toISOString()}`,
+    });
+
     results.push({
-      email: normalizedEmail,
+      username: invitedUser.username || normalizedUsername,
+      email: invitedUser.email,
       inviteId: invite?.id,
       emailSent: emailResult.sent,
       reason: emailResult.error,
@@ -700,9 +808,22 @@ export const journalSharesRouter = router({
             lastSentAt: journalShareInvite.lastSentAt,
             createdAt: journalShareInvite.createdAt,
             updatedAt: journalShareInvite.updatedAt,
+            invitedName: userTable.name,
+            invitedDisplayName: userTable.displayName,
+            invitedUsername: userTable.username,
+            invitedImage: userTable.image,
           })
           .from(journalShareInvite)
-          .where(eq(journalShareInvite.shareId, share.id))
+          .leftJoin(
+            userTable,
+            sql`lower(${userTable.email}) = ${journalShareInvite.invitedEmailNormalized}`
+          )
+          .where(
+            and(
+              eq(journalShareInvite.shareId, share.id),
+              ne(journalShareInvite.status, "revoked")
+            )
+          )
           .orderBy(desc(journalShareInvite.createdAt)),
         db
           .select({
@@ -714,12 +835,18 @@ export const journalSharesRouter = router({
             revokedAt: journalShareViewer.revokedAt,
             name: userTable.name,
             displayName: userTable.displayName,
+            username: userTable.username,
             email: userTable.email,
             image: userTable.image,
           })
           .from(journalShareViewer)
           .innerJoin(userTable, eq(userTable.id, journalShareViewer.viewerUserId))
-          .where(eq(journalShareViewer.shareId, share.id))
+          .where(
+            and(
+              eq(journalShareViewer.shareId, share.id),
+              eq(journalShareViewer.status, "approved")
+            )
+          )
           .orderBy(desc(journalShareViewer.approvedAt)),
         db
           .select({
@@ -750,7 +877,12 @@ export const journalSharesRouter = router({
       return {
         share: buildShareSummary(share),
         selectedEntryIds: selectedEntries.map((entry) => entry.journalEntryId),
-        invites,
+        invites: invites.map((invite) => ({
+          ...invite,
+          invitedName: invite.invitedDisplayName || invite.invitedName || null,
+          invitedUsername: invite.invitedUsername || null,
+          invitedImage: invite.invitedImage || null,
+        })),
         viewers: viewers.map((viewer) => ({
           id: viewer.id,
           viewerId: viewer.viewerId,
@@ -758,6 +890,7 @@ export const journalSharesRouter = router({
           source: viewer.source,
           approvedAt: viewer.approvedAt,
           revokedAt: viewer.revokedAt,
+          username: viewer.username,
           name: viewer.displayName || viewer.name || viewer.email,
           email: viewer.email,
           image: viewer.image,
@@ -799,12 +932,127 @@ export const journalSharesRouter = router({
       };
     }),
 
+  searchInviteCandidates: protectedProcedure
+    .input(
+      z.object({
+        shareId: z.string().min(1).optional(),
+        query: z.string().max(64).default(""),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const normalizedQuery = normalizeInviteUsername(input.query);
+      const prefixPattern = `${normalizedQuery}%`;
+      const containsPattern = `%${normalizedQuery}%`;
+
+      if (input.shareId) {
+        await getShareByIdForOwner(ctx.session.user.id, input.shareId);
+      }
+
+      const [approvedViewers, pendingInvites, candidateRows] = await Promise.all([
+        input.shareId
+          ? db
+              .select({ viewerUserId: journalShareViewer.viewerUserId })
+              .from(journalShareViewer)
+              .where(
+                and(
+                  eq(journalShareViewer.shareId, input.shareId),
+                  eq(journalShareViewer.status, "approved")
+                )
+              )
+          : Promise.resolve([]),
+        input.shareId
+          ? db
+              .select({
+                invitedEmailNormalized: journalShareInvite.invitedEmailNormalized,
+              })
+              .from(journalShareInvite)
+              .where(
+                and(
+                  eq(journalShareInvite.shareId, input.shareId),
+                  inArray(journalShareInvite.status, ["pending", "claimed"])
+                )
+              )
+          : Promise.resolve([]),
+        db
+          .select({
+            id: userTable.id,
+            username: userTable.username,
+            name: userTable.name,
+            displayName: userTable.displayName,
+            email: userTable.email,
+            image: userTable.image,
+            isVerified: userTable.isVerified,
+            isPremium: userTable.isPremium,
+          })
+          .from(userTable)
+          .where(
+            and(
+              isNotNull(userTable.username),
+              ne(userTable.id, ctx.session.user.id),
+              normalizedQuery
+                ? sql`lower(${userTable.username}) like ${containsPattern}`
+                : sql`true`
+            )
+          )
+          .orderBy(
+            sql`case
+              when lower(${userTable.username}) = ${normalizedQuery} then 0
+              when lower(${userTable.username}) like ${prefixPattern} then 1
+              else 2
+            end`,
+            desc(userTable.isVerified),
+            desc(userTable.isPremium),
+            desc(userTable.totalVerifiedTrades),
+            asc(userTable.username)
+          )
+          .limit(40),
+      ]);
+
+      const approvedViewerIds = new Set(
+        approvedViewers.map((viewer) => viewer.viewerUserId)
+      );
+      const pendingInviteEmails = new Set(
+        pendingInvites.map((invite) => invite.invitedEmailNormalized)
+      );
+
+      const visibleCandidates = candidateRows
+        .filter((candidate) => candidate.username)
+        .filter((candidate) => !approvedViewerIds.has(candidate.id))
+        .filter(
+          (candidate) =>
+            !pendingInviteEmails.has(normalizeInviteEmail(candidate.email))
+        )
+        .slice(0, 10);
+
+      const candidatesWithPlan = await Promise.all(
+        visibleCandidates.map(async (candidate) => {
+          const billingState = await getEffectiveBillingState(candidate.id);
+
+          return {
+            candidate,
+            planKey: billingState.activePlanKey,
+          };
+        })
+      );
+
+      return candidatesWithPlan.map(({ candidate, planKey }) => ({
+          id: candidate.id,
+          username: candidate.username!,
+          name: candidate.name,
+          displayName: candidate.displayName,
+          image: candidate.image,
+          isVerified: Boolean(candidate.isVerified),
+          isPremium: Boolean(candidate.isPremium),
+          planKey,
+        }));
+    }),
+
   create: protectedProcedure
     .input(
       z.object({
         name: shareNameSchema,
         entryIds: shareEntryIdsSchema,
-        inviteEmails: z.array(shareEmailSchema).max(50).optional(),
+        inviteUsernames: z.array(shareUsernameSchema).max(50).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -836,11 +1084,11 @@ export const journalSharesRouter = router({
 
       const createdShare = await getShareByIdForOwner(owner.id, share.id);
       const inviteResults =
-        input.inviteEmails && input.inviteEmails.length > 0
+        input.inviteUsernames && input.inviteUsernames.length > 0
           ? await addInviteBatch({
               share: createdShare,
               inviter: owner,
-              emails: input.inviteEmails,
+              usernames: input.inviteUsernames,
             })
           : [];
 
@@ -912,7 +1160,7 @@ export const journalSharesRouter = router({
     .input(
       z.object({
         shareId: z.string().min(1),
-        emails: z.array(shareEmailSchema).min(1).max(50),
+        usernames: z.array(shareUsernameSchema).min(1).max(50),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -924,7 +1172,7 @@ export const journalSharesRouter = router({
       const inviteResults = await addInviteBatch({
         share,
         inviter,
-        emails: input.emails,
+        usernames: input.usernames,
       });
 
       return { inviteResults };
@@ -975,6 +1223,31 @@ export const journalSharesRouter = router({
         shareToken: share.shareToken,
       });
 
+      const [invitedUser] = await db
+        .select({
+          id: userTable.id,
+        })
+        .from(userTable)
+        .where(eq(userTable.email, invite.invitedEmail))
+        .limit(1);
+
+      if (invitedUser) {
+        await createNotification({
+          userId: invitedUser.id,
+          type: "journal_share_invite",
+          title: `${inviter.name} invited you to a journal share`,
+          body: `Open "${share.name}" to review it.`,
+          metadata: {
+            shareId: share.id,
+            shareToken: share.shareToken,
+            inviteId: invite.id,
+            inviterUserId: inviter.id,
+            url: buildJournalSharePath(share.shareToken),
+          },
+          dedupeKey: `journal-share-invite:${invite.id}:${Date.now()}`,
+        });
+      }
+
       return {
         inviteId: invite.id,
         emailSent: emailResult.sent,
@@ -1011,6 +1284,178 @@ export const journalSharesRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(journalShareInvite.id, invite.id));
+
+      return { inviteId: invite.id, success: true };
+    }),
+
+  acceptInvite: protectedProcedure
+    .input(z.object({ inviteId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const viewer = await getViewerIdentity(ctx.session.user.id);
+
+      if (!viewer.emailVerified) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Verify your email before accepting journal share invites.",
+        });
+      }
+
+      const normalizedEmail = normalizeInviteEmail(viewer.email);
+      const [invite] = await db
+        .select({
+          id: journalShareInvite.id,
+          shareId: journalShareInvite.shareId,
+          status: journalShareInvite.status,
+          expiresAt: journalShareInvite.expiresAt,
+        })
+        .from(journalShareInvite)
+        .where(
+          and(
+            eq(journalShareInvite.id, input.inviteId),
+            eq(journalShareInvite.invitedEmailNormalized, normalizedEmail)
+          )
+        )
+        .limit(1);
+
+      if (!invite) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Invite not found" });
+      }
+
+      if (invite.expiresAt && invite.expiresAt.getTime() <= Date.now()) {
+        await db
+          .update(journalShareInvite)
+          .set({
+            status: "expired",
+            updatedAt: new Date(),
+          })
+          .where(eq(journalShareInvite.id, invite.id));
+
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite has expired.",
+        });
+      }
+
+      if (invite.status === "declined") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite has already been declined.",
+        });
+      }
+
+      if (invite.status === "revoked" || invite.status === "expired") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite is no longer active.",
+        });
+      }
+
+      const share = await getShareById(invite.shareId);
+
+      if (!share.isActive) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "This journal share is no longer active.",
+        });
+      }
+
+      const claimResult = await claimPendingInvite({ share, viewer });
+      if (!claimResult.claimed) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite can no longer be accepted.",
+        });
+      }
+
+      return {
+        inviteId: invite.id,
+        success: true,
+        share: buildShareSummary(share),
+      };
+    }),
+
+  declineInvite: protectedProcedure
+    .input(z.object({ inviteId: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const viewer = await getViewerIdentity(ctx.session.user.id);
+      const normalizedEmail = normalizeInviteEmail(viewer.email);
+      const [invite] = await db
+        .select({
+          id: journalShareInvite.id,
+          shareId: journalShareInvite.shareId,
+          status: journalShareInvite.status,
+          expiresAt: journalShareInvite.expiresAt,
+        })
+        .from(journalShareInvite)
+        .where(
+          and(
+            eq(journalShareInvite.id, input.inviteId),
+            eq(journalShareInvite.invitedEmailNormalized, normalizedEmail)
+          )
+        )
+        .limit(1);
+
+      if (!invite) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Invite not found" });
+      }
+
+      if (invite.expiresAt && invite.expiresAt.getTime() <= Date.now()) {
+        await db
+          .update(journalShareInvite)
+          .set({
+            status: "expired",
+            updatedAt: new Date(),
+          })
+          .where(eq(journalShareInvite.id, invite.id));
+
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite has already expired.",
+        });
+      }
+
+      if (invite.status === "claimed") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite has already been accepted.",
+        });
+      }
+
+      if (invite.status !== "pending") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This invite is no longer active.",
+        });
+      }
+
+      const share = await getShareById(invite.shareId);
+      const now = new Date();
+
+      await db
+        .update(journalShareInvite)
+        .set({
+          status: "declined",
+          claimedViewerUserId: null,
+          claimedAt: null,
+          revokedAt: null,
+          updatedAt: now,
+        })
+        .where(eq(journalShareInvite.id, invite.id));
+
+      await createNotification({
+        userId: share.ownerUserId,
+        type: "journal_share_declined",
+        title: `${viewer.name} declined your journal share invite`,
+        body: `They declined "${share.name}".`,
+        metadata: {
+          shareId: share.id,
+          shareToken: share.shareToken,
+          inviteId: invite.id,
+          viewerUserId: viewer.id,
+          url: buildOwnerJournalSharesPath(),
+        },
+        dedupeKey: `journal-share-declined:${share.id}:${viewer.id}:${invite.id}`,
+      });
 
       return { inviteId: invite.id, success: true };
     }),
@@ -1086,6 +1531,20 @@ export const journalSharesRouter = router({
         shareToken: share.shareToken,
       });
 
+      await createNotification({
+        userId: viewer.id,
+        type: "journal_share_accepted",
+        title: `${approver.name} approved your journal access request`,
+        body: `You can now open "${share.name}".`,
+        metadata: {
+          shareId: share.id,
+          shareToken: share.shareToken,
+          requestId: request.id,
+          url: buildJournalSharePath(share.shareToken),
+        },
+        dedupeKey: `journal-share-request-approved:${share.id}:${viewer.id}:${request.id}`,
+      });
+
       return {
         requestId: request.id,
         viewerUserId: viewer.id,
@@ -1100,6 +1559,8 @@ export const journalSharesRouter = router({
       const [request] = await db
         .select({
           id: journalShareAccessRequest.id,
+          shareId: journalShareAccessRequest.shareId,
+          requesterUserId: journalShareAccessRequest.requesterUserId,
         })
         .from(journalShareAccessRequest)
         .innerJoin(journalShare, eq(journalShare.id, journalShareAccessRequest.shareId))
@@ -1124,6 +1585,25 @@ export const journalSharesRouter = router({
           updatedAt: new Date(),
         })
         .where(eq(journalShareAccessRequest.id, request.id));
+
+      const [share, owner] = await Promise.all([
+        getShareByIdForOwner(ctx.session.user.id, request.shareId),
+        getViewerIdentity(ctx.session.user.id),
+      ]);
+
+      await createNotification({
+        userId: request.requesterUserId,
+        type: "journal_share_declined",
+        title: `${owner.name} declined your journal access request`,
+        body: `You no longer have pending access to "${share.name}".`,
+        metadata: {
+          shareId: share.id,
+          shareToken: share.shareToken,
+          requestId: request.id,
+          url: buildJournalSharePath(share.shareToken),
+        },
+        dedupeKey: `journal-share-request-declined:${share.id}:${request.requesterUserId}:${request.id}`,
+      });
 
       return { requestId: request.id, success: true };
     }),
@@ -1297,6 +1777,7 @@ export const journalSharesRouter = router({
           requestId: request?.id ?? null,
           requesterUserId: viewer.id,
           sharePath: buildJournalSharePath(resolved.share.shareToken),
+          url: buildOwnerJournalSharesPath(),
         },
         dedupeKey: `journal-share-request:${resolved.share.id}:${viewer.id}`,
       });

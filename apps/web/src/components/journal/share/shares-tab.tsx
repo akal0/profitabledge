@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
   Link2,
   Mail,
-  MailPlus,
   ShieldCheck,
   UserCheck,
   Users,
@@ -14,12 +13,16 @@ import {
 import { toast } from "sonner";
 
 import type { JournalListEntry } from "@/components/journal/list/list-types";
+import {
+  JournalShareInviteInput,
+  parseInviteUsernames,
+} from "@/components/journal/share/journal-share-invite-input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator, VerticalSeparator } from "@/components/ui/separator";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 
@@ -27,19 +30,45 @@ function buildJournalSharePath(shareToken: string) {
   return `/share/journal/${shareToken}`;
 }
 
-function parseInviteEmails(raw: string) {
-  return Array.from(
-    new Set(
-      raw
-        .split(/[\n,]/g)
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  );
+const primaryActionButtonClass =
+  "rounded-sm bg-teal-500/18 ring-teal-500/30 px-3 text-xs text-teal-100 hover:bg-teal-500/24";
+const neutralActionButtonClass =
+  "rounded-sm bg-white/8 ring-white/10 px-3 text-xs text-white/80 hover:bg-white/12";
+const warningActionButtonClass =
+  "rounded-sm bg-amber-500/16 ring-amber-500/30 px-3 text-xs text-amber-100 hover:bg-amber-500/22";
+const destructiveActionButtonClass =
+  "rounded-sm bg-rose-500/16 ring-rose-500/30 px-3 text-xs text-rose-100 hover:bg-rose-500/22";
+
+function getInitials(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function getInviteStatusBadgeClassName(status: string) {
+  switch (status.toLowerCase()) {
+    case "pending":
+      return "rounded-sm bg-amber-500/16 ring-amber-500/30 px-2.5 py-1 text-[10px] font-medium text-amber-100 capitalize";
+    case "claimed":
+      return "rounded-sm bg-teal-500/18 ring-teal-500/30 px-2.5 py-1 text-[10px] font-medium text-teal-100 capitalize";
+    case "declined":
+      return "rounded-sm bg-rose-500/16 ring-rose-500/30 px-2.5 py-1 text-[10px] font-medium text-rose-100 capitalize";
+    case "revoked":
+      return "rounded-sm bg-rose-500/16 ring-rose-500/30 px-2.5 py-1 text-[10px] font-medium text-rose-100 capitalize";
+    case "expired":
+      return "rounded-sm bg-white/8 ring-white/10 px-2.5 py-1 text-[10px] font-medium text-white/70 capitalize";
+    default:
+      return "rounded-sm bg-white/8 ring-white/10 px-2.5 py-1 text-[10px] font-medium text-white/70 capitalize";
+  }
 }
 
 export function JournalSharesTab({ accountId }: { accountId?: string }) {
   const utils = trpc.useUtils() as any;
+  const queuedInviteKeyRef = useRef<string | null>(null);
   const [selectedShareId, setSelectedShareId] = useState<string | null>(null);
   const [intentToCreate, setIntentToCreate] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -120,8 +149,20 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
     },
   });
   const revokeInvite = trpc.journal.shares.revokeInvite.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       if (!selectedShareId) return;
+      utils.journal.shares.getOwnerShare.setData(
+        { shareId: selectedShareId },
+        (current: any) =>
+          current
+            ? {
+                ...current,
+                invites: (current.invites ?? []).filter(
+                  (invite: any) => invite.id !== variables.inviteId
+                ),
+              }
+            : current
+      );
       await utils.journal.shares.getOwnerShare.invalidate({
         shareId: selectedShareId,
       });
@@ -147,8 +188,20 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
     },
   });
   const revokeViewer = trpc.journal.shares.revokeViewer.useMutation({
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       if (!selectedShareId) return;
+      utils.journal.shares.getOwnerShare.setData(
+        { shareId: selectedShareId },
+        (current: any) =>
+          current
+            ? {
+                ...current,
+                viewers: (current.viewers ?? []).filter(
+                  (viewer: any) => viewer.id !== variables.viewerId
+                ),
+              }
+            : current
+      );
       await utils.journal.shares.getOwnerShare.invalidate({
         shareId: selectedShareId,
       });
@@ -175,10 +228,11 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
   const rejectedRequests = ownerShareDetail?.rejectedRequests ?? [];
   const invites = ownerShareDetail?.invites ?? [];
   const viewers = ownerShareDetail?.viewers ?? [];
-  const parsedInviteEmails = useMemo(
-    () => parseInviteEmails(inviteInput),
+  const parsedInviteUsernames = useMemo(
+    () => parseInviteUsernames(inviteInput),
     [inviteInput]
   );
+  const inviteSelectionKey = parsedInviteUsernames.join(",");
   const isCreateMode = !selectedShareId;
   const ownerShareCount = ownerShares.length;
 
@@ -204,6 +258,36 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
     setDraftEntryIds([]);
   }, [isCreateMode, ownerShareCount]);
 
+  useEffect(() => {
+    if (!selectedShareId || isCreateMode || inviteSelectionKey.length === 0) {
+      queuedInviteKeyRef.current = null;
+      return;
+    }
+
+    const submissionKey = `${selectedShareId}:${inviteSelectionKey}`;
+    if (queuedInviteKeyRef.current === submissionKey) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      queuedInviteKeyRef.current = submissionKey;
+      addInvites.mutate({
+        shareId: selectedShareId,
+        usernames: parsedInviteUsernames,
+      });
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    inviteSelectionKey,
+    isCreateMode,
+    parsedInviteUsernames,
+    selectedShareId,
+    addInvites,
+  ]);
+
   const handleToggleEntry = (entryId: string) => {
     setDraftEntryIds((current) =>
       current.includes(entryId)
@@ -224,7 +308,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
     await createShare.mutateAsync({
       name: draftName.trim(),
       entryIds: draftEntryIds,
-      inviteEmails: parsedInviteEmails,
+      inviteUsernames: parsedInviteUsernames,
     });
   };
 
@@ -247,7 +331,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {/* Left: share list */}
       <aside className="flex w-64 shrink-0 flex-col xl:w-72">
-        <div className="flex items-center justify-between px-9 py-4">
+        <div className="flex items-center justify-between px-8 py-4">
           <span className="text-xs font-medium  text-white/38">Shares</span>
           <Button
             size="sm"
@@ -339,7 +423,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                 !draftName.trim()
               }
               onClick={isCreateMode ? handleCreateShare : handleSaveShare}
-              className="rounded-sm bg-teal-500/18 ring-teal-500/30 px-3 text-xs text-teal-100 hover:bg-teal-500/24"
+              className={primaryActionButtonClass}
             >
               <ShieldCheck className="size-3" />
               {isCreateMode ? "Create share" : "Save changes"}
@@ -347,8 +431,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
             {activeShare?.shareToken ? (
               <Button
                 size="sm"
-                variant="outline"
-                className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04]"
+                className={neutralActionButtonClass}
                 onClick={() => handleCopyShareLink(activeShare.shareToken)}
               >
                 <Copy className="size-3" />
@@ -358,8 +441,11 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
             {selectedShareId ? (
               <Button
                 size="sm"
-                variant="outline"
-                className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04]"
+                className={
+                  activeShare?.isActive
+                    ? destructiveActionButtonClass
+                    : primaryActionButtonClass
+                }
                 onClick={() =>
                   setShareActive.mutate({
                     shareId: selectedShareId,
@@ -435,28 +521,13 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
             <Mail className="size-3.5" />
             Invite approved viewers
           </div>
-          <Textarea
+          <JournalShareInviteInput
             value={inviteInput}
-            onChange={(e) => setInviteInput(e.target.value)}
-            placeholder="mentor@example.com, coach@example.com"
-            className="min-h-[80px] ring-white/10 bg-white/[0.03] text-white placeholder:text-white/24"
+            onChange={setInviteInput}
+            shareId={selectedShareId ?? undefined}
+            placeholder="@username"
+            textareaClassName="min-h-[80px]"
           />
-          <Button
-            size="sm"
-            disabled={!selectedShareId || parsedInviteEmails.length === 0}
-            className="rounded-sm bg-white/8 px-3 text-xs text-white hover:bg-white/12"
-            onClick={() =>
-              selectedShareId
-                ? addInvites.mutate({
-                    shareId: selectedShareId,
-                    emails: parsedInviteEmails,
-                  })
-                : undefined
-            }
-          >
-            <MailPlus className="size-3" />
-            Send invites
-          </Button>
         </section>
 
         {selectedShareId ? (
@@ -485,7 +556,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                         <div className="mt-3 flex gap-2">
                           <Button
                             size="sm"
-                            className="rounded-sm bg-teal-500/18 px-3 text-xs text-teal-100 hover:bg-teal-500/24"
+                            className={primaryActionButtonClass}
                             onClick={() =>
                               approveRequest.mutate({ requestId: request.id })
                             }
@@ -494,8 +565,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                           </Button>
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04]"
+                            className={destructiveActionButtonClass}
                             onClick={() =>
                               rejectRequest.mutate({ requestId: request.id })
                             }
@@ -538,8 +608,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                         </div>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04] shrink-0"
+                          className={neutralActionButtonClass + " shrink-0"}
                           onClick={() =>
                             clearRejection.mutate({ requestId: request.id })
                           }
@@ -572,17 +641,38 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                       className="rounded-lg ring ring-white/8 bg-white/[0.02] px-4 py-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">
-                            {invite.invitedEmail}
-                          </div>
-                          <div className="mt-0.5 text-xs text-white/38">
-                            {invite.status}
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Avatar className="size-8 ring ring-white/8">
+                            <AvatarImage
+                              alt={
+                                invite.invitedUsername ||
+                                invite.invitedName ||
+                                invite.invitedEmail
+                              }
+                              src={invite.invitedImage ?? undefined}
+                            />
+                            <AvatarFallback className="bg-sidebar-accent text-[10px] font-semibold text-white/80">
+                              {getInitials(
+                                invite.invitedName ||
+                                  invite.invitedUsername ||
+                                  invite.invitedEmail
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-white">
+                              {invite.invitedUsername
+                                ? `@${invite.invitedUsername}`
+                                : invite.invitedEmail}
+                            </div>
+                            <div className="mt-0.5 truncate text-xs text-white/38">
+                              {invite.invitedName || invite.invitedEmail}
+                            </div>
                           </div>
                         </div>
                         <Badge
                           variant="outline"
-                          className="ring-white/10 text-[10px] text-white/58 shrink-0"
+                          className={`${getInviteStatusBadgeClassName(invite.status)} shrink-0`}
                         >
                           {invite.status}
                         </Badge>
@@ -590,8 +680,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                       <div className="mt-3 flex gap-2">
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04]"
+                          className={warningActionButtonClass}
                           onClick={() =>
                             resendInvite.mutate({ inviteId: invite.id })
                           }
@@ -600,8 +689,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                         </Button>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04]"
+                          className={destructiveActionButtonClass}
                           onClick={() =>
                             revokeInvite.mutate({ inviteId: invite.id })
                           }
@@ -634,12 +722,29 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                       className="rounded-lg ring ring-white/8 bg-white/[0.02] px-4 py-3"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium text-white">
-                            {viewer.name || "Viewer"}
-                          </div>
-                          <div className="mt-0.5 text-xs text-white/38">
-                            {viewer.email || "No email available"}
+                        <div className="flex min-w-0 items-center gap-3">
+                          <Avatar className="size-8 ring ring-white/8">
+                            <AvatarImage
+                              alt={viewer.username || viewer.name || viewer.email}
+                              src={viewer.image ?? undefined}
+                            />
+                            <AvatarFallback className="bg-sidebar-accent text-[10px] font-semibold text-white/80">
+                              {getInitials(
+                                viewer.username || viewer.name || viewer.email
+                              )}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-white">
+                              {viewer.username
+                                ? `@${viewer.username}`
+                                : viewer.name || "Viewer"}
+                            </div>
+                            <div className="mt-0.5 truncate text-xs text-white/38">
+                              {viewer.username && viewer.name
+                                ? viewer.name
+                                : viewer.email || "No email available"}
+                            </div>
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
@@ -651,8 +756,7 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
                           </Badge>
                           <Button
                             size="sm"
-                            variant="outline"
-                            className="rounded-sm ring-white/10 bg-transparent px-3 text-xs text-white/70 hover:bg-white/[0.04]"
+                            className={destructiveActionButtonClass}
                             onClick={() =>
                               revokeViewer.mutate({ viewerId: viewer.id })
                             }

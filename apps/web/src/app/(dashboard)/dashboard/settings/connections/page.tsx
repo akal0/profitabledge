@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { normalizeOriginUrl } from "@profitabledge/platform";
 import { toast } from "sonner";
@@ -15,6 +15,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tabs,
+  TabsContent,
+  TabsListUnderlined,
+  TabsTriggerUnderlined,
+} from "@/components/ui/tabs";
 import { ActiveConnectionsSection } from "@/features/settings/connections/components/active-connections-section";
 import { AvailablePlatformsSection } from "@/features/settings/connections/components/available-platforms-section";
 import { ConnectionCredentialDialog } from "@/features/settings/connections/components/connection-credential-dialog";
@@ -48,6 +54,8 @@ import type {
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { trpcOptions } from "@/utils/trpc";
 
+type ConnectionsSettingsTab = "connections" | "admin";
+
 export default function ConnectionsSettingsPage() {
   const connectionsEnabled = isPublicAlphaFeatureEnabled("connections");
   const mt5IngestionEnabled = isPublicAlphaFeatureEnabled("mt5Ingestion");
@@ -64,6 +72,8 @@ export default function ConnectionsSettingsPage() {
   );
   const [pendingMt5Warning, setPendingMt5Warning] =
     useState<Mt5PlacementWarning | null>(null);
+  const [activeTab, setActiveTab] =
+    useState<ConnectionsSettingsTab>("connections");
 
   const { data: me } = useQuery({
     ...trpcOptions.users.me.queryOptions(),
@@ -78,6 +88,11 @@ export default function ConnectionsSettingsPage() {
       | undefined;
   };
 
+  const { data: billingState } = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+    enabled: connectionsEnabled,
+  });
+
   const { data: connections, refetch: refetchConnections } = useQuery({
     ...trpcOptions.connections.list.queryOptions(),
     enabled: connectionsEnabled,
@@ -89,6 +104,13 @@ export default function ConnectionsSettingsPage() {
   const terminalConnections = (connections ?? []).filter((connection) =>
     isTerminalProvider(connection.provider)
   );
+  const canViewTerminalWorkerStatus = billingState?.admin?.isAdmin === true;
+
+  useEffect(() => {
+    if (!canViewTerminalWorkerStatus && activeTab === "admin") {
+      setActiveTab("connections");
+    }
+  }, [activeTab, canViewTerminalWorkerStatus]);
 
   const { data: accounts } = useQuery({
     ...trpcOptions.accounts.list.queryOptions(),
@@ -103,8 +125,12 @@ export default function ConnectionsSettingsPage() {
     isFetching: isFetchingTerminalSupervisor,
   } = useQuery({
     ...trpcOptions.connections.getMtSupervisorStatus.queryOptions(),
-    enabled: connectionsEnabled && mt5IngestionEnabled,
-    refetchInterval: connectionsEnabled && mt5IngestionEnabled ? 30000 : false,
+    enabled:
+      connectionsEnabled && mt5IngestionEnabled && canViewTerminalWorkerStatus,
+    refetchInterval:
+      connectionsEnabled && mt5IngestionEnabled && canViewTerminalWorkerStatus
+        ? 30000
+        : false,
     refetchIntervalInBackground: false,
   }) as {
     data: TerminalSupervisorStatus | undefined;
@@ -397,43 +423,88 @@ export default function ConnectionsSettingsPage() {
   }
 
   return (
-    <div className="flex w-full flex-col">
-      <ActiveConnectionsSection
-        connections={connections}
-        isSyncing={syncNow.isPending}
-        scheduledSyncEnabled={scheduledSyncEnabled}
-        mt5IngestionEnabled={mt5IngestionEnabled}
-        onSync={(connectionId) => {
-          void handleSync(connectionId);
-        }}
-        onDelete={(connectionId) => {
-          void handleDelete(connectionId);
-        }}
-        onTogglePause={(connectionId, isPaused) => {
-          void handleTogglePause(connectionId, isPaused);
-        }}
-        onIntervalChange={(connectionId, value) => {
-          void handleIntervalChange(connectionId, value);
-        }}
-        onShowLinkDialog={setShowLinkDialog}
-      />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as ConnectionsSettingsTab)}
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
+        <div className="shrink-0 bg-background dark:bg-sidebar">
+          <div className="overflow-x-auto px-4 sm:px-6 lg:px-7">
+            <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
+              <TabsTriggerUnderlined
+                value="connections"
+                className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+              >
+                Connections
+              </TabsTriggerUnderlined>
+              {canViewTerminalWorkerStatus ? (
+                <TabsTriggerUnderlined
+                  value="admin"
+                  className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                >
+                  Admin
+                </TabsTriggerUnderlined>
+              ) : null}
+            </TabsListUnderlined>
+          </div>
 
-      {mt5IngestionEnabled ? (
-        <TerminalWorkerStatusSection
-          connectionCount={terminalConnections.length}
-          supervisor={terminalSupervisor}
-          isFetching={isFetchingTerminalSupervisor}
-          onRefresh={() => {
-            void refetchTerminalSupervisor();
-          }}
-        />
-      ) : null}
+          <Separator />
+        </div>
 
-      <AvailablePlatformsSection
-        providers={providers}
-        mt5IngestionEnabled={mt5IngestionEnabled}
-        onProviderClick={handleProviderClick}
-      />
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {activeTab === "connections" ? (
+            <TabsContent
+              value="connections"
+              className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+            >
+              <ActiveConnectionsSection
+                connections={connections}
+                isSyncing={syncNow.isPending}
+                scheduledSyncEnabled={scheduledSyncEnabled}
+                mt5IngestionEnabled={mt5IngestionEnabled}
+                onSync={(connectionId) => {
+                  void handleSync(connectionId);
+                }}
+                onDelete={(connectionId) => {
+                  void handleDelete(connectionId);
+                }}
+                onTogglePause={(connectionId, isPaused) => {
+                  void handleTogglePause(connectionId, isPaused);
+                }}
+                onIntervalChange={(connectionId, value) => {
+                  void handleIntervalChange(connectionId, value);
+                }}
+                onShowLinkDialog={setShowLinkDialog}
+              />
+
+              <AvailablePlatformsSection
+                providers={providers}
+                mt5IngestionEnabled={mt5IngestionEnabled}
+                onProviderClick={handleProviderClick}
+              />
+            </TabsContent>
+          ) : null}
+
+          {canViewTerminalWorkerStatus && activeTab === "admin" ? (
+            <TabsContent
+              value="admin"
+              className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
+            >
+              {mt5IngestionEnabled ? (
+                <TerminalWorkerStatusSection
+                  connectionCount={terminalConnections.length}
+                  supervisor={terminalSupervisor}
+                  isFetching={isFetchingTerminalSupervisor}
+                  onRefresh={() => {
+                    void refetchTerminalSupervisor();
+                  }}
+                />
+              ) : null}
+            </TabsContent>
+          ) : null}
+        </main>
+      </Tabs>
 
       <ConnectionCredentialDialog
         open={showCredentialDialog}
@@ -492,7 +563,7 @@ export default function ConnectionsSettingsPage() {
               <>
                 <Separator />
                 <div className="px-5 py-3">
-                  <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-white/35">
+                  <p className="text-[10px] font-medium text-white/35">
                     Currently available hosts
                   </p>
                   <div className="mt-2 space-y-1.5">

@@ -265,6 +265,7 @@ export async function* streamQuery(
         event: "error",
         message: planResult.error || "Could not understand query",
       };
+      yield { event: "done" };
       return;
     }
 
@@ -348,11 +349,25 @@ export async function* streamQuery(
         },
       };
     } else {
+      const vizSpec = buildVizSpec(plan, executionResult);
+
       // Emit coverage block
       yield {
         event: "analysis",
         block: buildCoverageBlock(executionResult, plan),
       };
+
+      const primaryStatsBlock = buildPrimaryStatsBlock(
+        executionResult,
+        plan,
+        vizSpec
+      );
+      if (primaryStatsBlock) {
+        yield {
+          event: "analysis",
+          block: primaryStatsBlock,
+        };
+      }
 
       const improvementRows = Array.isArray(executionResult.data?.improvements)
         ? executionResult.data.improvements
@@ -410,8 +425,6 @@ export async function* streamQuery(
       }
 
       // Build and emit visualization
-      const vizSpec = buildVizSpec(plan, executionResult);
-
       yield {
         event: "visualization",
         viz: vizSpec,
@@ -521,6 +534,7 @@ export async function* streamQuery(
       event: "error",
       message: normalized.message,
     };
+    yield { event: "done" };
   }
 }
 
@@ -749,6 +763,109 @@ function buildCoverageBlock(
   };
 }
 
+function buildPrimaryStatsBlock(
+  result: { data?: any; meta?: any },
+  plan: TradeQueryPlan,
+  viz: VizSpec
+): AnalysisBlock | null {
+  const rows: Array<{ label: string; value: string; note?: string }> = [];
+  const comparison = viz.data.comparison;
+
+  if (comparison) {
+    const format = comparison.format || inferMetricFormatFromKey(comparison.metricField);
+    rows.push(
+      {
+        label: comparison.a.label,
+        value: formatSummaryValue(comparison.a.value, format),
+        note: comparison.a.count ? `${comparison.a.count} trades` : undefined,
+      },
+      {
+        label: comparison.b.label,
+        value: formatSummaryValue(comparison.b.value, format),
+        note: comparison.b.count ? `${comparison.b.count} trades` : undefined,
+      }
+    );
+
+    if (comparison.delta !== undefined) {
+      rows.push({
+        label: "Difference",
+        value: formatSummaryValue(comparison.delta, format),
+        note: comparison.deltaPercent
+          ? `${comparison.deltaPercent} vs baseline`
+          : undefined,
+      });
+    }
+  }
+
+  if (rows.length === 0 && result.meta?.aggregates && !(plan.groupBy?.length)) {
+    for (const [key, value] of Object.entries(result.meta.aggregates).slice(0, 4)) {
+      rows.push({
+        label: formatFieldLabel(key),
+        value: formatSummaryValue(value, inferMetricFormatFromKey(key)),
+      });
+    }
+  }
+
+  const format = inferMetricFormatFromViz(viz, plan);
+  if (rows.length === 0 && viz.data.summary?.best) {
+    rows.push({
+      label: "Top result",
+      value: String(viz.data.summary.best.label),
+      note: formatSummaryValue(viz.data.summary.best.value, format),
+    });
+  }
+
+  if (rows.length < 4 && viz.data.summary?.worst) {
+    rows.push({
+      label: "Lowest result",
+      value: String(viz.data.summary.worst.label),
+      note: formatSummaryValue(viz.data.summary.worst.value, format),
+    });
+  }
+
+  if (rows.length < 4 && viz.data.summary?.total !== undefined) {
+    rows.push({
+      label: "Total",
+      value: formatSummaryValue(viz.data.summary.total, format),
+      note: viz.data.summary.count ? `${viz.data.summary.count} trades` : undefined,
+    });
+  }
+
+  if (rows.length < 4 && viz.data.summary?.average !== undefined) {
+    rows.push({
+      label: "Average",
+      value: formatSummaryValue(viz.data.summary.average, format),
+    });
+  }
+
+  if (rows.length === 0 && viz.type === "kpi_single" && viz.data.value !== undefined) {
+    rows.push({
+      label: viz.data.label || "Result",
+      value: formatSummaryValue(viz.data.value, format),
+      note: viz.data.summary?.count ? `${viz.data.summary.count} trades` : undefined,
+    });
+  }
+
+  if (rows.length === 0 && viz.type === "kpi_grid" && Array.isArray(viz.data.rows)) {
+    for (const row of viz.data.rows.slice(0, 4)) {
+      rows.push({
+        label: String(row.label || "Metric"),
+        value: String(row.value ?? "—"),
+      });
+    }
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    type: "stats",
+    title: "Quick summary",
+    rows: rows.slice(0, 4),
+  };
+}
+
 /**
  * Build breakdown table block from grouped results
  */
@@ -757,18 +874,20 @@ function buildBreakdownBlock(
   plan: TradeQueryPlan
 ): AnalysisBlock {
   const groups = result.meta?.groups || [];
-  const groupField = plan.groupBy?.[0]?.field || "group";
-  const titleGroup = formatFieldLabel(groupField);
+  const groupFields = plan.groupBy?.map((group) => group.field) || ["group"];
+  const titleGroup = groupFields.map((field) => formatFieldLabel(field)).join(" / ");
 
   // Build columns
-  const columns = [groupField];
+  const columns = [...groupFields];
   if (plan.aggregates) {
     columns.push(...plan.aggregates.map((a) => a.as));
   }
 
   // Build rows
   const rows = groups.slice(0, 20).map((g: any) => {
-    const row: (string | number | null)[] = [g[groupField] || "Unknown"];
+    const row: (string | number | null)[] = groupFields.map(
+      (field) => g[field] || "Unknown"
+    );
     if (plan.aggregates) {
       for (const agg of plan.aggregates) {
         const value = g[agg.as];
@@ -855,6 +974,97 @@ function formatFieldLabel(key: string): string {
     .trim();
   if (!cleaned) return "";
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1).toLowerCase();
+}
+
+function inferMetricFormatFromViz(
+  viz: VizSpec,
+  plan: TradeQueryPlan
+): "currency" | "percent" | "ratio" | "number" {
+  if (viz.data.comparison?.format) {
+    return viz.data.comparison.format;
+  }
+
+  const hint = [
+    viz.title,
+    viz.subtitle,
+    viz.data.yAxis,
+    viz.data.label,
+    plan.aggregates?.[0]?.field,
+    plan.aggregates?.[0]?.as,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return inferMetricFormatFromKey(hint);
+}
+
+function inferMetricFormatFromKey(
+  key?: string
+): "currency" | "percent" | "ratio" | "number" {
+  const lower = (key || "").toLowerCase();
+  if (
+    [
+      "profit",
+      "loss",
+      "pnl",
+      "expectancy",
+      "drawdown",
+      "commission",
+      "swap",
+      "balance",
+      "equity",
+    ].some((token) => lower.includes(token))
+  ) {
+    return "currency";
+  }
+  if (["rate", "percent", "efficiency"].some((token) => lower.includes(token))) {
+    return "percent";
+  }
+  if (["rr", "factor"].some((token) => lower.includes(token))) {
+    return "ratio";
+  }
+  return "number";
+}
+
+function formatSummaryValue(
+  value: unknown,
+  format: "currency" | "percent" | "ratio" | "number"
+): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return String(value ?? "—");
+  }
+
+  switch (format) {
+    case "currency":
+      return `${numericValue < 0 ? "-$" : "$"}${Math.abs(numericValue).toLocaleString(
+        undefined,
+        {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 2,
+        }
+      )}`;
+    case "percent":
+      return `${numericValue.toLocaleString(undefined, {
+        minimumFractionDigits: numericValue % 1 === 0 ? 0 : 1,
+        maximumFractionDigits: 1,
+      })}%`;
+    case "ratio":
+      return numericValue.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    case "number":
+    default:
+      return numericValue.toLocaleString(undefined, {
+        maximumFractionDigits: 2,
+      });
+  }
 }
 
 // ===== SERIALIZATION FOR HTTP STREAMING =====

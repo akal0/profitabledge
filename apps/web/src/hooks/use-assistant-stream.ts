@@ -44,14 +44,113 @@ export function useAssistantStream() {
     while (remaining.includes("\n")) {
       const idx = remaining.indexOf("\n");
       const line = remaining.substring(0, idx);
-      if (line.trim()) {
-        allLines.push(line);
-      }
+      allLines.push(line);
       remaining = remaining.substring(idx + 1);
     }
 
     return { lines: allLines, remainder: remaining };
   }, []);
+
+  const applyEvent = useCallback(
+    (event: StreamEvent) => {
+      setState((prev) => {
+        switch (event.event) {
+          case "status":
+            return {
+              ...prev,
+              stage: event.stage,
+              statusMessage: event.message,
+            };
+
+          case "delta": {
+            const newBuffer = prev.lineBuffer + event.text;
+            const { lines: newLines, remainder } = commitLines(newBuffer);
+
+            return {
+              ...prev,
+              lines: [...prev.lines, ...newLines],
+              lineBuffer: remainder,
+            };
+          }
+
+          case "analysis":
+            return {
+              ...prev,
+              analysisBlocks: [...prev.analysisBlocks, event.block],
+            };
+
+          case "visualization":
+            return {
+              ...prev,
+              visualization: event.viz,
+            };
+
+          case "error":
+            return {
+              ...prev,
+              error: (event as any).message || "Unknown error",
+            };
+
+          case "done": {
+            const {
+              lines: finalLines,
+              remainder,
+            } = commitLines(prev.lineBuffer);
+            const trailingLine = remainder.length > 0 ? [remainder] : [];
+
+            return {
+              ...prev,
+              lines: [...prev.lines, ...finalLines, ...trailingLine],
+              lineBuffer: "",
+              isStreaming: false,
+              isDone: true,
+              justCompleted: true,
+            };
+          }
+
+          default:
+            return prev;
+        }
+      });
+    },
+    [commitLines]
+  );
+
+  const processNdjsonLines = useCallback(
+    (input: string, isFinal = false): string => {
+      const lines = input.split("\n");
+      const remainder = isFinal ? "" : lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        try {
+          applyEvent(JSON.parse(line) as StreamEvent);
+        } catch (error) {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("Failed to parse stream event:", line, error);
+          }
+        }
+      }
+
+      if (isFinal) {
+        const finalLine = remainder || lines[lines.length - 1];
+        if (finalLine && finalLine.trim()) {
+          try {
+            applyEvent(JSON.parse(finalLine) as StreamEvent);
+          } catch (error) {
+            if (process.env.NODE_ENV !== "production") {
+              console.error("Failed to parse final stream event:", finalLine, error);
+            }
+          }
+        }
+        return "";
+      }
+
+      return remainder;
+    },
+    [applyEvent]
+  );
 
   /**
    * Start streaming from the endpoint
@@ -114,83 +213,12 @@ export function useAssistantStream() {
           }
 
           buffer += decoder.decode(value, { stream: true });
+          buffer = processNdjsonLines(buffer);
+        }
 
-          // Process complete lines (NDJSON)
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-
-            try {
-              const event: StreamEvent = JSON.parse(line);
-
-              setState((prev) => {
-                switch (event.event) {
-                  case "status":
-                    return {
-                      ...prev,
-                      stage: event.stage,
-                      statusMessage: event.message,
-                    };
-
-                  case "delta": {
-                    // Append to line buffer
-                    const newBuffer = prev.lineBuffer + event.text;
-                    const { lines: newLines, remainder } = commitLines(newBuffer);
-
-                    return {
-                      ...prev,
-                      lines: [...prev.lines, ...newLines],
-                      lineBuffer: remainder,
-                    };
-                  }
-
-                  case "analysis":
-                    return {
-                      ...prev,
-                      analysisBlocks: [...prev.analysisBlocks, event.block],
-                    };
-
-                  case "visualization":
-                    return {
-                      ...prev,
-                      visualization: event.viz,
-                    };
-
-                  case "error":
-                    return {
-                      ...prev,
-                      isStreaming: false,
-                      error: (event as any).message || "Unknown error",
-                    };
-
-                  case "done":
-                    // Commit any remaining buffer
-                    const {
-                      lines: finalLines,
-                      remainder,
-                    } = commitLines(prev.lineBuffer);
-                    const trailingLine = remainder.trim() ? [remainder] : [];
-                    return {
-                      ...prev,
-                      lines: [...prev.lines, ...finalLines, ...trailingLine],
-                      lineBuffer: "",
-                      isStreaming: false,
-                      isDone: true,
-                      justCompleted: true,
-                    };
-
-                  default:
-                    return prev;
-                }
-              });
-            } catch (error) {
-              if (process.env.NODE_ENV !== "production") {
-                console.error("Failed to parse stream event:", line, error);
-              }
-            }
-          }
+        buffer += decoder.decode();
+        if (buffer.trim()) {
+          processNdjsonLines(buffer, true);
         }
       } catch (error: any) {
         if (error.name === "AbortError") {
@@ -203,13 +231,15 @@ export function useAssistantStream() {
         setState((prev) => ({
           ...prev,
           isStreaming: false,
+          isDone: true,
+          justCompleted: true,
           error: error.message || "Stream failed",
         }));
       } finally {
         releaseTabAttention();
       }
     },
-    [commitLines]
+    [processNdjsonLines]
   );
 
   /**

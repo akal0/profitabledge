@@ -4,6 +4,7 @@ import { notification } from "../db/schema/notifications";
 import { user as userTable } from "../db/schema/auth";
 import { and, eq, inArray, isNull, desc, or } from "drizzle-orm";
 import { eventBus, publish } from "./event-bus";
+import { sendWebPushSignalToUser } from "./push-web";
 
 export type NotificationType =
   | "trade_closed"
@@ -23,6 +24,9 @@ export type NotificationType =
   | "prop_phase_advanced"
   | "edge_invite"
   | "journal_share_request"
+  | "journal_share_invite"
+  | "journal_share_accepted"
+  | "journal_share_declined"
   | "leaderboard_update"
   | "system_maintenance"
   | "system_update";
@@ -114,9 +118,12 @@ export function getNotificationCategory(
     case "news_upcoming":
       return "news";
     case "leaderboard_update":
-    case "journal_share_request":
       return "social";
     case "edge_invite":
+    case "journal_share_request":
+    case "journal_share_invite":
+    case "journal_share_accepted":
+    case "journal_share_declined":
       return "system";
     default:
       return "system";
@@ -140,6 +147,10 @@ export function getNotificationPriority(
     case "trade_opened":
     case "post_exit_ready":
     case "goal_progress":
+    case "journal_share_request":
+    case "journal_share_invite":
+    case "journal_share_accepted":
+    case "journal_share_declined":
       return "normal";
     default:
       return "low";
@@ -171,9 +182,12 @@ function isTypeEnabled(
     case "prop_phase_advanced":
       return prefs.alerts;
     case "leaderboard_update":
-    case "journal_share_request":
       return prefs.social;
     case "edge_invite":
+    case "journal_share_request":
+    case "journal_share_invite":
+    case "journal_share_accepted":
+    case "journal_share_declined":
       return prefs.system;
     default:
       return prefs.system;
@@ -258,6 +272,12 @@ class NotificationHub {
       type,
       title,
     });
+
+    if (prefs.push) {
+      void sendWebPushSignalToUser(userId).catch((error) => {
+        console.error("[NotificationHub] Web push delivery failed:", error);
+      });
+    }
 
     return { skipped: false, notificationId };
   }

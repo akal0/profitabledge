@@ -4,6 +4,7 @@ import React from "react";
 import { cn } from "@/lib/utils";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { formatDisplayCurrency } from "@/lib/format-display";
 
 export interface BaseKpiSingleProps {
   value: string | number;
@@ -32,9 +33,7 @@ const defaultFormatValue = (v: number, label?: string): string => {
     labelLower.includes("loss") ||
     labelLower.includes("balance")
   ) {
-    const abs = Math.abs(v);
-    const sign = v < 0 ? "-$" : "$";
-    return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    return formatDisplayCurrency(v);
   }
   if (
     labelLower.includes("hold") ||
@@ -72,10 +71,10 @@ export function BaseKpiSingle({
       : true;
 
   return (
-    <div className="flex flex-col items-center justify-center py-2">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-sm flex-col items-start justify-center py-2 text-left">
       <div
         className={cn(
-          "text-4xl font-bold tracking-tight",
+          "text-4xl font-bold",
           isPositive ? "text-teal-400" : "text-rose-400"
         )}
       >
@@ -93,7 +92,7 @@ export function BaseKpiSingle({
       {change !== undefined && (
         <div
           className={cn(
-            "flex items-center gap-1 mt-2 text-xs",
+            "mt-2 flex items-center gap-1 text-xs",
             change >= 0 ? "text-teal-400" : "text-rose-400"
           )}
         >
@@ -122,10 +121,10 @@ export function BaseKpiSingle({
 
 export function BaseKpiGrid({ items }: BaseKpiGridProps) {
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid h-full min-h-0 auto-rows-fr grid-cols-2 gap-3">
       {items.map((row, i) => (
         <div key={i} className="bg-white/5 rounded-lg p-3">
-          <p className="text-[10px] text-white/50 tracking-wider">
+          <p className="text-[10px] text-white/50">
             {sentenceCase(row.label)}
           </p>
           <p className="text-lg font-semibold text-white mt-1">{row.value}</p>

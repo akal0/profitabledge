@@ -48,7 +48,8 @@ const GROUP_FIELD_RULES: Array<{ field: GroupField; test: RegExp }> = [
   },
   {
     field: "modelTag",
-    test: /\b(setups|strategy|strategies|model|models|tagged setups)\b/i,
+    test:
+      /\b(setup|setups|strategy|strategies|model|models|tagged setups|pattern|patterns|condition|conditions)\b/i,
   },
   {
     field: "protocolAlignment",
@@ -498,6 +499,19 @@ function buildMetricDefinition(lower: string): MetricDefinition {
     };
   }
 
+  if (
+    /\b(leak|leaks|leaking|costing me|bleeding|hurting|weakening|underperforming|worst)\b/i.test(
+      lower
+    )
+  ) {
+    return {
+      aggregates: [aggregate("sum", "profit", "total_profit")],
+      baseTitle: "Biggest leak",
+      sortField: "total_profit",
+      defaultSortDir: "asc",
+    };
+  }
+
   return {
     aggregates: [aggregate("sum", "profit", "total_profit")],
     baseTitle: "Total profit",
@@ -516,6 +530,18 @@ function detectGroupFields(lower: string): GroupField[] {
   }
 
   return ordered;
+}
+
+function wantsConditionBundle(lower: string): boolean {
+  return /\b(condition|conditions|combo|combos|combination|combinations|intersection|intersections)\b/i.test(
+    lower
+  );
+}
+
+function wantsProfileBreakdown(lower: string): boolean {
+  return /\b(edge|edges|leak|leaks|leaking|costing me|bleeding|hurting|strength|strengths|weakness|weaknesses|doing well|doing wrong)\b/i.test(
+    lower
+  );
 }
 
 function detectSessionMentions(lower: string): string[] {
@@ -689,12 +715,24 @@ function isRankingQuery(lower: string): boolean {
   );
 }
 
+function hasExplicitPluralRanking(lower: string): boolean {
+  return /\b(best|worst|most|least|top|bottom)\b.*\b(assets|symbols|pairs|sessions|setups|strategies|models|patterns|conditions|combos|combinations|edges|days|hours|trades)\b/i.test(
+    lower
+  );
+}
+
 function wantsAscending(lower: string): boolean {
   return /\b(worst|lowest|least|avoid|stop|lost|losing)\b/i.test(lower);
 }
 
 function determineDisplayMode(lower: string, grouped: boolean): TradeQueryPlan["displayMode"] {
+  if (/\b(compare|vs|versus)\b/i.test(lower)) {
+    return "plural";
+  }
   if (!grouped) return "singular";
+  if (hasExplicitPluralRanking(lower)) {
+    return "plural";
+  }
   if (
     /\bwhich\b/i.test(lower) &&
     /\b(highest|lowest|best|worst|most|least|top|bottom)\b/i.test(lower)
@@ -732,12 +770,15 @@ function chooseVizType(
   metric: MetricDefinition,
   displayMode: TradeQueryPlan["displayMode"]
 ): TradeQueryPlan["vizType"] {
-  if (metric.vizType && groupBy.length <= 1) {
-    return metric.vizType;
-  }
-
   if (groupBy.length === 0) {
     return metric.aggregates.length > 1 ? "kpi_grid" : "kpi_single";
+  }
+
+  if (
+    metric.vizType &&
+    !(metric.vizType === "trade_counts" && groupBy.length > 0)
+  ) {
+    return metric.vizType;
   }
 
   if (groupBy.length > 1 || metric.aggregates.length > 1) {
@@ -813,6 +854,11 @@ export function buildDeterministicTradePlan(
   const filters = detectFilters(userMessage, lower);
   const fixedFields = new Set(filters.map((filter) => filter.field));
   const metric = buildMetricDefinition(lower);
+  const groupedConditionFields: GroupField[] =
+    wantsConditionBundle(lower) ||
+    (wantsProfileBreakdown(lower) && (filters.length > 0 || Boolean(timeframe)))
+    ? ["modelTag", "sessionTag", "tradeType", "protocolAlignment"]
+    : [];
 
   const specificComboQuery =
     filters.length >= 2 &&
@@ -842,9 +888,14 @@ export function buildDeterministicTradePlan(
     };
   }
 
+  const groupCandidates = groupedConditionFields.length > 0
+    ? [...detectedGroups, ...groupedConditionFields].filter(
+        (field, index, all) => all.indexOf(field) === index
+      )
+    : detectedGroups;
   const groupBy = specificComboQuery
     ? []
-    : detectedGroups.filter((field) => !fixedFields.has(field));
+    : groupCandidates.filter((field) => !fixedFields.has(field));
 
   const grouped = groupBy.length > 0;
   const displayMode = determineDisplayMode(lower, grouped);

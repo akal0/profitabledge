@@ -47,6 +47,7 @@ export async function createAutoTradeReviewEntry(input: {
     return {
       entry: existing,
       created: false,
+      symbol: null,
     } as const;
   }
 
@@ -213,7 +214,6 @@ export async function createAutoTradeReviewEntry(input: {
       tags: [
         "auto-generated",
         "trade-review",
-        "trade-close-auto",
         closedTrade.sessionTag || "untagged-session",
         closedTrade.edgeName || closedTrade.modelTag || "untagged-edge",
       ],
@@ -235,5 +235,6 @@ export async function createAutoTradeReviewEntry(input: {
   return {
     entry,
     created: true,
+    symbol: closedTrade.symbol ?? null,
   } as const;
 }

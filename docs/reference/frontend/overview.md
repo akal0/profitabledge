@@ -41,7 +41,7 @@ Main dashboard pages currently include:
 
 - `/dashboard`
 - `/dashboard/affiliate`
-- `/dashboard/growth`
+- `/dashboard/growth` (admin-only overview)
 - `/dashboard/growth-admin`
 - `/dashboard/referrals`
 - `/dashboard/trades`
@@ -144,7 +144,7 @@ Current example:
 - the onboarding shell now uses a scrollable responsive layout instead of a fixed-height desktop frame, so long profile/account-import forms remain usable on smaller screens and when CSV/account metadata expands vertically
 - the login page now lands directly on `/dashboard`, and the dashboard shell no longer force-bounces signed-in members back to onboarding just because billing/onboarding state is incomplete
 - the onboarding account step now flips its footer CTA to `Go to dashboard` as soon as CSV import, demo workspace creation, or broker/EA setup intent makes the member ready to continue, instead of waiting on a stale account-list refresh
-- the dashboard sidebar now exposes a `Growth` section with `/dashboard/growth`, `/dashboard/referrals`, and `/dashboard/affiliate`, while `/dashboard/growth-admin` remains an admin-only direct route instead of a persistent sidebar item
+- the dashboard sidebar now keeps `Growth` as a section label for referrals and affiliate routes, but the `/dashboard/growth` overview itself is now admin-only and hidden from normal-user navigation and command-palette discovery; `/dashboard/growth-admin` also remains admin-only
 - the beta-visible economic calendar route at `/dashboard/news` is now back in sidebar and command-palette discovery as `Calendar`, while the other community routes remain hidden from discovery
 - the economic calendar API route keeps the current beta-safe provider posture for now: TradingEconomics remains the primary source, real TradingEconomics credentials can be supplied through `TRADING_ECONOMICS_API_KEY`, and the existing FairEconomy fallback stays in place until a fully licensed production calendar feed replaces the guest-tier path
 - the growth overview and growth-admin routes now live under a shared dashboard route-group layout that mounts a billing-style underlined admin tab strip directly beneath the header, while growth, referrals, affiliate, and growth-admin page bodies reuse the same shadowed settings-card shell language as Billing instead of bespoke route-local framing
@@ -183,9 +183,10 @@ Current note:
 - the shared `Select` primitive now reuses the same dark filter-menu surface language as the journal and trades toolbars, so dashboard/product pages should prefer sizing/layout overrides only instead of introducing page-specific select skins
 - AI mutations and assistant streaming surfaces should route provider/rate-limit failures through the shared AI toast path, so users see a short recoverable message instead of raw quota errors or stalled UI state
 - the journal entry route now waits for fetched entry state to hydrate before mounting the content editor, journal autosave debounces the full draft so slash-inserted widgets do not trigger overlapping `journal.update` loops, and journal save actions read from the live editor snapshot so slash/AI/chart inserts are not lost behind stale page-state content
-- the main journal route now surfaces a top-level review workflow strip across tabs, keeping prompt inbox count, review-ready count, and quick actions visible even before the user drills into Insights or Review Ready
+- the journal calendar tab now owns a full-height content region inside `/dashboard/journal`, so the month grid and its summary-card sidebar stretch to the available route height rather than sitting inside a shorter capped subpanel
+- `/dashboard/journal` now keeps post-close auto reviews in the normal `Entries` flow; trade-close notifications deep-link into the generated journal entry instead of routing through a dedicated review queue tab
 - dashboard charts mounted inside the journal editor should use the embedded render mode rather than full dashboard fetch/render behavior, booting into a one-week window with comparison disabled and non-essential Recharts churn removed so rich chart blocks stay responsive inside TipTap
-- the journal Insights tab now uses a dedicated shell primitive modeled after `/dashboard/prop-tracker`, so workflow cards, question/pattern panels, and psychology/performance analysis all share the same nested border/body structure instead of mixing route-local widget frames
+- the journal Insights tab now uses the same outer/inner card treatment as `/dashboard/goals`, auto-runs pattern analysis only once per account scope, and keeps journal intelligence queries scoped to the selected account so the tab stays responsive and the surfaced insights match the visible journal context
 - the psychology route should behave like a coaching cockpit before it behaves like a chart page: lead with tilt status, mental score, emotion tagging/self-awareness, and recent rule pressure, then drop into correlation analysis and scatter diagnostics lower on the page
 - dashboard widget edit entry should come from direct double-click interactions on widget surfaces rather than long-press timers, so the main widget grid and chart widget section share the same discoverable gesture without a separate long-press path
 

@@ -12,20 +12,28 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+} from "@/components/dashboard/charts/dashboard-chart-ui";
+import {
+  ChartContainer,
+  ChartTooltip,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-} from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import { trpcOptions } from "@/utils/trpc";
 
 type ProviderId = "gemini" | "openai" | "anthropic";
@@ -40,7 +48,8 @@ const PROVIDERS: Array<{
   {
     id: "gemini",
     label: "Google Gemini",
-    helper: "Primary live provider for the current in-product assistant runtime.",
+    helper:
+      "Primary live provider for the current in-product assistant runtime.",
     note: "Recommended today for assistant, analysis, and metered AI flows.",
     keyLink: "https://aistudio.google.com/app/apikey",
   },
@@ -63,11 +72,86 @@ const PROVIDERS: Array<{
 ];
 
 const USAGE_VIEWS = [
-  { key: "profitabledge", label: "Profitabledge", accent: "text-teal-300" },
-  { key: "gemini", label: "Gemini", accent: "text-sky-300" },
-  { key: "openai", label: "OpenAI", accent: "text-emerald-300" },
-  { key: "anthropic", label: "Anthropic", accent: "text-orange-300" },
+  {
+    key: "profitabledge",
+    label: "Profitabledge",
+    accent: "text-teal-300",
+    stroke: "#2dd4bf",
+    tone: "teal",
+  },
+  {
+    key: "gemini",
+    label: "Gemini",
+    accent: "text-sky-300",
+    stroke: "#38bdf8",
+    tone: "neutral",
+  },
+  {
+    key: "openai",
+    label: "OpenAI",
+    accent: "text-emerald-300",
+    stroke: "#4ade80",
+    tone: "gold",
+  },
+  {
+    key: "anthropic",
+    label: "Anthropic",
+    accent: "text-orange-300",
+    stroke: "#fb923c",
+    tone: "amber",
+  },
 ] as const;
+
+const USAGE_METRICS = [
+  {
+    key: "requests",
+    label: "Requests",
+    description: "Daily request volume across the last 30 days.",
+    tone: "teal",
+    formatValue: (value: number) => formatNumber(value),
+    formatAxisValue: (value: number) => formatCompactNumber(value),
+    axisWidth: 44,
+  },
+  {
+    key: "totalTokens",
+    label: "Tokens",
+    description: "Token consumption over time by provider source.",
+    tone: "gold",
+    formatValue: (value: number) => formatNumber(value),
+    formatAxisValue: (value: number) => formatCompactNumber(value),
+    axisWidth: 52,
+  },
+  {
+    key: "chargedCredits",
+    label: "Credits",
+    description: "Charged Edge credits accumulated per day.",
+    tone: "amber",
+    formatValue: (value: number) => value.toFixed(2),
+    formatAxisValue: (value: number) => formatCompactDecimal(value),
+    axisWidth: 52,
+  },
+  {
+    key: "spendUsd",
+    label: "Spend",
+    description: "Estimated USD-equivalent spend for charged usage.",
+    tone: "danger",
+    formatValue: (value: number) => formatUsd(value),
+    formatAxisValue: (value: number) => formatCompactUsd(value),
+    axisWidth: 56,
+  },
+] as const;
+
+type UsageViewKey = (typeof USAGE_VIEWS)[number]["key"];
+type UsageMetricKey = (typeof USAGE_METRICS)[number]["key"];
+type UsagePoint = {
+  date: string;
+  label: string;
+  requests: number;
+  totalTokens: number;
+  chargedCredits: number;
+  spendUsd: number;
+};
+type VisibleUsageViews = Record<UsageViewKey, boolean>;
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return "Never";
@@ -88,6 +172,58 @@ function formatUsd(value: number) {
   }).format(value);
 }
 
+function formatCompactNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatCompactDecimal(value: number) {
+  if (Math.abs(value) >= 100) {
+    return formatCompactNumber(value);
+  }
+
+  return value.toFixed(value < 10 ? 1 : 0);
+}
+
+function formatCompactUsd(value: number) {
+  if (Math.abs(value) < 1) {
+    return formatUsd(value);
+  }
+
+  return `$${formatCompactNumber(value)}`;
+}
+
+function getInitialVisibleUsageViews(): VisibleUsageViews {
+  return Object.fromEntries(
+    USAGE_VIEWS.map((view) => [view.key, true])
+  ) as VisibleUsageViews;
+}
+
+const USAGE_SEGMENTED_CONTROL_CLASS_NAME =
+  "flex h-max w-max items-center gap-1 rounded-md bg-white p-[3px] ring ring-white/5 dark:bg-muted/15";
+
+function getUsageSegmentedButtonClassName(
+  active: boolean,
+  tone: "teal" | "neutral" | "gold" | "amber" | "danger"
+) {
+  return cn(
+    "cursor-pointer flex h-max w-max items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-all duration-250 active:scale-95",
+    active
+      ? tone === "teal"
+        ? "bg-teal-400/20 text-teal-200 ring ring-teal-400/30 hover:bg-teal-400/25 hover:!brightness-110"
+        : tone === "gold"
+        ? "bg-amber-400/15 text-amber-200 ring ring-amber-400/25 hover:bg-amber-400/20 hover:!brightness-110"
+        : tone === "amber"
+        ? "bg-orange-400/15 text-orange-200 ring ring-orange-400/25 hover:bg-orange-400/20 hover:!brightness-110"
+        : tone === "danger"
+        ? "bg-rose-400/15 text-rose-200 ring ring-rose-400/25 hover:bg-rose-400/20 hover:!brightness-110"
+        : "bg-sky-400/15 text-sky-200 ring ring-sky-400/25 hover:bg-sky-400/20 hover:!brightness-110"
+      : "bg-[#222225]/25 text-white/40 ring-0 hover:bg-[#222225] hover:!brightness-105 hover:text-white/80"
+  );
+}
+
 export default function AISettingsPage() {
   const aiEnabled = isPublicAlphaFeatureEnabled("aiAssistant");
   const [selectedProvider, setSelectedProvider] = useState<ProviderId | null>(
@@ -95,6 +231,11 @@ export default function AISettingsPage() {
   );
   const [apiKey, setApiKey] = useState("");
   const [copiedPrefix, setCopiedPrefix] = useState<string | null>(null);
+  const [selectedUsageMetric, setSelectedUsageMetric] =
+    useState<UsageMetricKey>("requests");
+  const [visibleUsageViews, setVisibleUsageViews] = useState<VisibleUsageViews>(
+    () => getInitialVisibleUsageViews()
+  );
 
   const { data: connectedKeys, refetch: refetchKeys } = useQuery({
     ...trpcOptions.aiKeys.list.queryOptions(),
@@ -109,8 +250,70 @@ export default function AISettingsPage() {
   const deleteKey = useMutation(trpcOptions.aiKeys.delete.mutationOptions());
 
   const keysByProvider = useMemo(
-    () => new Map((connectedKeys ?? []).map((entry) => [entry.provider, entry])),
+    () =>
+      new Map((connectedKeys ?? []).map((entry) => [entry.provider, entry])),
     [connectedKeys]
+  );
+  const activeUsageMetric = useMemo(
+    () =>
+      USAGE_METRICS.find((metric) => metric.key === selectedUsageMetric) ??
+      USAGE_METRICS[0],
+    [selectedUsageMetric]
+  );
+  const usageChartConfig = useMemo(
+    () =>
+      Object.fromEntries(
+        USAGE_VIEWS.map((view) => [
+          view.key,
+          { label: view.label, color: view.stroke },
+        ])
+      ) satisfies ChartConfig,
+    []
+  );
+  const usageChartData = useMemo(() => {
+    const fallbackData =
+      USAGE_VIEWS.map((view) => usage?.views?.[view.key]?.data).find(
+        (data): data is UsagePoint[] => Array.isArray(data) && data.length > 0
+      ) ?? [];
+
+    return fallbackData.map((point, index) => {
+      const row: {
+        date: string;
+        label: string;
+      } & Partial<Record<UsageViewKey, number>> = {
+        date: point.date,
+        label: point.label,
+      };
+
+      for (const view of USAGE_VIEWS) {
+        row[view.key] =
+          usage?.views?.[view.key]?.data?.[index]?.[selectedUsageMetric] ?? 0;
+      }
+
+      return row;
+    });
+  }, [selectedUsageMetric, usage]);
+  const usageHasActivity = useMemo(
+    () =>
+      usageChartData.some((row) =>
+        USAGE_VIEWS.some((view) => (row[view.key] ?? 0) > 0)
+      ),
+    [usageChartData]
+  );
+  const usageTotalsByView = useMemo(
+    () =>
+      Object.fromEntries(
+        USAGE_VIEWS.map((view) => {
+          const summary = usage?.views?.[view.key];
+          const total =
+            selectedUsageMetric === "requests"
+              ? summary?.totalRequests ?? 0
+              : summary?.[selectedUsageMetric] ?? 0;
+
+          return [view.key, total];
+        })
+      ) as Record<UsageViewKey, number>,
+    [selectedUsageMetric, usage]
   );
 
   const closeDialog = () => {
@@ -158,6 +361,21 @@ export default function AISettingsPage() {
     toast.success("Key prefix copied.");
     window.setTimeout(() => setCopiedPrefix(null), 1500);
   };
+  const toggleUsageView = (viewKey: UsageViewKey) => {
+    setVisibleUsageViews((current) => {
+      if (
+        current[viewKey] &&
+        Object.values(current).filter(Boolean).length === 1
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        [viewKey]: !current[viewKey],
+      };
+    });
+  };
 
   if (!aiEnabled) {
     return (
@@ -170,7 +388,7 @@ export default function AISettingsPage() {
 
   return (
     <div className="flex w-full flex-col">
-      <div className="grid grid-cols-1 gap-3 px-6 py-5 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-8">
+      <div className="flex justify-between gap-3 px-6 py-5 sm:gap-6 sm:px-8">
         <div>
           <Label className="text-sm font-medium text-white/80">AI</Label>
           <p className="mt-0.5 text-xs text-white/40">
@@ -178,13 +396,18 @@ export default function AISettingsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href="/assistant"
-            className="flex h-[38px] items-center gap-2 rounded-md bg-white px-4 py-2 text-xs text-black transition hover:bg-white/90"
+          <Button
+            asChild
+            className={getPropAssignActionButtonClassName({
+              tone: "teal",
+              size: "sm",
+            })}
           >
-            <Bot className="size-3.5" />
-            Open assistant
-          </Link>
+            <Link href="/assistant">
+              <Bot className="size-3.5" />
+              Open assistant
+            </Link>
+          </Button>
         </div>
       </div>
 
@@ -195,52 +418,158 @@ export default function AISettingsPage() {
           <Sparkles className="size-4 text-teal-300" />
           <h2 className="text-sm font-semibold text-white">Usage overview</h2>
         </div>
-        <div className="grid gap-3 lg:grid-cols-4">
-          {USAGE_VIEWS.map((view) => {
-            const summary = usage?.views?.[view.key];
+        <div className="rounded-sm ring ring-white/5 bg-sidebar p-1.5">
+          <div className="rounded-sm bg-sidebar-accent p-4 sm:p-5">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div
+                  className={cn(
+                    USAGE_SEGMENTED_CONTROL_CLASS_NAME,
+                    "flex-wrap"
+                  )}
+                >
+                  {USAGE_VIEWS.map((view) => {
+                    const isVisible = visibleUsageViews[view.key];
+                    const total = usageTotalsByView[view.key];
 
-            return (
-              <div
-                key={view.key}
-                className="rounded-md border border-white/5 bg-sidebar-accent p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm font-medium ${view.accent}`}>
-                    {view.label}
-                  </span>
-                  <Badge className="border-white/10 bg-white/5 text-white/60">
+                    return (
+                      <button
+                        key={view.key}
+                        type="button"
+                        aria-pressed={isVisible}
+                        onClick={() => toggleUsageView(view.key)}
+                        className={cn(
+                          getUsageSegmentedButtonClassName(
+                            isVisible,
+                            view.tone
+                          ),
+                          "gap-2"
+                        )}
+                      >
+                        <span
+                          className="size-2 rounded-full"
+                          style={{ backgroundColor: view.stroke }}
+                        />
+                        <span>{view.label}</span>
+                        <span className="ml-2.5 text-[10px] text-current/70">
+                          {activeUsageMetric.formatValue(total)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  <Badge className="h-8 rounded-md border-white/10 bg-white/5 px-2.5 text-[10px] text-white/55">
                     30d
                   </Badge>
                 </div>
-                <div className="mt-3 space-y-2 text-xs text-white/60">
-                  <div className="flex items-center justify-between">
-                    <span>Requests</span>
-                    <span className="font-medium text-white">
-                      {formatNumber(summary?.totalRequests ?? 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Tokens</span>
-                    <span className="font-medium text-white">
-                      {formatNumber(summary?.totalTokens ?? 0)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Credits</span>
-                    <span className="font-medium text-white">
-                      {(summary?.chargedCredits ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Spend</span>
-                    <span className="font-medium text-white">
-                      {formatUsd(summary?.spendUsd ?? 0)}
-                    </span>
-                  </div>
+
+                <div className={USAGE_SEGMENTED_CONTROL_CLASS_NAME}>
+                  {USAGE_METRICS.map((metric) => (
+                    <button
+                      key={metric.key}
+                      type="button"
+                      onClick={() => setSelectedUsageMetric(metric.key)}
+                      className={getUsageSegmentedButtonClassName(
+                        metric.key === selectedUsageMetric,
+                        metric.tone
+                      )}
+                    >
+                      {metric.label}
+                    </button>
+                  ))}
                 </div>
               </div>
-            );
-          })}
+
+              <div className="relative h-[320px] rounded-sm border border-white/5 bg-sidebar/40 p-3">
+                <ChartContainer
+                  config={usageChartConfig}
+                  className="h-full w-full aspect-auto"
+                >
+                  <LineChart
+                    data={usageChartData}
+                    margin={{ top: 12, right: 16, bottom: 0, left: 4 }}
+                  >
+                    <CartesianGrid
+                      stroke="rgba(255,255,255,0.08)"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      axisLine={false}
+                      tickLine={false}
+                      minTickGap={28}
+                      tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      width={activeUsageMetric.axisWidth}
+                      tickMargin={8}
+                      tick={{ fill: "rgba(255,255,255,0.45)", fontSize: 11 }}
+                      tickFormatter={activeUsageMetric.formatAxisValue}
+                    />
+                    <ChartTooltip
+                      cursor={{ stroke: "rgba(255,255,255,0.12)" }}
+                      content={({ active, label, payload }) => {
+                        if (!active || !payload?.length) return null;
+
+                        const visiblePayload = payload.filter(
+                          (item) =>
+                            typeof item.dataKey === "string" &&
+                            visibleUsageViews[item.dataKey as UsageViewKey]
+                        );
+
+                        if (!visiblePayload.length) return null;
+
+                        return (
+                          <DashboardChartTooltipFrame title={label}>
+                            {visiblePayload.map((item) => {
+                              const view = USAGE_VIEWS.find(
+                                (entry) => entry.key === item.dataKey
+                              );
+                              const value = Number(item.value ?? 0);
+
+                              return (
+                                <DashboardChartTooltipRow
+                                  key={String(item.dataKey)}
+                                  label={
+                                    view?.label ??
+                                    String(item.name ?? item.dataKey)
+                                  }
+                                  value={activeUsageMetric.formatValue(value)}
+                                  indicatorColor={view?.stroke}
+                                />
+                              );
+                            })}
+                          </DashboardChartTooltipFrame>
+                        );
+                      }}
+                    />
+                    {USAGE_VIEWS.map((view) =>
+                      visibleUsageViews[view.key] ? (
+                        <Line
+                          key={view.key}
+                          type="monotone"
+                          dataKey={view.key}
+                          stroke={view.stroke}
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 4, fill: view.stroke }}
+                        />
+                      ) : null
+                    )}
+                  </LineChart>
+                </ChartContainer>
+
+                {!usageHasActivity ? (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <div className="rounded-sm border border-white/5 bg-sidebar/90 px-3 py-2 text-xs text-white/45 backdrop-blur">
+                      No AI usage recorded in the last 30 days.
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -287,7 +616,9 @@ export default function AISettingsPage() {
                       <div className="mt-3 grid gap-2 text-xs text-white/60 sm:grid-cols-3">
                         <button
                           type="button"
-                          onClick={() => handleCopyPrefix(connectedKey.keyPrefix)}
+                          onClick={() =>
+                            handleCopyPrefix(connectedKey.keyPrefix)
+                          }
                           className="flex items-center gap-2 text-left text-white/60 transition hover:text-white"
                         >
                           {copiedPrefix === connectedKey.keyPrefix ? (
@@ -298,27 +629,41 @@ export default function AISettingsPage() {
                           <span>{connectedKey.keyPrefix}</span>
                         </button>
                         <span>
-                          Last validated: {formatDate(connectedKey.lastValidatedAt)}
+                          Last validated:{" "}
+                          {formatDate(connectedKey.lastValidatedAt)}
                         </span>
-                        <span>Last used: {formatDate(connectedKey.lastUsedAt)}</span>
+                        <span>
+                          Last used: {formatDate(connectedKey.lastUsedAt)}
+                        </span>
                       </div>
                     ) : null}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <a
-                      href={provider.keyLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex h-[38px] items-center gap-2 rounded-md border border-white/10 bg-white/5 px-4 py-2 text-xs text-white/70 transition hover:bg-white/10 hover:text-white"
+                    <Button
+                      asChild
+                      className={getPropAssignActionButtonClassName({
+                        tone: "neutral",
+                        size: "sm",
+                        className: "flex items-center",
+                      })}
                     >
-                      Get key
-                      <ExternalLink className="size-3.5" />
-                    </a>
+                      <a
+                        href={provider.keyLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Get key
+                        <ExternalLink className="size-3" />
+                      </a>
+                    </Button>
                     <Button
                       type="button"
                       onClick={() => setSelectedProvider(provider.id)}
-                      className="h-[38px] bg-blue-900/30 text-xs text-blue-200 hover:bg-blue-900/40"
+                      className={getPropAssignActionButtonClassName({
+                        tone: "teal",
+                        size: "sm",
+                      })}
                     >
                       {isConnected ? "Update key" : "Connect key"}
                     </Button>
@@ -328,7 +673,10 @@ export default function AISettingsPage() {
                         variant="outline"
                         onClick={() => handleDeleteKey(provider.id)}
                         disabled={deleteKey.isPending}
-                        className="h-[38px] border-white/10 bg-transparent text-xs text-rose-300 hover:bg-rose-500/10 hover:text-rose-200"
+                        className={getPropAssignActionButtonClassName({
+                          tone: "danger",
+                          size: "sm",
+                        })}
                       >
                         <Trash2 className="size-3.5" />
                         Remove
@@ -360,7 +708,11 @@ export default function AISettingsPage() {
               <div className="min-w-0">
                 <div className="text-sm font-medium text-white">
                   {selectedProvider
-                    ? `Connect ${PROVIDERS.find((provider) => provider.id === selectedProvider)?.label}`
+                    ? `Connect ${
+                        PROVIDERS.find(
+                          (provider) => provider.id === selectedProvider
+                        )?.label
+                      }`
                     : "Connect AI key"}
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-white/40">
@@ -401,7 +753,9 @@ export default function AISettingsPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-white/10 bg-white/5 text-white hover:bg-white/10"
+                  className={getPropAssignActionButtonClassName({
+                    tone: "neutral",
+                  })}
                 >
                   Cancel
                 </Button>
@@ -410,7 +764,9 @@ export default function AISettingsPage() {
                 type="button"
                 onClick={handleSaveKey}
                 disabled={saveKey.isPending}
-                className="bg-white text-black hover:bg-white/90"
+                className={getPropAssignActionButtonClassName({
+                  tone: "teal",
+                })}
               >
                 {saveKey.isPending ? "Validating..." : "Save key"}
               </Button>

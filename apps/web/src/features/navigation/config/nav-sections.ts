@@ -52,7 +52,8 @@ export type NavSection = {
 };
 
 export function getNavSections(
-  canViewAffiliateDashboard: boolean
+  canViewAffiliateDashboard: boolean,
+  canViewGrowthOverview: boolean
 ): NavSection[] {
   return [
     {
@@ -101,11 +102,15 @@ export function getNavSections(
     {
       label: "Growth",
       items: [
-        {
-          title: "Growth",
-          url: "/dashboard/growth",
-          icon: TrendingUp,
-        },
+        ...(canViewGrowthOverview
+          ? [
+              {
+                title: "Growth",
+                url: "/dashboard/growth",
+                icon: TrendingUp,
+              },
+            ]
+          : []),
         {
           title: "Referrals",
           url: "/dashboard/referrals",

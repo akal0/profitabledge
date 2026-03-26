@@ -1,3 +1,5 @@
+import { formatDisplayCurrency } from "@/lib/format-display";
+
 export function splitMarkdownSections(markdown: string): Array<{
   title: string;
   body: string;
@@ -22,7 +24,7 @@ export function splitMarkdownSections(markdown: string): Array<{
       continue;
     }
     if (!current) {
-      current = { title: "Your message", body: "" };
+      current = { title: "Response", body: "" };
     }
     current.body += `${line}\n`;
   }
@@ -44,6 +46,26 @@ export function decorateMentions(text: string): string {
     (match, prefix, sigil, token) => {
       const scheme = sigil === "@" ? "mention" : "command";
       return `${prefix}[${sigil}${token}](${scheme}:${token})`;
+    }
+  );
+}
+
+export function formatCurrencyNumbers(text: string): string {
+  if (!text) return text;
+
+  return text.replace(
+    /(^|[^A-Za-z0-9_])(-?)([$£€])(\d[\d,]*)(\.\d+)?/g,
+    (match, prefix, sign, symbol, whole, decimals) => {
+      const numericValue = Number(`${whole}${decimals || ""}`.replace(/,/g, ""));
+      if (!Number.isFinite(numericValue)) {
+        return match;
+      }
+
+      const signedValue = sign ? -numericValue : numericValue;
+      return `${prefix}${formatDisplayCurrency(
+        signedValue,
+        symbol as "$" | "£" | "€"
+      )}`;
     }
   );
 }

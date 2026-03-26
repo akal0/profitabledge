@@ -61,21 +61,27 @@ export function useConfirmedSession({
     setIsRecoveringSession(true);
 
     void (async () => {
-      const confirmed = await waitForConfirmedSession(retryDelays);
-      if (!isMountedRef.current) {
-        return;
+      try {
+        const confirmed = await waitForConfirmedSession(retryDelays);
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setHasRecoveredSession(confirmed);
+
+        if (confirmed) {
+          void Promise.resolve(refetchSession()).catch(() => {
+            // Let the recovered-session flag keep protected queries alive.
+          });
+        }
+      } finally {
+        if (!isMountedRef.current) {
+          return;
+        }
+
+        setHasAttemptedSessionRecovery(true);
+        setIsRecoveringSession(false);
       }
-
-      setHasRecoveredSession(confirmed);
-
-      if (confirmed) {
-        void Promise.resolve(refetchSession()).catch(() => {
-          // Let the recovered-session flag keep protected queries alive.
-        });
-      }
-
-      setHasAttemptedSessionRecovery(true);
-      setIsRecoveringSession(false);
     })();
   }, [
     autoRecover,

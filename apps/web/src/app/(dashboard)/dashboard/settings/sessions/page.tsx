@@ -117,10 +117,10 @@ export default function SessionsSettingsPage() {
   return (
     <div className="flex flex-col w-full">
       {/* Header with actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+      <div className="flex flex-col items-start gap-2 sm:gap-4 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Trading Sessions
+            Trading sessions
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Trades are auto-tagged based on these time ranges.

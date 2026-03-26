@@ -20,6 +20,10 @@ export type AccountSourceBadgeAccountLike = LiveCapabilityAccountLike & {
   lastImportedAt?: string | Date | null;
 };
 
+export type BrokerSettingsDisplayAccountLike = AccountSourceBadgeAccountLike & {
+  preferredDataSource?: string | null;
+};
+
 export type AccountSourceBadge = {
   label: string;
   className: string;
@@ -68,6 +72,26 @@ const DEMO_BROKER_SERVERS = new Set([
   "Profitabledge-Demo01",
 ]);
 const DEMO_ACCOUNT_PREFIXES = ["PE", "DEMO-"];
+
+const BROKER_TYPE_LABELS: Record<string, string> = {
+  mt4: "MetaTrader 4",
+  mt5: "MetaTrader 5",
+  ctrader: "cTrader",
+  ib: "Interactive Brokers",
+  oanda: "OANDA",
+  tradovate: "Tradovate",
+  topstepx: "TopstepX",
+  rithmic: "Rithmic",
+  ninjatrader: "NinjaTrader",
+  other: "Other",
+};
+
+const DATA_SOURCE_LABELS: Record<string, string> = {
+  dukascopy: "Dukascopy",
+  alphavantage: "Alpha Vantage",
+  truefx: "TrueFX",
+  broker: "Broker",
+};
 
 export function getBrokerImage(broker?: string | null): string {
   switch (broker?.toLowerCase()) {
@@ -145,6 +169,100 @@ export function getBrokerSupplementalCsvReports(
     BROKER_OPTIONS.find((option) => option.value === broker)
       ?.supplementalCsvReports ?? []
   );
+}
+
+function normalizeNonEmptyString(value?: string | null): string | null {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function getBrokerSettingsBrokerLabel(
+  account?: BrokerSettingsDisplayAccountLike | null
+): string {
+  if (!account) return "Broker";
+
+  if (
+    isDemoWorkspaceAccount({
+      name: account.name,
+      broker: account.broker,
+      brokerServer: account.brokerServer,
+      accountNumber: account.accountNumber,
+    })
+  ) {
+    return "Profitabledge demo";
+  }
+
+  const broker = normalizeNonEmptyString(account.broker);
+  if (broker) {
+    return getBrokerLabel(broker);
+  }
+
+  const brokerType = normalizeNonEmptyString(account.brokerType)?.toLowerCase();
+  if (brokerType) {
+    return BROKER_TYPE_LABELS[brokerType] ?? brokerType;
+  }
+
+  return "Broker";
+}
+
+export function getBrokerSettingsPlatformLabel(
+  account?: BrokerSettingsDisplayAccountLike | null
+): string {
+  if (!account) return "Platform";
+
+  if (
+    isDemoWorkspaceAccount({
+      name: account.name,
+      broker: account.broker,
+      brokerServer: account.brokerServer,
+      accountNumber: account.accountNumber,
+    })
+  ) {
+    return "Profitabledge";
+  }
+
+  const brokerType = normalizeNonEmptyString(account.brokerType)?.toLowerCase();
+  if (brokerType) {
+    return BROKER_TYPE_LABELS[brokerType] ?? brokerType;
+  }
+
+  return "Other";
+}
+
+export function getBrokerSettingsDataSourceLabel(
+  account?: BrokerSettingsDisplayAccountLike | null
+): string {
+  if (!account) return "Data source";
+
+  if (
+    isDemoWorkspaceAccount({
+      name: account.name,
+      broker: account.broker,
+      brokerServer: account.brokerServer,
+      accountNumber: account.accountNumber,
+    })
+  ) {
+    return "Profitabledge";
+  }
+
+  const preferredDataSource = normalizeNonEmptyString(
+    account.preferredDataSource
+  )?.toLowerCase();
+  if (preferredDataSource) {
+    return DATA_SOURCE_LABELS[preferredDataSource] ?? preferredDataSource;
+  }
+
+  if (
+    account.verificationLevel === "api_verified" ||
+    account.verificationLevel === "ea_synced" ||
+    hasVerifiedFlag(account)
+  ) {
+    return "Broker";
+  }
+
+  return "Dukascopy";
 }
 
 function hasVerifiedFlag(account?: LiveCapabilityAccountLike | null): boolean {

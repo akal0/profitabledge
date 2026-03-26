@@ -16,10 +16,18 @@ const TIMEZONES = [
   { value: "America/New_York", label: "Eastern Time (US)", offset: "-05:00" },
   { value: "America/Chicago", label: "Central Time (US)", offset: "-06:00" },
   { value: "America/Denver", label: "Mountain Time (US)", offset: "-07:00" },
-  { value: "America/Los_Angeles", label: "Pacific Time (US)", offset: "-08:00" },
+  {
+    value: "America/Los_Angeles",
+    label: "Pacific Time (US)",
+    offset: "-08:00",
+  },
   { value: "America/Anchorage", label: "Alaska Time", offset: "-09:00" },
   { value: "Pacific/Honolulu", label: "Hawaii Time", offset: "-10:00" },
-  { value: "America/Toronto", label: "Eastern Time (Canada)", offset: "-05:00" },
+  {
+    value: "America/Toronto",
+    label: "Eastern Time (Canada)",
+    offset: "-05:00",
+  },
   { value: "America/Sao_Paulo", label: "Brasilia Time", offset: "-03:00" },
   { value: "Europe/London", label: "London (GMT)", offset: "+00:00" },
   { value: "Europe/Paris", label: "Central European Time", offset: "+01:00" },
@@ -34,12 +42,24 @@ const TIMEZONES = [
   { value: "Asia/Hong_Kong", label: "Hong Kong Time", offset: "+08:00" },
   { value: "Asia/Tokyo", label: "Japan Standard Time", offset: "+09:00" },
   { value: "Asia/Seoul", label: "Korea Standard Time", offset: "+09:00" },
-  { value: "Australia/Sydney", label: "Australian Eastern Time", offset: "+11:00" },
-  { value: "Australia/Perth", label: "Australian Western Time", offset: "+08:00" },
+  {
+    value: "Australia/Sydney",
+    label: "Australian Eastern Time",
+    offset: "+11:00",
+  },
+  {
+    value: "Australia/Perth",
+    label: "Australian Western Time",
+    offset: "+08:00",
+  },
   { value: "Pacific/Auckland", label: "New Zealand Time", offset: "+13:00" },
   { value: "Africa/Cairo", label: "Egypt Standard Time", offset: "+02:00" },
   { value: "Africa/Lagos", label: "West Africa Time", offset: "+01:00" },
-  { value: "Africa/Johannesburg", label: "South Africa Time", offset: "+02:00" },
+  {
+    value: "Africa/Johannesburg",
+    label: "South Africa Time",
+    offset: "+02:00",
+  },
 ];
 
 function getCurrentTimeInTimezone(tz: string): string {
@@ -104,7 +124,9 @@ export default function TimezonePage() {
   };
 
   if (isLoading) {
-    return <RouteLoadingFallback route="settingsTimezone" className="min-h-full" />;
+    return (
+      <RouteLoadingFallback route="settingsTimezone" className="min-h-full" />
+    );
   }
 
   const currentTzInfo = TIMEZONES.find((tz) => tz.value === selectedTz);
@@ -114,7 +136,9 @@ export default function TimezonePage() {
       {/* Current Time Preview */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Current Time</Label>
+          <Label className="text-sm text-white/80 font-medium">
+            Current time
+          </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Preview for selected timezone.
           </p>
@@ -126,7 +150,9 @@ export default function TimezonePage() {
             </p>
             <p className="text-xs text-white/40 mt-1">
               {currentTzInfo?.label || selectedTz}{" "}
-              <span className="text-white/20">({currentTzInfo?.offset || ""})</span>
+              <span className="text-white/20">
+                ({currentTzInfo?.offset || ""})
+              </span>
             </p>
           </div>
           <Clock className="size-8 text-white/10" />
@@ -136,16 +162,16 @@ export default function TimezonePage() {
       <Separator />
 
       {/* Timezone Selector */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+      <div className="flex flex-col  gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Timezone</Label>
           <p className="text-xs text-white/40 mt-0.5">
             For trade times and calendar data.
           </p>
         </div>
-        <div className="bg-sidebar border border-white/5 rounded-md">
+        <div className="bg-sidebar ring ring-white/5 rounded-md">
           {/* Search */}
-          <div className="p-3 border-b border-white/5">
+          <div className="p-3 ring-b ring-white/5">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/25" />
               <input
@@ -153,13 +179,13 @@ export default function TimezonePage() {
                 placeholder="Search timezone..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-white/[0.02] border border-white/5 rounded text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/15"
+                className="w-full pl-8 pr-3 py-2 bg-white/[0.02] ring ring-white/5 rounded text-xs text-white placeholder:text-white/20 focus:outline-none focus:ring-white/15"
               />
             </div>
           </div>
 
           {/* Timezone List */}
-          <div className="max-h-[320px] overflow-y-auto">
+          <div className="max-h-[320px] overflow-y-auto w-full">
             {filtered.map((tz) => (
               <button
                 key={tz.value}
@@ -167,8 +193,8 @@ export default function TimezonePage() {
                 className={cn(
                   "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors cursor-pointer",
                   selectedTz === tz.value
-                    ? "bg-teal-500/10 border-l-2 border-l-teal-400"
-                    : "hover:bg-white/[0.02] border-l-2 border-l-transparent"
+                    ? "bg-teal-500/10 border-l border-l-teal-400"
+                    : "hover:bg-white/[0.02] border-l border-l-transparent"
                 )}
               >
                 <div className="flex-1 min-w-0">
@@ -188,7 +214,7 @@ export default function TimezonePage() {
                   {tz.offset}
                 </span>
                 {selectedTz === tz.value && (
-                  <Check className="size-3.5 text-teal-400 shrink-0" />
+                  <Check className="size-3 text-teal-400 shrink-0" />
                 )}
               </button>
             ))}
@@ -208,7 +234,7 @@ export default function TimezonePage() {
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 border border-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
+          className="cursor-pointer flex items-center justify-center py-2 h-[38px] w-max transition-all active:scale-95 text-white text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-5"
         >
           {saving ? "Saving..." : "Save changes"}
         </Button>

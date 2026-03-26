@@ -47,6 +47,7 @@ type DashboardShellHeaderProps = {
   isGoalsRoute: boolean;
   isPropTrackerRoute: boolean;
   isTradesRoute: boolean;
+  isAssistantRoute: boolean;
   onOpenCommandPalette: () => void;
   onOpenGoalDialog: () => void;
 };
@@ -66,6 +67,7 @@ export function DashboardShellHeader({
   isGoalsRoute,
   isPropTrackerRoute,
   isTradesRoute,
+  isAssistantRoute,
   onOpenCommandPalette,
   onOpenGoalDialog,
 }: DashboardShellHeaderProps) {
@@ -78,13 +80,13 @@ export function DashboardShellHeader({
   return (
     <div className="flex flex-col shrink-0">
       <header className="flex h-[3.725rem] shrink-0 items-center gap-1 bg-background dark:bg-sidebar rounded-t-[8px] px-4 sm:px-6 lg:px-8 pr-4 sm:pr-6 min-w-0 overflow-hidden">
-        <SidebarTrigger className="h-9 w-9 shrink-0 ring ring-white/5 bg-sidebar hover:bg-sidebar-accent text-white/70 hover:text-white rounded-sm" />
+        <SidebarTrigger className="shrink-0 ring ring-white/5 bg-sidebar hover:bg-sidebar-accent text-white/70 hover:text-white rounded-sm" />
         <button
           onClick={onOpenCommandPalette}
           className="flex items-center gap-2 flex-1 min-w-0 group transition-all duration-250 cursor-pointer px-2 sm:px-4"
         >
-          <SearchIcon className="size-3.5 shrink-0 text-white/50 group-hover:text-white/75 transition-all duration-150" />
-          <span className="text-sm text-white/50 group-hover:text-white/75 transition-all duration-150 font-medium truncate hidden sm:inline">
+          <SearchIcon className="size-3 shrink-0 text-white/50 group-hover:text-white/75 transition-all duration-150" />
+          <span className="text-[13px] text-white/50 group-hover:text-white/75 transition-all duration-150 truncate hidden sm:inline">
             Search anything or enter a command...
           </span>
 
@@ -163,85 +165,89 @@ export function DashboardShellHeader({
         </div>
       </header>
 
-      <Separator />
+      {isAssistantRoute ? null : (
+        <>
+          <Separator />
 
-      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
-        <Breadcrumb>
-          <BreadcrumbList className="text-xs text-secondary dark:text-neutral-400">
-            {breadcrumbs.items.map((item, index) => {
-              const isLast = index === breadcrumbs.items.length - 1;
-              const itemVisibilityClass = isLast ? "" : "hidden md:block";
-              return (
-                <Fragment key={`${item.label}-${index}`}>
-                  <BreadcrumbItem className={itemVisibilityClass}>
-                    {isLast ? (
-                      <BreadcrumbPage className="font-medium text-secondary dark:text-neutral-200">
-                        {item.label}
-                      </BreadcrumbPage>
-                    ) : (
-                      <BreadcrumbLink
-                        href={item.href || "#"}
-                        className="hover:text-secondary text-secondary dark:text-neutral-300 font-medium"
-                      >
-                        {item.label}
-                      </BreadcrumbLink>
-                    )}
-                  </BreadcrumbItem>
+          <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
+            <Breadcrumb>
+              <BreadcrumbList className="text-xs text-secondary dark:text-neutral-400">
+                {breadcrumbs.items.map((item, index) => {
+                  const isLast = index === breadcrumbs.items.length - 1;
+                  const itemVisibilityClass = isLast ? "" : "hidden md:block";
+                  return (
+                    <Fragment key={`${item.label}-${index}`}>
+                      <BreadcrumbItem className={itemVisibilityClass}>
+                        {isLast ? (
+                          <BreadcrumbPage className="font-medium text-secondary dark:text-neutral-200">
+                            {item.label}
+                          </BreadcrumbPage>
+                        ) : (
+                          <BreadcrumbLink
+                            href={item.href || "#"}
+                            className="hover:text-secondary text-secondary dark:text-neutral-300 font-medium"
+                          >
+                            {item.label}
+                          </BreadcrumbLink>
+                        )}
+                      </BreadcrumbItem>
 
-                  {!isLast ? (
-                    <BreadcrumbSeparator className={itemVisibilityClass} />
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </BreadcrumbList>
-        </Breadcrumb>
+                      {!isLast ? (
+                        <BreadcrumbSeparator className={itemVisibilityClass} />
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </BreadcrumbList>
+            </Breadcrumb>
 
-        {isAccountsRoute && (
-          <AddAccountSheet
-            onAccountCreated={() => {}}
-            trigger={
-              <Button className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3 gap-1">
+            {isAccountsRoute && (
+              <AddAccountSheet
+                onAccountCreated={() => {}}
+                trigger={
+                  <Button className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3 gap-1">
+                    <Plus className="size-3" />
+                    <span>Add account</span>
+                  </Button>
+                }
+              />
+            )}
+
+            {isPropTrackerRoute && (
+              <Link href="/dashboard/accounts?tab=prop">
+                <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+                  <Plus className="size-3" />
+                  <span>Add prop account</span>
+                </Button>
+              </Link>
+            )}
+
+            {isGoalsRoute && (
+              <Button
+                onClick={onOpenGoalDialog}
+                className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
+              >
                 <Plus className="size-3" />
-                <span>Add account</span>
+                <span>New goal</span>
               </Button>
-            }
-          />
-        )}
+            )}
 
-        {isPropTrackerRoute && (
-          <Link href="/dashboard/accounts?tab=prop">
-            <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
-              <Plus className="size-3" />
-              <span>Add prop account</span>
-            </Button>
-          </Link>
-        )}
+            {isTradesRoute && accountId && (
+              <QuickTradeEntry
+                accountId={accountId}
+                trigger={
+                  <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
+                    <Plus className="size-3" />
+                    <span>Add trade </span>
+                  </Button>
+                }
+              />
+            )}
+          </div>
 
-        {isGoalsRoute && (
-          <Button
-            onClick={onOpenGoalDialog}
-            className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3"
-          >
-            <Plus className="size-3" />
-            <span>New goal</span>
-          </Button>
-        )}
-
-        {isTradesRoute && accountId && (
-          <QuickTradeEntry
-            accountId={accountId}
-            trigger={
-              <Button className="cursor-pointer flex items-center justify-center gap-2 py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3">
-                <Plus className="size-3" />
-                <span>Add trade </span>
-              </Button>
-            }
-          />
-        )}
-      </div>
-
-      <Separator />
+          <Separator />
+        </>
+      )}
     </div>
   );
 }

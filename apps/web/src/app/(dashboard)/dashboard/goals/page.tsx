@@ -20,6 +20,7 @@ import {
   TabsTriggerUnderlined,
 } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { useGoalDialog } from "@/stores/goal-dialog";
@@ -71,17 +72,20 @@ const GOAL_LIFECYCLE_LABELS: Record<
   paused: {
     title: "Paused goals",
     emptyTitle: "No paused goals",
-    emptyDescription: "Paused goals will show up here when you need to step back without deleting them.",
+    emptyDescription:
+      "Paused goals will show up here when you need to step back without deleting them.",
   },
   achieved: {
     title: "Achieved goals",
     emptyTitle: "No achieved goals yet",
-    emptyDescription: "Completed goals will stay here so you can review what you’ve closed out.",
+    emptyDescription:
+      "Completed goals will stay here so you can review what you’ve closed out.",
   },
   failed: {
     title: "Failed goals",
     emptyTitle: "No failed goals",
-    emptyDescription: "Missed goals will show here so you can review and rework them.",
+    emptyDescription:
+      "Missed goals will show here so you can review and rework them.",
   },
 };
 
@@ -138,8 +142,9 @@ export default function GoalsPage() {
     useGoalDialog();
   const [goalStatusTab, setGoalStatusTab] =
     useState<GoalLifecycleStatus>("active");
-  const [creatingSuggestedGoalType, setCreatingSuggestedGoalType] =
-    useState<string | null>(null);
+  const [creatingSuggestedGoalType, setCreatingSuggestedGoalType] = useState<
+    string | null
+  >(null);
   const [celebrationData, setCelebrationData] = useState<{
     show: boolean;
     milestone: {
@@ -347,12 +352,13 @@ export default function GoalsPage() {
 
   return (
     <>
-      <main className="space-y-6 p-6 py-4">
+      <main className="space-y-6 p-8 py-4">
         <section className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-white">Goals</h1>
             <p className="mt-1 text-sm text-white/50">
-              Set targets, track discipline, and keep progress visible across every account scope.
+              Set targets, track discipline, and keep progress visible across
+              every account scope.
             </p>
           </div>
           <Button
@@ -360,10 +366,10 @@ export default function GoalsPage() {
             onClick={() => setCreateDialogOpen(true)}
             className={getPropAssignActionButtonClassName({
               tone: "neutral",
-              className: "self-start gap-1.5 px-4 text-white",
+              className: "self-start gap-1 px-4 text-white",
             })}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="size-3" />
             Create goal
           </Button>
         </section>
@@ -471,21 +477,24 @@ export default function GoalsPage() {
           }
           className="space-y-6"
         >
-          <div className="overflow-x-auto">
-            <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5">
-              {GOAL_LIFECYCLE_ORDER.map((status) => (
-                <TabsTriggerUnderlined
-                  key={status}
-                  value={status}
-                  className="gap-2 text-sm"
-                >
-                  <span>{GOAL_LIFECYCLE_LABELS[status].title}</span>
-                  <span className="rounded-full bg-white/6 px-2 py-0.5 text-[11px] text-white/55">
-                    {goalsByStatus[status].length}
-                  </span>
-                </TabsTriggerUnderlined>
-              ))}
-            </TabsListUnderlined>
+          <div className="-mx-6 shrink-0">
+            <div className="overflow-x-auto px-6">
+              <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
+                {GOAL_LIFECYCLE_ORDER.map((status) => (
+                  <TabsTriggerUnderlined
+                    key={status}
+                    value={status}
+                    className="h-10 gap-2 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                  >
+                    <span>{GOAL_LIFECYCLE_LABELS[status].title}</span>
+                    <span className="rounded-full bg-white/6 px-2 py-0.5 text-[11px] text-white/55">
+                      {goalsByStatus[status].length}
+                    </span>
+                  </TabsTriggerUnderlined>
+                ))}
+              </TabsListUnderlined>
+            </div>
+            <Separator />
           </div>
 
           {isLoadingGoals ? (

@@ -133,6 +133,11 @@ class MetaTrader5Adapter(MtAdapter):
             self._initialize_terminal(session, login=login, password=password, server=server)
 
             now = datetime.now(timezone.utc)
+            self._restore_runtime_state_from_bootstrap(
+                runtime_state=runtime_state,
+                bootstrap=bootstrap,
+                now=now,
+            )
             full_reconcile = self._should_run_full_reconcile(
                 checkpoint,
                 now=now,
@@ -202,6 +207,7 @@ class MetaTrader5Adapter(MtAdapter):
                 price_snapshots=price_snapshots,
             )
             execution_contexts = self._build_execution_contexts(runtime_state)
+            runtime_meta = self._build_runtime_state_payload(runtime_state)
 
             self.session_manager.mark_collect(session)
             self.session_manager.mark_heartbeat(session)
@@ -243,6 +249,7 @@ class MetaTrader5Adapter(MtAdapter):
             session_meta["priceSnapshotCount"] = len(price_snapshots)
             session_meta["trackedSymbols"] = sorted(quote_symbols)
             session_meta["symbolSpecSymbols"] = sorted(spec_symbols)
+            session_meta["mt5Runtime"] = runtime_meta
             if isinstance(bootstrap.get("meta"), dict) and isinstance(
                 bootstrap["meta"].get("gapHeal"), dict
             ):
@@ -1001,6 +1008,203 @@ class MetaTrader5Adapter(MtAdapter):
             existing = ConnectionRuntimeState()
             self.connection_states[connection_id] = existing
         return existing
+
+    def _restore_runtime_state_from_bootstrap(
+        self,
+        *,
+        runtime_state: ConnectionRuntimeState,
+        bootstrap: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        bootstrap_meta = bootstrap.get("meta")
+        if not isinstance(bootstrap_meta, dict):
+            return
+
+        runtime_meta = bootstrap_meta.get("mt5Runtime")
+        if not isinstance(runtime_meta, dict):
+            return
+
+        tracked_symbols: set[str] = set()
+        tracking_entries = runtime_meta.get("postExitTracking")
+        if isinstance(tracking_entries, list):
+            for entry in tracking_entries:
+                if not isinstance(entry, dict):
+                    continue
+
+                trade_key = str(entry.get("tradeKey", "") or "").strip()
+                symbol = str(entry.get("symbol", "") or "").strip()
+                side = str(entry.get("side", "") or "").strip()
+                close_time = self._safe_parse_api_timestamp(entry.get("closeTime"))
+                tracking_end_time = self._safe_parse_api_timestamp(
+                    entry.get("trackingEndTime")
+                )
+                if (
+                    not trade_key
+                    or not symbol
+                    or side not in {"buy", "sell"}
+                    or close_time is None
+                    or tracking_end_time is None
+                    or tracking_end_time <= now
+                ):
+                    continue
+
+                candidate = PostExitTrackingState(
+                    trade_key=trade_key,
+                    symbol=symbol,
+                    side=side,
+                    close_time=close_time,
+                    tracking_end_time=tracking_end_time,
+                    entry_expected_price=self._optional_float(
+                        entry.get("entryExpectedPrice")
+                    ),
+                    entry_spread_pips=self._optional_float(
+                        entry.get("entrySpreadPips")
+                    ),
+                    last_bid=self._optional_float(entry.get("lastBid")),
+                    last_ask=self._optional_float(entry.get("lastAsk")),
+                    last_quote_time=self._safe_parse_api_timestamp(
+                        entry.get("lastQuoteTime")
+                    ),
+                    exit_reference_bid=self._optional_float(
+                        entry.get("exitReferenceBid")
+                    ),
+                    exit_reference_ask=self._optional_float(
+                        entry.get("exitReferenceAsk")
+                    ),
+                    exit_reference_time=self._safe_parse_api_timestamp(
+                        entry.get("exitReferenceTime")
+                    ),
+                )
+                existing = runtime_state.post_exit_positions.get(trade_key)
+                if existing is not None and self._tracking_state_sort_key(
+                    existing
+                ) >= self._tracking_state_sort_key(candidate):
+                    tracked_symbols.add(existing.symbol)
+                    continue
+
+                runtime_state.post_exit_positions[trade_key] = candidate
+                tracked_symbols.add(candidate.symbol)
+
+        quote_cursor_by_symbol = runtime_meta.get("quoteCursorBySymbol")
+        if isinstance(quote_cursor_by_symbol, dict):
+            for symbol, raw_value in quote_cursor_by_symbol.items():
+                parsed = self._safe_parse_api_timestamp(raw_value)
+                normalized_symbol = str(symbol or "").strip()
+                if (
+                    parsed is None
+                    or not normalized_symbol
+                    or (tracked_symbols and normalized_symbol not in tracked_symbols)
+                ):
+                    continue
+
+                existing = runtime_state.last_tick_sent_at_by_symbol.get(
+                    normalized_symbol
+                )
+                if existing is None or parsed > existing:
+                    runtime_state.last_tick_sent_at_by_symbol[normalized_symbol] = (
+                        parsed
+                    )
+
+        for trade_key in list(runtime_state.post_exit_positions.keys()):
+            tracking = runtime_state.post_exit_positions[trade_key]
+            if tracking.tracking_end_time <= now:
+                runtime_state.post_exit_positions.pop(trade_key, None)
+
+    def _build_runtime_state_payload(
+        self,
+        runtime_state: ConnectionRuntimeState,
+    ) -> dict[str, Any]:
+        tracking_payload = [
+            self._serialize_post_exit_tracking_state(state)
+            for state in runtime_state.post_exit_positions.values()
+        ]
+        tracking_payload = [
+            payload for payload in tracking_payload if payload is not None
+        ]
+        quote_cursor_by_symbol = {
+            symbol: to_api_timestamp(timestamp)
+            for symbol, timestamp in runtime_state.last_tick_sent_at_by_symbol.items()
+            if isinstance(symbol, str) and symbol.strip() and timestamp is not None
+        }
+        boost_until = max(
+            (
+                state.tracking_end_time
+                for state in runtime_state.post_exit_positions.values()
+            ),
+            default=None,
+        )
+
+        return {
+            "postExitTracking": tracking_payload,
+            "postExitBoostUntil": (
+                to_api_timestamp(boost_until) if boost_until is not None else None
+            ),
+            "quoteCursorBySymbol": quote_cursor_by_symbol,
+            "postExitTrackingSeconds": self.post_exit_tracking_seconds,
+        }
+
+    def _serialize_post_exit_tracking_state(
+        self,
+        state: PostExitTrackingState,
+    ) -> dict[str, Any] | None:
+        if not state.trade_key or not state.symbol:
+            return None
+
+        return {
+            "tradeKey": state.trade_key,
+            "symbol": state.symbol,
+            "side": state.side,
+            "closeTime": to_api_timestamp(state.close_time),
+            "trackingEndTime": to_api_timestamp(state.tracking_end_time),
+            "entryExpectedPrice": state.entry_expected_price,
+            "entrySpreadPips": state.entry_spread_pips,
+            "lastBid": state.last_bid,
+            "lastAsk": state.last_ask,
+            "lastQuoteTime": (
+                to_api_timestamp(state.last_quote_time)
+                if state.last_quote_time
+                else None
+            ),
+            "exitReferenceBid": state.exit_reference_bid,
+            "exitReferenceAsk": state.exit_reference_ask,
+            "exitReferenceTime": (
+                to_api_timestamp(state.exit_reference_time)
+                if state.exit_reference_time
+                else None
+            ),
+        }
+
+    def _tracking_state_sort_key(self, state: PostExitTrackingState) -> tuple[float, float]:
+        last_quote_time = state.last_quote_time.timestamp() if state.last_quote_time else 0.0
+        tracking_end_time = state.tracking_end_time.timestamp()
+        return (last_quote_time, tracking_end_time)
+
+    def _optional_float(self, value: Any) -> float | None:
+        if value is None:
+            return None
+
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if parsed != parsed:
+            return None
+
+        return parsed
+
+    def _safe_parse_api_timestamp(self, value: Any) -> datetime | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
 
     def _update_connection_state(
         self,

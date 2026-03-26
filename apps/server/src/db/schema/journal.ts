@@ -98,6 +98,7 @@ export interface JournalPrompt {
 export type JournalShareInviteStatus =
   | "pending"
   | "claimed"
+  | "declined"
   | "revoked"
   | "expired";
 

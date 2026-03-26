@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -12,7 +12,13 @@ import {
 } from "lucide-react";
 
 import { AlphaFeatureLocked } from "@/features/platform/alpha/components/alpha-feature-locked";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
+import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { RequestFeatureDialog } from "@/features/navigation/components/request-feature-dialog";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,14 +47,43 @@ function StatusBadge({
   );
 }
 
+function SupportOverviewCard({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <GoalSurface className="h-full">
+      <div className="p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm font-medium text-white">{title}</span>
+          {badge}
+        </div>
+        <GoalContentSeparator className="mb-3.5 mt-3.5" />
+        {children}
+      </div>
+    </GoalSurface>
+  );
+}
+
 export default function SupportSettingsPage() {
   const supportEnabled = isPublicAlphaFeatureEnabled("supportDiagnostics");
   const feedbackEnabled = isPublicAlphaFeatureEnabled("feedback");
   const [featureDialogOpen, setFeatureDialogOpen] = useState(false);
+  const billingStateQuery = useQuery({
+    ...trpcOptions.billing.getState.queryOptions(),
+    enabled: supportEnabled,
+    staleTime: 60_000,
+  });
+  const isAdmin = billingStateQuery.data?.admin?.isAdmin === true;
 
   const { data: snapshot, refetch, isFetching } = useQuery({
     ...trpcOptions.operations.getSupportSnapshot.queryOptions(),
-    enabled: supportEnabled,
+    enabled: supportEnabled && isAdmin,
   });
 
   if (!supportEnabled) {
@@ -57,6 +92,25 @@ export default function SupportSettingsPage() {
         feature="supportDiagnostics"
         title="Support diagnostics are held back in this alpha"
       />
+    );
+  }
+
+  if (billingStateQuery.isLoading) {
+    return <RouteLoadingFallback route="settingsSupport" className="min-h-full" />;
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="p-6 py-4">
+        <GoalSurface className="max-w-2xl">
+          <div className="p-6">
+            <p className="text-sm font-medium text-white">Admin access required</p>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
+              This route is only available to allowlisted admin accounts.
+            </p>
+          </div>
+        </GoalSurface>
+      </div>
     );
   }
 
@@ -79,10 +133,12 @@ export default function SupportSettingsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
-              variant="outline"
               onClick={() => void refetch()}
               disabled={isFetching}
-              className="border-white/10 bg-white/5 text-white hover:bg-white/10"
+              className={getPropAssignActionButtonClassName({
+                tone: "neutral",
+                size: "sm",
+              })}
             >
               <RefreshCw
                 className={`size-3.5 ${isFetching ? "animate-spin" : ""}`}
@@ -93,19 +149,29 @@ export default function SupportSettingsPage() {
               <Button
                 type="button"
                 onClick={() => setFeatureDialogOpen(true)}
-                className="bg-blue-900/30 text-blue-200 hover:bg-blue-900/40"
+                className={getPropAssignActionButtonClassName({
+                  tone: "teal",
+                  size: "sm",
+                })}
               >
                 <LifeBuoy className="size-3.5" />
                 Request feature
               </Button>
             ) : null}
-            <a
-              href={`mailto:${snapshot?.supportEmail ?? "support@profitabledge.com"}`}
-              className="flex h-[38px] items-center gap-2 rounded-md bg-white px-4 py-2 text-xs text-black transition hover:bg-white/90"
+            <Button
+              asChild
+              className={getPropAssignActionButtonClassName({
+                tone: "neutral",
+                size: "sm",
+              })}
             >
-              Email support
-              <ExternalLink className="size-3.5" />
-            </a>
+              <a
+                href={`mailto:${snapshot?.supportEmail ?? "support@profitabledge.com"}`}
+              >
+                Email support
+                <ExternalLink className="size-3.5" />
+              </a>
+            </Button>
           </div>
         </div>
 
@@ -117,14 +183,15 @@ export default function SupportSettingsPage() {
             <h2 className="text-sm font-semibold text-white">Runtime snapshot</h2>
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="rounded-md border border-white/5 bg-sidebar-accent p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">Server</span>
+            <SupportOverviewCard
+              title="Server"
+              badge={
                 <Badge className="border-emerald-400/20 bg-emerald-500/10 text-emerald-200">
                   {runtime?.status ?? "loading"}
                 </Badge>
-              </div>
-              <div className="mt-3 space-y-2 text-xs text-white/60">
+              }
+            >
+              <div className="space-y-2 text-xs text-white/60">
                 <div className="flex items-center justify-between">
                   <span>Environment</span>
                   <span className="text-white">
@@ -144,16 +211,17 @@ export default function SupportSettingsPage() {
                   </span>
                 </div>
               </div>
-            </div>
+            </SupportOverviewCard>
 
-            <div className="rounded-md border border-white/5 bg-sidebar-accent p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">Connections</span>
+            <SupportOverviewCard
+              title="Connections"
+              badge={
                 <Badge className="border-white/10 bg-white/5 text-white/60">
                   {connectionSummary?.total ?? 0}
                 </Badge>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-white/60">
+              }
+            >
+              <div className="grid grid-cols-2 gap-2 text-xs text-white/60">
                 <div className="rounded-md border border-white/5 bg-black/10 p-3">
                   <div className="text-white">{connectionSummary?.active ?? 0}</div>
                   <div>Active</div>
@@ -173,16 +241,17 @@ export default function SupportSettingsPage() {
                   <div>Terminal</div>
                 </div>
               </div>
-            </div>
+            </SupportOverviewCard>
 
-            <div className="rounded-md border border-white/5 bg-sidebar-accent p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-white">Accounts</span>
+            <SupportOverviewCard
+              title="Accounts"
+              badge={
                 <Badge className="border-white/10 bg-white/5 text-white/60">
                   {accountSummary?.total ?? 0}
                 </Badge>
-              </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-white/60">
+              }
+            >
+              <div className="grid grid-cols-2 gap-2 text-xs text-white/60">
                 <div className="rounded-md border border-white/5 bg-black/10 p-3">
                   <div className="text-white">{accountSummary?.fresh ?? 0}</div>
                   <div>Fresh</div>
@@ -202,7 +271,7 @@ export default function SupportSettingsPage() {
                   <div>Never synced</div>
                 </div>
               </div>
-            </div>
+            </SupportOverviewCard>
           </div>
         </div>
 
@@ -214,34 +283,39 @@ export default function SupportSettingsPage() {
             <h2 className="text-sm font-semibold text-white">Server config</h2>
           </div>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/70">
-              <span>Database</span>
-              <StatusBadge value={Boolean(runtime?.config.databaseConfigured)} />
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/70">
-              <span>Auth</span>
-              <StatusBadge value={Boolean(runtime?.config.authConfigured)} />
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/70">
-              <span>Credential encryption</span>
-              <StatusBadge
-                value={Boolean(runtime?.config.credentialEncryptionConfigured)}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/70">
-              <span>Worker secret</span>
-              <StatusBadge
-                value={Boolean(runtime?.config.workerSecretConfigured)}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/70">
-              <span>UploadThing</span>
-              <StatusBadge value={Boolean(runtime?.config.uploadthingConfigured)} />
-            </div>
-            <div className="flex items-center justify-between rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/70">
-              <span>AI provider path</span>
-              <StatusBadge value={Boolean(runtime?.config.aiConfigured)} />
-            </div>
+            {[
+              {
+                label: "Database",
+                value: Boolean(runtime?.config.databaseConfigured),
+              },
+              {
+                label: "Auth",
+                value: Boolean(runtime?.config.authConfigured),
+              },
+              {
+                label: "Credential encryption",
+                value: Boolean(runtime?.config.credentialEncryptionConfigured),
+              },
+              {
+                label: "Worker secret",
+                value: Boolean(runtime?.config.workerSecretConfigured),
+              },
+              {
+                label: "UploadThing",
+                value: Boolean(runtime?.config.uploadthingConfigured),
+              },
+              {
+                label: "AI provider path",
+                value: Boolean(runtime?.config.aiConfigured),
+              },
+            ].map((item) => (
+              <GoalSurface key={item.label}>
+                <div className="flex items-center justify-between p-3.5 text-sm text-white/70">
+                  <span>{item.label}</span>
+                  <StatusBadge value={item.value} />
+                </div>
+              </GoalSurface>
+            ))}
           </div>
         </div>
 
@@ -255,37 +329,36 @@ export default function SupportSettingsPage() {
                 Recent visible errors
               </h2>
             </div>
-            <div className="space-y-3">
+            <GoalSurface className="h-full" innerClassName="h-full overflow-hidden">
               {recentErrors.length === 0 ? (
-                <div className="rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/50">
+                <div className="p-4 text-sm text-white/50">
                   No recent visible errors for this member.
                 </div>
               ) : (
-                recentErrors.slice(0, 5).map((error) => (
-                  <div
-                    key={error.id}
-                    className="rounded-md border border-white/5 bg-sidebar-accent p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {error.summary || error.name}
+                <div className="divide-y divide-white/5">
+                  {recentErrors.slice(0, 5).map((error) => (
+                    <div key={error.id} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">
+                            {error.summary || error.name}
+                          </div>
+                          <div className="mt-1 text-xs text-white/45">
+                            {error.category} • {error.source}
+                          </div>
                         </div>
-                        <div className="mt-1 text-xs text-white/45">
-                          {error.category} • {error.source}
-                        </div>
+                        <Badge className="border-white/10 bg-white/5 text-white/60">
+                          {error.level}
+                        </Badge>
                       </div>
-                      <Badge className="border-white/10 bg-white/5 text-white/60">
-                        {error.level}
-                      </Badge>
+                      <div className="mt-3 text-xs text-white/40">
+                        {formatDate(error.createdAt)}
+                      </div>
                     </div>
-                    <div className="mt-3 text-xs text-white/40">
-                      {formatDate(error.createdAt)}
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
-            </div>
+            </GoalSurface>
           </div>
 
           <div>
@@ -295,44 +368,43 @@ export default function SupportSettingsPage() {
                 Recent sync logs
               </h2>
             </div>
-            <div className="space-y-3">
+            <GoalSurface className="h-full" innerClassName="h-full overflow-hidden">
               {recentSyncLogs.length === 0 ? (
-                <div className="rounded-md border border-white/5 bg-sidebar-accent p-4 text-sm text-white/50">
+                <div className="p-4 text-sm text-white/50">
                   No recent sync attempts recorded yet.
                 </div>
               ) : (
-                recentSyncLogs.slice(0, 5).map((log) => (
-                  <div
-                    key={log.id}
-                    className="rounded-md border border-white/5 bg-sidebar-accent p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {log.status}
-                        </div>
-                        <div className="mt-1 text-xs text-white/45">
-                          Found {log.tradesFound ?? 0} • Inserted{" "}
-                          {log.tradesInserted ?? 0} • Duplicated{" "}
-                          {log.tradesDuplicated ?? 0}
-                        </div>
-                        {log.errorMessage ? (
-                          <div className="mt-2 text-xs text-amber-200/80">
-                            {log.errorMessage}
+                <div className="divide-y divide-white/5">
+                  {recentSyncLogs.slice(0, 5).map((log) => (
+                    <div key={log.id} className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-white">
+                            {log.status}
                           </div>
-                        ) : null}
+                          <div className="mt-1 text-xs text-white/45">
+                            Found {log.tradesFound ?? 0} • Inserted{" "}
+                            {log.tradesInserted ?? 0} • Duplicated{" "}
+                            {log.tradesDuplicated ?? 0}
+                          </div>
+                          {log.errorMessage ? (
+                            <div className="mt-2 text-xs text-amber-200/80">
+                              {log.errorMessage}
+                            </div>
+                          ) : null}
+                        </div>
+                        <Badge className="border-white/10 bg-white/5 text-white/60">
+                          {log.durationMs ? `${log.durationMs}ms` : "n/a"}
+                        </Badge>
                       </div>
-                      <Badge className="border-white/10 bg-white/5 text-white/60">
-                        {log.durationMs ? `${log.durationMs}ms` : "n/a"}
-                      </Badge>
+                      <div className="mt-3 text-xs text-white/40">
+                        {formatDate(log.createdAt)}
+                      </div>
                     </div>
-                    <div className="mt-3 text-xs text-white/40">
-                      {formatDate(log.createdAt)}
-                    </div>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
-            </div>
+            </GoalSurface>
           </div>
         </div>
       </div>

@@ -1,22 +1,17 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { JournalList } from "@/components/journal/journal-list";
 import { JournalEntryPage } from "@/components/journal/journal-entry";
-import { JournalPrompts } from "@/components/journal/journal-prompts";
 import { TemplateBrowser } from "@/components/journal/template-browser";
-import { JournalReviewReadyPanel } from "@/components/journal/journal-review-ready-panel";
-import { JournalWorkflowStrip } from "@/components/journal/journal-workflow-strip";
 import {
   Tabs,
   TabsContent,
   TabsListUnderlined,
   TabsTriggerUnderlined,
 } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
 import { useAccountStore } from "@/stores/account";
@@ -25,24 +20,14 @@ import { JournalCalendarTab } from "@/components/journal/journal-calendar-tab";
 import { JournalInsightsTab } from "@/components/journal/journal-insights-tab";
 import { JournalSharesTab } from "@/components/journal/share/shares-tab";
 import { trpcOptions, trpc } from "@/utils/trpc";
-import { journalActionButtonClassName } from "@/components/journal/action-button-styles";
-import { toast } from "sonner";
-import { FileText } from "lucide-react";
 
 const JOURNAL_TABS = [
   "entries",
-  "review-ready",
   "insights",
   "calendar",
   "shares",
 ] as const;
 type JournalTab = (typeof JOURNAL_TABS)[number];
-interface ReviewQueueItem {
-  id: string;
-  title: string;
-  preview?: string;
-  updatedAt: string | Date;
-}
 
 function isJournalTab(value: string | null): value is JournalTab {
   return value !== null && JOURNAL_TABS.includes(value as JournalTab);
@@ -148,67 +133,7 @@ function JournalPageContent() {
     requestedTab === "insights" && hasResolvedBillingState && !canAccessInsights
       ? "entries"
       : requestedTab;
-  const { data: reviewQueue } = useQuery({
-    ...trpcOptions.journal.list.queryOptions({
-      limit: 12,
-      entryType: "trade_review",
-      tags: ["trade-close-auto"],
-      accountId: accountId || undefined,
-    }),
-    staleTime: 30000,
-  });
-  const { data: prompts = [] } = useQuery(
-    trpcOptions.journal.getPrompts.queryOptions()
-  );
-  const reviewItems = React.useMemo(
-    () =>
-      (reviewQueue as { items?: ReviewQueueItem[] } | undefined)?.items ?? [],
-    [reviewQueue]
-  );
-  const pendingPrompts = React.useMemo(
-    () =>
-      ((prompts as Array<{ status?: string }> | undefined) ?? []).filter(
-        (prompt) => prompt.status === "pending"
-      ),
-    [prompts]
-  );
   const completePromptMutation = trpc.journal.completePrompt.useMutation();
-  const notifyPendingReviews =
-    trpc.notifications.notifyPendingReviews.useMutation();
-  const markTypeRead = trpc.notifications.markTypeRead.useMutation();
-  const reviewNotifiedRef = useRef(false);
-  const [reviewsViewed, setReviewsViewed] = useState(
-    () => activeTab === "review-ready"
-  );
-
-  React.useEffect(() => {
-    if (reviewNotifiedRef.current || reviewItems.length === 0) return;
-    reviewNotifiedRef.current = true;
-
-    const count = reviewItems.length;
-
-    // If already on review-ready tab, skip toast and mark viewed
-    if (activeTab === "review-ready") {
-      setReviewsViewed(true);
-      markTypeRead.mutate({ type: "post_exit_ready" });
-      return;
-    }
-
-    // Toast for immediate visibility
-    toast(`${count} trade review${count === 1 ? "" : "s"} waiting`, {
-      description: "Open the Review Ready tab to reflect on recent trades.",
-      icon: <FileText className="size-4 text-teal-400" />,
-      duration: 6000,
-      classNames: {
-        toast: "bg-sidebar border-white/10 text-white",
-        title: "text-white font-medium",
-        description: "text-white/60",
-      },
-    });
-
-    // Persistent notification (deduped per day)
-    notifyPendingReviews.mutate({ count });
-  }, [activeTab, markTypeRead, notifyPendingReviews, reviewItems]);
 
   React.useEffect(() => {
     if (!entryIdFromQuery) return;
@@ -265,12 +190,6 @@ function JournalPageContent() {
         return;
       }
 
-      // Mark review notifications as read and hide dot when opening the tab
-      if (value === "review-ready") {
-        setReviewsViewed(true);
-        markTypeRead.mutate({ type: "post_exit_ready" });
-      }
-
       const params = new URLSearchParams(searchParams?.toString() ?? "");
 
       if (value === "entries") {
@@ -284,7 +203,7 @@ function JournalPageContent() {
         scroll: false,
       });
     },
-    [canAccessInsights, router, safePathname, searchParams, markTypeRead]
+    [canAccessInsights, router, safePathname, searchParams]
   );
 
   // Handle template selection
@@ -373,22 +292,13 @@ function JournalPageContent() {
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
       <div className="shrink-0 bg-background dark:bg-sidebar">
-        <div className="overflow-x-auto px-4 sm:px-6 lg:px-8">
+        <div className="overflow-x-auto px-4 sm:px-6 lg:px-7">
           <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
             <TabsTriggerUnderlined
               value="entries"
               className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
             >
               Entries
-            </TabsTriggerUnderlined>
-            <TabsTriggerUnderlined
-              value="review-ready"
-              className="h-10 gap-2 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
-            >
-              <span>Review ready</span>
-              {reviewItems.length > 0 && !reviewsViewed && (
-                <span className="size-1.5 rounded-full bg-teal-400" />
-              )}
             </TabsTriggerUnderlined>
             {canAccessInsights ? (
               <TabsTriggerUnderlined
@@ -416,14 +326,6 @@ function JournalPageContent() {
       </div>
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {/*<JournalWorkflowStrip
-          pendingPromptCount={pendingPrompts.length}
-          reviewItems={reviewItems}
-          onCreateFromPrompt={handleCreateFromPrompt}
-          onOpenLatestReview={() => setSelectedEntryId(reviewItems[0]?.id || null)}
-          onOpenReviewTab={() => handleTabChange("review-ready")}
-        />*/}
-
         <TabsContent
           value="entries"
           className="mt-0 flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -434,17 +336,6 @@ function JournalPageContent() {
             onSelectEntry={(id) => setSelectedEntryId(id)}
             onCreateEntry={handleCreateEntry}
             className="min-h-0 flex-1"
-          />
-        </TabsContent>
-
-        <TabsContent
-          value="review-ready"
-          className="mt-0 min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
-        >
-          <JournalReviewReadyPanel
-            reviewItems={reviewItems}
-            onCreateEntry={handleCreateEntry}
-            onSelectEntry={(id) => setSelectedEntryId(id)}
           />
         </TabsContent>
 
@@ -464,11 +355,12 @@ function JournalPageContent() {
 
         <TabsContent
           value="calendar"
-          className="mt-0 flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
+          className="mt-0 flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 lg:px-8"
         >
           <JournalCalendarTab
             accountId={accountId || undefined}
             onSelectEntry={(id) => setSelectedEntryId(id)}
+            className="h-full"
           />
         </TabsContent>
 

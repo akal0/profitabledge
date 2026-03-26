@@ -1,25 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ExternalLink, RefreshCw, Shield, Sparkles } from "lucide-react";
+import {
+  BadgePercent,
+  Check,
+  ExternalLink,
+  RefreshCw,
+  Shield,
+  Sparkles,
+} from "lucide-react";
 import Image from "next/image";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { AuthHeroArtwork } from "@/components/auth/auth-hero-artwork";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
-import { AffiliateOfferCodeInput } from "@/features/growth/components/affiliate-offer-code-input";
 import { InvoiceHistoryTable } from "@/features/settings/billing/components/invoice-history-table";
 import {
   formatLiveSyncSlots,
   getPlanFeatureLines,
 } from "@/features/settings/billing/lib/plan-copy";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
-import { useAccountStore } from "@/stores/account";
 import CircleCheck from "@/public/icons/circle-check.svg";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
@@ -47,6 +67,15 @@ type BillingPageState = {
   } | null;
   legacyMigration?: LegacyMigrationState | null;
 };
+
+type ResolvedAffiliateProfile = {
+  name: string;
+  username: string | null;
+  image: string | null;
+  defaultOfferCode?: string | null;
+};
+
+const AFFILIATE_CODE_TOAST_ID = "billing-affiliate-code-status";
 
 const PLAN_CARD_META: Record<
   BillingPlanKey,
@@ -127,37 +156,6 @@ function getPlanComparisonRows(plan: {
         : ("muted" as const),
     },
   ];
-}
-
-function buildSmoothPath(pts: { x: number; y: number }[]): string {
-  if (pts.length < 2) return "";
-  let d = `M ${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1];
-    const curr = pts[i];
-    const cpx = ((prev.x + curr.x) / 2).toFixed(1);
-    d += ` C ${cpx},${prev.y.toFixed(1)} ${cpx},${curr.y.toFixed(
-      1
-    )} ${curr.x.toFixed(1)},${curr.y.toFixed(1)}`;
-  }
-  return d;
-}
-
-function downsample<T>(arr: T[], max: number): T[] {
-  if (arr.length <= max) return arr;
-  const step = arr.length / max;
-  return Array.from({ length: max }, (_, i) => arr[Math.round(i * step)]);
-}
-
-function getPlanTitle(planKey: BillingPlanKey) {
-  switch (planKey) {
-    case "professional":
-      return "Professional";
-    case "institutional":
-      return "Institutional";
-    default:
-      return "Student";
-  }
 }
 
 // prop-tracker card shell
@@ -255,7 +253,6 @@ function WalletHero({
   allowanceEdgeCredits,
   subscriptionStatus,
   currentPeriodEnd,
-  walletChartPaths,
 }: {
   planTitle: string;
   priceLabel: string;
@@ -263,7 +260,6 @@ function WalletHero({
   allowanceEdgeCredits: number;
   subscriptionStatus?: string | null;
   currentPeriodEnd?: string | Date | null;
-  walletChartPaths: { line: string; area: string } | null;
 }) {
   const renewalLabel = currentPeriodEnd
     ? formatDate(currentPeriodEnd)
@@ -277,130 +273,43 @@ function WalletHero({
     : "Plan ready";
 
   return (
-    <div className="relative h-[164px] min-h-[164px] w-full overflow-hidden rounded-[30px] bg-[#0a0a0a] shadow-[0_24px_32px_rgba(0,0,0,0.3)] sm:h-[182px] sm:min-h-[182px] lg:h-[196px] lg:min-h-[196px]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.15),transparent_26%),linear-gradient(160deg,#262626_0%,#171717_35%,#111111_68%,#050505_100%)]" />
+    <div className="relative h-[164px] min-h-[164px] w-full overflow-hidden rounded-[30px] bg-[#050505] ring ring-white/10 shadow-[0_24px_32px_rgba(0,0,0,0.3)] sm:h-[182px] sm:min-h-[182px] lg:h-[196px] lg:min-h-[196px]">
+      <AuthHeroArtwork />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,5,0.18),rgba(5,5,5,0.52)_42%,rgba(5,5,5,0.82)_100%)]" />
+      <div className="absolute inset-[10px] rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] ring ring-white/8" />
 
-      <div className="absolute inset-[6px] rounded-[24px] ring ring-white/6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),inset_0_-18px_26px_rgba(0,0,0,0.18)]" />
-
-      <div className="absolute inset-[12px] rounded-[21px] ring ring-white/[0.045]" />
-
-      <div className="absolute inset-x-[20px] top-[18px] h-[43%] overflow-hidden rounded-t-[16px] bg-[linear-gradient(180deg,#141414_0%,#060606_100%)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.07),transparent_40%)]" />
-        <svg
-          className="absolute inset-0 h-full w-full"
-          viewBox="0 -14 378 109"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <linearGradient id="wallet-chart-fill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(251,191,36,0.18)" />
-              <stop offset="100%" stopColor="rgba(251,191,36,0)" />
-            </linearGradient>
-          </defs>
-          {walletChartPaths ? (
-            <>
-              <path d={walletChartPaths.area} fill="url(#wallet-chart-fill)" />
-              <path
-                d={walletChartPaths.line}
-                fill="none"
-                stroke="rgba(251,191,36,0.45)"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </>
-          ) : (
-            <>
-              <path
-                d="M0,78 C38,74 54,66 88,61 C118,56 130,64 166,50 C192,40 202,45 232,33 C256,23 270,22 302,16 C330,10 342,12 378,10 L378,95 L0,95 Z"
-                fill="url(#wallet-chart-fill)"
-              />
-              <path
-                d="M0,78 C38,74 54,66 88,61 C118,56 130,64 166,50 C192,40 202,45 232,33 C256,23 270,22 302,16 C330,10 342,12 378,10"
-                fill="none"
-                stroke="rgba(251,191,36,0.4)"
-                strokeWidth="1.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </>
-          )}
-        </svg>
-
-        <span className="pointer-events-none absolute right-3 top-0 select-none text-[72px] font-black tracking-[-0.08em] text-white/[0.035]">
-          PE
-        </span>
-      </div>
-
-      <div className="absolute inset-x-[8px] bottom-[7px] top-[38%] overflow-hidden rounded-[26px]">
-        <svg
-          className="absolute inset-0 h-full w-full"
-          viewBox="0 0 540 250"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <linearGradient id="wallet-pocket-fill" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#212121" />
-              <stop offset="52%" stopColor="#121212" />
-              <stop offset="100%" stopColor="#070707" />
-            </linearGradient>
-          </defs>
-          <path
-            d="M0,46 C88,42 141,68 228,62 C314,56 370,31 540,45 L540,250 L0,250 Z"
-            fill="url(#wallet-pocket-fill)"
-          />
-        </svg>
-
-        <svg
-          className="pointer-events-none absolute inset-0 z-10 h-full w-full"
-          viewBox="0 0 540 250"
-          preserveAspectRatio="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M0,46 C88,42 141,68 228,62 C314,56 370,31 540,45"
-            fill="none"
-            stroke="rgba(255,255,255,0.08)"
-            strokeWidth="1.1"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M5,52 L5,200 Q5,234 38,234 L502,234 Q535,234 535,200 L535,52"
-            fill="none"
-            stroke="rgba(255,255,255,0.075)"
-            strokeWidth="1.15"
-            strokeDasharray="5 5.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-
-        <div className="absolute inset-x-0 bottom-0 z-20 grid grid-cols-3 items-end gap-3 px-4 pb-5">
-          <div className="min-w-0 text-left">
-            <div className="space-y-0">
-              <p className="text-base font-medium tracking-[-0.04em] text-white/28 sm:text-xs">
-                {statusLabel}
-              </p>
-
-              <p className="truncate text-base font-medium tracking-[-0.04em] text-white/56 sm:text-sm">
+      <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-7">
+        <div className="space-y-3">
+          <Badge className="h-7 w-fit rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
+            {statusLabel}
+          </Badge>
+          <div className="space-y-1">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-white/36">
+              Current plan
+            </p>
+            <div className="flex items-end gap-2">
+              <h2 className="text-2xl font-semibold tracking-[-0.05em] text-white sm:text-[2rem]">
                 {planTitle}
-              </p>
+              </h2>
+              <p className="pb-0.5 text-sm text-white/45">{priceLabel}</p>
             </div>
           </div>
+        </div>
 
-          <div className="text-center">
-            <p className="text-[10px] text-white/20">Edge credits</p>
-            <p className="text-sm font-medium tracking-[-0.04em] text-white/56 sm:text-sm">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-sm bg-black/28 p-4 ring ring-white/10 backdrop-blur-[2px]">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/30">
+              Edge credits
+            </p>
+            <p className="mt-2 text-sm font-medium tracking-[-0.03em] text-white/78">
               {edgeCreditsLabel}
             </p>
           </div>
-
-          <div className="text-right">
-            <p className="text-[10px] text-white/20">Renews</p>
-            <p className="text-base font-medium tracking-[-0.04em] text-white/56 sm:text-sm">
+          <div className="rounded-sm bg-black/28 p-4 ring ring-white/10 backdrop-blur-[2px]">
+            <p className="text-[10px] uppercase tracking-[0.16em] text-white/30">
+              Renews
+            </p>
+            <p className="mt-2 text-sm font-medium tracking-[-0.03em] text-white/78">
               {renewalLabel}
             </p>
           </div>
@@ -414,7 +323,6 @@ export default function BillingSettingsPage() {
   const searchParams = useSearchParams();
   const hasTriggeredStripeReturnSyncRef = useRef(false);
   const [hoveredCard, setHoveredCard] = useState<BillingPlanKey | null>(null);
-  const selectedAccountId = useAccountStore((s) => s.selectedAccountId);
 
   const billingStateQuery = useQuery(
     trpcOptions.billing.getState.queryOptions()
@@ -422,68 +330,6 @@ export default function BillingSettingsPage() {
   const billingConfigQuery = useQuery(
     trpcOptions.billing.getPublicConfig.queryOptions()
   );
-
-  const walletTradesQuery = useQuery({
-    queryKey: ["wallet-equity-trades", selectedAccountId ?? null],
-    enabled: Boolean(selectedAccountId),
-    staleTime: 5 * 60_000,
-    queryFn: async () => {
-      if (!selectedAccountId) return [];
-      const trades: { profit: number | null; closeTime: string | null }[] = [];
-      let cursor: { createdAtISO: string; id: string } | undefined;
-      let pages = 0;
-      do {
-        const page = await trpcClient.trades.listInfinite.query({
-          accountId: selectedAccountId,
-          limit: 200,
-          cursor,
-        });
-        for (const t of page.items as any[])
-          trades.push({
-            profit: t.profit ?? 0,
-            closeTime: t.closeTime ?? t.close ?? null,
-          });
-        cursor =
-          "nextCursor" in page ? page.nextCursor ?? undefined : undefined;
-        pages++;
-      } while (cursor && pages < 10);
-      return trades;
-    },
-  });
-
-  const walletChartPaths = useMemo(() => {
-    const trades = walletTradesQuery.data;
-    if (!trades?.length) return null;
-    const W = 378,
-      H = 95,
-      PAD = 6;
-    const sorted = [...trades]
-      .filter((t) => t.closeTime && t.profit != null)
-      .sort(
-        (a, b) =>
-          new Date(a.closeTime!).getTime() - new Date(b.closeTime!).getTime()
-      );
-    if (sorted.length < 2) return null;
-    let running = 0;
-    const raw = [
-      0,
-      ...sorted.map((t) => {
-        running += Number(t.profit);
-        return running;
-      }),
-    ];
-    const sampled = downsample(raw, 60);
-    const minY = Math.min(...sampled);
-    const maxY = Math.max(...sampled);
-    const range = maxY - minY || 1;
-    const pts = sampled.map((v, i) => ({
-      x: (i / (sampled.length - 1)) * W,
-      y: H - PAD - ((v - minY) / range) * (H - PAD * 2),
-    }));
-    const line = buildSmoothPath(pts);
-    const area = `${line} L ${W},${H} L 0,${H} Z`;
-    return { line, area };
-  }, [walletTradesQuery.data]);
 
   const syncBillingState = useMutation({
     ...trpcOptions.billing.syncBillingState.mutationOptions(),
@@ -496,12 +342,22 @@ export default function BillingSettingsPage() {
     },
   });
   const createCheckout = useMutation<any, unknown, any>({
-    mutationFn: (input) => (trpcClient.billing as any).createCheckout.mutate(input),
+    mutationFn: (input) =>
+      (trpcClient.billing as any).createCheckout.mutate(input),
   });
   const createCustomerPortalSession = useMutation(
     trpcOptions.billing.createCustomerPortalSession.mutationOptions()
   );
   const [affiliateOfferCode, setAffiliateOfferCode] = useState("");
+  const [affiliateDialogOpen, setAffiliateDialogOpen] = useState(false);
+  const [affiliateCodeInput, setAffiliateCodeInput] = useState("");
+  const [affiliateCodeResolved, setAffiliateCodeResolved] = useState(false);
+  const [resolvedAffiliate, setResolvedAffiliate] =
+    useState<ResolvedAffiliateProfile | null>(null);
+  const [appliedAffiliate, setAppliedAffiliate] =
+    useState<ResolvedAffiliateProfile | null>(null);
+  const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestAffiliateCodeRequestRef = useRef<string | null>(null);
   const plans = billingConfigQuery.data?.plans ?? [];
   const billingData = billingStateQuery.data?.billing as
     | BillingPageState
@@ -509,7 +365,7 @@ export default function BillingSettingsPage() {
   const legacyMigration = billingData?.legacyMigration ?? null;
   const activePlanKey = billingData?.activePlanKey ?? "student";
   const activePlan =
-    plans.find((p) => p.key === activePlanKey) ?? plans[0] ?? null;
+    plans.find((plan) => plan.key === activePlanKey) ?? plans[0] ?? null;
   const access = billingStateQuery.data?.access;
   const subscription = billingData?.subscription;
   const creditState = billingData?.credits;
@@ -517,12 +373,108 @@ export default function BillingSettingsPage() {
     billingData?.customer?.stripeCustomerId &&
       billingData?.subscription?.provider === "stripe"
   );
-  const returnedFromStripeCheckout = searchParams?.get("checkout") === "success";
-  const migrationCheckoutPlan =
-    legacyMigration?.requiresCheckout
-      ? plans.find((plan) => plan.key === legacyMigration.targetPlanKey) ??
-        null
-      : null;
+  const returnedFromStripeCheckout =
+    searchParams?.get("checkout") === "success";
+  const migrationCheckoutPlan = legacyMigration?.requiresCheckout
+    ? plans.find((plan) => plan.key === legacyMigration.targetPlanKey) ?? null
+    : null;
+
+  const resolveAffiliateCode = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      latestAffiliateCodeRequestRef.current = null;
+      setResolvedAffiliate(null);
+      setAffiliateCodeResolved(false);
+      toast.dismiss(AFFILIATE_CODE_TOAST_ID);
+      return;
+    }
+
+    latestAffiliateCodeRequestRef.current = trimmed;
+
+    try {
+      const profile = (await trpcClient.billing.getAffiliatePublicProfile.query({
+        code: trimmed,
+      })) as ResolvedAffiliateProfile | null;
+
+      if (latestAffiliateCodeRequestRef.current !== trimmed) {
+        return;
+      }
+
+      if (profile?.defaultOfferCode) {
+        setResolvedAffiliate(profile);
+        setAffiliateCodeResolved(true);
+        toast.success("Affiliate code ready for checkout.", {
+          id: AFFILIATE_CODE_TOAST_ID,
+        });
+        return;
+      }
+
+      setResolvedAffiliate(null);
+      setAffiliateCodeResolved(false);
+      toast.error("Affiliate code doesn't exist.", {
+        id: AFFILIATE_CODE_TOAST_ID,
+      });
+    } catch {
+      if (latestAffiliateCodeRequestRef.current !== trimmed) {
+        return;
+      }
+
+      setResolvedAffiliate(null);
+      setAffiliateCodeResolved(false);
+      toast.error("Affiliate code doesn't exist.", {
+        id: AFFILIATE_CODE_TOAST_ID,
+      });
+    }
+  };
+
+  const handleAffiliateCodeChange = (value: string) => {
+    setAffiliateCodeInput(value);
+    setAffiliateCodeResolved(false);
+
+    if (resolveTimerRef.current) {
+      clearTimeout(resolveTimerRef.current);
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      latestAffiliateCodeRequestRef.current = null;
+      setResolvedAffiliate(null);
+      toast.dismiss(AFFILIATE_CODE_TOAST_ID);
+      return;
+    }
+
+    resolveTimerRef.current = setTimeout(() => {
+      void resolveAffiliateCode(trimmed);
+    }, 500);
+  };
+
+  const handleApplyAffiliateCode = () => {
+    if (!resolvedAffiliate?.defaultOfferCode) {
+      toast.error("Enter a valid affiliate code first.");
+      return;
+    }
+
+    setAffiliateOfferCode(resolvedAffiliate.defaultOfferCode);
+    setAppliedAffiliate(resolvedAffiliate);
+    setAffiliateDialogOpen(false);
+    toast.success("Affiliate code will be applied at checkout.", {
+      id: AFFILIATE_CODE_TOAST_ID,
+    });
+  };
+
+  const handleClearAffiliateCode = () => {
+    if (resolveTimerRef.current) {
+      clearTimeout(resolveTimerRef.current);
+    }
+
+    latestAffiliateCodeRequestRef.current = null;
+    setAffiliateOfferCode("");
+    setAffiliateCodeInput("");
+    setAffiliateCodeResolved(false);
+    setResolvedAffiliate(null);
+    setAppliedAffiliate(null);
+    toast.dismiss(AFFILIATE_CODE_TOAST_ID);
+  };
 
   const handleCheckout = async (
     planKey: Extract<BillingPlanKey, "professional" | "institutional">
@@ -551,7 +503,10 @@ export default function BillingSettingsPage() {
   };
 
   useEffect(() => {
-    if (!returnedFromStripeCheckout || hasTriggeredStripeReturnSyncRef.current) {
+    if (
+      !returnedFromStripeCheckout ||
+      hasTriggeredStripeReturnSyncRef.current
+    ) {
       return;
     }
 
@@ -559,8 +514,18 @@ export default function BillingSettingsPage() {
     syncBillingState.mutate();
   }, [returnedFromStripeCheckout, syncBillingState]);
 
+  useEffect(() => {
+    return () => {
+      if (resolveTimerRef.current) {
+        clearTimeout(resolveTimerRef.current);
+      }
+    };
+  }, []);
+
   if (billingStateQuery.isLoading || billingConfigQuery.isLoading) {
-    return <RouteLoadingFallback route="settingsBilling" className="min-h-full" />;
+    return (
+      <RouteLoadingFallback route="settingsBilling" className="min-h-full" />
+    );
   }
 
   return (
@@ -580,7 +545,7 @@ export default function BillingSettingsPage() {
             <Button
               onClick={() => syncBillingState.mutate()}
               disabled={syncBillingState.isPending}
-              className="h-8 cursor-pointer gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:brightness-120 hover:bg-sidebar-accent"
+              className="h-8 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:brightness-120 hover:bg-sidebar-accent"
             >
               <RefreshCw
                 className={cn(
@@ -594,9 +559,9 @@ export default function BillingSettingsPage() {
               <Button
                 onClick={handleManageSubscription}
                 disabled={createCustomerPortalSession.isPending}
-                className="h-8 cursor-pointer gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:brightness-120 hover:bg-sidebar-accent"
+                className="h-8 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar px-3 text-xs text-white transition-all duration-250 active:scale-95 hover:brightness-120 hover:bg-sidebar-accent"
               >
-                <ExternalLink className="size-3.5" />
+                <ExternalLink className="size-3" />
                 {createCustomerPortalSession.isPending
                   ? "Opening..."
                   : "Manage subscription"}
@@ -607,7 +572,7 @@ export default function BillingSettingsPage() {
 
         <div className="w-full max-w-[560px] min-w-0 lg:justify-self-end">
           <WalletHero
-            planTitle={activePlan?.title ?? getPlanTitle(activePlanKey)}
+            planTitle={activePlan?.title ?? "Student"}
             priceLabel={activePlan?.priceLabel ?? "Free"}
             remainingEdgeCredits={creditState?.remainingCredits ?? 0}
             allowanceEdgeCredits={
@@ -617,7 +582,6 @@ export default function BillingSettingsPage() {
             }
             subscriptionStatus={subscription?.status ?? null}
             currentPeriodEnd={subscription?.currentPeriodEnd ?? null}
-            walletChartPaths={walletChartPaths}
           />
         </div>
       </div>
@@ -645,7 +609,7 @@ export default function BillingSettingsPage() {
 
       {/* ── Plans ── */}
       <div className="px-6 py-5 sm:px-8">
-        <div className="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+        <div className="mb-4 flex items-center justify-between gap-4">
           <div className="flex items-center justify-between">
             <SectionLabel>Plans</SectionLabel>
             {access?.privateBetaRequired ? (
@@ -664,12 +628,6 @@ export default function BillingSettingsPage() {
               </Badge>
             ) : null}
           </div>
-
-          <AffiliateOfferCodeInput
-            value={affiliateOfferCode}
-            onChange={setAffiliateOfferCode}
-            helperText="This code is resolved before you leave for checkout so attribution and discounting stay in sync."
-          />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
@@ -971,7 +929,105 @@ export default function BillingSettingsPage() {
             );
           })}
         </div>
+
+        <div className="mt-5 flex flex-col items-start gap-2">
+          <button
+            type="button"
+            onClick={() => setAffiliateDialogOpen(true)}
+            className="flex cursor-pointer items-center gap-1.5 text-xs text-white/38 transition-colors hover:text-white/62"
+          >
+            <BadgePercent className="size-3.5" />
+            Have an affiliate code?
+          </button>
+
+          {appliedAffiliate ? (
+            <div className="flex items-center gap-3 text-xs text-white/42">
+              <p>
+                Applied for{" "}
+                <span className="text-white/65">
+                  {appliedAffiliate.username || appliedAffiliate.name}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={handleClearAffiliateCode}
+                className="cursor-pointer text-white/32 transition-colors hover:text-white/58"
+              >
+                Remove code
+              </button>
+            </div>
+          ) : (
+            <p className="text-xs text-white/30">
+              We&apos;ll resolve it before sending you to Stripe.
+            </p>
+          )}
+        </div>
       </div>
+
+      <Dialog open={affiliateDialogOpen} onOpenChange={setAffiliateDialogOpen}>
+        <DialogContent className="border-white/10 bg-sidebar text-white shadow-2xl sm:max-w-md">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-base font-medium text-white">
+              Have an affiliate code?
+            </DialogTitle>
+            <DialogDescription className="text-sm text-white/45">
+              Enter the affiliate username or code you were given and
+              we&apos;ll apply it to checkout.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <Input
+                value={affiliateCodeInput}
+                onChange={(event) => handleAffiliateCodeChange(event.target.value)}
+                placeholder="Enter username or code"
+                className="h-11 border-white/10 bg-sidebar-accent text-sm text-white placeholder:text-white/28"
+              />
+              {affiliateCodeResolved ? (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Check className="size-4 text-emerald-400" />
+                </div>
+              ) : null}
+            </div>
+
+            {affiliateCodeResolved && resolvedAffiliate ? (
+              <p className="text-xs text-white/45">
+                Affiliate found:{" "}
+                <span className="text-white/70">
+                  {resolvedAffiliate.username || resolvedAffiliate.name}
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-white/32">
+                The code is checked before checkout, so discounts and
+                attribution stay aligned.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2">
+            {affiliateOfferCode ? (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={handleClearAffiliateCode}
+                className="h-9 rounded-sm border border-white/10 bg-transparent text-xs text-white/60 hover:bg-white/5 hover:text-white"
+              >
+                Remove code
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              onClick={handleApplyAffiliateCode}
+              disabled={!affiliateCodeResolved || !resolvedAffiliate?.defaultOfferCode}
+              className="h-9 rounded-sm bg-white text-xs font-medium text-black hover:bg-white/90"
+            >
+              Use code
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

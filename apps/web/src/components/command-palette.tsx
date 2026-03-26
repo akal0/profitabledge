@@ -155,16 +155,6 @@ const baseResults: ResultItem[] = [
     iconBg: "bg-yellow-500/10",
   },
   {
-    icon: TrendingUp,
-    label: "Growth",
-    subtitle: "Pages  ·  Overview of referrals and affiliate access",
-    href: "/dashboard/growth",
-    key: "",
-    category: "pages",
-    iconColor: "text-teal-400",
-    iconBg: "bg-teal-500/10",
-  },
-  {
     icon: Gift,
     label: "Referrals",
     subtitle: "Pages  ·  Referral rewards and invite tracking",
@@ -234,20 +224,6 @@ const baseResults: ResultItem[] = [
     iconColor: "text-red-400",
     iconBg: "bg-red-500/10",
   },
-  ...(publicAlphaFlags.supportDiagnostics
-    ? [
-        {
-          icon: LifeBuoy,
-          label: "Support",
-          subtitle: "Settings  ·  Alpha diagnostics & feedback",
-          href: "/dashboard/settings/support",
-          key: "",
-          category: "settings" as const,
-          iconColor: "text-sky-400",
-          iconBg: "bg-sky-500/10",
-        },
-      ]
-    : []),
   // Actions
   {
     icon: Zap,
@@ -331,6 +307,9 @@ export function CommandPalette({ className }: CommandPaletteProps) {
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
+  const canViewGrowthOverview = billingState?.admin?.isAdmin === true;
+  const canViewSupportSettings =
+    publicAlphaFlags.supportDiagnostics && billingState?.admin?.isAdmin === true;
 
   const quickQuery = (trpc as any).ai.quickQuery.useMutation({
     onSuccess: (data: any) => {
@@ -347,6 +326,34 @@ export function CommandPalette({ className }: CommandPaletteProps) {
   const allResults = React.useMemo<ResultItem[]>(
     () => [
       ...baseResults,
+      ...(canViewGrowthOverview
+        ? [
+            {
+              icon: TrendingUp,
+              label: "Growth",
+              subtitle: "Pages  ·  Admin growth overview and routing hub",
+              href: "/dashboard/growth",
+              key: "",
+              category: "pages" as const,
+              iconColor: "text-teal-400",
+              iconBg: "bg-teal-500/10",
+            },
+          ]
+        : []),
+      ...(canViewSupportSettings
+        ? [
+            {
+              icon: LifeBuoy,
+              label: "Support",
+              subtitle: "Settings  ·  Alpha diagnostics & feedback",
+              href: "/dashboard/settings/support",
+              key: "",
+              category: "settings" as const,
+              iconColor: "text-sky-400",
+              iconBg: "bg-sky-500/10",
+            },
+          ]
+        : []),
       ...(canViewAffiliateDashboard
         ? [
             {
@@ -362,7 +369,7 @@ export function CommandPalette({ className }: CommandPaletteProps) {
           ]
         : []),
     ],
-    [canViewAffiliateDashboard]
+    [canViewAffiliateDashboard, canViewGrowthOverview, canViewSupportSettings]
   );
   const hasExactMatch = allResults.some(
     (r) => r.label.toLowerCase() === searchValue.toLowerCase().trim()

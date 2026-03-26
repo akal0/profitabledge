@@ -254,11 +254,11 @@ export function AffiliatePaymentMethodsSection() {
             <p className="mt-3 text-sm leading-6 text-white/45">
               Payment methods unlock after your affiliate application is
               approved, so payout instructions only appear on active affiliate
-              accounts
+              accounts.
             </p>
             <Button
               asChild
-              className="mt-5 h-9 rounded-sm border border-white/10 bg-sidebar-accent px-4 text-xs text-white hover:bg-sidebar-accent/80"
+              className="mt-5 h-9 rounded-sm ring ring-white/10 bg-sidebar-accent px-4 text-xs text-white hover:bg-sidebar-accent/80"
             >
               <Link href="/dashboard/referrals">Open referrals</Link>
             </Button>

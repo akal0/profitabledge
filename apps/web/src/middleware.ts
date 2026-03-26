@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import {
+  areGrowthTouchesEquivalent,
   buildStoredGrowthTouch,
   GROWTH_TOUCH_COOKIE,
   GROWTH_TOUCH_MAX_AGE_SECONDS,
@@ -37,7 +38,13 @@ export function middleware(request: NextRequest) {
     request.nextUrl.pathname
   );
 
-  if (touch && !existingTouch) {
+  const shouldStoreTouch =
+    touch &&
+    (!existingTouch ||
+      existingTouch.visitorToken !== visitorToken ||
+      !areGrowthTouchesEquivalent(existingTouch, touch));
+
+  if (shouldStoreTouch) {
     response.cookies.set(
       GROWTH_TOUCH_COOKIE,
       serializeStoredGrowthTouch(buildStoredGrowthTouch(visitorToken, touch)),

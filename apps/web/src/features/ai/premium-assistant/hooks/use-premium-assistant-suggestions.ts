@@ -10,6 +10,21 @@ interface UsePremiumAssistantSuggestionsOptions {
   accountId?: string;
 }
 
+function normalizeSuggestionItems(items: SuggestionItem[]) {
+  const seen = new Map<string, number>();
+
+  return items.map((item) => {
+    const baseId = `${item.type}:${item.category || "uncategorized"}:${item.id}:${item.name}`;
+    const count = seen.get(baseId) ?? 0;
+    seen.set(baseId, count + 1);
+
+    return {
+      ...item,
+      id: count === 0 ? baseId : `${baseId}:${count}`,
+    };
+  });
+}
+
 export function usePremiumAssistantSuggestions({
   accountId,
 }: UsePremiumAssistantSuggestionsOptions) {
@@ -47,13 +62,13 @@ export function usePremiumAssistantSuggestions({
 
       if (type === "command") {
         const { TRADE_COMMAND_SUGGESTIONS } = await import("@/components/ai/trade-command-suggestions");
-        return TRADE_COMMAND_SUGGESTIONS.filter((item) => {
+        return normalizeSuggestionItems(TRADE_COMMAND_SUGGESTIONS.filter((item) => {
           if (!query) return true;
           return (
             item.name.toLowerCase().includes(lowerQuery) ||
             item.description?.toLowerCase().includes(lowerQuery)
           );
-        });
+        }));
       }
 
       const mentionItems: SuggestionItem[] = [];
@@ -162,7 +177,7 @@ export function usePremiumAssistantSuggestions({
         }
       });
 
-      return mentionItems;
+      return normalizeSuggestionItems(mentionItems);
     },
     [modelTagsList, sessionTagsList, symbolsList]
   );

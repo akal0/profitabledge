@@ -3,6 +3,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { formatDisplayCurrency } from "@/lib/format-display";
 
 export interface ComparisonSide {
   label: string;
@@ -19,9 +20,7 @@ export interface BaseComparisonCardProps {
 }
 
 const defaultFormat = (v: number) => {
-  const abs = Math.abs(v);
-  const sign = v < 0 ? "-$" : "$";
-  return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return formatDisplayCurrency(v);
 };
 
 export function BaseComparisonCard({
@@ -34,7 +33,7 @@ export function BaseComparisonCard({
   const isABetter = a.value > b.value;
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col justify-center space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div
           className={cn(

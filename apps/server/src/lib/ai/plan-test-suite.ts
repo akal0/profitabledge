@@ -183,7 +183,7 @@ export const PLAN_TEST_SUITE: PlanTestCase[] = [
     expect: {
       intent: "aggregate",
       vizType: "weekday_performance",
-      groupBy: ["open"],
+      groupBy: ["weekday"],
       aggregates: [{ field: "profit", fn: "sum" }],
     },
   },

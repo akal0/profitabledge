@@ -8,6 +8,7 @@ import type { CondensedProfile } from "./engine/types";
 import type { TradeQueryPlan } from "./query-plan";
 import { buildVizSpec } from "./visualization-registry";
 import { buildDeterministicTradePlan } from "./deterministic-plan-builder";
+import { generatePlan } from "./plan-generator";
 
 type AssistantRegressionCase = {
   id: string;
@@ -61,6 +62,14 @@ function expectDomain(
   return actual === expected
     ? []
     : [`domain ${actual ?? "null"} !== ${expected}`];
+}
+
+function expectNoDomain(
+  message: string,
+  pageContext?: AssistantPageContext
+): string[] {
+  const actual = detectAssistantDomain(message, pageContext);
+  return actual === null ? [] : [`domain ${actual} !== null`];
 }
 
 function buildDashboardContext() {
@@ -503,21 +512,21 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
   {
     id: "leak-query-routes-to-dashboard-domain",
     run: () =>
-      expectDomain("Where am I leaking money?", "dashboard", {
+      expectNoDomain("Where am I leaking money?", {
         surface: "assistant",
       }),
   },
   {
     id: "costing-query-routes-to-dashboard-domain",
     run: () =>
-      expectDomain("What's costing me the most right now?", "dashboard", {
+      expectNoDomain("What's costing me the most right now?", {
         surface: "assistant",
       }),
   },
   {
     id: "bleeding-query-routes-to-dashboard-domain",
     run: () =>
-      expectDomain("Where am I bleeding money?", "dashboard", {
+      expectNoDomain("Where am I bleeding money?", {
         surface: "assistant",
       }),
   },
@@ -728,6 +737,314 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       if (!result.message?.includes("Dashboard readout:")) {
         failures.push("missing dashboard summary text");
       }
+      return failures;
+    },
+  },
+  {
+    id: "broad-edge-query-short-circuits-to-profile-summary",
+    run: async () => {
+      const result = await generatePlan(
+        "What's my edge?",
+        [],
+        "account_test",
+        buildDashboardContext().condensed
+      );
+
+      const failures: string[] = [];
+      if (!(result.success && (result.plan as any)?._profileSummary)) {
+        failures.push("profile summary short-circuit not triggered");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "broad-leak-query-short-circuits-to-profile-summary",
+    run: async () => {
+      const result = await generatePlan(
+        "Where am I leaking money?",
+        [],
+        "account_test",
+        buildDashboardContext().condensed
+      );
+
+      const failures: string[] = [];
+      if (!(result.success && (result.plan as any)?._profileSummary)) {
+        failures.push("profile summary short-circuit not triggered");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "qualified-edge-query-keeps-qualifiers-out-of-profile-summary",
+    run: async () => {
+      const result = await generatePlan(
+        "Which edge name has the highest win rate in London this month?",
+        [],
+        "account_test",
+        buildDashboardContext().condensed
+      );
+
+      const failures: string[] = [];
+      if (!result.success || !result.plan) {
+        failures.push("plan missing");
+        return failures;
+      }
+      if ((result.plan as any)?._profileSummary) {
+        failures.push("unexpected profile summary short-circuit");
+      }
+      if (!result.plan.groupBy?.some((group) => group.field === "edgeName")) {
+        failures.push("missing edgeName grouping");
+      }
+      if (
+        !result.plan.filters?.some(
+          (filter) =>
+            filter.field === "sessionTag" &&
+            filter.op === "contains" &&
+            filter.value === "London"
+        )
+      ) {
+        failures.push("missing London filter");
+      }
+      if (!result.plan.timeframe || result.plan.timeframe.lastNDays !== 30) {
+        failures.push("missing monthly timeframe");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "qualified-leak-query-keeps-qualifiers-out-of-profile-summary",
+    run: async () => {
+      const result = await generatePlan(
+        "Which session leaks the most in London this month?",
+        [],
+        "account_test",
+        buildDashboardContext().condensed
+      );
+
+      const failures: string[] = [];
+      if (!result.success || !result.plan) {
+        failures.push("plan missing");
+        return failures;
+      }
+      if ((result.plan as any)?._profileSummary) {
+        failures.push("unexpected profile summary short-circuit");
+      }
+      if ((result.plan.groupBy?.length || 0) === 0) {
+        failures.push("missing condition grouping");
+      }
+      if (
+        !result.plan.filters?.some(
+          (filter) =>
+            filter.field === "sessionTag" &&
+            filter.op === "contains" &&
+            filter.value === "London"
+        )
+      ) {
+        failures.push("missing London filter");
+      }
+      if (!result.plan.timeframe || result.plan.timeframe.lastNDays !== 30) {
+        failures.push("missing monthly timeframe");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "empty-answer-returns-guardrail-copy",
+    run: () => {
+      const plan = buildRankingPlan("symbol");
+      const answer = assembleAnswer(
+        {
+          success: true,
+          data: [],
+          meta: {
+            rowCount: 0,
+            explanation: "Total profit",
+            aggregates: {
+              total_profit: 0,
+            },
+            groups: [],
+            filters: [],
+            timeframe: "Last 30 days",
+          },
+        },
+        plan
+      );
+
+      const failures: string[] = [];
+      if (!answer.markdown.startsWith("### I don't know yet")) {
+        failures.push("missing guardrail heading");
+      }
+      if (!answer.markdown.includes("(n=0)")) {
+        failures.push("missing empty sample size");
+      }
+      if (answer.markdown.includes("### Suggested follow-up")) {
+        failures.push("unexpected follow-up section");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "missing-aggregate-answer-returns-guardrail-copy",
+    run: () => {
+      const plan = buildRankingPlan("symbol");
+      const answer = assembleAnswer(
+        {
+          success: true,
+          data: [],
+          meta: {
+            rowCount: 4,
+            explanation: "Total profit",
+            aggregates: {
+              total_profit: Number.NaN,
+            },
+            groups: [],
+            filters: [],
+            timeframe: "Last 30 days",
+          },
+        },
+        plan
+      );
+
+      const failures: string[] = [];
+      if (!answer.markdown.startsWith("### I don't know yet")) {
+        failures.push("missing guardrail heading");
+      }
+      if (!answer.markdown.includes("missing required fields for this metric")) {
+        failures.push("missing guardrail reason");
+      }
+      if (answer.markdown.includes("### Suggested follow-up")) {
+        failures.push("unexpected follow-up section");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "edge-conditions-query-routes-to-summary-surface",
+    run: async () => {
+      const message = "Which conditions improve or weaken my edge?";
+      const failures: string[] = [];
+
+      const domain = detectAssistantDomain(message, {
+        surface: "assistant",
+        accountScope: "all",
+      });
+      if (domain !== null) {
+        failures.push(`domain ${domain} !== null`);
+      }
+
+      const result = await maybeHandleSpecialistQuery(message, {
+        ...buildDashboardContext(),
+        pageContext: {
+          surface: "assistant",
+          accountScope: "all",
+        },
+      });
+      if (result.handled) {
+        failures.push(`specialist ${result.domain ?? "null"} should not pre-handle`);
+      }
+
+      const plan = await generatePlan(
+        message,
+        [],
+        "account_test",
+        buildDashboardContext().condensed
+      );
+      if (!(plan.success && (plan.plan as any)?._profileSummary)) {
+        failures.push("profile summary short-circuit not triggered");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "deterministic-count-query-captures-session-and-timeframe",
+    run: () => {
+      const plan = buildDeterministicTradePlan(
+        "How many trades did I take in London last month?"
+      );
+
+      const failures: string[] = [];
+      if (!plan) {
+        failures.push("plan missing");
+        return failures;
+      }
+      if (
+        !plan.aggregates?.some(
+          (agg) => agg.fn === "count" && agg.as === "trade_count"
+        )
+      ) {
+        failures.push("missing trade_count aggregate");
+      }
+      if (plan.vizType !== "kpi_single") {
+        failures.push(`viz type ${plan.vizType} !== kpi_single`);
+      }
+      if (!plan.timeframe || plan.timeframe.lastNDays !== 30) {
+        failures.push("missing monthly timeframe");
+      }
+      if (
+        !plan.filters?.some(
+          (filter) =>
+            filter.field === "sessionTag" &&
+            filter.op === "contains" &&
+            filter.value === "London"
+        )
+      ) {
+        failures.push("missing London filter");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "grouped-count-visualization-combines-labels",
+    run: () => {
+      const plan: TradeQueryPlan = {
+        intent: "aggregate",
+        filters: [],
+        groupBy: [{ field: "sessionTag" }, { field: "tradeType" }],
+        aggregates: [{ fn: "count", field: "id", as: "trade_count" }],
+        sort: { field: "trade_count", dir: "desc" },
+        limit: 2,
+        explanation: "Rank session and direction combos by trade count",
+        vizType: "bar_chart",
+        componentHint: "auto",
+        displayMode: "plural",
+        vizTitle: "Trade count by combo",
+      };
+      const viz = buildVizSpec(plan, {
+        data: [],
+        meta: {
+          rowCount: 18,
+          groups: [
+            { sessionTag: "London", tradeType: "long", trade_count: 9 },
+            { sessionTag: "New York", tradeType: "short", trade_count: 6 },
+          ],
+          filters: [],
+          timeframe: "Last 30 days",
+        },
+      });
+
+      const failures: string[] = [];
+      if (viz.type !== "bar_chart") {
+        failures.push(`viz type ${viz.type} !== bar_chart`);
+      }
+      if ((viz.data.rows || [])[0]?.label !== "London / long") {
+        failures.push(
+          `unexpected top label ${(viz.data.rows || [])[0]?.label ?? "none"}`
+        );
+      }
+      if ((viz.data.rows || [])[1]?.label !== "New York / short") {
+        failures.push(
+          `unexpected second label ${(viz.data.rows || [])[1]?.label ?? "none"}`
+        );
+      }
+
       return failures;
     },
   },

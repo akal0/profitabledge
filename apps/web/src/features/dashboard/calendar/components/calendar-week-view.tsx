@@ -13,6 +13,7 @@ import {
 } from "@/components/trades/trade-identifier-pill";
 import { cn } from "@/lib/utils";
 
+import { GroupedTradeMultiplierChip } from "./grouped-trade-multiplier-chip";
 import type {
   CalendarPreviewState,
   DayRow,
@@ -221,57 +222,53 @@ export function CalendarWeekView({
                             {formatTradePillMoney(Number(group.totalProfit || 0))}
                           </span>
                           {group.items.length > 1 ? (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="rounded-xs bg-neutral-800/25 px-1.5 py-0.5 text-[10px] font-medium text-white/60">
-                                  x{formatTradeCount(group.items.length)}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent
-                                sideOffset={6}
-                                className="w-max max-w-none min-w-[15rem] py-3"
-                              >
-                                <div className="flex flex-col gap-2">
-                                  {group.items.map((item) => {
-                                    const row = previewRows.find((preview) => preview.id === item.id);
-                                    const opened = row?.open
-                                      ? new Date(row.open).toLocaleTimeString([], {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })
-                                      : "--:--";
+                            <GroupedTradeMultiplierChip
+                              label={`x${formatTradeCount(group.items.length)}`}
+                            >
+                              {group.items.map((item) => {
+                                const row = previewRows.find(
+                                  (preview) => preview.id === item.id
+                                );
+                                const opened = row?.open
+                                  ? new Date(row.open).toLocaleTimeString([], {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                  : "--:--";
 
-                                    return (
-                                      <div
-                                        key={item.id}
-                                        className="flex w-full items-center gap-3"
-                                      >
-                                        <span className="w-14 shrink-0 text-[11px] tabular-nums text-white/60">
-                                          {opened}
-                                        </span>
-                                        {row?.status === "live" ? (
-                                          <span className="rounded-xs bg-cyan-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-cyan-200 ring-1 ring-cyan-400/20">
-                                            Live
-                                          </span>
-                                        ) : null}
-                                        <span className="min-w-0 flex-1 truncate text-center text-[11px] tabular-nums text-white/40">
-                                          {formatDuration(row?.holdSeconds || 0)}
-                                        </span>
-                                        <span
-                                          className={cn(
-                                            TRADE_IDENTIFIER_PILL_CLASS,
-                                            "ml-auto min-h-0 shrink-0 px-1.5 py-0 text-[10px]",
-                                            getTradePillProfitTone(Number(row?.profit || 0))
-                                          )}
-                                        >
-                                          {formatTradePillMoney(Number(row?.profit || 0))}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="flex w-full items-center gap-3"
+                                  >
+                                    <span className="w-14 shrink-0 text-[11px] tabular-nums text-white/60">
+                                      {opened}
+                                    </span>
+                                    {row?.status === "live" ? (
+                                      <span className="rounded-xs bg-cyan-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-cyan-200 ring-1 ring-cyan-400/20">
+                                        Live
+                                      </span>
+                                    ) : null}
+                                    <span className="min-w-0 flex-1 truncate text-center text-[11px] tabular-nums text-white/40">
+                                      {formatDuration(row?.holdSeconds || 0)}
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        TRADE_IDENTIFIER_PILL_CLASS,
+                                        "ml-auto min-h-0 shrink-0 px-1.5 py-0 text-[10px]",
+                                        getTradePillProfitTone(
+                                          Number(row?.profit || 0)
+                                        )
+                                      )}
+                                    >
+                                      {formatTradePillMoney(
+                                        Number(row?.profit || 0)
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </GroupedTradeMultiplierChip>
                           ) : null}
                         </div>
                       </div>

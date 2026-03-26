@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { formatDisplayCurrency } from "@/lib/format-display";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown } from "lucide-react";
 
@@ -81,7 +82,7 @@ export function InlineReport({
                   "text-lg font-semibold",
                   summary.totalProfit >= 0 ? "text-green-400" : "text-red-400"
                 )}>
-                  ${Math.abs(summary.totalProfit).toFixed(2)}
+                  {formatDisplayCurrency(summary.totalProfit)}
                 </p>
               </div>
             </div>
@@ -93,7 +94,7 @@ export function InlineReport({
                 "text-lg font-semibold",
                 summary.avgProfit >= 0 ? "text-green-400" : "text-red-400"
               )}>
-                ${Math.abs(summary.avgProfit).toFixed(2)}
+                {formatDisplayCurrency(summary.avgProfit)}
               </p>
             </div>
           )}
@@ -138,7 +139,7 @@ export function InlineReport({
                   "text-right font-medium",
                   trade.profit >= 0 ? "text-green-400" : "text-red-400"
                 )}>
-                  ${trade.profit.toFixed(2)}
+                  {formatDisplayCurrency(trade.profit)}
                 </div>
                 <div className="text-right text-white/70">
                   {trade.pips.toFixed(1)}

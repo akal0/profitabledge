@@ -3,6 +3,7 @@ import { db } from "../db";
 import { notification } from "../db/schema/notifications";
 import { user as userTable } from "../db/schema/auth";
 import { and, eq } from "drizzle-orm";
+import { sendWebPushSignalToUser } from "./push-web";
 
 export type NotificationType =
   | "trade_closed"
@@ -22,6 +23,9 @@ export type NotificationType =
   | "prop_phase_advanced"
   | "edge_invite"
   | "journal_share_request"
+  | "journal_share_invite"
+  | "journal_share_accepted"
+  | "journal_share_declined"
   | "leaderboard_update"
   | "system_maintenance"
   | "system_update";
@@ -82,9 +86,12 @@ function isTypeEnabled(prefs: NotificationPreferences, type: NotificationType) {
     case "prop_phase_advanced":
       return prefs.alerts;
     case "leaderboard_update":
-    case "journal_share_request":
       return prefs.social;
     case "edge_invite":
+    case "journal_share_request":
+    case "journal_share_invite":
+    case "journal_share_accepted":
+    case "journal_share_declined":
       return prefs.system;
     case "trade_imported":
     case "api_key":
@@ -147,6 +154,12 @@ export async function createNotification(input: {
     dedupeKey: dedupeKey || null,
     createdAt: new Date(),
   });
+
+  if (prefs.push) {
+    void sendWebPushSignalToUser(userId).catch((error) => {
+      console.error("[Notifications] Web push delivery failed:", error);
+    });
+  }
 
   return { skipped: false } as const;
 }

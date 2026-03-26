@@ -1,11 +1,11 @@
 import { getServerEnv } from "../env";
 
-export type FeatureRequestGithubIssueInput = {
+export type GithubIssueInput = {
   title: string;
   body: string;
 };
 
-export type FeatureRequestGithubIssueResult =
+export type GithubIssueResult =
   | {
       status: "created";
       issueNumber: number;
@@ -20,9 +20,9 @@ export type FeatureRequestGithubIssueResult =
       error: string;
     };
 
-export async function createFeatureRequestGithubIssue(
-  input: FeatureRequestGithubIssueInput
-): Promise<FeatureRequestGithubIssueResult> {
+export async function createGithubIssue(
+  input: GithubIssueInput
+): Promise<GithubIssueResult> {
   const env = getServerEnv();
 
   if (
@@ -45,7 +45,7 @@ export async function createFeatureRequestGithubIssue(
           Accept: "application/vnd.github+json",
           Authorization: `Bearer ${env.GITHUB_FEATURE_REQUEST_TOKEN}`,
           "Content-Type": "application/json",
-          "User-Agent": "profitabledge-feature-request-bot",
+          "User-Agent": "profitabledge-support-bot",
           "X-GitHub-Api-Version": "2022-11-28",
         },
         body: JSON.stringify({
@@ -90,4 +90,13 @@ export async function createFeatureRequestGithubIssue(
           : "Unknown GitHub issue creation failure",
     };
   }
+}
+
+export type FeatureRequestGithubIssueInput = GithubIssueInput;
+export type FeatureRequestGithubIssueResult = GithubIssueResult;
+
+export async function createFeatureRequestGithubIssue(
+  input: FeatureRequestGithubIssueInput
+): Promise<FeatureRequestGithubIssueResult> {
+  return createGithubIssue(input);
 }

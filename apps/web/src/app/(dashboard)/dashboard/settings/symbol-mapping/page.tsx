@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ArrowRightLeft,
+  ChevronLeft,
+  ChevronRight,
   Database,
   Layers,
   MoreHorizontal,
@@ -42,12 +44,13 @@ import { cn } from "@/lib/utils";
 import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 
 const CARD_OUTER =
-  "group flex flex-col rounded-lg border border-white/5 bg-sidebar p-1";
+  "group flex flex-col rounded-lg ring ring-white/5 bg-sidebar p-1";
 const CARD_INNER =
   "flex flex-1 flex-col rounded-sm bg-white ring ring-white/5 transition-all duration-250 dark:bg-sidebar-accent dark:group-hover:brightness-120";
 const CARD_ALIAS_GRID = "flex max-w-full flex-wrap gap-2";
 const CARD_ALIAS_CHIP =
-  "inline-flex max-w-full items-center rounded-sm border border-white/8 bg-sidebar px-2 py-1 text-[11px] text-white/65";
+  "inline-flex max-w-full items-center rounded-sm ring ring-white/8 bg-sidebar px-2 py-1 text-[11px] text-white/65";
+const BUILT_IN_FOUNDATION_PAGE_SIZE = 9;
 
 type CustomMappingRow = {
   id: string;
@@ -126,7 +129,7 @@ function MappingCardMenu({
         <Button
           type="button"
           variant="ghost"
-          className="size-8 rounded-sm border border-white/5 bg-sidebar px-0 text-white/55 hover:bg-sidebar hover:text-white"
+          className="size-8 rounded-sm ring ring-white/5 bg-sidebar px-0 text-white/55 hover:bg-sidebar hover:text-white"
         >
           <MoreHorizontal className="size-4" />
           <span className="sr-only">Open mapping actions</span>
@@ -134,7 +137,7 @@ function MappingCardMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className="min-w-[10rem] rounded-sm border border-white/5 bg-sidebar text-white"
+        className="min-w-[10rem] rounded-sm ring ring-white/5 bg-sidebar text-white"
       >
         <DropdownMenuItem
           onSelect={() => onEdit()}
@@ -221,6 +224,7 @@ export default function SymbolMappingSettingsPage() {
   const [customTab, setCustomTab] = useState("all");
   const [detectedTab, setDetectedTab] = useState("all");
   const [builtInTab, setBuiltInTab] = useState("all");
+  const [builtInPage, setBuiltInPage] = useState(0);
   const customMappingSectionRef = useRef<HTMLElement | null>(null);
 
   const { data: customMappingsRaw, isLoading: customMappingsLoading } =
@@ -307,6 +311,18 @@ export default function SymbolMappingSettingsPage() {
     return rows;
   }, [baseMappings, searchTerm, builtInTab]);
 
+  const builtInPageCount = Math.max(
+    Math.ceil(filteredBaseMappings.length / BUILT_IN_FOUNDATION_PAGE_SIZE),
+    1
+  );
+  const paginatedBaseMappings = useMemo(() => {
+    const start = builtInPage * BUILT_IN_FOUNDATION_PAGE_SIZE;
+    return filteredBaseMappings.slice(
+      start,
+      start + BUILT_IN_FOUNDATION_PAGE_SIZE
+    );
+  }, [builtInPage, filteredBaseMappings]);
+
   const detectedAssetClasses = useMemo(() => {
     const classes = new Set<string>();
     for (const row of detectedSymbols) {
@@ -322,6 +338,16 @@ export default function SymbolMappingSettingsPage() {
     }
     return Array.from(classes).sort();
   }, [baseMappings]);
+
+  useEffect(() => {
+    setBuiltInPage(0);
+  }, [builtInTab, searchTerm]);
+
+  useEffect(() => {
+    if (builtInPage >= builtInPageCount) {
+      setBuiltInPage(Math.max(builtInPageCount - 1, 0));
+    }
+  }, [builtInPage, builtInPageCount]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -549,7 +575,7 @@ export default function SymbolMappingSettingsPage() {
                   setCanonicalSymbol(event.target.value.toUpperCase())
                 }
                 placeholder="NAS100"
-                className="min-h-[38px] bg-sidebar-accent ring-white/5 text-white text-xs py-2"
+                className="h-9 bg-sidebar-accent ring-white/5 text-white text-xs"
               />
               {/*<p className="text-[11px] text-white/35">
                 If you leave this blank, the first alias will be used as the
@@ -564,7 +590,7 @@ export default function SymbolMappingSettingsPage() {
                 placeholder="Add raw symbols like US100.cash, US100, NQH6"
                 selectedLayout="grid"
                 onChange={setAliases}
-                className="rounded-md border-0 bg-sidebar-accent ring ring-white/5 text-xs"
+                className="min-h-9 rounded-md ring bg-sidebar-accent py-0 border-none ring-white/5 text-xs [&_input[cmdk-input]]:h-9 [&_input[cmdk-input]]:px-3 [&_input[cmdk-input]]:py-1"
               />
             </div>
           </div>
@@ -604,10 +630,10 @@ export default function SymbolMappingSettingsPage() {
           <Separator className="-mx-6" />
 
           <Tabs value={customTab} onValueChange={setCustomTab}>
-            <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
+            <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 ring-b-0">
               <TabsTriggerUnderlined
                 value="all"
-                className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
               >
                 All
               </TabsTriggerUnderlined>
@@ -615,7 +641,7 @@ export default function SymbolMappingSettingsPage() {
                 <TabsTriggerUnderlined
                   key={assetClass}
                   value={assetClass}
-                  className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                  className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
                 >
                   {formatAssetClass(assetClass)}
                 </TabsTriggerUnderlined>
@@ -637,7 +663,7 @@ export default function SymbolMappingSettingsPage() {
                       key={row.id}
                       className={cn(
                         CARD_OUTER,
-                        editingId === row.id && "border-teal-500/35"
+                        editingId === row.id && "ring-teal-500/35"
                       )}
                     >
                       <div className={cn(CARD_INNER, "p-3.5")}>
@@ -686,12 +712,12 @@ export default function SymbolMappingSettingsPage() {
           </p>
         </div>
         <div className="relative max-w-lg">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-white/25" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-white/25 z-10" />
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search NAS100, NQ, XAUUSD, CL, BTC..."
-            className="bg-sidebar-accent pl-9 ring-white/5 text-white text-sm"
+            className="bg-sidebar-accent pl-8.5 ring-white/5 text-white text-sm"
           />
         </div>
       </section>
@@ -711,10 +737,10 @@ export default function SymbolMappingSettingsPage() {
         </div>
 
         <Tabs value={detectedTab} onValueChange={setDetectedTab}>
-          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
+          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 ring-b-0">
             <TabsTriggerUnderlined
               value="all"
-              className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+              className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
             >
               All
             </TabsTriggerUnderlined>
@@ -722,7 +748,7 @@ export default function SymbolMappingSettingsPage() {
               <TabsTriggerUnderlined
                 key={ac}
                 value={ac}
-                className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
               >
                 {formatAssetClass(ac)}
               </TabsTriggerUnderlined>
@@ -771,7 +797,7 @@ export default function SymbolMappingSettingsPage() {
                         className={getPropAssignActionButtonClassName({
                           tone: "teal",
                           size: "sm",
-                          className: "mt-auto w-fit",
+                          className: "mt-auto w-fit py-1.5 h-max",
                         })}
                       >
                         Add alias
@@ -804,10 +830,10 @@ export default function SymbolMappingSettingsPage() {
         </div>
 
         <Tabs value={builtInTab} onValueChange={setBuiltInTab}>
-          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
+          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 ring-b-0">
             <TabsTriggerUnderlined
               value="all"
-              className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+              className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
             >
               All
             </TabsTriggerUnderlined>
@@ -815,7 +841,7 @@ export default function SymbolMappingSettingsPage() {
               <TabsTriggerUnderlined
                 key={ac}
                 value={ac}
-                className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+                className="h-10 pb-0 pt-0 text-xs font-medium data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
               >
                 {formatAssetClass(ac)}
               </TabsTriggerUnderlined>
@@ -832,29 +858,64 @@ export default function SymbolMappingSettingsPage() {
                 <Skeleton className="h-28 w-full" />
               </div>
             ) : filteredBaseMappings.length > 0 ? (
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {filteredBaseMappings.map((row) => (
-                  <div key={row.canonicalSymbol} className={CARD_OUTER}>
-                    <div className={cn(CARD_INNER, "p-3.5")}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-white">
-                          {row.canonicalSymbol}
-                        </span>
-                        <span className="rounded-sm bg-white/6 px-2 py-1 text-[10px] text-white/40">
-                          {formatAssetClass(row.assetClass)}
-                        </span>
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {paginatedBaseMappings.map((row) => (
+                    <div key={row.canonicalSymbol} className={CARD_OUTER}>
+                      <div className={cn(CARD_INNER, "p-3.5")}>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-medium text-white">
+                            {row.canonicalSymbol}
+                          </span>
+                          <span className="rounded-sm bg-white/6 px-2 py-1 text-[10px] text-white/40">
+                            {formatAssetClass(row.assetClass)}
+                          </span>
+                        </div>
+                        <div className="mt-3">
+                          <AliasCardGrid aliases={row.aliases} />
+                        </div>
+                        {row.futuresRoots.length > 0 ? (
+                          <p className="mt-3 text-xs text-white/35">
+                            Futures roots: {row.futuresRoots.join(", ")}
+                          </p>
+                        ) : null}
                       </div>
-                      <div className="mt-3">
-                        <AliasCardGrid aliases={row.aliases} />
-                      </div>
-                      {row.futuresRoots.length > 0 ? (
-                        <p className="mt-3 text-xs text-white/35">
-                          Futures roots: {row.futuresRoots.join(", ")}
-                        </p>
-                      ) : null}
                     </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-white/40">
+                    Page {builtInPage + 1} of {builtInPageCount}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setBuiltInPage((current) => Math.max(current - 1, 0))
+                      }
+                      disabled={builtInPage === 0}
+                      className="h-9 rounded-sm text-xs"
+                    >
+                      <ChevronLeft className="mr-1 size-3.5" />
+                      Previous
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setBuiltInPage((current) =>
+                          Math.min(current + 1, builtInPageCount - 1)
+                        )
+                      }
+                      disabled={builtInPage >= builtInPageCount - 1}
+                      className="h-9 rounded-sm text-xs"
+                    >
+                      Next
+                      <ChevronRight className="ml-1 size-3.5" />
+                    </Button>
                   </div>
-                ))}
+                </div>
               </div>
             ) : (
               <p className="py-4 text-xs text-white/40">

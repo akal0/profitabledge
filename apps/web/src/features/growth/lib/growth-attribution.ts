@@ -19,6 +19,8 @@ export type StoredGrowthTouch = GrowthTouchPayload & {
   capturedAtISO: string;
 };
 
+type ComparableGrowthTouch = GrowthTouchPayload | StoredGrowthTouch;
+
 function normalizeGrowthCode(value: string | null) {
   return (value ?? "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
@@ -97,6 +99,29 @@ export function buildStoredGrowthTouch(
 
 export function serializeStoredGrowthTouch(value: StoredGrowthTouch) {
   return encodeURIComponent(JSON.stringify(value));
+}
+
+function toComparableGrowthTouchKey(value: ComparableGrowthTouch) {
+  return JSON.stringify({
+    type: value.type,
+    code: value.code ?? "",
+    offerCode: value.offerCode ?? "",
+    channel: value.channel ?? "",
+    trackingLinkSlug: value.trackingLinkSlug ?? "",
+    landingPath: value.landingPath ?? "",
+    query: value.query ?? "",
+  });
+}
+
+export function areGrowthTouchesEquivalent(
+  left?: ComparableGrowthTouch | null,
+  right?: ComparableGrowthTouch | null
+) {
+  if (!left || !right) {
+    return false;
+  }
+
+  return toComparableGrowthTouchKey(left) === toComparableGrowthTouchKey(right);
 }
 
 export function parseStoredGrowthTouch(value?: string | null) {

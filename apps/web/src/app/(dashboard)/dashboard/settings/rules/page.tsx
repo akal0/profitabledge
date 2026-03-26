@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -17,6 +17,10 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -47,10 +51,6 @@ type ComplianceRules = {
 };
 
 type ComplianceRuleKey = keyof ComplianceRules;
-
-const SECTION_CLASS =
-  "rounded-xl border border-white/8 bg-white/[0.03] shadow-[0_0_0_1px_rgba(255,255,255,0.015)]";
-const PANEL_CLASS = "rounded-lg border border-white/8 bg-white/[0.03]";
 
 const CATEGORY_TONES: Record<string, string> = {
   session: "border-blue-500/20 bg-blue-500/10 text-blue-200",
@@ -287,6 +287,49 @@ function renderParameterValue(value: unknown) {
 
 function numericInputValue(value: unknown) {
   return typeof value === "number" ? value : "";
+}
+
+function formatRuleBadgeLabel(value: string) {
+  const normalized = value
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return value;
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function RulesSection({
+  id,
+  className,
+  children,
+}: {
+  id?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} className={className}>
+      <GoalSurface innerClassName="h-full overflow-hidden">{children}</GoalSurface>
+    </section>
+  );
+}
+
+function RulesCard({
+  className,
+  paddingClassName = "p-4",
+  children,
+}: {
+  className?: string;
+  paddingClassName?: string;
+  children: ReactNode;
+}) {
+  return (
+    <GoalSurface className={className}>
+      <div className={paddingClassName}>{children}</div>
+    </GoalSurface>
+  );
 }
 
 export default function RulesPage() {
@@ -605,73 +648,69 @@ export default function RulesPage() {
             </>
           ) : (
             <>
-              <div className={cn(SECTION_CLASS, "p-4")}>
+              <RulesCard>
                 <div className="flex items-center gap-2 text-white/70">
                   <ShieldAlert className="size-4 text-teal-300" />
-                  <span className="text-xs uppercase tracking-[0.18em]">
-                    Active rules
-                  </span>
+                  <span className="text-xs text-white/50">Active rules</span>
                 </div>
-                <div className="mt-3 text-2xl font-semibold text-white">
+                <GoalContentSeparator className="mb-3.5 mt-3.5" />
+                <div className="text-2xl font-semibold text-white">
                   {activeRules.length}
                 </div>
                 <p className="mt-1 text-xs text-white/40">
                   Live account rules currently enforcing your process.
                 </p>
-              </div>
+              </RulesCard>
 
-              <div className={cn(SECTION_CLASS, "p-4")}>
+              <RulesCard>
                 <div className="flex items-center gap-2 text-white/70">
                   <CheckCircle2 className="size-4 text-emerald-300" />
-                  <span className="text-xs uppercase tracking-[0.18em]">
-                    Daily compliance
-                  </span>
+                  <span className="text-xs text-white/50">Daily compliance</span>
                 </div>
-                <div className="mt-3 text-2xl font-semibold text-white">
+                <GoalContentSeparator className="mb-3.5 mt-3.5" />
+                <div className="text-2xl font-semibold text-white">
                   {complianceRate}%
                 </div>
                 <p className="mt-1 text-xs text-white/40">
                   {reviewedTrades} recent trades reviewed against your live
                   process.
                 </p>
-              </div>
+              </RulesCard>
 
-              <div className={cn(SECTION_CLASS, "p-4")}>
+              <RulesCard>
                 <div className="flex items-center gap-2 text-white/70">
                   <Lightbulb className="size-4 text-amber-300" />
-                  <span className="text-xs uppercase tracking-[0.18em]">
-                    Guardrails
-                  </span>
+                  <span className="text-xs text-white/50">Guardrails</span>
                 </div>
-                <div className="mt-3 text-2xl font-semibold text-white">
+                <GoalContentSeparator className="mb-3.5 mt-3.5" />
+                <div className="text-2xl font-semibold text-white">
                   {configuredGuardrailCount}
                 </div>
                 <p className="mt-1 text-xs text-white/40">
                   Saved audit thresholds that also seed rulebooks.
                 </p>
-              </div>
+              </RulesCard>
 
-              <div className={cn(SECTION_CLASS, "p-4")}>
+              <RulesCard>
                 <div className="flex items-center gap-2 text-white/70">
                   <ClipboardList className="size-4 text-blue-300" />
-                  <span className="text-xs uppercase tracking-[0.18em]">
-                    Rulebooks
-                  </span>
+                  <span className="text-xs text-white/50">Rulebooks</span>
                 </div>
-                <div className="mt-3 text-2xl font-semibold text-white">
+                <GoalContentSeparator className="mb-3.5 mt-3.5" />
+                <div className="text-2xl font-semibold text-white">
                   {replayRulebooks.length}
                 </div>
                 <p className="mt-1 text-xs text-white/40">
                   {unresolvedViolations} recent violations tracked across this
                   account.
                 </p>
-              </div>
+              </RulesCard>
             </>
           )}
         </div>
 
         <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-          <section className={cn(SECTION_CLASS, "overflow-hidden")}>
+          <RulesSection className="h-full">
             <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div>
                 <div className="flex items-center gap-2 text-white">
@@ -688,7 +727,7 @@ export default function RulesPage() {
               </Badge>
             </div>
 
-            <Separator />
+            <GoalContentSeparator />
 
             <div className="p-4 space-y-3">
               {isWorkspaceLoading ? (
@@ -697,15 +736,15 @@ export default function RulesPage() {
                   <Skeleton className="h-24 w-full" />
                 </>
               ) : suggestedRules.length === 0 ? (
-                <div className={cn(PANEL_CLASS, "p-4 text-sm text-white/45")}>
+                <RulesCard paddingClassName="p-4 text-sm text-white/45">
                   No strong AI suggestions yet. More trading history and profile
                   data will surface better rule ideas here.
-                </div>
+                </RulesCard>
               ) : (
                 suggestedRules.map((rule) => (
-                  <div
+                  <RulesCard
                     key={`${rule.ruleType}-${rule.label}`}
-                    className={cn(PANEL_CLASS, "p-4")}
+                    className="h-full"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-2">
@@ -715,12 +754,12 @@ export default function RulesPage() {
                           </p>
                           <span
                             className={cn(
-                              "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide",
+                              "rounded-full border px-2 py-0.5 text-[10px]",
                               CATEGORY_TONES[rule.category] ??
                                 "border-white/10 bg-white/5 text-white/55"
                             )}
                           >
-                            {rule.category}
+                            {formatRuleBadgeLabel(rule.category)}
                           </span>
                           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/55">
                             Confidence {formatConfidence(rule.confidence)}
@@ -744,13 +783,13 @@ export default function RulesPage() {
                         Add rule
                       </Button>
                     </div>
-                  </div>
+                  </RulesCard>
                 ))
               )}
             </div>
-          </section>
+          </RulesSection>
 
-          <section className={cn(SECTION_CLASS, "overflow-hidden")}>
+          <RulesSection className="h-full">
             <div className="px-4 py-4">
               <div className="flex items-center gap-2 text-white">
                 <AlertTriangle className="size-4 text-rose-300" />
@@ -761,7 +800,7 @@ export default function RulesPage() {
               </p>
             </div>
 
-            <Separator />
+            <GoalContentSeparator />
 
             <div className="p-4 space-y-3">
               {isWorkspaceLoading ? (
@@ -770,12 +809,12 @@ export default function RulesPage() {
                   <Skeleton className="h-16 w-full" />
                 </>
               ) : recentViolations.length === 0 ? (
-                <div className={cn(PANEL_CLASS, "p-4 text-sm text-white/45")}>
+                <RulesCard paddingClassName="p-4 text-sm text-white/45">
                   No recent violations. Keep it clean.
-                </div>
+                </RulesCard>
               ) : (
                 recentViolations.map((violation) => (
-                  <div key={violation.id} className={cn(PANEL_CLASS, "p-3")}>
+                  <RulesCard key={violation.id} paddingClassName="p-3">
                     <div className="flex items-start gap-2">
                       <XCircle className="mt-0.5 size-4 shrink-0 text-rose-300" />
                       <div className="min-w-0">
@@ -787,14 +826,14 @@ export default function RulesPage() {
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </RulesCard>
                 ))
               )}
             </div>
-          </section>
+          </RulesSection>
         </div>
 
-        <section id="guardrails" className={cn(SECTION_CLASS, "overflow-hidden")}>
+        <RulesSection id="guardrails">
           <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4">
             <div>
               <div className="flex items-center gap-2 text-white">
@@ -821,10 +860,10 @@ export default function RulesPage() {
             </div>
           </div>
 
-          <Separator />
+          <GoalContentSeparator />
 
           <div className="grid gap-4 p-4 xl:grid-cols-[0.95fr_1.05fr_1fr]">
-            <div className={cn(PANEL_CLASS, "p-4")}>
+            <RulesCard>
               <div className="space-y-1">
                 <h4 className="text-sm font-medium text-white">
                   Required fields
@@ -854,9 +893,9 @@ export default function RulesPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </RulesCard>
 
-            <div className={cn(PANEL_CLASS, "p-4")}>
+            <RulesCard>
               <div className="space-y-1">
                 <h4 className="text-sm font-medium text-white">
                   Risk and execution thresholds
@@ -918,9 +957,9 @@ export default function RulesPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </RulesCard>
 
-            <div className={cn(PANEL_CLASS, "p-4")}>
+            <RulesCard>
               <div className="space-y-1">
                 <h4 className="text-sm font-medium text-white">
                   Rulebooks
@@ -964,11 +1003,11 @@ export default function RulesPage() {
                   </Button>
                 </div>
               </div>
-            </div>
+            </RulesCard>
           </div>
-        </section>
+        </RulesSection>
 
-        <section className={cn(SECTION_CLASS, "overflow-hidden")}>
+        <RulesSection>
           <div className="flex items-center justify-between gap-3 px-4 py-4">
             <div>
               <div className="flex items-center gap-2 text-white">
@@ -985,7 +1024,7 @@ export default function RulesPage() {
             </Badge>
           </div>
 
-          <Separator />
+          <GoalContentSeparator />
 
           <div className="p-4 space-y-3">
             {isWorkspaceLoading ? (
@@ -994,13 +1033,13 @@ export default function RulesPage() {
                 <Skeleton className="h-20 w-full" />
               </>
             ) : activeRules.length === 0 ? (
-              <div className={cn(PANEL_CLASS, "p-4 text-sm text-white/45")}>
+              <RulesCard paddingClassName="p-4 text-sm text-white/45">
                 No account rules saved yet. Accept an AI suggestion or build a
                 checklist below to start tracking process discipline.
-              </div>
+              </RulesCard>
             ) : (
               activeRules.map((rule) => (
-                <div key={rule.id} className={cn(PANEL_CLASS, "p-4")}>
+                <RulesCard key={rule.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1009,15 +1048,15 @@ export default function RulesPage() {
                         </p>
                         <span
                           className={cn(
-                            "rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide",
+                            "rounded-full border px-2 py-0.5 text-[10px]",
                             CATEGORY_TONES[rule.category] ??
                               "border-white/10 bg-white/5 text-white/55"
                           )}
                         >
-                          {rule.category}
+                          {formatRuleBadgeLabel(rule.category)}
                         </span>
                         <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/55">
-                          {rule.ruleType}
+                          {formatRuleBadgeLabel(rule.ruleType)}
                         </span>
                       </div>
 
@@ -1084,13 +1123,13 @@ export default function RulesPage() {
                       </Button>
                     </div>
                   </div>
-                </div>
+                </RulesCard>
               ))
             )}
           </div>
-        </section>
+        </RulesSection>
 
-        <section className={cn(SECTION_CLASS, "overflow-hidden")}>
+        <RulesSection>
           <div className="flex items-center justify-between gap-3 px-4 py-4">
             <div>
               <div className="flex items-center gap-2 text-white">
@@ -1106,7 +1145,7 @@ export default function RulesPage() {
             </Badge>
           </div>
 
-          <Separator />
+          <GoalContentSeparator />
 
           <div className="p-4 space-y-3">
             {isWorkspaceLoading ? (
@@ -1115,13 +1154,13 @@ export default function RulesPage() {
                 <Skeleton className="h-24 w-full" />
               </>
             ) : replayRulebooks.length === 0 ? (
-              <div className={cn(PANEL_CLASS, "p-4 text-sm text-white/45")}>
+              <RulesCard paddingClassName="p-4 text-sm text-white/45">
                 No rulebooks saved yet. Create one from your guardrails above
                 so reviews evaluate the same process.
-              </div>
+              </RulesCard>
             ) : (
               replayRulebooks.map((rulebook) => (
-                <div key={rulebook.id} className={cn(PANEL_CLASS, "p-4")}>
+                <RulesCard key={rulebook.id}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1181,14 +1220,14 @@ export default function RulesPage() {
                       </Button>
                     </div>
                   </div>
-                </div>
+                </RulesCard>
               ))
             )}
           </div>
-        </section>
+        </RulesSection>
 
         <section className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-          <div className={cn(SECTION_CLASS, "overflow-hidden")}>
+          <GoalSurface innerClassName="h-full overflow-hidden">
             <div className="px-4 py-4">
               <div className="flex items-center gap-2 text-white">
                 <ClipboardList className="size-4 text-blue-300" />
@@ -1200,7 +1239,7 @@ export default function RulesPage() {
               </p>
             </div>
 
-            <Separator />
+            <GoalContentSeparator />
 
             <div className="p-4 space-y-4">
               <div className="space-y-3">
@@ -1216,9 +1255,9 @@ export default function RulesPage() {
 
                 <div className="grid gap-3 lg:grid-cols-2">
                   {CHECKLIST_STARTERS.map((starter) => (
-                    <div
+                    <RulesCard
                       key={starter.id}
-                      className="rounded-lg border border-white/8 bg-black/10 p-3"
+                      paddingClassName="p-3"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -1248,7 +1287,7 @@ export default function RulesPage() {
                           </span>
                         ))}
                       </div>
-                    </div>
+                    </RulesCard>
                   ))}
                 </div>
               </div>
@@ -1299,7 +1338,7 @@ export default function RulesPage() {
               </div>
 
               {parsedChecklistItems.length > 0 ? (
-                <div className="rounded-lg border border-white/8 bg-black/10 p-3">
+                <RulesCard paddingClassName="p-3">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-white/35">
                     Preview
                   </p>
@@ -1323,7 +1362,7 @@ export default function RulesPage() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </RulesCard>
               ) : null}
 
               <Button
@@ -1334,9 +1373,9 @@ export default function RulesPage() {
                 Save checklist template
               </Button>
             </div>
-          </div>
+          </GoalSurface>
 
-          <div className={cn(SECTION_CLASS, "overflow-hidden")}>
+          <GoalSurface innerClassName="h-full overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div>
                 <div className="flex items-center gap-2 text-white">
@@ -1353,7 +1392,7 @@ export default function RulesPage() {
               </Badge>
             </div>
 
-            <Separator />
+            <GoalContentSeparator />
 
             <div className="p-4 space-y-3">
               {isWorkspaceLoading ? (
@@ -1362,13 +1401,13 @@ export default function RulesPage() {
                   <Skeleton className="h-24 w-full" />
                 </>
               ) : checklistTemplates.length === 0 ? (
-                <div className={cn(PANEL_CLASS, "p-4 text-sm text-white/45")}>
+                <RulesCard paddingClassName="p-4 text-sm text-white/45">
                   No templates saved yet. Build one from your best setup so
                   checklist completion becomes a meaningful process metric.
-                </div>
+                </RulesCard>
               ) : (
                 checklistTemplates.map((template) => (
-                  <div key={template.id} className={cn(PANEL_CLASS, "p-4")}>
+                  <RulesCard key={template.id}>
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1421,11 +1460,11 @@ export default function RulesPage() {
                         <Trash2 className="size-3.5 text-rose-200" />
                       </Button>
                     </div>
-                  </div>
+                  </RulesCard>
                 ))
               )}
             </div>
-          </div>
+          </GoalSurface>
         </section>
       </div>
     </div>

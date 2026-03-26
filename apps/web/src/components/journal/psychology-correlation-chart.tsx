@@ -114,9 +114,17 @@ export function PsychologyCorrelationChart({
     }
   }, [isFetching]);
 
-  const { data: optimalConditionsData } = trpc.journal.getOptimalTradingConditions.useQuery({
-    accountId,
-  });
+  const hasCorrelationSeedData =
+    Array.isArray(correlationsData) && correlationsData.length > 0;
+  const { data: optimalConditionsData } =
+    trpc.journal.getOptimalTradingConditions.useQuery(
+      {
+        accountId,
+      },
+      {
+        enabled: hasCorrelationSeedData,
+      }
+    );
   const correlations = React.useMemo(
     () =>
       [...((correlationsData ?? []) as PsychologyCorrelation[])].sort(
@@ -257,10 +265,9 @@ interface CorrelationCardProps {
 function CorrelationCard({ correlation }: CorrelationCardProps) {
   const [showChart, setShowChart] = React.useState(false);
   const isPositive = correlation.correlationCoefficient > 0;
-  const absCorrelation = Math.abs(correlation.correlationCoefficient);
 
   return (
-    <div className="rounded-sm border border-white/10 bg-sidebar p-3.5">
+    <div className="rounded-sm border border-white/5 bg-white/[0.02] p-3.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {isPositive ? (
@@ -289,11 +296,11 @@ function CorrelationCard({ correlation }: CorrelationCardProps) {
       <div className="mt-3 space-y-2">
         <div className="flex items-start gap-2">
           <CheckCircle className="h-3 w-3 text-green-400 mt-0.5" />
-          <p className="text-xs text-white/60">{correlation.insights.bestConditions}</p>
+          <p className="text-xs leading-5 text-white/60">{correlation.insights.bestConditions}</p>
         </div>
         <div className="flex items-start gap-2">
           <AlertCircle className="h-3 w-3 text-red-400 mt-0.5" />
-          <p className="text-xs text-white/60">{correlation.insights.worstConditions}</p>
+          <p className="text-xs leading-5 text-white/60">{correlation.insights.worstConditions}</p>
         </div>
       </div>
 
@@ -305,7 +312,7 @@ function CorrelationCard({ correlation }: CorrelationCardProps) {
           variant="ghost"
           size="sm"
           onClick={() => setShowChart(!showChart)}
-          className="h-6 text-xs text-white/40 hover:text-white"
+          className="h-6 px-0 text-xs text-white/40 hover:bg-transparent hover:text-white"
         >
           {showChart ? "Hide" : "Show"} chart
         </Button>
@@ -372,21 +379,24 @@ interface CorrelationMiniCardProps {
 
 function CorrelationMiniCard({ correlation }: CorrelationMiniCardProps) {
   const isPositive = correlation.correlationCoefficient > 0;
-  const absCorrelation = Math.abs(correlation.correlationCoefficient);
 
   const getBgColor = () => {
     if (correlation.significance === "high") {
-      return isPositive ? "bg-green-500/12 border-green-500/25" : "bg-red-500/12 border-red-500/25";
+      return isPositive
+        ? "bg-green-500/12 border-green-500/25"
+        : "bg-red-500/12 border-red-500/25";
     }
     if (correlation.significance === "medium") {
-      return isPositive ? "bg-teal-500/10 border-teal-500/20" : "bg-orange-500/10 border-orange-500/20";
+      return isPositive
+        ? "bg-teal-500/10 border-teal-500/20"
+        : "bg-orange-500/10 border-orange-500/20";
     }
-    return "bg-sidebar border-white/10";
+    return "bg-white/[0.02] border-white/5";
   };
 
   return (
-    <div className={cn("rounded-sm border p-2.5 text-center", getBgColor())}>
-      <p className="text-xs text-white/60 truncate">
+    <div className={cn("rounded-sm border p-3", getBgColor())}>
+      <p className="truncate text-xs text-white/60">
         {PSYCHOLOGY_LABELS[correlation.psychologyFactor]}
       </p>
       <p className={cn(

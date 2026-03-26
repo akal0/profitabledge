@@ -86,6 +86,7 @@ export const updateBrokerSettingsProcedure = protectedProcedure
     const account = await db
       .select({
         userId: tradingAccount.userId,
+        name: tradingAccount.name,
         breakevenThresholdPips: tradingAccount.breakevenThresholdPips,
       })
       .from(tradingAccount)
@@ -151,7 +152,9 @@ export const updateBrokerSettingsProcedure = protectedProcedure
         accountId: input.accountId,
         type: "settings_updated",
         title: "Broker settings updated",
-        body: `Updated broker settings for account ${input.accountId}.`,
+        body: `Updated broker settings for account ${
+          account[0].name ?? input.accountId
+        }.`,
         metadata: {
           accountId: input.accountId,
           updatedFields: Object.keys(updates),

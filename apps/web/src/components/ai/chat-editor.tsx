@@ -32,6 +32,7 @@ export interface ChatEditorHandle {
   clear: () => void;
   focus: () => void;
   insertText: (text: string) => void;
+  setText: (text: string) => void;
 }
 
 const mentionColors: Record<string, string> = {
@@ -173,6 +174,11 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
         editor.commands.focus();
         editor.commands.insertContent(text);
       },
+      setText: (text: string) => {
+        if (!editor) return;
+        editor.commands.setContent(text);
+        editor.commands.focus("end");
+      },
     }));
 
     if (!editor) {
@@ -181,9 +187,9 @@ export const ChatEditor = forwardRef<ChatEditorHandle, ChatEditorProps>(
 
     return (
       <div
-        className={cn("w-full hover:bg-sidebar-accent p-2 text-sm", className)}
+        className={cn("w-full hover:bg-sidebar-accent p-2 pb-3 text-sm", className)}
       >
-        <EditorContent editor={editor} className="px-4 py-3" />
+        <EditorContent editor={editor} className="px-4 pt-3 pb-5" />
       </div>
     );
   }

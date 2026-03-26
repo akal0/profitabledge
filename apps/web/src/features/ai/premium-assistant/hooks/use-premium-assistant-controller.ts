@@ -11,7 +11,7 @@ import { useAssistantPageContext } from "@/hooks/use-assistant-page-context";
 import { useAssistantStream } from "@/hooks/use-assistant-stream";
 import { usePDFExport } from "@/hooks/use-pdf-export";
 import type { AnalysisBlock, VizSpec } from "@/types/assistant-stream";
-import { trpcClient } from "@/utils/trpc";
+import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { normalizeGoalTargetType } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import type { ChatMessage } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import { usePremiumAssistantSuggestions } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-suggestions";
@@ -36,6 +36,10 @@ export function usePremiumAssistantController({
   );
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<ChatEditorHandle>(null);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  const loadRequestRef = useRef(0);
+  const pendingHydrationReportIdRef = useRef<string | null>(null);
+  const finalizedAssistantSignatureRef = useRef<string | null>(null);
   const [inputValue, setInputValue] = useState("");
   const [inputHtml, setInputHtml] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -63,15 +67,33 @@ export function usePremiumAssistantController({
   const { state, startStream, reset } = useAssistantStream();
   const { exportToPDF } = usePDFExport();
   const { fetchSuggestions } = usePremiumAssistantSuggestions({ accountId });
+  const reportsQueryKey = trpcOptions.ai.getReports.queryOptions({
+    limit: 50,
+    accountId,
+  }).queryKey;
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     if (!currentReportId) return;
 
     const loadMessages = async () => {
+      const requestId = ++loadRequestRef.current;
+      const reportId = currentReportId;
+
       try {
         const result = await trpcClient.ai.getMessages.query({
-          reportId: currentReportId,
+          reportId,
         });
+
+        if (
+          loadRequestRef.current !== requestId ||
+          currentReportId !== reportId
+        ) {
+          return;
+        }
 
         const loadedMessages: ChatMessage[] = result.items.map((message: any) => ({
           id: message.id,
@@ -84,11 +106,34 @@ export function usePremiumAssistantController({
             | AnalysisBlock[]
             | undefined,
         }));
+        const latestAssistantWithAnalysis = [...loadedMessages]
+          .reverse()
+          .find(
+            (message) =>
+              message.role === "assistant" &&
+              (message.visualization || (message.analysisBlocks?.length ?? 0) > 0)
+          );
+
+        const hasPendingPlaceholder = messagesRef.current.some(
+          (message) => message.role === "assistant" && message.content === ""
+        );
+        if (
+          pendingHydrationReportIdRef.current === reportId &&
+          hasPendingPlaceholder &&
+          loadedMessages.length <= messagesRef.current.length
+        ) {
+          return;
+        }
 
         setMessages(loadedMessages);
         setConversationHistory(
           loadedMessages.map((message) => `${message.role}: ${message.content}`)
         );
+        setSelectedVisualization(latestAssistantWithAnalysis?.visualization || null);
+        setSelectedAnalysisBlocks(
+          latestAssistantWithAnalysis?.analysisBlocks || []
+        );
+        setPanelOpen(Boolean(latestAssistantWithAnalysis));
       } catch (error) {
         console.error("Failed to load messages:", error);
       }
@@ -120,38 +165,37 @@ export function usePremiumAssistantController({
       .filter((line): line is string => Boolean(line))
       .join("\n");
 
-    if (!state.isDone || content.length === 0) return;
+    if (!state.isDone) return;
+
+    const fallbackContent =
+      state.error
+        ? `I ran into an error: ${state.error}`
+        : state.analysisBlocks.length > 0 || state.visualization
+          ? "I analyzed your data and added the result to the analysis panel."
+          : "I couldn't generate a useful answer for that question. Try asking it with a bit more detail.";
+
+    const finalContent = content.length > 0 ? content : fallbackContent;
+    const completionSignature = [
+      currentReportId || "no-report",
+      finalContent,
+      state.analysisBlocks.length,
+      Boolean(state.visualization),
+      state.error || "",
+    ].join("::");
+
+    if (finalizedAssistantSignatureRef.current === completionSignature) {
+      return;
+    }
+    finalizedAssistantSignatureRef.current = completionSignature;
 
     setMessages((prev) => {
       const lastMessage = prev[prev.length - 1];
       if (lastMessage?.role === "assistant" && lastMessage.content === "") {
-        if (currentReportId) {
-          trpcClient.ai.addMessage
-            .mutate({
-              reportId: currentReportId,
-              role: "assistant",
-              content,
-              data:
-                state.visualization || state.analysisBlocks.length > 0
-                  ? {
-                      visualization: state.visualization,
-                      analysisBlocks: state.analysisBlocks,
-                    }
-                  : undefined,
-            })
-            .catch((error) => {
-              if (process.env.NODE_ENV !== "production") {
-                console.error("Failed to persist assistant message:", error);
-              }
-            });
-          void queryClient.invalidateQueries({ queryKey: ["ai.getReports"] });
-        }
-
         return prev.map((message, index) =>
           index === prev.length - 1
             ? {
                 ...message,
-                content,
+                content: finalContent,
                 visualization: state.visualization || undefined,
                 analysisBlocks: state.analysisBlocks,
               }
@@ -159,19 +203,48 @@ export function usePremiumAssistantController({
         );
       }
 
-      return prev;
+      return [
+        ...prev,
+        {
+          id: `${Date.now()}-assistant`,
+          role: "assistant",
+          content: finalContent,
+          createdAt: new Date(),
+          visualization: state.visualization || undefined,
+          analysisBlocks: state.analysisBlocks,
+        },
+      ];
     });
 
-    setConversationHistory((prev) => [...prev, `assistant: ${content}`]);
-  }, [
-    currentReportId,
-    queryClient,
-    state.analysisBlocks,
-    state.isDone,
-    state.lineBuffer,
-    state.lines,
-    state.visualization,
-  ]);
+    if (currentReportId) {
+      pendingHydrationReportIdRef.current = null;
+      trpcClient.ai.addMessage
+        .mutate({
+          reportId: currentReportId,
+          role: "assistant",
+          content: finalContent,
+          data:
+            state.visualization || state.analysisBlocks.length > 0
+              ? {
+                  visualization: state.visualization,
+                  analysisBlocks: state.analysisBlocks,
+                }
+              : undefined,
+        })
+        .catch((error) => {
+          if (process.env.NODE_ENV !== "production") {
+            console.error("Failed to persist assistant message:", error);
+          }
+        });
+      void queryClient.invalidateQueries({ queryKey: reportsQueryKey });
+    }
+
+    setConversationHistory((prev) =>
+      prev[prev.length - 1] === `assistant: ${finalContent}`
+        ? prev
+        : [...prev, `assistant: ${finalContent}`]
+    );
+  }, [currentReportId, queryClient, reportsQueryKey, state]);
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -211,8 +284,9 @@ export function usePremiumAssistantController({
             accountId,
           });
           reportId = report.id;
+          pendingHydrationReportIdRef.current = reportId;
           setCurrentReportId(reportId);
-          void queryClient.invalidateQueries({ queryKey: ["ai.getReports"] });
+          void queryClient.invalidateQueries({ queryKey: reportsQueryKey });
         } catch (error) {
           if (process.env.NODE_ENV !== "production") {
             console.error("Failed to create report:", error);
@@ -259,6 +333,7 @@ export function usePremiumAssistantController({
         ...conversationHistory,
         `user: ${message}`,
       ];
+      finalizedAssistantSignatureRef.current = null;
       setConversationHistory(nextConversationHistory);
       setInputValue("");
       setInputHtml("");
@@ -291,6 +366,7 @@ export function usePremiumAssistantController({
 
   const handleSuggestionClick = useCallback((suggestion: string) => {
     setInputValue(suggestion);
+    editorRef.current?.setText(suggestion);
   }, []);
 
   const handleViewTrades = useCallback(
@@ -304,10 +380,14 @@ export function usePremiumAssistantController({
     setMessages([]);
     setConversationHistory([]);
     setCurrentReportId(null);
+    setSelectedVisualization(null);
+    setSelectedAnalysisBlocks([]);
+    pendingHydrationReportIdRef.current = null;
+    finalizedAssistantSignatureRef.current = null;
     reset();
     setPanelOpen(false);
-    queryClient.invalidateQueries({ queryKey: ["ai.getReports"] });
-  }, [queryClient, reset]);
+    queryClient.invalidateQueries({ queryKey: reportsQueryKey });
+  }, [queryClient, reportsQueryKey, reset]);
 
   const handleExportPDF = useCallback(async () => {
     if (messages.length === 0) {
@@ -328,9 +408,15 @@ export function usePremiumAssistantController({
   }, [exportToPDF, messages]);
 
   const handleSelectReport = useCallback((reportId: string) => {
+    reset();
+    setSelectedVisualization(null);
+    setSelectedAnalysisBlocks([]);
+    setPanelOpen(false);
+    pendingHydrationReportIdRef.current = null;
+    finalizedAssistantSignatureRef.current = null;
     setCurrentReportId(reportId);
     setHistorySidebarOpen(false);
-  }, []);
+  }, [reset]);
 
   const handleCreateGoal = useCallback(
     async (criteria: CustomGoalCriteria, title: string, type: string) => {
@@ -387,16 +473,21 @@ export function usePremiumAssistantController({
   );
 
   const currentVisualization =
-    selectedVisualization ||
     state.visualization ||
-    messages.filter((message) => message.role === "assistant").pop()?.visualization;
+    selectedVisualization ||
+    (!state.isStreaming
+      ? messages.filter((message) => message.role === "assistant").pop()
+          ?.visualization
+      : null);
 
   const currentAnalysisBlocks =
     selectedAnalysisBlocks ??
     (state.analysisBlocks.length > 0
       ? state.analysisBlocks
-      : messages.filter((message) => message.role === "assistant").pop()
-          ?.analysisBlocks || []);
+      : !state.isStreaming
+        ? messages.filter((message) => message.role === "assistant").pop()
+            ?.analysisBlocks || []
+        : []);
 
   return {
     accountId,

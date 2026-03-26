@@ -6,6 +6,11 @@ import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { trpcOptions } from "@/utils/trpc";
 import { useState } from "react";
 import {
@@ -108,7 +113,6 @@ export default function APISettingsPage() {
             href="/dashboard/settings/ea-setup"
             className="flex items-center gap-2 px-4 py-2 h-[38px] bg-blue-900/20 ring ring-blue-500/30 rounded-md text-blue-300 text-xs hover:bg-blue-900/30 transition"
           >
-            <Download className="size-3.5" />
             <span>Setup EA</span>
             <ExternalLink className="size-3" />
           </Link>
@@ -119,67 +123,97 @@ export default function APISettingsPage() {
 
       {/* Keys List */}
       <div className="px-6 sm:px-8 py-5">
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {apiKeys?.length === 0 ? (
-            <div className="text-center py-8 text-white/40">
-              <Key className="size-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No API keys yet</p>
-              <p className="text-xs mt-1">
-                Generate one to connect your MetaTrader EA
-              </p>
-            </div>
+            <GoalSurface className="lg:col-span-2 2xl:col-span-3">
+              <div className="py-12 text-center text-white/40">
+                <Key className="size-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No API keys yet</p>
+                <p className="text-xs mt-1">
+                  Generate one to connect your MetaTrader EA
+                </p>
+              </div>
+            </GoalSurface>
           ) : (
             apiKeys?.map((key) => (
-              <div
-                key={key.id}
-                className="flex items-center justify-between p-4 bg-sidebar-accent ring ring-white/5 rounded-md"
-              >
-                <div className="flex flex-col gap-1">
-                  <span className="text-white font-medium text-sm">
-                    {key.name}
-                  </span>
-                  <code className="text-xs text-white/60 font-mono">
-                    {key.keyPrefix}...
-                  </code>
-                  {key.lastUsedAt && (
-                    <span className="text-xs text-white/40">
-                      Last used: {new Date(key.lastUsedAt).toLocaleString()}
-                    </span>
-                  )}
-                </div>
+              <GoalSurface key={key.id} className="h-full">
+                <div className="p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-white">
+                        {key.name}
+                      </span>
+                      <code className="mt-1 block text-xs text-white/60 font-mono">
+                        {key.keyPrefix}...
+                      </code>
+                    </div>
 
-                <div className="flex items-center gap-2">
-                  {key.isActive ? (
-                    <Badge className="bg-teal-900/30 text-teal-400 ring-teal-500/30">
-                      Active
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary">Revoked</Badge>
-                  )}
+                    {key.isActive ? (
+                      <Badge className="bg-teal-900/30 text-teal-400 ring-teal-500/30">
+                        Active
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">Revoked</Badge>
+                    )}
+                  </div>
 
-                  {key.isActive && (
+                  <GoalContentSeparator className="mb-3.5 mt-3.5" />
+
+                  <div className="space-y-2 text-xs text-white/40">
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Prefix</span>
+                      <code className="font-mono text-white/65">
+                        {key.keyPrefix}...
+                      </code>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Status</span>
+                      <span className="text-white/65">
+                        {key.isActive ? "Active" : "Revoked"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Last used</span>
+                      <span className="text-right text-white/65">
+                        {key.lastUsedAt
+                          ? new Date(key.lastUsedAt).toLocaleString()
+                          : "Never"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <GoalContentSeparator className="mb-3.5 mt-3.5" />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {key.isActive ? (
+                      <Button
+                        type="button"
+                        onClick={() => handleRevokeKey(key.id)}
+                        disabled={revokeKey.isPending}
+                        className={getPropAssignActionButtonClassName({
+                          tone: "neutral",
+                          size: "sm",
+                        })}
+                      >
+                        Revoke
+                      </Button>
+                    ) : null}
+
                     <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleRevokeKey(key.id)}
-                      disabled={revokeKey.isPending}
-                      className="text-white/60 hover:text-white text-xs"
+                      type="button"
+                      onClick={() => handleDeleteKey(key.id)}
+                      disabled={deleteKey.isPending}
+                      className={getPropAssignActionButtonClassName({
+                        tone: "danger",
+                        size: "sm",
+                      })}
                     >
-                      Revoke
+                      <Trash2 className="size-3.5" />
+                      Delete
                     </Button>
-                  )}
-
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDeleteKey(key.id)}
-                    disabled={deleteKey.isPending}
-                    className="text-rose-400 hover:text-rose-300"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  </div>
                 </div>
-              </div>
+              </GoalSurface>
             ))
           )}
         </div>
@@ -268,7 +302,7 @@ export default function APISettingsPage() {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-white">
-                  Your API Key Has Been Generated
+                  Your API showKeyDialog has been generated
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-rose-400">
                   Copy this key now - you won't be able to see it again!
@@ -295,7 +329,7 @@ export default function APISettingsPage() {
                 <Button
                   size="sm"
                   onClick={handleCopyKey}
-                  className="ring ring-white/5 bg-teal-600/25 hover:bg-teal-600/35 text-teal-300"
+                  className="ring ring-teal-600/50 bg-teal-600/25 hover:bg-teal-600/35 text-teal-300"
                 >
                   {copiedKey ? (
                     <Check className="size-4" />
@@ -321,8 +355,8 @@ export default function APISettingsPage() {
                 href="/dashboard/settings/ea-setup"
                 className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-900/20 ring ring-blue-500/30 rounded-md text-blue-300 text-sm hover:bg-blue-900/30 transition"
               >
-                <Download className="size-4" />
-                <span>Next: Download &amp; Setup Expert Advisor</span>
+                <Download className="size-3.5" />
+                <span>Download &amp; setup expert advisor (EA)</span>
                 <ExternalLink className="size-3" />
               </Link>
             </div>
@@ -337,7 +371,7 @@ export default function APISettingsPage() {
                 }}
                 className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none w-full"
               >
-                I've Saved My Key
+                I've saved my key
               </Button>
             </div>
           </div>

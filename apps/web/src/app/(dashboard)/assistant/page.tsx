@@ -19,13 +19,15 @@ function AssistantPageContent() {
   const activeAccountId = accountId || selectedAccountId;
 
   return (
-    <PremiumAssistant
-      accountId={activeAccountId}
-      userImage={me?.image}
-      userName={me?.name}
-      className="h-[calc(100vh-12rem)]"
-      contextPathOverride={sourcePath}
-    />
+    <div className="flex min-h-0 w-full flex-1">
+      <PremiumAssistant
+        accountId={activeAccountId}
+        userImage={me?.image}
+        userName={me?.name}
+        className="h-full min-h-0 flex-1 self-stretch"
+        contextPathOverride={sourcePath}
+      />
+    </div>
   );
 }
 
@@ -42,7 +44,7 @@ export default function AssistantPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center h-[calc(100vh-12rem)] bg-sidebar">
+        <div className="flex min-h-0 w-full flex-1 items-center justify-center bg-sidebar">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
         </div>
       }

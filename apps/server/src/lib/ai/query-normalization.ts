@@ -33,6 +33,115 @@ export function buildAliasCatalog(): string {
   );
 }
 
+const ANALYSIS_DIMENSION_HINTS: Array<{ field: string; pattern: RegExp }> = [
+  {
+    field: "symbol",
+    pattern:
+      /\b(symbol|symbols|pair|pairs|asset|assets|instrument|instruments|ticker|tickers|gold|forex|eurusd|gbpusd|usdjpy|xauusd|xagusd|btcusd|ethusd|jpy pairs?)\b/i,
+  },
+  {
+    field: "sessionTag",
+    pattern: /\b(session|sessions|london|new york|ny\b|asia|asian|sydney)\b/i,
+  },
+  {
+    field: "tradeType",
+    pattern: /\b(direction|directions|long|longs|short|shorts|buy|sell)\b/i,
+  },
+  {
+    field: "edgeName",
+    pattern: /\b(edge|edges|playbook|playbooks)\b/i,
+  },
+  {
+    field: "modelTag",
+    pattern:
+      /\b(setup|setups|strategy|strategies|model|models|pattern|patterns|condition|conditions|combo|combos|combination|combinations|intersection|intersections)\b/i,
+  },
+  {
+    field: "protocolAlignment",
+    pattern:
+      /\b(protocol|aligned|against protocol|non aligned|non-aligned|discretionary)\b/i,
+  },
+  {
+    field: "weekday",
+    pattern:
+      /\b(day of week|weekday|weekdays|monday|tuesday|wednesday|thursday|friday)\b/i,
+  },
+  {
+    field: "timeOfDay",
+    pattern:
+      /\b(time of day|morning|afternoon|evening|night|market open|market close)\b/i,
+  },
+];
+
+const PROFILE_SCOPE_DIMENSIONS = new Set([
+  "symbol",
+  "sessionTag",
+  "tradeType",
+  "protocolAlignment",
+  "weekday",
+  "timeOfDay",
+]);
+
+const PROFILE_SUMMARY_PATTERNS = [
+  /what('?s| is) my edge/i,
+  /what('?s| are) my (edges?|leaks?|patterns?)/i,
+  /\b(which|what)\b.*\b(conditions?|patterns?)\b.*\b(improve|improves|strengthen|strengthens|weaken|weakens|hurt|hurts)\b.*\b(edge|edges)\b/i,
+  /\b(improve|improves|strengthen|strengthens|weaken|weakens|hurt|hurts)\b.*\b(edge|edges)\b/i,
+  /show (me )?my (profile|edge|leak)/i,
+  /my trading (profile|summary|overview)/i,
+  /where (do i|am i) (losing|leaking)/i,
+  /what (am i|do i) do(ing)? (well|wrong|right)/i,
+  /strengths? and weaknesses?/i,
+  /how am i doing/i,
+  /leav(e|ing).*(table|money|profit)/i,
+  /money.*(table|leaving|left)/i,
+  /exit(ing)? too (early|soon|late)/i,
+  /opportunity cost/i,
+  /how much.*(miss|left|leave|table)/i,
+];
+
+const PROFILE_SCOPE_HINT_RE =
+  /\b(by|per|vs|versus|compare|compared|against|combo|combos|combination|combinations|intersection|intersections|breakdown|split|rank|ranking|best|worst|most|least|top|bottom)\b/i;
+
+const CONDITION_QUERY_RE =
+  /\b(condition|conditions|combo|combos|combination|combinations|pattern|patterns|intersection|intersections|mix|stack|stacked)\b/i;
+
+export function detectAnalysisDimensions(message: string): string[] {
+  return ANALYSIS_DIMENSION_HINTS.filter((entry) => entry.pattern.test(message))
+    .map((entry) => entry.field)
+    .filter((field, index, all) => all.indexOf(field) === index);
+}
+
+export function isBroadProfileSummaryQuery(message: string): boolean {
+  return PROFILE_SUMMARY_PATTERNS.some((pattern) => pattern.test(message.trim()));
+}
+
+export function isConditionAnalysisQuery(message: string): boolean {
+  return CONDITION_QUERY_RE.test(message);
+}
+
+export function hasProfileAnalysisQualifier(message: string): boolean {
+  if (inferTimeframeFromMessage(message)) {
+    return true;
+  }
+
+  if (
+    detectAnalysisDimensions(message).some((field) =>
+      PROFILE_SCOPE_DIMENSIONS.has(field)
+    )
+  ) {
+    return true;
+  }
+
+  return PROFILE_SCOPE_HINT_RE.test(message);
+}
+
+export function shouldUseProfileSummaryShortcut(message: string): boolean {
+  return (
+    isBroadProfileSummaryQuery(message) && !hasProfileAnalysisQualifier(message)
+  );
+}
+
 export function inferTimeframeFromMessage(
   message: string
 ): TradeQueryPlan["timeframe"] | null {
@@ -102,6 +211,7 @@ export function inferTimeframeFromMessage(
   }
   if (
     lower.includes("this month") ||
+    lower.includes("last month") ||
     lower.includes("last 30 days") ||
     lower.includes("past month")
   ) {

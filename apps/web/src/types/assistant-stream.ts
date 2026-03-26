@@ -92,6 +92,8 @@ export interface VizDataConfig {
     b: { label: string; value: number | string; count?: number };
     delta?: number | string;
     deltaPercent?: string;
+    metricField?: string;
+    format?: "currency" | "percent" | "ratio" | "number";
   };
   
   // Trade IDs for "view trades" action

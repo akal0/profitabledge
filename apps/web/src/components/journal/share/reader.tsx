@@ -27,8 +27,8 @@ export function JournalShareReader({
   onSelectEntry: (entryId: string) => void;
 }) {
   return (
-    <div className="flex min-h-screen min-w-screen flex-col bg-[#0c0d10] text-white">
-      <header className="ring-b ring-white/8 bg-black/20 backdrop-blur-sm py-4">
+    <div className="flex min-h-screen min-w-screen flex-col bg-sidebar text-white">
+      <header className="ring-b ring-white/8 bg-sidebar/95 backdrop-blur-sm py-4">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <div className="min-w-0">
             <div className="text-xs text-white/30">Private journal share</div>

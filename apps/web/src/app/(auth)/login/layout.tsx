@@ -16,7 +16,7 @@ export default function LoginLayout({
 }) {
   return (
     <Suspense fallback={<RouteLoadingFallback route="login" className="min-h-screen" />}>
-      <AuthEntryGate>{children}</AuthEntryGate>
+      <AuthEntryGate mode="login">{children}</AuthEntryGate>
     </Suspense>
   );
 }

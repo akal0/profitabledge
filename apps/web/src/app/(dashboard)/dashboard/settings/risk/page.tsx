@@ -98,7 +98,7 @@ export default function RiskProfilePage() {
     <div className="flex flex-col w-full">
       {/* Position Sizing heading */}
       <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">Position Sizing</h2>
+        <h2 className="text-sm font-semibold text-white">Position sizing</h2>
         <p className="text-xs text-white/40 mt-0.5">
           Configure your position sizing parameters.
         </p>
@@ -110,7 +110,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Max Risk Per Trade
+            Max risk per trade
           </Label>
           <p className="text-xs text-white/40 mt-0.5">Percentage of account.</p>
         </div>
@@ -136,7 +136,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Sizing Method
+            Sizing method
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             How positions are sized.
@@ -150,10 +150,10 @@ export default function RiskProfilePage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="fixed">Fixed Lot</SelectItem>
-            <SelectItem value="risk_based">Risk-Based</SelectItem>
-            <SelectItem value="kelly">Kelly Criterion</SelectItem>
-            <SelectItem value="half_kelly">Half-Kelly</SelectItem>
+            <SelectItem value="fixed">Fixed lot</SelectItem>
+            <SelectItem value="risk_based">Risk-based</SelectItem>
+            <SelectItem value="kelly">Kelly criterion</SelectItem>
+            <SelectItem value="half_kelly">Half Kelly</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -164,7 +164,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Default Lot Size
+            Default lot size
           </Label>
           <p className="text-xs text-white/40 mt-0.5">For fixed lot sizing.</p>
         </div>
@@ -185,7 +185,7 @@ export default function RiskProfilePage() {
 
       {/* Daily Risk Limits heading */}
       <div className="px-6 sm:px-8 py-5">
-        <h2 className="text-sm font-semibold text-white">Daily Risk Limits</h2>
+        <h2 className="text-sm font-semibold text-white">Daily risk limits</h2>
         <p className="text-xs text-white/40 mt-0.5">
           Maximum exposure limits per day.
         </p>
@@ -197,7 +197,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Max Daily Loss
+            Max daily loss
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Stop trading after this loss.
@@ -225,7 +225,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Max Daily Trades
+            Max daily trades
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Maximum trades per day.
@@ -249,7 +249,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Max Concurrent Positions
+            Max concurrent positions
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Open positions at once.
@@ -272,7 +272,7 @@ export default function RiskProfilePage() {
       {/* Drawdown Management heading */}
       <div className="px-6 sm:px-8 py-5">
         <h2 className="text-sm font-semibold text-white">
-          Drawdown Management
+          Drawdown management
         </h2>
         <p className="text-xs text-white/40 mt-0.5">
           Weekly and monthly drawdown limits.
@@ -285,7 +285,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Max Weekly Loss
+            Max weekly loss
           </Label>
           <p className="text-xs text-white/40 mt-0.5">Weekly loss threshold.</p>
         </div>
@@ -311,7 +311,7 @@ export default function RiskProfilePage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Max Monthly Drawdown
+            Max monthly drawdown
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Monthly max loss threshold.
@@ -338,7 +338,7 @@ export default function RiskProfilePage() {
       {/* Risk Escalation heading */}
       <div className="px-6 sm:px-8 py-5">
         <h2 className="text-sm font-semibold text-white">
-          Risk Escalation Rules
+          Risk escalation rules
         </h2>
         <p className="text-xs text-white/40 mt-0.5">
           Automatic risk adjustments triggered by trading behavior.
@@ -397,7 +397,7 @@ export default function RiskProfilePage() {
           onClick={reset}
           className="text-white/40 hover:text-white/60 text-xs"
         >
-          Reset to Defaults
+          Reset to defaults
         </Button>
         <Button
           onClick={save}

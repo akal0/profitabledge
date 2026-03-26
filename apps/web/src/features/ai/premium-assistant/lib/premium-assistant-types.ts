@@ -12,18 +12,15 @@ export interface ChatMessage {
 }
 
 export const TRADING_SUGGESTIONS = [
-  "What's my edge?",
-  "Where am I leaking money?",
-  "Am I tilted right now?",
-  "How is this session going?",
-  "What's my most profitable pair this week?",
-  "What's my win rate in the New York session?",
-  "How's my performance this month?",
-  "Which day of the week am I most profitable?",
-  "What's my average trade duration?",
-  "How much am I leaving on the table?",
-  "What should I focus on in my journal?",
-  "How close am I to failing my prop challenge?",
+  "Which combinations of setup, session, symbol, and direction perform best?",
+  "What patterns separate my best trades from my worst trades?",
+  "Where do I lose the most money across columns and intersections?",
+  "Which mistakes or habits are hurting performance the most?",
+  "What is my edge?",
+  "What should I focus on next?",
+  "What is actually driving my profitability?",
+  "Which conditions improve or weaken my edge?",
+  "Which trade attributes correlate most with strong expectancy?",
 ];
 
 export function normalizeGoalTargetType(metric: CustomGoalCriteria["metric"]) {

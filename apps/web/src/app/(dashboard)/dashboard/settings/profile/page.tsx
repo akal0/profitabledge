@@ -32,6 +32,7 @@ import {
   type CoverFrameDimensions,
 } from "@/components/cover-image-crop-dialog";
 import { ProfileEffectsEditor } from "@/features/growth/components/affiliate-profile-effects";
+import { DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE } from "@/lib/default-profile-banner";
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -309,7 +310,12 @@ export default function EditProfilePage() {
           {/* Cover / Banner */}
           <div
             ref={bannerContainerRef}
-            className="relative h-52 md:h-64 bg-gradient-to-r from-teal-900/40 to-indigo-900/40"
+            className="relative h-52 md:h-64 bg-sidebar-accent"
+            style={
+              !bannerUrl
+                ? { backgroundImage: DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE }
+                : undefined
+            }
           >
             {bannerUrl && (
               <img

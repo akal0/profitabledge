@@ -1,69 +1,81 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
-import { buildPostAuthContinuePath, resolvePostAuthPath } from "@/lib/post-auth-paths";
+import { markLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
+import {
+  buildPostAuthContinuePath,
+  buildPostLoginPath,
+  resolvePostAuthPath,
+} from "@/lib/post-auth-paths";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
 
 type AuthEntryGateProps = {
   children: ReactNode;
+  mode?: "login" | "signup";
 };
 
-export function AuthEntryGate({ children }: AuthEntryGateProps) {
+const AUTH_ENTRY_GATE_MAX_WAIT_MS = 900;
+
+export function AuthEntryGate({
+  children,
+  mode = "signup",
+}: AuthEntryGateProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const {
-    isSessionPending,
-    hasConfirmedSession,
-    hasAttemptedSessionRecovery,
-    isRecoveringSession,
-  } = useConfirmedSession();
+  const { isSessionPending, hasConfirmedSession } = useConfirmedSession({
+    autoRecover: false,
+  });
+  const [canRenderChildren, setCanRenderChildren] = useState(
+    () => !isSessionPending
+  );
 
   const requestedReturnTo = useMemo(
     () => resolvePostAuthPath(searchParams?.get("returnTo")),
     [searchParams]
   );
-  const postAuthContinuePath = useMemo(
-    () => buildPostAuthContinuePath(requestedReturnTo),
-    [requestedReturnTo]
+  const postAuthPath = useMemo(
+    () =>
+      mode === "login"
+        ? buildPostLoginPath(requestedReturnTo)
+        : buildPostAuthContinuePath(requestedReturnTo),
+    [mode, requestedReturnTo]
   );
 
   useEffect(() => {
-    if (isSessionPending || isRecoveringSession || !hasConfirmedSession) {
+    if (!hasConfirmedSession) {
       return;
     }
 
-    router.replace(postAuthContinuePath);
-  }, [
-    hasConfirmedSession,
-    isRecoveringSession,
-    isSessionPending,
-    postAuthContinuePath,
-    router,
-  ]);
+    if (mode === "login") {
+      markLoginOnboardingBypass();
+    }
 
-  if (isSessionPending || isRecoveringSession) {
-    return (
-      <RouteLoadingFallback
-        route="continue"
-        className="min-h-screen"
-        message="Checking your session and opening your workspace..."
-      />
-    );
-  }
+    router.replace(postAuthPath);
+  }, [hasConfirmedSession, mode, postAuthPath, router]);
 
-  if (!hasConfirmedSession && !hasAttemptedSessionRecovery) {
-    return (
-      <RouteLoadingFallback
-        route="continue"
-        className="min-h-screen"
-        message="Checking your session and opening your workspace..."
-      />
-    );
-  }
+  useEffect(() => {
+    if (hasConfirmedSession) {
+      setCanRenderChildren(false);
+      return;
+    }
+
+    if (!isSessionPending) {
+      setCanRenderChildren(true);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCanRenderChildren(true);
+    }, AUTH_ENTRY_GATE_MAX_WAIT_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [hasConfirmedSession, isSessionPending]);
 
   if (hasConfirmedSession) {
     return (
@@ -71,6 +83,16 @@ export function AuthEntryGate({ children }: AuthEntryGateProps) {
         route="continue"
         className="min-h-screen"
         message="You're already signed in. Opening your workspace..."
+      />
+    );
+  }
+
+  if (!canRenderChildren) {
+    return (
+      <RouteLoadingFallback
+        route="continue"
+        className="min-h-screen"
+        message="Checking your session and opening your workspace..."
       />
     );
   }

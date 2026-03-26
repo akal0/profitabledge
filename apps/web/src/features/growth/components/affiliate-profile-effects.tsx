@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GoalContentSeparator } from "@/components/goals/goal-surface";
+import { DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE } from "@/lib/default-profile-banner";
 import { cn } from "@/lib/utils";
 import {
   PFP_EFFECT_PRESETS,
@@ -57,8 +58,7 @@ const PROFILE_PREVIEW_THEMES: Record<
 > = {
   neutral: {
     accent: "#94a3b8",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(148,163,184,0.28) 0%, transparent 24%), radial-gradient(circle at 78% 18%, rgba(255,255,255,0.12) 0%, transparent 20%), linear-gradient(135deg, rgba(24,24,27,0.96) 0%, rgba(15,23,42,0.96) 100%)",
+    banner: DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE,
   },
   gold_glow: {
     accent: "#fbbf24",

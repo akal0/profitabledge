@@ -12,25 +12,15 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import type { VizSpec, VizDataConfig } from "@/types/assistant-stream";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Bar,
-  BarChart,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
+  formatDisplayCurrency,
+  formatDisplayNumber,
+} from "@/lib/format-display";
+import type { VizSpec, VizDataConfig } from "@/types/assistant-stream";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Bar, BarChart, Cell, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Calendar, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DailyNetCard,
-  PerformanceWeekdayCard,
-} from "@/features/dashboard/charts/components/comparison-chart-cards";
 import {
   BaseBarChart,
   BaseAreaChart,
@@ -39,6 +29,12 @@ import {
   BaseComparisonCard,
   BaseTable,
 } from "./charts";
+import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import {
+  DashboardChartTooltipFrame,
+  DashboardChartTooltipRow,
+} from "@/components/dashboard/charts/dashboard-chart-ui";
 
 interface WidgetBlockRendererProps {
   viz: VizSpec;
@@ -51,23 +47,21 @@ export function WidgetBlockRenderer({
   viz,
   className,
   onViewTrades,
-  accountId,
+  accountId: _accountId,
 }: WidgetBlockRendererProps) {
   const { type, data, title, subtitle, style, mode } = viz;
   const cardTitle = formatCardTitle(title);
+  const content = renderVisualization(
+    type,
+    data,
+    style,
+    mode,
+    title,
+    onViewTrades
+  );
 
-  if (type === "weekday_performance" && !(data.rows && data.rows.length > 0)) {
-    return (
-      <PerformanceWeekdayCard
-        accountId={accountId}
-        className="bg-transparent border-none p-0"
-        hideComparison={true}
-      />
-    );
-  }
-
-  if (type === "daily_pnl" && !(data.rows && data.rows.length > 0)) {
-    return <DailyNetCard accountId={accountId} hideComparison={true} />;
+  if (type === "text_answer") {
+    return null;
   }
 
   return (
@@ -77,7 +71,7 @@ export function WidgetBlockRenderer({
       mode={mode}
       className={className}
     >
-      {renderVisualization(type, data, style, mode, title, onViewTrades)}
+      {content ?? <EmptyVisualizationState />}
     </AnalysisWidgetShell>
   );
 }
@@ -144,6 +138,12 @@ function KPISingleViz({
 }
 
 function KPIGridViz({ data }: { data: VizDataConfig }) {
+  if (!data.rows?.length) {
+    return (
+      <EmptyVisualizationState message="No summary metrics available for this query." />
+    );
+  }
+
   return <BaseKpiGrid items={data.rows || []} />;
 }
 
@@ -157,9 +157,15 @@ function BarChartViz({
 }) {
   const rows = data.rows || [];
   const chartData = rows.map((r: any) => ({
-    name: r.label || r.name || r[data.xAxis || "label"],
-    value: r.value || r[data.yAxis || "value"] || 0,
+    name: r.label ?? r.name ?? r[data.xAxis || "label"],
+    value: Number(r.value ?? r[data.yAxis || "value"] ?? 0),
   }));
+
+  if (!chartData.length) {
+    return (
+      <EmptyVisualizationState message="No ranked chart data available for this query." />
+    );
+  }
 
   return (
     <BaseBarChart
@@ -179,8 +185,8 @@ function AssetProfitabilityViz({
 }) {
   const rows = data.rows || [];
   const rawData = rows.map((r: any) => ({
-    asset: r.label || r.name || r[data.xAxis || "label"],
-    profit: r.value || r[data.yAxis || "value"] || 0,
+    asset: r.label ?? r.name ?? r[data.xAxis || "label"],
+    profit: Number(r.value ?? r[data.yAxis || "value"] ?? 0),
   }));
 
   const chartData = React.useMemo(() => {
@@ -256,24 +262,28 @@ function AssetProfitabilityViz({
   }, [chartData]);
 
   const currencyTick = (v: number) => {
-    const abs = Math.abs(Math.round(v));
-    const prefix = v < 0 ? "-$" : "$";
-    return `${prefix}${abs.toLocaleString()}`;
+    return formatDisplayCurrency(Math.round(v));
   };
 
+  if (!chartData.length) {
+    return (
+      <EmptyVisualizationState message="No asset performance data is available for this query." />
+    );
+  }
+
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {bestWorst && chartData.length > 1 && (
         <p className="text-xs text-white/50">
           Most profitable asset:{" "}
           <span className="text-teal-400 font-medium">
-            {bestWorst.best.asset} ({bestWorst.best.profit < 0 ? "-$" : "$"}
-            {Math.abs(bestWorst.best.profit).toLocaleString()})
+            {bestWorst.best.asset} (
+            {formatDisplayCurrency(bestWorst.best.profit)})
           </span>{" "}
           · Least profitable asset:{" "}
           <span className="text-rose-400 font-medium">
-            {bestWorst.worst.asset} ({bestWorst.worst.profit < 0 ? "-$" : "$"}
-            {Math.abs(bestWorst.worst.profit).toLocaleString()})
+            {bestWorst.worst.asset} (
+            {formatDisplayCurrency(bestWorst.worst.profit)})
           </span>
         </p>
       )}
@@ -294,83 +304,74 @@ function AssetProfitabilityViz({
         </p>
       )}
 
-      <div className="h-56 md:h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={chartData}
-            margin={{ top: 12, right: 0, left: 20, bottom: -4 }}
-            onMouseLeave={() => setActiveIndex(undefined)}
-          >
-            <CartesianGrid
-              vertical={false}
-              strokeDasharray="8 8"
-              stroke="rgba(255,255,255,0.1)"
-            />
-            <YAxis
-              domain={[niceScale.min, niceScale.max]}
-              ticks={niceScale.ticks}
-              tickLine={false}
-              axisLine={false}
-              width={28}
-              tickMargin={8}
-              tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
-              tickFormatter={currencyTick}
-            />
-            <XAxis
-              dataKey="asset"
-              tickLine={false}
-              tickMargin={10}
-              axisLine={false}
-              tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
-              tickFormatter={(value) => String(value).slice(0, 12)}
-            />
-            <Tooltip
-              cursor={false}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
-                const entry = payload[0];
-                const v = Number(entry.value ?? 0);
-                const sign = v < 0 ? "-$" : "$";
-                const asset = entry.payload?.asset ?? "Asset";
-                return (
-                  <div className="bg-dashboard-background border border-white/10 grid min-w-[16rem] gap-2 border-[0.5px] p-3 px-0 text-xs shadow-xl">
-                    <div className="text-[11px] font-medium text-white px-3">
-                      Profit
-                    </div>
-                    <div className="h-px bg-white/10" />
-                    <div className="flex w-full justify-between px-3 font-semibold">
-                      <span className="text-white/80">{asset}</span>
-                      <span
-                        className={cn(
-                          v < 0 ? "text-rose-400" : "text-teal-400"
-                        )}
-                      >
-                        {sign}
-                        {Math.abs(Math.round(v)).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                );
-              }}
-            />
-            <Bar dataKey="profit" barSize={32} radius={[0, 0, 0, 0]}>
-              {chartData.map((entry: any, index: number) => {
-                const isActive = index === highlightIndex;
-                const hoverFill = entry.profit >= 0 ? "#2dd4bf" : "#fb7185";
-                return (
-                  <Cell
-                    key={index}
-                    className="duration-200"
-                    opacity={isActive ? 1 : 0.45}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    fill={isActive ? hoverFill : "#6b7280"}
+      <ChartContainer
+        config={{ profit: { label: "Profit", color: "#2dd4bf" } }}
+        className="w-full min-h-[18rem] flex-1 aspect-auto"
+      >
+        <BarChart
+          data={chartData}
+          margin={{ top: 12, right: 8, left: 8, bottom: 4 }}
+          onMouseLeave={() => setActiveIndex(undefined)}
+        >
+          <CartesianGrid
+            vertical={false}
+            strokeDasharray="8 8"
+            stroke="rgba(255,255,255,0.1)"
+          />
+          <YAxis
+            domain={[niceScale.min, niceScale.max]}
+            ticks={niceScale.ticks}
+            tickLine={false}
+            axisLine={false}
+            width={56}
+            tickMargin={8}
+            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+            tickFormatter={currencyTick}
+          />
+          <XAxis
+            dataKey="asset"
+            tickLine={false}
+            tickMargin={10}
+            axisLine={false}
+            tick={{ fill: "rgba(255,255,255,0.5)", fontSize: 10 }}
+            tickFormatter={(value) => String(value).slice(0, 12)}
+          />
+          <ChartTooltip
+            cursor={false}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null;
+              const entry = payload[0];
+              const v = Number(entry.value ?? 0);
+              const asset = entry.payload?.asset ?? "Asset";
+              return (
+                <DashboardChartTooltipFrame title="Profit">
+                  <DashboardChartTooltipRow
+                    label={asset}
+                    value={formatDisplayCurrency(v)}
+                    tone={v < 0 ? "negative" : "positive"}
+                    indicatorColor={v < 0 ? "#fb7185" : "#2dd4bf"}
                   />
-                );
-              })}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+                </DashboardChartTooltipFrame>
+              );
+            }}
+          />
+          <Bar dataKey="profit" barSize={32} radius={[0, 0, 0, 0]}>
+            {chartData.map((entry: any, index: number) => {
+              const isActive = index === highlightIndex;
+              const hoverFill = entry.profit >= 0 ? "#2dd4bf" : "#fb7185";
+              return (
+                <Cell
+                  key={index}
+                  className="duration-200"
+                  opacity={isActive ? 1 : 0.45}
+                  onMouseEnter={() => setActiveIndex(index)}
+                  fill={isActive ? hoverFill : "#6b7280"}
+                />
+              );
+            })}
+          </Bar>
+        </BarChart>
+      </ChartContainer>
     </div>
   );
 }
@@ -383,19 +384,24 @@ function HorizontalBarViz({
   style?: VizSpec["style"];
 }) {
   const rows = data.rows || [];
+  if (!rows.length) {
+    return (
+      <EmptyVisualizationState message="No loss breakdown is available for this query." />
+    );
+  }
   const maxValue = Math.max(
     ...rows.map((r: any) => Math.abs(Number(r?.value ?? 0))),
     1
   );
 
   return (
-    <div className="space-y-4">
+    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
       {rows.map((row: any, i: number) => (
         <div key={i} className="space-y-1">
           <div className="flex justify-between text-xs">
             <span className="text-white/70">{sentenceCase(row.label)}</span>
             <span className="text-rose-400 font-medium">
-              -${Math.abs(Number(row?.value ?? 0)).toLocaleString()}
+              {formatDisplayCurrency(-Math.abs(Number(row?.value ?? 0)))}
             </span>
           </div>
           <div className="h-2 bg-white/5 overflow-hidden">
@@ -415,7 +421,7 @@ function HorizontalBarViz({
         <div className="pt-2 border-t border-white/5 flex justify-between text-xs">
           <span className="text-white/50">Total</span>
           <span className="text-rose-400 font-semibold">
-            -${Math.abs(Number(data.summary.total)).toLocaleString()}
+            {formatDisplayCurrency(-Math.abs(Number(data.summary.total)))}
           </span>
         </div>
       )}
@@ -433,32 +439,54 @@ function AreaChartViz({
 }) {
   const rows = data.rows || [];
   const chartData = rows.map((r: any) => ({
-    name: r.x || r.date || r.day || r.label,
+    name: r.x ?? r.date ?? r.day ?? r.label,
     value: Number(r.y ?? r.profit ?? r.value ?? 0) || 0,
   }));
+
+  if (!chartData.length) {
+    return (
+      <EmptyVisualizationState
+        message={
+          variant === "daily_pnl"
+            ? "No daily P&L history is available for this query."
+            : "No timeline data is available for this query."
+        }
+      />
+    );
+  }
 
   return <BaseAreaChart data={chartData} variant={variant} />;
 }
 
 function ComparisonViz({ data }: { data: VizDataConfig }) {
   const comparison = data.comparison;
-  if (!comparison) return null;
+  if (!comparison) {
+    return (
+      <EmptyVisualizationState message="No comparison data is available for this query." />
+    );
+  }
 
   const { a, b, delta, deltaPercent } = comparison;
+  const formatValue = createComparisonFormatter(comparison.format);
   return (
     <BaseComparisonCard
       a={{
         label: a.label,
-        value: typeof a.value === "number" ? a.value : parseFloat(String(a.value)),
+        value:
+          typeof a.value === "number" ? a.value : parseFloat(String(a.value)),
         count: a.count,
       }}
       b={{
         label: b.label,
-        value: typeof b.value === "number" ? b.value : parseFloat(String(b.value)),
+        value:
+          typeof b.value === "number" ? b.value : parseFloat(String(b.value)),
         count: b.count,
       }}
-      delta={typeof delta === "number" ? delta : parseFloat(String(delta || "0"))}
+      delta={
+        typeof delta === "number" ? delta : parseFloat(String(delta || "0"))
+      }
       deltaPercent={deltaPercent}
+      formatValue={formatValue}
     />
   );
 }
@@ -470,6 +498,12 @@ function TableViz({
   data: VizDataConfig;
   onViewTrades?: (tradeIds: string[]) => void;
 }) {
+  if (!data.rows?.length || !data.columns?.length) {
+    return (
+      <EmptyVisualizationState message="No table rows are available for this query." />
+    );
+  }
+
   return (
     <BaseTable
       rows={data.rows || []}
@@ -493,12 +527,17 @@ function CalendarPreviewViz({
   const rows = data.rows || [];
   const dateRange = data.dateRange;
   const tradeIds = data.tradeIds || [];
+  if (!rows.length) {
+    return (
+      <EmptyVisualizationState message="No calendar data is available for this query." />
+    );
+  }
 
   // Group by date for calendar-like display
   const days = rows.slice(0, 14); // Show max 2 weeks
 
   return (
-    <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {dateRange && (
         <div className="flex items-center gap-2 text-xs text-white/50">
           <Calendar className="w-3 h-3" />
@@ -573,8 +612,14 @@ function WinRateViz({ data }: { data: VizDataConfig }) {
       ? data.value
       : parseFloat(String(data.value || "0"));
 
+  if (!Number.isFinite(value)) {
+    return (
+      <EmptyVisualizationState message="No win-rate summary is available for this query." />
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center py-4">
+    <div className="flex h-full min-h-0 flex-col items-center justify-center py-4">
       <div className="relative w-24 h-24">
         <svg className="w-full h-full transform -rotate-90">
           <circle
@@ -614,11 +659,19 @@ function WinRateViz({ data }: { data: VizDataConfig }) {
 function TradeCountsViz({ data }: { data: VizDataConfig }) {
   const rows = data.rows || [];
 
+  if (!rows.length) {
+    return (
+      <EmptyVisualizationState message="No trade-count data is available for this query." />
+    );
+  }
+
   return (
-    <div className="space-y-2">
+    <div className="flex h-full min-h-0 flex-col justify-center gap-2">
       {rows.map((row: any, i: number) => (
         <div key={i} className="flex items-center justify-between py-1">
-          <span className="text-xs text-white/50">{row.period}</span>
+          <span className="text-xs text-white/50">
+            {row.label || row.period || row.name || `Group ${i + 1}`}
+          </span>
           <div className="flex items-center gap-2">
             <div className="w-24 h-2 bg-white/5 rounded-full overflow-hidden">
               <div
@@ -645,24 +698,55 @@ function TradeCountsViz({ data }: { data: VizDataConfig }) {
 // ===== HELPERS =====
 
 function formatCurrency(value: number): string {
-  const absValue = Math.abs(value);
-  const sign = value < 0 ? "-$" : "$";
-  return `${sign}${absValue.toLocaleString(undefined, {
-    maximumFractionDigits: 2,
-  })}`;
+  return formatDisplayCurrency(value);
+}
+
+function createComparisonFormatter(
+  format?: VizDataConfig["comparison"] extends infer T
+    ? T extends { format?: infer U }
+      ? U
+      : never
+    : never
+) {
+  switch (format) {
+    case "percent":
+      return (value: number) =>
+        `${formatDisplayNumber(value, { maximumFractionDigits: 1 })}%`;
+    case "ratio":
+      return (value: number) =>
+        `${formatDisplayNumber(value, { maximumFractionDigits: 2 })}R`;
+    case "number":
+      return (value: number) =>
+        formatDisplayNumber(value, { maximumFractionDigits: 2 });
+    case "currency":
+    default:
+      return (value: number) => formatDisplayCurrency(value);
+  }
 }
 
 function formatCardTitle(title?: string): string {
   if (!title) return "";
   const trimmed = title.trim();
   if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
 
 function sentenceCase(value: string): string {
   const trimmed = (value || "").trim();
   if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function EmptyVisualizationState({
+  message = "No chart data available for this query.",
+}: {
+  message?: string;
+}) {
+  return (
+    <div className="flex min-h-[16rem] flex-1 items-center justify-center rounded-sm border border-dashed border-white/8 bg-white/[0.02] px-6 text-center">
+      <p className="max-w-sm text-sm text-white/40">{message}</p>
+    </div>
+  );
 }
 
 function AnalysisWidgetShell({
@@ -679,33 +763,29 @@ function AnalysisWidgetShell({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      className={cn(
-        "bg-sidebar h-full w-full border border-white/5 p-1 flex flex-col group rounded-sm",
-        className
-      )}
-    >
-      <div className="flex w-full items-start justify-between gap-3 p-3.5">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium text-white/50">
-            <span className="normal-case">{title}</span>
-          </h2>
-          {subtitle && <p className="text-xs text-white/40">{subtitle}</p>}
+    <WidgetWrapper
+      className={cn("h-auto min-h-[28rem] rounded-lg", className)}
+      header={
+        <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <h2 className="text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
+              <span className="block truncate normal-case">{title}</span>
+            </h2>
+            {subtitle ? (
+              <p className="truncate text-xs text-white/40">{subtitle}</p>
+            ) : null}
+          </div>
+          {mode === "singular" ? (
+            <div className="shrink-0 rounded-sm border border-white/5 bg-sidebar px-3 py-1.5 text-[11px] font-medium text-white/70">
+              Top result
+            </div>
+          ) : null}
         </div>
-        {mode === "singular" && (
-          <Badge
-            variant="outline"
-            className="text-[10px] font-normal rounded-none px-3 py-1.5"
-          >
-            Top result
-          </Badge>
-        )}
-      </div>
-
-      <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col h-full w-full rounded-sm">
-        <div className="flex flex-col p-3.5 h-full">{children}</div>
-      </div>
-    </div>
+      }
+      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+    >
+      <div className="flex min-h-0 flex-1 flex-col p-3.5">{children}</div>
+    </WidgetWrapper>
   );
 }
 
@@ -713,15 +793,18 @@ function AnalysisWidgetShell({
 
 export function WidgetBlockSkeleton() {
   return (
-    <div className="bg-sidebar h-full w-full border border-white/5 p-1 flex flex-col group rounded-sm">
-      <div className="flex w-full items-start justify-between gap-3 p-3.5">
-        <Skeleton className="h-4 w-32" />
-      </div>
-      <div className="bg-white dark:bg-sidebar-accent flex flex-col h-full w-full rounded-sm">
-        <div className="flex flex-col p-3.5 h-full">
-          <Skeleton className="h-48 w-full" />
+    <WidgetWrapper
+      className="h-auto min-h-[28rem] rounded-lg"
+      header={
+        <div className="widget-header flex min-h-[48px] w-full items-center gap-3 px-3.5">
+          <Skeleton className="h-4 w-32" />
         </div>
+      }
+      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+    >
+      <div className="flex min-h-0 flex-1 flex-col p-3.5">
+        <Skeleton className="h-full min-h-[16rem] w-full" />
       </div>
-    </div>
+    </WidgetWrapper>
   );
 }

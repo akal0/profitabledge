@@ -16,6 +16,11 @@ import { toast } from "sonner";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { trpcOptions, queryClient } from "@/utils/trpc";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
+import {
+  ensureWebPushSubscription,
+  removeWebPushSubscription,
+} from "@/lib/push-notifications";
+import { useEffect } from "react";
 
 export default function NotificationsSettingsPage() {
   const { data: preferences } = useQuery(
@@ -34,16 +39,27 @@ export default function NotificationsSettingsPage() {
 
   const handleToggle = async (key: string, nextValue: boolean) => {
     if (key === "push" && nextValue && typeof Notification !== "undefined") {
-      if (Notification.permission === "default") {
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") {
+      try {
+        const subscribed = await ensureWebPushSubscription();
+        if (!subscribed) {
           toast.error("Desktop notifications were blocked.");
           return;
         }
-      }
-      if (Notification.permission === "denied") {
-        toast.error("Desktop notifications are blocked in your browser.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Failed to enable push notifications"
+        );
         return;
+      }
+    }
+
+    if (key === "push" && !nextValue) {
+      try {
+        await removeWebPushSubscription();
+      } catch {
+        // Keep preference update available even if browser cleanup fails.
       }
     }
 
@@ -55,14 +71,22 @@ export default function NotificationsSettingsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!preferences?.push) return;
+
+    void ensureWebPushSubscription().catch(() => {
+      // Silent background re-subscribe for existing enabled users.
+    });
+  }, [preferences?.push]);
+
   return (
     <div className="flex flex-col w-full">
       {/* Notification Channels heading */}
       <div className="px-6 sm:px-8 py-5">
         <h2 className="text-sm font-semibold text-white">
-          Notification Channels
+          Notification channels
         </h2>
-        <p className="text-xs text-white/40 mt-0.5">
+        <p className="mt-0.5 w-max text-xs text-white/40">
           Choose how you receive notifications.
         </p>
       </div>
@@ -73,7 +97,7 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">In-app</Label>
-          <p className="text-xs text-white/40 mt-0.5">
+          <p className="mt-0.5 w-max text-xs text-white/40">
             Notification hub and in-app toast fallback.
           </p>
         </div>
@@ -93,8 +117,8 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Push</Label>
-          <p className="text-xs text-white/40 mt-0.5">
-            Browser desktop notifications when available.
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            Browser push notifications when available.
           </p>
         </div>
         <div className="flex justify-end">
@@ -114,10 +138,10 @@ export default function NotificationsSettingsPage() {
         <div className="flex items-center gap-2">
           <Activity className="size-4 text-teal-400" />
           <h2 className="text-sm font-semibold text-white">
-            Trade Notifications
+            Trade notifications
           </h2>
         </div>
-        <p className="text-xs text-white/40 mt-0.5">
+        <p className="mt-0.5 w-max text-xs text-white/40">
           Notifications for your trading activity.
         </p>
       </div>
@@ -128,7 +152,7 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Trade closed</Label>
-          <p className="text-xs text-white/40 mt-0.5">When trades close via EA sync.</p>
+          <p className="mt-0.5 w-max text-xs text-white/40">When trades close via EA sync.</p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -142,11 +166,11 @@ export default function NotificationsSettingsPage() {
 
       <Separator />
 
-      {/* Post-Exit Metrics */}
+      {/* Post-exit metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Post-exit metrics</Label>
-          <p className="text-xs text-white/40 mt-0.5">Money left on table analysis.</p>
+          <p className="mt-0.5 w-max text-xs text-white/40">Money left on table analysis.</p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -164,7 +188,7 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Trade opened</Label>
-          <p className="text-xs text-white/40 mt-0.5">When new trades are opened.</p>
+          <p className="mt-0.5 w-max text-xs text-white/40">When new trades are opened.</p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -183,10 +207,10 @@ export default function NotificationsSettingsPage() {
         <div className="flex items-center gap-2">
           <Target className="size-4 text-orange-400" />
           <h2 className="text-sm font-semibold text-white">
-            Goal Notifications
+            Goal notifications
           </h2>
         </div>
-        <p className="text-xs text-white/40 mt-0.5">
+        <p className="mt-0.5 w-max text-xs text-white/40">
           Updates on trading goals and milestones.
         </p>
       </div>
@@ -197,7 +221,7 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Goal achieved</Label>
-          <p className="text-xs text-white/40 mt-0.5">When you hit a trading goal.</p>
+          <p className="mt-0.5 w-max text-xs text-white/40">When you hit a trading goal.</p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -216,10 +240,10 @@ export default function NotificationsSettingsPage() {
         <div className="flex items-center gap-2">
           <AlertTriangle className="size-4 text-red-400" />
           <h2 className="text-sm font-semibold text-white">
-            Alert Notifications
+            Alert notifications
           </h2>
         </div>
-        <p className="text-xs text-white/40 mt-0.5">
+        <p className="mt-0.5 w-max text-xs text-white/40">
           Rule violations and warnings.
         </p>
       </div>
@@ -230,7 +254,7 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">Alert triggered</Label>
-          <p className="text-xs text-white/40 mt-0.5">When your custom alerts fire.</p>
+          <p className="mt-0.5 w-max text-xs text-white/40">When your custom alerts fire.</p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -247,9 +271,9 @@ export default function NotificationsSettingsPage() {
       {/* Market events heading */}
       <div className="px-6 sm:px-8 py-5">
         <h2 className="text-sm font-semibold text-white">
-          {showSocialNotifications ? "Market Events & Social" : "Market Events"}
+          {showSocialNotifications ? "Market events & social" : "Market events"}
         </h2>
-        <p className="text-xs text-white/40 mt-0.5">
+        <p className="mt-0.5 w-max text-xs text-white/40">
           {showSocialNotifications
             ? "Economic calendar alerts and optional social updates."
             : "Economic calendar alerts and market-event reminders."}
@@ -265,7 +289,7 @@ export default function NotificationsSettingsPage() {
             <Newspaper className="size-4 text-blue-400" />
             <Label className="text-sm text-white/80 font-medium">Economic events</Label>
           </div>
-          <p className="text-xs text-white/40 mt-0.5">
+          <p className="mt-0.5 w-max text-xs text-white/40">
             Upcoming economic-calendar alerts.
           </p>
         </div>
@@ -288,9 +312,9 @@ export default function NotificationsSettingsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <Users className="size-4 text-purple-400" />
-                <Label className="text-sm text-white/80 font-medium">Leaderboard & Copy</Label>
+                <Label className="text-sm text-white/80 font-medium">Leaderboard & copy</Label>
               </div>
-              <p className="text-xs text-white/40 mt-0.5">Social updates.</p>
+              <p className="mt-0.5 w-max text-xs text-white/40">Social updates.</p>
             </div>
             <div className="flex justify-end">
               <Switch
@@ -314,7 +338,7 @@ export default function NotificationsSettingsPage() {
           <Settings className="size-4 text-white/50" />
           <h2 className="text-sm font-semibold text-white">System</h2>
         </div>
-        <p className="text-xs text-white/40 mt-0.5">
+        <p className="mt-0.5 w-max text-xs text-white/40">
           Account settings and API updates.
         </p>
       </div>
@@ -325,7 +349,7 @@ export default function NotificationsSettingsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">System updates</Label>
-          <p className="text-xs text-white/40 mt-0.5">Imports, API keys, settings.</p>
+          <p className="mt-0.5 w-max text-xs text-white/40">Imports, API keys, settings.</p>
         </div>
         <div className="flex justify-end">
           <Switch

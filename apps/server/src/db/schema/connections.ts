@@ -60,7 +60,7 @@ export const platformConnection = pgTable(
 
     // Incremental sync cursor
     syncCursor: timestamp("sync_cursor"),
-    syncIntervalMinutes: integer("sync_interval_minutes").default(60),
+    syncIntervalMinutes: integer("sync_interval_minutes").default(0),
 
     // OAuth token expiry
     tokenExpiresAt: timestamp("token_expires_at"),

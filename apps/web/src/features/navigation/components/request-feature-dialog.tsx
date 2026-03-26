@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { isMissingTrpcProcedureError } from "@/features/navigation/lib/support-feedback-fallback";
 import { trpcOptions } from "@/utils/trpc";
 
 const WHOLE_FEATURE_VALUE = "__whole_feature__";
@@ -74,6 +75,9 @@ export function RequestFeatureDialog({
 
   const submitFeatureRequest = useMutation(
     trpcOptions.operations.submitFeatureRequest.mutationOptions()
+  );
+  const submitFallbackFeedback = useMutation(
+    trpcOptions.operations.submitFeedback.mutationOptions()
   );
 
   useEffect(() => {
@@ -173,6 +177,42 @@ export function RequestFeatureDialog({
 
       onOpenChange(false);
     } catch (error) {
+      if (
+        isMissingTrpcProcedureError(error, "operations.submitFeatureRequest")
+      ) {
+        try {
+          await submitFallbackFeedback.mutateAsync({
+            category: "idea",
+            priority: "normal",
+            subject: effectiveSummary,
+            message: details.trim(),
+            pagePath,
+            metadata: {
+              origin: "sidebar-request-feature",
+              requestType: "feature-request",
+              areaId: selection.areaId,
+              featureId: selection.featureId,
+              subfeatureId: selection.subfeatureId,
+              targetLabel: selectionLabel || null,
+              proposedFeatureName: proposedFeatureName.trim() || null,
+            },
+          });
+
+          toast.success(
+            "Feature request saved internally. GitHub forwarding isn't available on this server yet."
+          );
+          onOpenChange(false);
+          return;
+        } catch (fallbackError) {
+          toast.error(
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : "Failed to submit feature request"
+          );
+          return;
+        }
+      }
+
       toast.error(
         error instanceof Error ? error.message : "Failed to submit feature request"
       );
@@ -351,11 +391,15 @@ export function RequestFeatureDialog({
               <Button
                 type="button"
                 onClick={handleSubmit}
-                disabled={submitFeatureRequest.isPending}
+                disabled={
+                  submitFeatureRequest.isPending ||
+                  submitFallbackFeedback.isPending
+                }
                 className="cursor-pointer justify-center gap-2 rounded-sm border border-white/5 bg-white px-3 py-2 text-xs text-black transition-all duration-250 hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Send className="size-3.5" />
-                {submitFeatureRequest.isPending
+                {submitFeatureRequest.isPending ||
+                submitFallbackFeedback.isPending
                   ? "Submitting..."
                   : "Submit request"}
               </Button>

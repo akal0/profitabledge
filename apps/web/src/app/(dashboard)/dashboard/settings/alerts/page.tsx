@@ -1,6 +1,10 @@
 "use client";
 
 import * as React from "react";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
@@ -14,7 +18,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
-import { Bell, Plus, Trash2, Edit2, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Bell,
+  Edit2,
+  Plus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useAccountStore } from "@/stores/account";
 import { trpcClient, trpcOptions, queryClient } from "@/utils/trpc";
 import { toast } from "sonner";
@@ -32,12 +43,12 @@ type ThresholdUnit = "percent" | "usd" | "count";
 type Severity = "info" | "warning" | "critical";
 
 const RULE_TYPE_LABELS: Record<RuleType, string> = {
-  daily_loss: "Daily Loss Limit",
-  max_drawdown: "Max Drawdown",
-  win_streak: "Win Streak",
-  loss_streak: "Loss Streak",
-  consecutive_green: "Consecutive Green Days",
-  consecutive_red: "Consecutive Red Days",
+  daily_loss: "Daily loss limit",
+  max_drawdown: "Max drawdown",
+  win_streak: "Win streak",
+  loss_streak: "Loss streak",
+  consecutive_green: "Consecutive green days",
+  consecutive_red: "Consecutive red days",
 };
 
 const RULE_TYPE_DESCRIPTIONS: Record<RuleType, string> = {
@@ -54,6 +65,11 @@ const SEVERITY_COLORS: Record<Severity, string> = {
   warning: "bg-yellow-500/20 text-yellow-400",
   critical: "bg-rose-500/20 text-rose-400",
 };
+
+function formatAlertStatCount(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
 export default function AlertsSettingsPage() {
   const { selectedAccountId } = useAccountStore();
@@ -187,10 +203,10 @@ export default function AlertsSettingsPage() {
   return (
     <div className="flex flex-col w-full">
       {/* Header with Add button */}
-      <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+      <div className="flex flex-col items-start gap-2 sm:gap-4 px-6 sm:px-8 py-5">
         <div>
           <Label className="text-sm text-white/80 font-medium">
-            Performance Alerts
+            Performance alerts
           </Label>
           <p className="text-xs text-white/40 mt-0.5">
             Daily loss, drawdown, and streak notifications.
@@ -202,7 +218,7 @@ export default function AlertsSettingsPage() {
               resetForm();
               setShowCreateDialog(true);
             }}
-            className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-1 transition-all active:scale-95 duration-250"
+            className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-max w-max text-xs text-teal-300 cursor-pointer justify-start gap-1 transition-all active:scale-95 duration-250"
           >
             <Plus className="size-3" />
             Add alert rule
@@ -216,24 +232,45 @@ export default function AlertsSettingsPage() {
       {summary && (
         <>
           <div className="grid grid-cols-3 gap-4 px-6 sm:px-8 py-5">
-            <div className="p-3 bg-sidebar ring ring-white/5 rounded-md">
-              <div className="text-xs text-white/50">Active Rules</div>
-              <div className="text-xl font-bold text-white">
-                {summary.activeRulesCount}
-              </div>
-            </div>
-            <div className="p-3 bg-sidebar ring ring-white/5 rounded-md">
-              <div className="text-xs text-white/50">Unacknowledged</div>
-              <div className="text-xl font-bold text-rose-400">
-                {summary.unacknowledgedTotal}
-              </div>
-            </div>
-            <div className="p-3 bg-sidebar ring ring-white/5 rounded-md">
-              <div className="text-xs text-white/50">Critical</div>
-              <div className="text-xl font-bold text-rose-400">
-                {summary.bySeverity?.critical || 0}
-              </div>
-            </div>
+            {[
+              {
+                icon: Bell,
+                label: "Active rules",
+                value: formatAlertStatCount(summary.activeRulesCount),
+                description: "Rules currently enabled for this account.",
+                color: "text-teal-300",
+              },
+              {
+                icon: AlertTriangle,
+                label: "Unacknowledged",
+                value: formatAlertStatCount(summary.unacknowledgedTotal),
+                description: "Alerts still waiting to be reviewed.",
+                color: "text-amber-300",
+              },
+              {
+                icon: AlertTriangle,
+                label: "Critical",
+                value: formatAlertStatCount(summary.bySeverity?.critical),
+                description: "Critical alerts triggered across this account.",
+                color: "text-rose-300",
+              },
+            ].map((card) => (
+              <GoalSurface key={card.label}>
+                <div className="p-3.5">
+                  <div className="flex items-center gap-2">
+                    <card.icon className={cn("h-4 w-4", card.color)} />
+                    <span className="text-xs text-white/50">{card.label}</span>
+                  </div>
+                  <GoalContentSeparator className="mb-3.5 mt-3.5" />
+                  <div className="text-2xl font-semibold text-white">
+                    {card.value}
+                  </div>
+                  <p className="mt-1 text-xs text-white/40">
+                    {card.description}
+                  </p>
+                </div>
+              </GoalSurface>
+            ))}
           </div>
           <Separator />
         </>
@@ -328,7 +365,7 @@ export default function AlertsSettingsPage() {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-white">
-                  {editingRule ? "Edit Alert Rule" : "Create Alert Rule"}
+                  {editingRule ? "Edit alert rule" : "Create alert rule"}
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-white/40">
                   Configure when you want to be alerted about your trading
@@ -349,10 +386,10 @@ export default function AlertsSettingsPage() {
 
             {/* Body */}
             <div className="px-5 py-4 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-white/80">Rule Name</Label>
+              <div className="space-y-3">
+                <Label className="text-white/80">Rule name</Label>
                 <Input
-                  placeholder="e.g., Daily 5% Loss Limit"
+                  placeholder="e.g., Daily 5% loss limit"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="bg-sidebar-accent ring-white/5 text-white"
@@ -360,34 +397,39 @@ export default function AlertsSettingsPage() {
               </div>
 
               {!editingRule && (
-                <div className="space-y-2">
-                  <Label className="text-white/80">Rule Type</Label>
-                  <Select
-                    value={ruleType}
-                    onValueChange={(v) => setRuleType(v as RuleType)}
-                  >
-                    <SelectTrigger className="bg-sidebar-accent ring-white/5 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(RULE_TYPE_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        )
-                      )}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-white/50">
-                    {RULE_TYPE_DESCRIPTIONS[ruleType]}
-                  </p>
-                </div>
+                <>
+                  <Separator className="-mx-5" />
+                  <div className="space-y-2.5">
+                    <Label className="text-white/80">Rule type</Label>
+                    <Select
+                      value={ruleType}
+                      onValueChange={(v) => setRuleType(v as RuleType)}
+                    >
+                      <SelectTrigger className="w-full bg-sidebar-accent ring-white/5 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(RULE_TYPE_LABELS).map(
+                          ([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-white/50">
+                      {RULE_TYPE_DESCRIPTIONS[ruleType]}
+                    </p>
+                  </div>
+                </>
               )}
 
+              <Separator className="-mx-5" />
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-white/80">Threshold Value</Label>
+                <div className="space-y-3">
+                  <Label className="text-white/80">Threshold value</Label>
                   <Input
                     type="number"
                     placeholder="5"
@@ -397,7 +439,7 @@ export default function AlertsSettingsPage() {
                   />
                 </div>
                 {!editingRule && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <Label className="text-white/80">Unit</Label>
                     <Select
                       value={thresholdUnit}
@@ -405,7 +447,7 @@ export default function AlertsSettingsPage() {
                         setThresholdUnit(v as ThresholdUnit)
                       }
                     >
-                      <SelectTrigger className="bg-sidebar-accent ring-white/5 text-white">
+                      <SelectTrigger className="w-full bg-sidebar-accent ring-white/5 text-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -418,13 +460,15 @@ export default function AlertsSettingsPage() {
                 )}
               </div>
 
-              <div className="space-y-2">
+              <Separator className="-mx-5" />
+
+              <div className="space-y-3">
                 <Label className="text-white/80">Severity</Label>
                 <Select
                   value={severity}
                   onValueChange={(v) => setSeverity(v as Severity)}
                 >
-                  <SelectTrigger className="bg-sidebar-accent ring-white/5 text-white">
+                  <SelectTrigger className="w-full bg-sidebar-accent ring-white/5 text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -435,7 +479,9 @@ export default function AlertsSettingsPage() {
                 </Select>
               </div>
 
-              <div className="space-y-2">
+              <Separator className="-mx-5" />
+
+              <div className="space-y-2.5">
                 <Label className="text-white/80">Cooldown (minutes)</Label>
                 <Input
                   type="number"
@@ -449,14 +495,16 @@ export default function AlertsSettingsPage() {
                 </p>
               </div>
 
-              <div className="space-y-3">
-                <Label className="text-xs text-white/60 uppercase tracking-wider">
-                  Notification Channels
+              <Separator className="-mx-5" />
+
+              <div className="space-y-4">
+                <Label className="text-xs text-white/60">
+                  Notification channels
                 </Label>
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="space-y-1">
                     <Label className="text-white/80">
-                      In-App Notifications
+                      In-app notifications
                     </Label>
                     <p className="text-[10px] text-white/30">
                       Show alert in the notification hub
@@ -469,8 +517,8 @@ export default function AlertsSettingsPage() {
                   />
                 </div>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-white/80">Email Notifications</Label>
+                  <div className="space-y-1">
+                    <Label className="text-white/80">Email notifications</Label>
                     <p className="text-[10px] text-white/30">
                       Send alert to your email address
                     </p>
@@ -481,9 +529,9 @@ export default function AlertsSettingsPage() {
                     className="data-[state=checked]:bg-teal-600"
                   />
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-3">
                   <Label className="text-white/80">
-                    Webhook (Discord/Slack/Custom)
+                    Webhook (Discord/Slack/custom)
                   </Label>
                   <Input
                     type="url"

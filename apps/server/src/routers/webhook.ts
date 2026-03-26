@@ -835,12 +835,16 @@ export const webhookRouter = router({
 
               if (createdReviews.length === 1) {
                 const review = createdReviews[0].entry;
+                const symbol =
+                  createdReviews[0].symbol ||
+                  review.title.match(/\b[A-Z]{3,10}\b/)?.[0] ||
+                  "Trade";
                 await createNotification({
                   userId,
                   accountId,
                   type: "post_exit_ready",
-                  title: "Trade review ready",
-                  body: `${review.title} has been added to your journal.`,
+                  title: `${symbol} trade has just closed`,
+                  body: "We've auto-generated an entry in your journal. Make sure to review it.",
                   metadata: {
                     accountId,
                     accountNumber: input.accountNumber,
@@ -857,8 +861,8 @@ export const webhookRouter = router({
                 userId,
                 accountId,
                 type: "post_exit_ready",
-                title: `${createdReviews.length} trade reviews ready`,
-                body: "Auto-generated post-trade reviews have been added to your journal.",
+                title: `${createdReviews.length} trade reviews added`,
+                body: "We've auto-generated journal entries for your recently closed trades. Make sure to review them.",
                 metadata: {
                   accountId,
                   accountNumber: input.accountNumber,

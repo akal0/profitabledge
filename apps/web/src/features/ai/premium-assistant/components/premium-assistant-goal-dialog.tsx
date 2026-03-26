@@ -25,7 +25,7 @@ export function PremiumAssistantGoalDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton={false}
-        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg max-w-3xl"
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar p-2 shadow-2xl max-w-3xl"
       >
         <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80 max-h-[90vh] overflow-y-auto">
           {/* Header */}

@@ -211,4 +211,40 @@ describe("mt5 claim scheduler", () => {
       "cold-aged-1",
     ]);
   });
+
+  it("keeps live requests ahead of boosted cold jobs in the same queue tier", () => {
+    const selected = selectMt5Claims(
+      [
+        {
+          connectionId: "boosted-cold-1",
+          userId: "institutional-user",
+          planKey: "institutional" as const,
+          concurrentSlotCap: 5,
+          currentActiveSlots: 0,
+          queueTier: 1,
+          dueAt: "2026-03-25T11:59:00.000Z",
+          lastRequestedAt: null,
+          updatedAt: "2026-03-25T12:02:00.000Z",
+          connection: null,
+        },
+        {
+          connectionId: "live-1",
+          userId: "professional-user",
+          planKey: "professional" as const,
+          concurrentSlotCap: 1,
+          currentActiveSlots: 0,
+          queueTier: 1,
+          dueAt: "2026-03-25T12:00:00.000Z",
+          lastRequestedAt: "2026-03-25T12:01:00.000Z",
+          updatedAt: "2026-03-25T12:01:00.000Z",
+          connection: null,
+        },
+      ],
+      1
+    );
+
+    expect(selected.map((candidate) => candidate.connectionId)).toEqual([
+      "live-1",
+    ]);
+  });
 });

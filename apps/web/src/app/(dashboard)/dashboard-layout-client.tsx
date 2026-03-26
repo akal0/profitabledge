@@ -47,6 +47,7 @@ import {
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
 import { isHeldBackDashboardRoute } from "@/features/navigation/lib/held-back-routes";
+import { hasLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import { buildLoginPath, buildOnboardingPath } from "@/lib/post-auth-paths";
 import { isPublicAlphaFeatureEnabled } from "@/lib/alpha-flags";
 import { useConfirmedSession } from "@/lib/use-confirmed-session";
@@ -300,6 +301,7 @@ function DashboardMainStage({
   children,
   isJournalRoute,
   isAccountsRoute,
+  isAssistantRoute,
   routeLoadingVariant,
   showAccountTransitionFallback,
   shouldHoldAccountScopedContent,
@@ -307,6 +309,7 @@ function DashboardMainStage({
   children: React.ReactNode;
   isJournalRoute: boolean;
   isAccountsRoute: boolean;
+  isAssistantRoute: boolean;
   routeLoadingVariant: ReturnType<typeof resolveRouteLoadingVariant>;
   showAccountTransitionFallback: boolean;
   shouldHoldAccountScopedContent: boolean;
@@ -322,7 +325,7 @@ function DashboardMainStage({
     <div
       className={cn(
         "relative flex w-full flex-1 min-h-0 flex-col dark:bg-sidebar",
-        isJournalRoute || isAccountsRoute
+        isJournalRoute || isAccountsRoute || isAssistantRoute
           ? "overflow-hidden"
           : "overflow-y-auto gap-4 pb-12"
       )}
@@ -382,6 +385,7 @@ function DashboardContentStage({
   isGoalsRoute,
   isPropTrackerRoute,
   isTradesRoute,
+  isAssistantRoute,
   onOpenCommandPalette,
   onOpenGoalDialog,
   routeLoadingVariant,
@@ -404,6 +408,7 @@ function DashboardContentStage({
   isGoalsRoute: boolean;
   isPropTrackerRoute: boolean;
   isTradesRoute: boolean;
+  isAssistantRoute: boolean;
   onOpenCommandPalette: () => void;
   onOpenGoalDialog: () => void;
   routeLoadingVariant: ReturnType<typeof resolveRouteLoadingVariant>;
@@ -420,7 +425,7 @@ function DashboardContentStage({
 
   if (isDashboardTourActive) {
     return (
-      <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden min-h-screen">
+      <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full min-h-0 flex flex-col overflow-hidden">
         <RouteLoadingFallback
           route="dashboard"
           message="Preparing your onboarding workspace..."
@@ -432,29 +437,38 @@ function DashboardContentStage({
   }
 
   return (
-    <SidebarInset className="bg-background dark:bg-sidebar py-2 h-full flex flex-col overflow-hidden min-h-screen">
-      <DashboardShellHeader
-        breadcrumbs={breadcrumbs}
-        accountId={accountId}
-        currentAccountName={currentAccountName}
-        currentAccountBroker={currentAccountBroker}
-        currentAccountIsProp={currentAccountIsProp}
-        currentAccountIsDemo={currentAccountIsDemo}
-        currentAccountIsEaSynced={currentAccountIsEaSynced}
-        currentAccountSupportsLiveSync={currentAccountSupportsLiveSync}
-        currentAccountLastImportedAt={currentAccountLastImportedAt}
-        connectionBadge={connectionBadge}
-        isAccountsRoute={Boolean(isAccountsRoute)}
-        isGoalsRoute={Boolean(isGoalsRoute)}
-        isPropTrackerRoute={Boolean(isPropTrackerRoute)}
-        isTradesRoute={Boolean(isTradesRoute)}
-        onOpenCommandPalette={onOpenCommandPalette}
-        onOpenGoalDialog={onOpenGoalDialog}
-      />
+    <SidebarInset
+      className={cn(
+        "bg-background dark:bg-sidebar h-full min-h-0 flex flex-col overflow-hidden",
+        isAssistantRoute ? "py-0" : "py-2"
+      )}
+    >
+      {isAssistantRoute ? null : (
+        <DashboardShellHeader
+          breadcrumbs={breadcrumbs}
+          accountId={accountId}
+          currentAccountName={currentAccountName}
+          currentAccountBroker={currentAccountBroker}
+          currentAccountIsProp={currentAccountIsProp}
+          currentAccountIsDemo={currentAccountIsDemo}
+          currentAccountIsEaSynced={currentAccountIsEaSynced}
+          currentAccountSupportsLiveSync={currentAccountSupportsLiveSync}
+          currentAccountLastImportedAt={currentAccountLastImportedAt}
+          connectionBadge={connectionBadge}
+          isAccountsRoute={Boolean(isAccountsRoute)}
+          isGoalsRoute={Boolean(isGoalsRoute)}
+          isPropTrackerRoute={Boolean(isPropTrackerRoute)}
+          isTradesRoute={Boolean(isTradesRoute)}
+          isAssistantRoute={Boolean(isAssistantRoute)}
+          onOpenCommandPalette={onOpenCommandPalette}
+          onOpenGoalDialog={onOpenGoalDialog}
+        />
+      )}
 
       <DashboardMainStage
         isJournalRoute={Boolean(isJournalRoute)}
         isAccountsRoute={Boolean(isAccountsRoute)}
+        isAssistantRoute={Boolean(isAssistantRoute)}
         routeLoadingVariant={routeLoadingVariant}
         showAccountTransitionFallback={showAccountTransitionFallback}
         shouldHoldAccountScopedContent={shouldHoldAccountScopedContent}
@@ -558,6 +572,7 @@ export default function DashboardLayoutClient({
   const isGoalsRoute = pathname?.startsWith("/dashboard/goals");
   const isPropTrackerRoute = pathname === "/dashboard/prop-tracker";
   const isTradesRoute = pathname?.startsWith("/dashboard/trades");
+  const isAssistantRoute = pathname?.startsWith("/assistant");
   const { setOpen: setGoalDialogOpen } = useGoalDialog();
   const observedPendingFetchRef = useRef<string | null>(null);
   const routeLoadingVariant = useMemo(
@@ -581,9 +596,14 @@ export default function DashboardLayoutClient({
 
   const billingState = billingStateQuery.data;
   const hasFetchedBillingState = billingStateQuery.isFetched;
+  const [shouldBypassOnboardingRedirect] = useState(() =>
+    hasLoginOnboardingBypass()
+  );
   const hasIncompleteOnboarding = Boolean(
     billingState && !billingState.onboarding.isComplete
   );
+  const shouldRedirectToOnboarding =
+    hasIncompleteOnboarding && !shouldBypassOnboardingRedirect;
   const activePlanKey = (billingState?.billing?.activePlanKey ??
     null) as PlanKey | null;
   const mt5LiveLeaseLimit = activePlanKey
@@ -592,7 +612,7 @@ export default function DashboardLayoutClient({
   const connectionsEnabled = isPublicAlphaFeatureEnabled("connections");
   const mt5IngestionEnabled = isPublicAlphaFeatureEnabled("mt5Ingestion");
   const canLoadDashboardShellData =
-    isSessionReady && hasFetchedBillingState && !hasIncompleteOnboarding;
+    isSessionReady && hasFetchedBillingState && !shouldRedirectToOnboarding;
 
   const { accounts, isFetched: hasFetchedAccounts } = useAccountCatalog({
     enabled: canLoadDashboardShellData,
@@ -744,6 +764,9 @@ export default function DashboardLayoutClient({
   const hasBlockedAffiliateAccess = Boolean(
     pathname?.startsWith("/dashboard/affiliate") && !hasAffiliateAccess
   );
+  const hasBlockedGrowthOverview = Boolean(
+    safePathname === "/dashboard/growth" && !hasAdminAccess
+  );
 
   const hasBlockedAdminAccess = Boolean(
     (pathname?.startsWith("/dashboard/beta-access") ||
@@ -775,7 +798,7 @@ export default function DashboardLayoutClient({
   useAssistantShortcut(openFloatingAssistant);
 
   useEffect(() => {
-    if (hasIncompleteOnboarding) {
+    if (shouldRedirectToOnboarding) {
       router.replace(buildOnboardingPath(currentDashboardPath));
     } else if (hasBlockedCommunityAccess) {
       router.replace(
@@ -783,8 +806,10 @@ export default function DashboardLayoutClient({
           ? "/dashboard/settings/profile"
           : "/dashboard"
       );
+    } else if (hasBlockedGrowthOverview) {
+      router.replace("/dashboard/referrals");
     } else if (hasBlockedAdminAccess) {
-      router.replace("/dashboard/growth");
+      router.replace("/dashboard/referrals");
     } else if (hasBlockedAffiliateAccess) {
       router.replace("/dashboard/referrals");
     } else if (hasBlockedPlanAccess) {
@@ -792,8 +817,9 @@ export default function DashboardLayoutClient({
     }
   }, [
     currentDashboardPath,
-    hasIncompleteOnboarding,
+    shouldRedirectToOnboarding,
     hasBlockedCommunityAccess,
+    hasBlockedGrowthOverview,
     hasBlockedAdminAccess,
     hasBlockedAffiliateAccess,
     hasBlockedPlanAccess,
@@ -886,7 +912,7 @@ export default function DashboardLayoutClient({
     );
   }
 
-  if (hasIncompleteOnboarding) {
+  if (shouldRedirectToOnboarding) {
     return (
       <DashboardGateFallback
         route="onboarding"
@@ -912,7 +938,10 @@ export default function DashboardLayoutClient({
   return (
     <OnbordaProvider>
       <DashboardOnbordaShell>
-        <SidebarProvider defaultOpen className="min-h-[100vh] h-full relative">
+        <SidebarProvider
+          defaultOpen
+          className="relative h-svh min-h-svh overflow-hidden"
+        >
           <DashboardTour />
           <TourBackdropBlur />
           <DashboardTourChrome />
@@ -938,6 +967,7 @@ export default function DashboardLayoutClient({
             isGoalsRoute={Boolean(isGoalsRoute)}
             isPropTrackerRoute={Boolean(isPropTrackerRoute)}
             isTradesRoute={Boolean(isTradesRoute)}
+            isAssistantRoute={Boolean(isAssistantRoute)}
             onOpenCommandPalette={openCommandPalette}
             onOpenGoalDialog={() => setGoalDialogOpen(true)}
             routeLoadingVariant={routeLoadingVariant}

@@ -22,7 +22,9 @@ export function AvailablePlatformsSection({
       <Separator />
 
       <div className="px-6 py-5 sm:px-8">
-        <h2 className="text-sm font-semibold text-white">Supported Platforms</h2>
+        <h2 className="text-sm font-semibold text-white">
+          Supported platforms
+        </h2>
         <p className="mt-0.5 text-xs text-white/40">
           Connect a platform that is enabled for the current alpha.
         </p>
@@ -44,7 +46,10 @@ export function AvailablePlatformsSection({
                 <Label className="text-sm font-medium text-white/80">
                   {provider.name}
                 </Label>
-                <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[9px]">
+                <Badge
+                  variant="secondary"
+                  className="px-2 py-0.5 bg-sidebar-accent ring ring-white/5 text-[9px]"
+                >
                   {provider.status === "coming_soon" ? "Coming soon" : "Alpha"}
                 </Badge>
               </div>
@@ -54,7 +59,9 @@ export function AvailablePlatformsSection({
               <div className="flex-1 space-y-2">
                 <p className="text-xs text-white/50">{provider.description}</p>
                 {provider.betaNote ? (
-                  <p className="text-[11px] text-amber-200/80">{provider.betaNote}</p>
+                  <p className="text-[11px] text-amber-200/80">
+                    {provider.betaNote}
+                  </p>
                 ) : null}
                 <div className="flex flex-wrap gap-1">
                   {provider.firms.map((firm) => (
@@ -73,13 +80,13 @@ export function AvailablePlatformsSection({
                 className={cn(
                   "h-[32px] shrink-0 cursor-pointer px-4 text-xs transition-all duration-250 active:scale-95",
                   provider.status === "coming_soon"
-                    ? "border border-white/5 bg-white/5 text-white/45 hover:bg-white/5"
-                    : "border border-white/5 bg-teal-600/25 text-teal-300 hover:bg-teal-600/35"
+                    ? "ring ring-white/10 bg-white/5 text-white/45 hover:bg-white/5"
+                    : "ring ring-teal-500/50 bg-teal-600/25 text-teal-300 hover:bg-teal-600/35"
                 )}
               >
                 {provider.status !== "coming_soon" &&
                 provider.authType === "oauth" ? (
-                  <ExternalLink className="mr-1.5 size-3" />
+                  <ExternalLink className=" size-3" />
                 ) : null}
                 {provider.status === "coming_soon" ? "Coming soon" : "Connect"}
               </Button>
@@ -97,7 +104,7 @@ export function AvailablePlatformsSection({
           <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-400" />
           <div>
             <p className="mb-1 text-sm font-medium text-blue-300">
-              EA Bridge Recommended
+              EA bridge recommended
             </p>
             <p className="text-xs text-white/50">
               {mt5IngestionEnabled

@@ -14,13 +14,71 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { SYNC_INTERVALS } from "@/features/settings/connections/lib/connection-catalog";
-import { isTerminalProvider, STATUS_STYLES } from "@/features/settings/connections/lib/connection-status";
+import {
+  isTerminalProvider,
+  STATUS_STYLES,
+} from "@/features/settings/connections/lib/connection-status";
 import type { ConnectionRow } from "@/features/settings/connections/lib/connection-types";
 import { cn } from "@/lib/utils";
+
+function formatSyncIntervalLabel(minutes: number) {
+  if (minutes <= 0) return "Manual only";
+  if (minutes === 60) return "Every hour";
+  if (minutes < 60) return `Every ${minutes} min`;
+  if (minutes % 1440 === 0) {
+    const days = minutes / 1440;
+    return days === 1 ? "Daily" : `Every ${days} days`;
+  }
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `Every ${hours} hours`;
+  }
+
+  return `Every ${minutes} min`;
+}
+
+function getResolvedSyncIntervalOption(syncIntervalMinutes: number | null) {
+  const fallbackMinutes = 0;
+  const normalizedMinutes =
+    typeof syncIntervalMinutes === "number" &&
+    Number.isFinite(syncIntervalMinutes)
+      ? syncIntervalMinutes
+      : fallbackMinutes;
+
+  const normalizedValue = String(normalizedMinutes);
+  const existingOption = SYNC_INTERVALS.find(
+    (option) => option.value === normalizedValue
+  );
+
+  if (existingOption) {
+    return {
+      selectedValue: existingOption.value,
+      options: SYNC_INTERVALS,
+    };
+  }
+
+  return {
+    selectedValue: normalizedValue,
+    options: [
+      ...SYNC_INTERVALS,
+      {
+        value: normalizedValue,
+        label: formatSyncIntervalLabel(normalizedMinutes),
+      },
+    ],
+  };
+}
 
 export function ActiveConnectionsSection({
   connections,
@@ -46,7 +104,7 @@ export function ActiveConnectionsSection({
   return (
     <>
       <div className="px-6 py-5 sm:px-8">
-        <h2 className="text-sm font-semibold text-white">Active Connections</h2>
+        <h2 className="text-sm font-semibold text-white">Active connections</h2>
         <p className="mt-0.5 text-xs text-white/40">
           {scheduledSyncEnabled
             ? "Manage your linked trading platforms."
@@ -58,7 +116,11 @@ export function ActiveConnectionsSection({
 
       {connections && connections.length > 0 ? (
         connections.map((conn, idx) => {
-          const statusInfo = STATUS_STYLES[conn.status] ?? STATUS_STYLES.pending;
+          const statusInfo =
+            STATUS_STYLES[conn.status] ?? STATUS_STYLES.pending;
+          const syncInterval = getResolvedSyncIntervalOption(
+            conn.syncIntervalMinutes
+          );
 
           return (
             <div key={conn.id}>
@@ -71,7 +133,9 @@ export function ActiveConnectionsSection({
                     <Badge className={cn("text-[10px]", statusInfo.className)}>
                       {statusInfo.label}
                     </Badge>
-                    <span className="text-[10px] text-white/30">{conn.provider}</span>
+                    <span className="text-[10px] text-white/30">
+                      {conn.provider}
+                    </span>
                   </div>
                 </div>
 
@@ -84,10 +148,12 @@ export function ActiveConnectionsSection({
                         ) : (
                           <CheckCircle2 className="size-3 text-teal-500" />
                         )}
-                        Last sync: {new Date(conn.lastSyncSuccessAt).toLocaleString()}
+                        Last sync:{" "}
+                        {new Date(conn.lastSyncSuccessAt).toLocaleString()}
                       </span>
                     ) : null}
-                    {conn.lastSyncedTradeCount != null && conn.lastSyncedTradeCount > 0 ? (
+                    {conn.lastSyncedTradeCount != null &&
+                    conn.lastSyncedTradeCount > 0 ? (
                       <span>{conn.lastSyncedTradeCount} trades</span>
                     ) : null}
                   </div>
@@ -111,18 +177,23 @@ export function ActiveConnectionsSection({
                     )
                   ) : null}
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Select
-                      value={String(conn.syncIntervalMinutes ?? 60)}
-                      onValueChange={(value) => onIntervalChange(conn.id, value)}
+                      value={syncInterval.selectedValue}
+                      onValueChange={(value) =>
+                        onIntervalChange(conn.id, value)
+                      }
                       disabled={!scheduledSyncEnabled}
                     >
-                      <SelectTrigger className="!h-7 w-fit max-w-[140px] rounded-sm border border-white/5 bg-transparent !px-2 text-[11px] text-white/60">
-                        <Clock className="mr-1 size-3 shrink-0 text-white/30" />
+                      <SelectTrigger
+                        size="sm"
+                        className="w-fit max-w-[140px] rounded-sm ring-white/10 bg-sidebar-accent px-2.5 text-[11px] text-white/70 shadow-sm"
+                      >
+                        <Clock className="size-3 shrink-0 text-white/30" />
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent className="rounded-sm border border-white/5 bg-sidebar-accent">
-                        {SYNC_INTERVALS.map((option) => (
+                      <SelectContent className="rounded-sm ring ring-white/5 bg-sidebar-accent">
+                        {syncInterval.options.map((option) => (
                           <SelectItem
                             key={option.value}
                             value={option.value}
@@ -135,35 +206,48 @@ export function ActiveConnectionsSection({
                     </Select>
 
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-white/40 hover:text-white"
+                      className={getPropAssignActionButtonClassName({
+                        tone: "neutral",
+                        size: "sm",
+                      })}
                       onClick={() => onTogglePause(conn.id, conn.isPaused)}
                       disabled={!scheduledSyncEnabled}
                     >
-                      {conn.isPaused ? <Play className="size-3" /> : <Pause className="size-3" />}
+                      {conn.isPaused ? (
+                        <Play className="size-3" />
+                      ) : (
+                        <Pause className="size-3" />
+                      )}
+                      {conn.isPaused ? "Resume connection" : "Pause connection"}
                     </Button>
 
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-white/40 hover:text-white"
+                      className={getPropAssignActionButtonClassName({
+                        tone: "teal",
+                        size: "sm",
+                      })}
                       onClick={() => onSync(conn.id)}
                       disabled={
                         isSyncing ||
-                        (isTerminalProvider(conn.provider) && !mt5IngestionEnabled)
+                        (isTerminalProvider(conn.provider) &&
+                          !mt5IngestionEnabled)
                       }
                     >
-                      <RefreshCw className={cn("size-3", isSyncing && "animate-spin")} />
+                      <RefreshCw
+                        className={cn("size-3", isSyncing && "animate-spin")}
+                      />
+                      Sync connection
                     </Button>
 
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-white/30 hover:text-red-400"
+                      className={getPropAssignActionButtonClassName({
+                        tone: "danger",
+                        size: "sm",
+                      })}
                       onClick={() => onDelete(conn.id)}
                     >
                       <Trash2 className="size-3" />
+                      Delete connection
                     </Button>
                   </div>
                 </div>

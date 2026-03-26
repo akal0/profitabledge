@@ -28,6 +28,8 @@ interface AuthSplitShellProps {
   heroSlides?: AuthHeroSlide[];
   affiliate?: AffiliateInfo | null;
   hideAffiliateDescription?: boolean;
+  heroArtwork?: ReactNode;
+  heroContent?: ReactNode;
 }
 
 const DEFAULT_HERO_TITLE = "See the edge before the same mistake repeats.";
@@ -45,6 +47,50 @@ const HERO_COPY_TRANSITION = {
   },
 };
 const HERO_ACCENT_ORB_PULSE_EASE = [0.42, 0, 0.58, 1] as const;
+
+function AuthAffiliateLockup({
+  affiliate,
+  hideAffiliateDescription = false,
+}: {
+  affiliate: AffiliateInfo;
+  hideAffiliateDescription?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-5">
+      <div className="flex items-center gap-3">
+        <span className="text-lg font-semibold tracking-[-0.08em] text-white">
+          profitabledge
+        </span>
+        <span className="text-sm font-medium text-white/40">&times;</span>
+        <div className="flex items-center gap-2">
+          {affiliate.image ? (
+            <Image
+              src={affiliate.image}
+              alt={affiliate.name}
+              width={28}
+              height={28}
+              className="rounded-full ring-1 ring-white/15"
+            />
+          ) : (
+            <div className="flex size-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/70 ring-1 ring-white/15">
+              {affiliate.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <span className="text-sm font-medium text-white/80">
+            {affiliate.username || affiliate.name}
+          </span>
+        </div>
+      </div>
+      {hideAffiliateDescription ? null : (
+        <p className="max-w-md text-center text-sm leading-5.5 text-white/50">
+          You&apos;ve been invited to the sharpest trading journal on the
+          market. <br />
+          Are you ready to find your own profitable edge?
+        </p>
+      )}
+    </div>
+  );
+}
 
 function AuthHeroAccentOrbs({ reducedMotion }: { reducedMotion: boolean }) {
   return (
@@ -200,6 +246,8 @@ export function AuthSplitShell({
   heroSlides,
   affiliate,
   hideAffiliateDescription = false,
+  heroArtwork,
+  heroContent,
 }: AuthSplitShellProps) {
   const resolvedHeroSlides = useMemo(
     () =>
@@ -238,45 +286,26 @@ export function AuthSplitShell({
         </main>
 
         <aside className="relative hidden min-h-screen min-w-0 overflow-hidden lg:block">
-          <AuthHeroArtwork />
+          {heroArtwork ?? <AuthHeroArtwork />}
 
-          {affiliate ? (
-            <div className="absolute inset-0 z-20 flex items-center justify-center">
-              <div className="flex flex-col items-center gap-5">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg font-semibold tracking-[-0.08em] text-white">
-                    profitabledge
-                  </span>
-                  <span className="text-sm font-medium text-white/40">
-                    &times;
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {affiliate.image ? (
-                      <Image
-                        src={affiliate.image}
-                        alt={affiliate.name}
-                        width={28}
-                        height={28}
-                        className="rounded-full ring-1 ring-white/15"
-                      />
-                    ) : (
-                      <div className="flex size-7 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-white/70 ring-1 ring-white/15">
-                        {affiliate.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span className="text-sm font-medium text-white/80">
-                      {affiliate.username || affiliate.name}
-                    </span>
-                  </div>
-                </div>
-                {hideAffiliateDescription ? null : (
-                  <p className="max-w-md text-center text-sm leading-5.5 text-white/50">
-                    You&apos;ve been invited to the sharpest trading journal on
-                    the market. <br />
-                    Are you ready to find your own profitable edge?
-                  </p>
-                )}
+          {heroContent ? (
+            <div className="relative z-10 flex h-full items-center justify-center px-12 xl:px-16">
+              <div className="flex min-h-[24rem] w-full flex-col items-center justify-center gap-10 xl:min-h-[28rem]">
+                {affiliate ? (
+                  <AuthAffiliateLockup
+                    affiliate={affiliate}
+                    hideAffiliateDescription={hideAffiliateDescription}
+                  />
+                ) : null}
+                {heroContent}
               </div>
+            </div>
+          ) : affiliate ? (
+            <div className="absolute inset-0 z-20 flex items-center justify-center">
+              <AuthAffiliateLockup
+                affiliate={affiliate}
+                hideAffiliateDescription={hideAffiliateDescription}
+              />
             </div>
           ) : (
             <div className="relative z-10 flex h-full items-center justify-center px-12 xl:px-16">

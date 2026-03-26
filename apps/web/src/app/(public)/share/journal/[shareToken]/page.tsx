@@ -34,7 +34,7 @@ function ShareStateCard({
   } as const;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0c0d10] px-6 py-10 text-center text-white min-w-screen">
+    <div className="flex min-h-screen min-w-screen items-center justify-center bg-sidebar px-6 py-10 text-center text-white">
       <div
         className={`w-full max-w-xl rounded-2xl ring px-6 py-8 ${accentClasses[accent]}`}
       >
@@ -138,7 +138,7 @@ export default function JournalSharePage() {
     return (
       <RouteLoadingFallback
         route="journalShare"
-        className="min-h-screen bg-[#0c0d10]"
+        className="min-h-screen bg-sidebar"
       />
     );
   }
@@ -147,7 +147,7 @@ export default function JournalSharePage() {
     return (
       <RouteLoadingFallback
         route="journalShare"
-        className="min-h-screen bg-[#0c0d10]"
+        className="min-h-screen bg-sidebar"
       />
     );
   }
@@ -156,7 +156,7 @@ export default function JournalSharePage() {
     return (
       <RouteLoadingFallback
         route="journalShare"
-        className="min-h-screen bg-[#0c0d10]"
+        className="min-h-screen bg-sidebar"
       />
     );
   }
@@ -224,7 +224,7 @@ export default function JournalSharePage() {
     return (
       <RouteLoadingFallback
         route="journalShare"
-        className="min-h-screen bg-[#0c0d10]"
+        className="min-h-screen bg-sidebar"
       />
     );
   }

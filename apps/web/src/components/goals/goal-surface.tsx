@@ -11,10 +11,10 @@ export const GOAL_SURFACE_OUTER_CLASS =
 export const GOAL_SURFACE_INNER_CLASS =
   "flex flex-1 flex-col rounded-sm bg-white ring ring-white/5 transition-all duration-250 dark:bg-sidebar-accent dark:group-hover:brightness-120";
 export const GOAL_PANEL_HEADER_CLASS =
-  "widget-header flex w-full items-start gap-1.5 px-3.5 py-3.5";
+  "widget-header flex w-full items-center gap-1.5 px-3.5 py-3.5";
 export const GOAL_PANEL_BODY_CLASS = "px-3.5 py-3.5";
 export const GOAL_PANEL_ICON_CLASS =
-  "mt-0.5 h-4 w-4 shrink-0 text-white/50 transition-all duration-250 group-hover:text-white";
+  "h-4 w-4 shrink-0 text-white/50 transition-all duration-250 group-hover:text-white";
 export const GOAL_PANEL_TITLE_CLASS =
   "text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white";
 
@@ -60,7 +60,7 @@ export function GoalPanel({
   return (
     <GoalSurface innerClassName="h-full overflow-hidden">
       <div className={cn(GOAL_PANEL_HEADER_CLASS, "justify-between")}>
-        <div className="flex min-w-0 flex-1 items-start gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {Icon ? <Icon className={GOAL_PANEL_ICON_CLASS} /> : null}
           <div className="min-w-0">
             <h2 className={GOAL_PANEL_TITLE_CLASS}>{title}</h2>

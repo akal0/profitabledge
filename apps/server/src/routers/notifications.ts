@@ -120,30 +120,6 @@ export const notificationsRouter = router({
         .where(eq(userTable.id, userId));
       return next;
     }),
-
-  notifyPendingReviews: protectedProcedure
-    .input(
-      z.object({
-        count: z.number().int().min(1),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const userId = ctx.session.user.id;
-      const todayKey = new Date().toISOString().slice(0, 10);
-      const count = input.count;
-
-      const res = await createNotification({
-        userId,
-        type: "post_exit_ready" as NotificationType,
-        title: `${count} trade review${count === 1 ? "" : "s"} waiting`,
-        body: "You have pending trade reviews ready for reflection in your journal.",
-        metadata: { source: "journal", reviewCount: count },
-        dedupeKey: `pending-reviews:${todayKey}`,
-      });
-
-      return { ok: true, created: !res.skipped } as const;
-    }),
-
   ingestNews: protectedProcedure
     .input(
       z.object({

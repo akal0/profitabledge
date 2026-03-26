@@ -5,7 +5,7 @@ import { buildContextFromPath } from "./assistant-page-context";
 describe("buildContextFromPath", () => {
   it("captures journal entry context from query params", () => {
     const context = buildContextFromPath(
-      "/dashboard/journal?entryId=entry-123&tab=review-ready",
+      "/dashboard/journal?entryId=entry-123",
       null,
       "floating-assistant"
     );

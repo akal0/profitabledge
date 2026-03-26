@@ -24,12 +24,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import { storeAffiliateIntent } from "@/features/growth/lib/access-intent";
 import {
   buildLoginPath,
   buildPostAuthContinuePath,
   resolvePostAuthPath,
 } from "@/lib/post-auth-paths";
+import { waitForConfirmedSession } from "@/lib/session-confirmation";
 import { trpcClient } from "@/utils/trpc";
 import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
@@ -67,12 +69,6 @@ const FormSchema = z.object({
     }),
 });
 
-const SESSION_CONFIRM_RETRY_DELAYS_MS = [0, 150, 350, 750] as const;
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function deriveSignupName(email: string) {
   const localPart = email.split("@")[0]?.trim() ?? "";
   const normalized = localPart
@@ -108,6 +104,7 @@ export default function InvitePage() {
   const inviterLabel = affiliate?.username || affiliate?.name || username;
 
   useEffect(() => {
+    clearLoginOnboardingBypass();
     storeAffiliateIntent(username, channel);
 
     trpcClient.billing.getAffiliatePublicProfile
@@ -130,21 +127,6 @@ export default function InvitePage() {
     },
   });
   const isSubmitting = form.formState.isSubmitting;
-
-  async function waitForConfirmedSession() {
-    for (const delay of SESSION_CONFIRM_RETRY_DELAYS_MS) {
-      if (delay > 0) {
-        await sleep(delay);
-      }
-
-      const result = await authClient.getSession();
-      if (result.data) {
-        return true;
-      }
-    }
-
-    return false;
-  }
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
     await authClient.signUp.email(

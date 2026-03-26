@@ -4,6 +4,15 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "../../db";
 import { aiActionLog, aiChatMessage, aiReport } from "../../db/schema/ai";
+import { isAllAccountsScope } from "../../lib/account-scope";
+
+function normalizeReportAccountId(accountId?: string | null) {
+  if (!accountId || isAllAccountsScope(accountId)) {
+    return null;
+  }
+
+  return accountId;
+}
 
 async function ensureOwnedReport(reportId: string, userId: string) {
   const reports = await db
@@ -121,8 +130,9 @@ export const aiLogReportProcedures = {
     )
     .query(async ({ ctx, input }) => {
       const conditions = [eq(aiReport.userId, ctx.session.user.id)];
-      if (input.accountId) {
-        conditions.push(eq(aiReport.accountId, input.accountId));
+      const normalizedAccountId = normalizeReportAccountId(input.accountId);
+      if (normalizedAccountId) {
+        conditions.push(eq(aiReport.accountId, normalizedAccountId));
       }
 
       const reports = await db
@@ -144,12 +154,14 @@ export const aiLogReportProcedures = {
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const normalizedAccountId = normalizeReportAccountId(input.accountId);
+
       const [report] = await db
         .insert(aiReport)
         .values({
           id: crypto.randomUUID(),
           userId: ctx.session.user.id,
-          accountId: input.accountId || null,
+          accountId: normalizedAccountId,
           title: input.title,
           description: input.description,
           createdAt: new Date(),

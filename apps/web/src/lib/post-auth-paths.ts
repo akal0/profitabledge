@@ -46,6 +46,10 @@ export function buildOnboardingPath(returnTo?: string | null) {
   return `/onboarding?${params.toString()}`;
 }
 
+export function buildPostLoginPath(returnTo?: string | null) {
+  return resolvePostOnboardingPath(returnTo);
+}
+
 export function buildPostAuthContinuePath(returnTo?: string | null) {
   const safeReturnTo = resolvePostAuthPath(returnTo);
   if (safeReturnTo === DEFAULT_POST_AUTH_PATH) {

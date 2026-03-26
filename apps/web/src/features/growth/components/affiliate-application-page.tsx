@@ -19,6 +19,10 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { AuthHeroArtwork } from "@/components/auth/auth-hero-artwork";
+import {
+  AuthSplitShell,
+  type AffiliateInfo,
+} from "@/components/auth/auth-split-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,36 +35,45 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { cn } from "@/lib/utils";
 import { queryClient, trpcOptions } from "@/utils/trpc";
 
 const INPUT_CLASS =
-  "min-h-11 rounded-sm border-none bg-sidebar px-4 py-3 text-sm text-white ring ring-white/10 shadow-none placeholder:text-white/28 hover:bg-sidebar-accent hover:brightness-120 focus-visible:ring-2 focus-visible:ring-white/15";
+  "h-max rounded-sm border-none bg-sidebar px-4 py-3 text-sm text-white ring ring-white/10 shadow-none placeholder:text-white/28 hover:bg-sidebar-accent hover:brightness-120 focus-visible:ring-2 focus-visible:ring-white/15";
 const TEXTAREA_CLASS =
   "min-h-[132px] rounded-sm border-none bg-sidebar px-4 py-3 text-sm text-white ring ring-white/10 shadow-none placeholder:text-white/28 hover:bg-sidebar-accent hover:brightness-120 focus-visible:ring-2 focus-visible:ring-white/15";
-const PRIMARY_BUTTON_CLASS =
-  "h-11 rounded-sm bg-sidebar px-4 text-sm font-medium text-white ring ring-white/10 shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120";
-const SECONDARY_BUTTON_CLASS =
-  "h-11 rounded-sm bg-transparent px-4 text-sm font-medium text-white ring ring-white/10 shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120";
+const FIELD_LABEL_CLASS = "text-xs font-medium text-white/42";
 
 function isNonNegativeIntegerString(value: string) {
   return /^\d+$/.test(value.trim());
 }
 
 const AffiliateApplicationFormSchema = z.object({
-  whyApply: z.string().trim().min(24, {
-    message: "Tell us a bit more about why you want affiliate access.",
-  }).max(1200),
-  promotionPlan: z.string().trim().min(16, {
-    message: "Tell us how you plan to bring the right traders in.",
-  }).max(1200),
-  estimatedMonthlyReferrals: z.string().trim().min(1, {
-    message: "Enter an estimate for monthly referrals.",
-  }).refine(isNonNegativeIntegerString, {
-    message: "Use a whole number.",
-  }),
+  whyApply: z
+    .string()
+    .trim()
+    .min(24, {
+      message: "Tell us a bit more about why you want affiliate access.",
+    })
+    .max(1200),
+  promotionPlan: z
+    .string()
+    .trim()
+    .min(16, {
+      message: "Tell us how you plan to bring the right traders in.",
+    })
+    .max(1200),
+  estimatedMonthlyReferrals: z
+    .string()
+    .trim()
+    .min(1, {
+      message: "Enter an estimate for monthly referrals.",
+    })
+    .refine(isNonNegativeIntegerString, {
+      message: "Use a whole number.",
+    }),
   audienceSize: z.string().trim().optional().refine(
     (value) => !value || isNonNegativeIntegerString(value),
     { message: "Use a whole number." }
@@ -89,6 +102,138 @@ function formatCompactNumber(value?: number | null) {
 type AffiliateApplicationFormValues = z.infer<
   typeof AffiliateApplicationFormSchema
 >;
+
+function AffiliateApplicationHero({
+  currentSignups,
+  currentPaidConversions,
+  audienceSignal,
+  applicationStatus,
+}: {
+  currentSignups: number;
+  currentPaidConversions: number;
+  audienceSignal: string;
+  applicationStatus?: string | null;
+}) {
+  return (
+    <div className="relative z-10 flex w-full max-w-[34rem] flex-col items-center gap-6 text-center">
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Badge className="h-7 rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
+            Affiliate application
+          </Badge>
+          {applicationStatus ? (
+            <Badge className="h-7 rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
+              {formatStatusLabel(applicationStatus)}
+            </Badge>
+          ) : null}
+        </div>
+        <div className="space-y-3">
+          <h2 className="mx-auto max-w-[32rem] text-4xl font-semibold leading-[1.02] text-white xl:text-[3rem] xl:leading-[0.98]">
+            Apply with the context we actually need to review you.
+          </h2>
+          <p className="mx-auto max-w-[28rem] text-sm leading-6 text-white/58 xl:text-base xl:leading-7">
+            This is separate from the member referral ladder. We review your
+            current referral traction, your promotion plan, and the social
+            surfaces you already use before affiliate access is unlocked.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid w-full gap-3 sm:grid-cols-3">
+        {[
+          {
+            label: "Referral signups",
+            value: String(currentSignups),
+            icon: UserPlus,
+          },
+          {
+            label: "Paid referrals",
+            value: String(currentPaidConversions),
+            icon: Users,
+          },
+          {
+            label: "Audience signal",
+            value: audienceSignal,
+            icon: TrendingUp,
+          },
+        ].map((item) => {
+          const Icon = item.icon;
+
+          return (
+            <div
+              key={item.label}
+              className="rounded-sm bg-sidebar/70 p-4 text-center ring ring-white/8 backdrop-blur-[2px]"
+            >
+              <div className="flex items-center justify-center gap-2 text-white/45">
+                <Icon className="size-4 text-amber-300" />
+                <span className="text-xs">{item.label}</span>
+              </div>
+              <p className="mt-4 text-2xl font-semibold text-white">
+                {item.value}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ApprovedAffiliateShell() {
+  return (
+    <AuthSplitShell
+      className="max-w-[33rem]"
+      heroArtwork={<AuthHeroArtwork />}
+      heroContent={
+        <div className="relative z-10 flex w-full max-w-[32rem] flex-col items-center gap-4 text-center">
+          <Badge className="h-7 rounded-sm bg-emerald-400/10 px-2.5 text-[11px] text-emerald-200 ring ring-emerald-300/20">
+            Affiliate approved
+          </Badge>
+          <h2 className="text-4xl font-semibold leading-[1.02] text-white xl:text-[3rem] xl:leading-[0.98]">
+            This account already has affiliate access.
+          </h2>
+          <p className="mx-auto max-w-[28rem] text-sm leading-6 text-white/58 xl:text-base xl:leading-7">
+            Your application flow is complete. Use the affiliate dashboard to
+            manage offers, links, commissions, and payouts.
+          </p>
+        </div>
+      }
+    >
+      <div className="space-y-8">
+        <div className="space-y-3 text-center">
+          <p className="text-3xl font-medium text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
+            Affiliate access is already active
+          </p>
+          <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
+            There&apos;s nothing left to submit for this account.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <Button
+            asChild
+            className={getPropAssignActionButtonClassName({
+              tone: "teal",
+              className: "h-11 w-full justify-center text-sm",
+            })}
+          >
+            <Link href="/dashboard/affiliate">Open affiliate dashboard</Link>
+          </Button>
+          <Button
+            asChild
+            variant="ghost"
+            className={getPropAssignActionButtonClassName({
+              tone: "ghost",
+              className: "h-11 w-full justify-center text-sm",
+            })}
+          >
+            <Link href="/dashboard/referrals">Back to referrals</Link>
+          </Button>
+        </div>
+      </div>
+    </AuthSplitShell>
+  );
+}
 
 export function AffiliateApplicationPage() {
   const billingStateQuery = useQuery(
@@ -131,6 +276,13 @@ export function AffiliateApplicationPage() {
   const application = affiliate?.application;
   const referral = billingStateQuery.data?.referral;
   const me = meQuery.data;
+  const applicantIdentity: AffiliateInfo | null = me
+    ? {
+        name: me.name ?? me.username ?? "Trader",
+        username: me.username ?? null,
+        image: me.image ?? null,
+      }
+    : null;
   const applicationDetails =
     application?.details && typeof application.details === "object"
       ? application.details
@@ -142,10 +294,7 @@ export function AffiliateApplicationPage() {
     }
 
     form.reset({
-      whyApply:
-        applicationDetails?.whyApply ??
-        application?.message ??
-        "",
+      whyApply: applicationDetails?.whyApply ?? application?.message ?? "",
       promotionPlan: applicationDetails?.promotionPlan ?? "",
       estimatedMonthlyReferrals:
         applicationDetails?.estimatedMonthlyReferrals != null
@@ -161,55 +310,39 @@ export function AffiliateApplicationPage() {
       location: applicationDetails?.location ?? me.location ?? "",
       otherSocials: applicationDetails?.otherSocials ?? "",
     });
-  }, [
-    application?.message,
-    applicationDetails,
-    billingStateQuery.data,
-    form,
-    me,
-  ]);
+  }, [application?.message, applicationDetails, billingStateQuery.data, form, me]);
 
   if (billingStateQuery.isLoading) {
+    return <RouteLoadingFallback route="referrals" className="min-h-screen" />;
+  }
+
+  if (billingStateQuery.isError || meQuery.isError) {
     return (
-      <RouteLoadingFallback
-        route="referrals"
-        className="min-h-[calc(100vh-10rem)]"
-      />
+      <AuthSplitShell className="max-w-[33rem]" heroArtwork={<AuthHeroArtwork />}>
+        <div className="space-y-6 text-center">
+          <p className="text-3xl font-medium text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
+            Sign in to continue your affiliate application
+          </p>
+          <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
+            This page is only available for a signed-in account with referral
+            access.
+          </p>
+          <Button
+            asChild
+            className={getPropAssignActionButtonClassName({
+              tone: "teal",
+              className: "h-11 w-full justify-center text-sm",
+            })}
+          >
+            <Link href="/login?returnTo=%2Fapply%2Faffiliate">Log in</Link>
+          </Button>
+        </div>
+      </AuthSplitShell>
     );
   }
 
   if (affiliate?.isAffiliate) {
-    return (
-      <main className="p-6 py-4">
-        <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#050505]">
-          <AuthHeroArtwork className="opacity-70" />
-          <div className="relative z-10 flex min-h-[420px] flex-col justify-between gap-10 p-6 sm:p-8">
-            <div className="max-w-2xl space-y-4">
-              <Badge className="h-7 rounded-sm bg-emerald-400/10 px-2.5 text-[11px] text-emerald-200 ring ring-emerald-300/20">
-                Affiliate approved
-              </Badge>
-              <div className="space-y-3">
-                <h1 className="text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl">
-                  This account already has affiliate access.
-                </h1>
-                <p className="max-w-xl text-sm leading-6 text-white/58">
-                  Your application flow is complete. Use the affiliate dashboard
-                  to manage offers, links, commissions, and payouts.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild className={PRIMARY_BUTTON_CLASS}>
-                <Link href="/dashboard/affiliate">Open affiliate dashboard</Link>
-              </Button>
-              <Button asChild variant="ghost" className={SECONDARY_BUTTON_CLASS}>
-                <Link href="/dashboard/referrals">Back to referrals</Link>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <ApprovedAffiliateShell />;
   }
 
   const currentSignups = referral?.stats.signups ?? 0;
@@ -234,354 +367,298 @@ export function AffiliateApplicationPage() {
   });
 
   return (
-    <main className="p-6 py-4">
-      <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-[#050505] shadow-[0_24px_120px_rgba(0,0,0,0.45)]">
-        <AuthHeroArtwork className="opacity-70" />
-        <div className="relative z-10 grid min-h-[760px] lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
-          <section className="flex flex-col justify-between gap-10 p-6 sm:p-8 lg:p-10">
-            <div className="space-y-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <Button asChild variant="ghost" className={SECONDARY_BUTTON_CLASS}>
-                  <Link href="/dashboard/referrals">
-                    <ArrowLeft className="size-4" />
-                    Back to referrals
-                  </Link>
-                </Button>
-                {applicationStatus ? (
-                  <Badge className="h-7 rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
-                    {formatStatusLabel(applicationStatus)}
-                  </Badge>
-                ) : null}
-              </div>
-
-              <div className="max-w-2xl space-y-4">
-                <Badge className="h-7 rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
-                  Affiliate application
-                </Badge>
-                <h1 className="text-3xl font-semibold tracking-[-0.05em] text-white sm:text-4xl lg:text-[3.25rem] lg:leading-[0.96]">
-                  Apply with the context we actually need to review you.
-                </h1>
-                <p className="max-w-xl text-sm leading-6 text-white/58 sm:text-[15px] sm:leading-7">
-                  This is separate from the member referral ladder. We review
-                  your current referral traction, your promotion plan, and the
-                  social surfaces you already use to decide whether to unlock
-                  affiliate access.
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                {
-                  label: "Referral signups",
-                  value: String(currentSignups),
-                  icon: UserPlus,
-                },
-                {
-                  label: "Paid referrals",
-                  value: String(currentPaidConversions),
-                  icon: Users,
-                },
-                {
-                  label: "Audience signal",
-                  value: formatCompactNumber(applicationDetails?.audienceSize ?? 0),
-                  icon: TrendingUp,
-                },
-              ].map((item) => {
-                const Icon = item.icon;
-
-                return (
-                  <div
-                    key={item.label}
-                    className="rounded-2xl border border-white/10 bg-black/35 p-4 backdrop-blur-sm"
-                  >
-                    <div className="flex items-center gap-2 text-white/45">
-                      <Icon className="size-4 text-amber-300" />
-                      <span className="text-xs">{item.label}</span>
-                    </div>
-                    <p className="mt-4 text-2xl font-semibold text-white">
-                      {item.value}
-                    </p>
-                  </div>
-                );
+    <AuthSplitShell
+      className="max-w-[34rem]"
+      heroArtwork={<AuthHeroArtwork />}
+      affiliate={applicantIdentity}
+      hideAffiliateDescription
+      heroContent={
+        <AffiliateApplicationHero
+          currentSignups={currentSignups}
+          currentPaidConversions={currentPaidConversions}
+          audienceSignal={formatCompactNumber(applicationDetails?.audienceSize ?? 0)}
+          applicationStatus={applicationStatus}
+        />
+      }
+    >
+      <div className="space-y-8">
+        <div className="space-y-4 text-center">
+          <div className="flex justify-center">
+            <Button
+              asChild
+              variant="ghost"
+              className={getPropAssignActionButtonClassName({
+                tone: "ghost",
+                className: "h-11 px-4 text-sm",
               })}
-            </div>
-          </section>
-
-          <section className="border-t border-white/10 bg-black/52 backdrop-blur-md lg:border-l lg:border-t-0">
-            <div className="flex h-full flex-col p-6 sm:p-8">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-white">
-                  Review form
-                </p>
-                <p className="text-sm leading-6 text-white/52">
-                  Social fields are prefilled from your profile when available.
-                  Update them here if this application should use different
-                  links.
-                </p>
-              </div>
-
-              <Separator className="my-6 bg-white/8" />
-
-              <Form {...form}>
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <FormField
-                    control={form.control}
-                    name="whyApply"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs text-white/58">
-                          Why do you want affiliate access?
-                        </FormLabel>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            className={TEXTAREA_CLASS}
-                            placeholder="Tell us why you're applying, what kind of traders you reach, and why you'd be a strong fit for the program."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="promotionPlan"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs text-white/58">
-                          How will you promote Profitabledge?
-                        </FormLabel>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            className={TEXTAREA_CLASS}
-                            placeholder="Explain the channels, communities, content formats, or mentorship workflows you plan to use."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="estimatedMonthlyReferrals"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs text-white/58">
-                            Estimated referrals per month
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={field.value ?? ""}
-                              className={INPUT_CLASS}
-                              placeholder="25"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="audienceSize"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs text-white/58">
-                            Audience size
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="number"
-                              min={0}
-                              step={1}
-                              value={field.value ?? ""}
-                              className={INPUT_CLASS}
-                              placeholder="2500"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-center gap-2">
-                      <BadgePercent className="size-4 text-amber-300" />
-                      <p className="text-sm font-medium text-white">
-                        Current referral history
-                      </p>
-                    </div>
-                    <p className="mt-2 text-xs leading-5 text-white/48">
-                      We use your actual member referral stats automatically, so
-                      you do not need to re-enter them manually.
-                    </p>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-xl border border-white/8 bg-black/25 p-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/32">
-                          Signups
-                        </p>
-                        <p className="mt-2 text-xl font-semibold text-white">
-                          {currentSignups}
-                        </p>
-                      </div>
-                      <div className="rounded-xl border border-white/8 bg-black/25 p-3">
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-white/32">
-                          Paid referrals
-                        </p>
-                        <p className="mt-2 text-xl font-semibold text-white">
-                          {currentPaidConversions}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FormField
-                      control={form.control}
-                      name="twitter"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs text-white/58">
-                            X / Twitter
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              className={INPUT_CLASS}
-                              placeholder="@yourhandle"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="discord"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs text-white/58">
-                            Discord
-                          </FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              value={field.value ?? ""}
-                              className={INPUT_CLASS}
-                              placeholder="yourserver / yourhandle"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="website"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs text-white/58">
-                            Website
-                          </FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Globe className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/28" />
-                              <Input
-                                {...field}
-                                value={field.value ?? ""}
-                                className={cn(INPUT_CLASS, "pl-10")}
-                                placeholder="https://your-site.com"
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="location"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs text-white/58">
-                            Location
-                          </FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/28" />
-                              <Input
-                                {...field}
-                                value={field.value ?? ""}
-                                className={cn(INPUT_CLASS, "pl-10")}
-                                placeholder="London, UK"
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="otherSocials"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs text-white/58">
-                          Other socials or communities
-                        </FormLabel>
-                        <FormControl>
-                          <Textarea
-                            {...field}
-                            value={field.value ?? ""}
-                            className={TEXTAREA_CLASS}
-                            placeholder="Share any Telegram groups, YouTube channels, newsletters, mentorship communities, or other places you plan to promote from."
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex flex-wrap gap-3 pt-2">
-                    <Button
-                      type="submit"
-                      disabled={isSubmitting}
-                      className={PRIMARY_BUTTON_CLASS}
-                    >
-                      <Send className="size-4" />
-                      {isSubmitting
-                        ? "Submitting..."
-                        : application
-                        ? "Update application"
-                        : "Submit application"}
-                    </Button>
-                    <Button asChild variant="ghost" className={SECONDARY_BUTTON_CLASS}>
-                      <Link href="/dashboard/referrals">Cancel</Link>
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </div>
-          </section>
+            >
+              <Link href="/dashboard/referrals">
+                <ArrowLeft className="size-4" />
+                Back to referrals
+              </Link>
+            </Button>
+          </div>
+          <div className="space-y-3">
+            <p className="text-3xl font-medium text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
+              Affiliate review form
+            </p>
+            <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
+              Social fields are prefilled from your profile when available.
+              Update them here if this application should use different links.
+            </p>
+          </div>
         </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-sm bg-sidebar p-4 text-left ring ring-white/8">
+            <div className="flex items-center gap-2 text-white/45">
+              <UserPlus className="size-4 text-amber-300" />
+              <span className="text-xs">Signups</span>
+            </div>
+            <p className="mt-3 text-2xl font-semibold text-white">
+              {currentSignups}
+            </p>
+          </div>
+          <div className="rounded-sm bg-sidebar p-4 text-left ring ring-white/8">
+            <div className="flex items-center gap-2 text-white/45">
+              <BadgePercent className="size-4 text-amber-300" />
+              <span className="text-xs">Paid referrals</span>
+            </div>
+            <p className="mt-3 text-2xl font-semibold text-white">
+              {currentPaidConversions}
+            </p>
+          </div>
+        </div>
+
+        <Form {...form}>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <FormField
+              control={form.control}
+              name="whyApply"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className={FIELD_LABEL_CLASS}>
+                    Why do you want affiliate access?
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      className={TEXTAREA_CLASS}
+                      placeholder="Tell us why you're applying, what kind of traders you reach, and why you'd be a strong fit for the program."
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs text-rose-200/80" />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="promotionPlan"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className={FIELD_LABEL_CLASS}>
+                    How will you promote Profitabledge?
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      className={TEXTAREA_CLASS}
+                      placeholder="Explain the channels, communities, content formats, or mentorship workflows you plan to use."
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs text-rose-200/80" />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="estimatedMonthlyReferrals"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className={FIELD_LABEL_CLASS}>
+                      Estimated referrals per month
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={field.value ?? ""}
+                        className={INPUT_CLASS}
+                        placeholder="25"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="audienceSize"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className={FIELD_LABEL_CLASS}>
+                      Audience size
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={field.value ?? ""}
+                        className={INPUT_CLASS}
+                        placeholder="2500"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="twitter"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className={FIELD_LABEL_CLASS}>
+                      X / Twitter
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        className={INPUT_CLASS}
+                        placeholder="@yourhandle"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="discord"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className={FIELD_LABEL_CLASS}>Discord</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        value={field.value ?? ""}
+                        className={INPUT_CLASS}
+                        placeholder="yourserver / yourhandle"
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="website"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className={FIELD_LABEL_CLASS}>Website</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <Globe className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/28" />
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          className={cn(INPUT_CLASS, "pl-10")}
+                          placeholder="https://your-site.com"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="location"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className={FIELD_LABEL_CLASS}>Location</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <MapPin className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/28" />
+                        <Input
+                          {...field}
+                          value={field.value ?? ""}
+                          className={cn(INPUT_CLASS, "pl-10")}
+                          placeholder="London, UK"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage className="text-xs text-rose-200/80" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="otherSocials"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className={FIELD_LABEL_CLASS}>
+                    Other socials or communities
+                  </FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      value={field.value ?? ""}
+                      className={TEXTAREA_CLASS}
+                      placeholder="Share any Telegram groups, YouTube channels, newsletters, mentorship communities, or other places you plan to promote from."
+                    />
+                  </FormControl>
+                  <FormMessage className="text-xs text-rose-200/80" />
+                </FormItem>
+              )}
+            />
+
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className={getPropAssignActionButtonClassName({
+                  tone: "teal",
+                  className: "h-11 flex-1 text-sm",
+                })}
+              >
+                <Send className="size-4" />
+                {isSubmitting
+                  ? "Submitting..."
+                  : application
+                    ? "Update application"
+                    : "Submit application"}
+              </Button>
+              <Button
+                asChild
+                variant="ghost"
+                className={getPropAssignActionButtonClassName({
+                  tone: "ghost",
+                  className: "h-11 flex-1 text-sm",
+                })}
+              >
+                <Link href="/dashboard/referrals">Cancel</Link>
+              </Button>
+            </div>
+          </form>
+        </Form>
       </div>
-    </main>
+    </AuthSplitShell>
   );
 }

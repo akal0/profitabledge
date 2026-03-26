@@ -11,6 +11,10 @@ import type { CondensedProfile } from "./engine/types";
 import { isAllAccountsScope } from "../account-scope";
 import { checkPropRules } from "../prop-rule-monitor";
 import { getChallengeRuleById, getPropFirmById } from "../prop-firm-detection";
+import {
+  hasProfileAnalysisQualifier,
+  isBroadProfileSummaryQuery,
+} from "./query-normalization";
 
 export type AssistantSurface =
   | "dashboard"
@@ -183,14 +187,32 @@ function isDashboardQuery(
   message: string,
   pageContext: AssistantPageContext
 ): boolean {
+  const onDashboardSurface = pageContext.surface === "dashboard";
+  const focusedExplain =
+    Boolean(pageContext.focusedWidgetId) && DASHBOARD_EXPLAIN_RE.test(message);
+
+  if (
+    isBroadProfileSummaryQuery(message) &&
+    !onDashboardSurface &&
+    !focusedExplain
+  ) {
+    return false;
+  }
+
+  if (
+    isBroadProfileSummaryQuery(message) &&
+    hasProfileAnalysisQualifier(message)
+  ) {
+    return false;
+  }
+
   return (
-    /\b(dashboard|overview|headline|top priority|what matters today|where am i leaking|where am i losing money|what'?s costing me|what is costing me|what am i doing well|what should i focus on today|edge summary|biggest leak|money leak|bleeding money)\b/i.test(
+    /\b(dashboard|overview|headline|top priority|what matters today|what matters on this dashboard|edge summary|focused widget|this widget|this chart|this card|this panel)\b/i.test(
       message
     ) ||
-    (pageContext.surface === "dashboard" &&
+    (onDashboardSurface &&
       (isBroadSummaryQuery(message) ||
-        (Boolean(pageContext.focusedWidgetId) &&
-          DASHBOARD_EXPLAIN_RE.test(message))))
+        focusedExplain))
   );
 }
 

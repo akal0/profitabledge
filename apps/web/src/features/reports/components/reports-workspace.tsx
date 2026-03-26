@@ -475,31 +475,40 @@ function StatCard({
   value,
   tone,
   caption,
+  valueFirst,
 }: {
   label: string;
   value: ReactNode;
   tone?: "positive" | "negative" | "default";
   caption?: ReactNode;
+  valueFirst?: boolean;
 }) {
   return (
     <WidgetWrapper
       className="!h-auto w-full rounded-lg p-1"
-      contentClassName="flex h-full min-h-[8.5rem] flex-col rounded-sm px-4 py-4"
+      contentClassName="flex h-full min-h-[8.5rem] flex-col justify-end rounded-sm px-4 py-4"
     >
-      <div className="flex items-center justify-between gap-4">
-        <span className="text-xs text-white/35">{label}</span>
-      </div>
+      {valueFirst ? null : (
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-xs text-white/35">{label}</span>
+        </div>
+      )}
       <div
         className={cn(
-          "mt-3 text-2xl font-semibold text-white",
+          valueFirst
+            ? "text-2xl font-semibold text-white"
+            : "mt-3 text-2xl font-semibold text-white",
           tone === "positive" && "text-teal-400",
           tone === "negative" && "text-rose-400"
         )}
       >
         {value}
       </div>
+      {valueFirst ? (
+        <div className="mt-2 text-xs text-white/35">{label}</div>
+      ) : null}
       {caption ? (
-        <div className="mt-auto pt-3 text-xs leading-5 text-white/45">
+        <div className="mt-3 text-xs leading-5 text-white/45">
           {caption}
         </div>
       ) : null}
@@ -2116,12 +2125,12 @@ function ReportsWorkspaceContent() {
     >
       <div className="shrink-0 bg-background dark:bg-sidebar">
         <div className="overflow-x-auto px-4 sm:px-6 lg:px-8">
-          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 ring-b-0">
+          <TabsListUnderlined className="flex h-auto min-w-full items-stretch gap-5 border-b-0">
             {REPORT_LENS_IDS.map((lens) => (
               <TabsTriggerUnderlined
                 key={lens}
                 value={lens}
-                className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:ring-teal-400 data-[state=active]:text-teal-400"
+                className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
               >
                 {REPORT_LENS_CONFIG[lens].label}
               </TabsTriggerUnderlined>
@@ -2147,10 +2156,6 @@ function ReportsWorkspaceContent() {
                 hero chart, click into a bucket, and let the rest of the lens
                 react in-place.
               </p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <DashboardTradeFiltersBar mode="button" />
             </div>
           </div>
         </WidgetWrapper>
@@ -2215,33 +2220,37 @@ function ReportsWorkspaceContent() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-muted/15 flex h-max w-max items-center gap-1 rounded-md p-[3px] ring ring-white/5">
-              {REPORT_CHART_TYPES.map((nextChartType) => (
+            <div className="flex items-center gap-2">
+              <div className="bg-white dark:bg-muted/15 flex h-max w-max items-center gap-1 rounded-md p-[3px] ring ring-white/5">
+                {REPORT_CHART_TYPES.map((nextChartType) => (
+                  <Button
+                    key={nextChartType}
+                    type="button"
+                    className={segmentedButtonClassName(
+                      chartType === nextChartType
+                    )}
+                    onClick={() => setChartType(nextChartType)}
+                  >
+                    <span className="px-1">
+                      {nextChartType === "bar"
+                        ? "Bar"
+                        : nextChartType === "line"
+                          ? "Line"
+                          : "Composed"}
+                    </span>
+                  </Button>
+                ))}
                 <Button
-                  key={nextChartType}
                   type="button"
-                  className={segmentedButtonClassName(
-                    chartType === nextChartType
-                  )}
-                  onClick={() => setChartType(nextChartType)}
+                  className={segmentedButtonClassName(false, { action: true })}
+                  onClick={resetLensState}
                 >
-                  <span className="px-1">
-                    {nextChartType === "bar"
-                      ? "Bar"
-                      : nextChartType === "line"
-                      ? "Line"
-                      : "Composed"}
-                  </span>
+                  <RefreshCw className="size-3" />
+                  <span className="px-1">Reset lens</span>
                 </Button>
-              ))}
-              <Button
-                type="button"
-                className={segmentedButtonClassName(false, { action: true })}
-                onClick={resetLensState}
-              >
-                <RefreshCw className="size-3" />
-                <span className="px-1">Reset lens</span>
-              </Button>
+              </div>
+
+              <DashboardTradeFiltersBar mode="button" />
             </div>
           </div>
         </div>
@@ -2256,6 +2265,7 @@ function ReportsWorkspaceContent() {
                 overviewQuery.data?.metrics[metric],
                 currencyCode
               )}
+              valueFirst
               tone={
                 metric === "netPnl"
                   ? Number(overviewQuery.data?.metrics.netPnl ?? 0) >= 0

@@ -43,6 +43,10 @@ type KnownNotificationType =
   | "prop_journey"
   | "prop_phase_advanced"
   | "edge_invite"
+  | "journal_share_request"
+  | "journal_share_invite"
+  | "journal_share_accepted"
+  | "journal_share_declined"
   | "leaderboard_update"
   | "system_maintenance"
   | "system_update";
@@ -50,7 +54,6 @@ type KnownNotificationType =
 type NotificationTab =
   | "all"
   | "trades"
-  | "review-ready"
   | "goals"
   | "alerts"
   | "news"
@@ -97,6 +100,10 @@ function getNotificationPriority(type?: string | null): NotificationPriority {
     case "post_exit_ready":
     case "goal_progress":
     case "edge_invite":
+    case "journal_share_request":
+    case "journal_share_invite":
+    case "journal_share_accepted":
+    case "journal_share_declined":
       return "normal";
     default:
       return "low";
@@ -110,6 +117,13 @@ type NotificationMetadata = {
   date?: string;
   title?: string;
   url?: string;
+  shareId?: string;
+  shareToken?: string;
+  sharePath?: string;
+  inviteId?: string;
+  requestId?: string;
+  inviterUserId?: string;
+  viewerUserId?: string;
   accountId?: string;
   accountNumber?: string;
   broker?: string;
@@ -161,7 +175,6 @@ type NotificationItem = {
 const NOTIFICATION_TABS = [
   "all",
   "trades",
-  "review-ready",
   "goals",
   "alerts",
   "news",
@@ -192,6 +205,10 @@ const knownNotificationTypes = [
   "prop_journey",
   "prop_phase_advanced",
   "edge_invite",
+  "journal_share_request",
+  "journal_share_invite",
+  "journal_share_accepted",
+  "journal_share_declined",
   "leaderboard_update",
   "system_maintenance",
   "system_update",
@@ -200,7 +217,6 @@ const knownNotificationTypes = [
 const notificationTabLabels: Record<NotificationTab, string> = {
   all: "All",
   trades: "Trades",
-  "review-ready": "Review ready",
   goals: "Goals",
   alerts: "Alerts",
   news: "Calendar",
@@ -212,8 +228,6 @@ const notificationTabEmptyStates: Record<NotificationTab, string> = {
   all: "No notifications yet.",
   trades:
     "No trade notifications. Closed trades, imports, and execution updates will land here.",
-  "review-ready":
-    "No review-ready notifications. Auto-generated post-trade reviews will show up here.",
   goals:
     "No goal notifications. Goal milestones, achievements, and progress updates will land here.",
   alerts:
@@ -228,7 +242,6 @@ const notificationTabEmptyStates: Record<NotificationTab, string> = {
 const notificationTabBadgeClasses: Record<NotificationTab, string> = {
   all: "bg-teal-500/15 text-teal-300",
   trades: "bg-white/5 text-white/60",
-  "review-ready": "bg-teal-500/15 text-teal-300",
   goals: "bg-emerald-500/15 text-emerald-300",
   alerts: "bg-red-500/15 text-red-300",
   news: "bg-amber-500/15 text-amber-300",
@@ -242,7 +255,7 @@ const notificationTypePrimaryTab: Record<
 > = {
   trade_closed: "trades",
   trade_opened: "trades",
-  post_exit_ready: "review-ready",
+  post_exit_ready: "trades",
   webhook_sync: "system",
   news_upcoming: "news",
   trade_imported: "trades",
@@ -256,10 +269,19 @@ const notificationTypePrimaryTab: Record<
   prop_journey: "alerts",
   prop_phase_advanced: "alerts",
   edge_invite: "system",
+  journal_share_request: "system",
+  journal_share_invite: "system",
+  journal_share_accepted: "system",
+  journal_share_declined: "system",
   leaderboard_update: "social",
   system_maintenance: "system",
   system_update: "system",
 };
+
+const primaryActionButtonClass =
+  "rounded-sm bg-teal-500/18 ring-teal-500/30 px-2 text-[10px] text-teal-100 hover:bg-teal-500/24 h-max py-1";
+const destructiveActionButtonClass =
+  "rounded-sm bg-rose-500/16 ring-rose-500/30 px-2 text-[10px] text-rose-100 hover:bg-rose-500/22 h-max py-1";
 
 const impactBadgeClasses: Record<ImpactLevel, string> = {
   High: "bg-red-500/20 text-red-200 ring-red-500/30",
@@ -360,22 +382,14 @@ function getNotificationPrimaryTab(
   return notificationTypePrimaryTab[type];
 }
 
-function buildReviewReadyUrl(item: NotificationItem) {
+function buildJournalEntryUrl(item: NotificationItem) {
   if (item.metadata?.url?.startsWith("/dashboard/journal")) {
-    const [path, rawQuery] = item.metadata.url.split("?");
-    const params = new URLSearchParams(rawQuery ?? "");
-
-    if (!params.has("tab")) {
-      params.set("tab", "review-ready");
-    }
-
-    const query = params.toString();
-    return query ? `${path}?${query}` : path;
+    return item.metadata.url;
   }
 
   return item.metadata?.journalEntryId
-    ? `/dashboard/journal?tab=review-ready&entryId=${item.metadata.journalEntryId}&entryType=trade_review`
-    : "/dashboard/journal?tab=review-ready&entryType=trade_review";
+    ? `/dashboard/journal?entryId=${item.metadata.journalEntryId}&entryType=trade_review`
+    : "/dashboard/journal?entryType=trade_review";
 }
 
 function buildSettingsUpdatedUrl(metadata?: NotificationMetadata | null) {
@@ -404,7 +418,7 @@ function buildCalendarUrl(_metadata?: NotificationMetadata | null) {
 
 function buildNotificationUrl(item: NotificationItem) {
   if (item.type === "post_exit_ready") {
-    return buildReviewReadyUrl(item);
+    return buildJournalEntryUrl(item);
   }
 
   if (item.metadata?.url) {
@@ -431,6 +445,11 @@ function buildNotificationUrl(item: NotificationItem) {
       return "/dashboard/settings/alerts";
     case "leaderboard_update":
       return "/dashboard";
+    case "journal_share_request":
+    case "journal_share_invite":
+    case "journal_share_accepted":
+    case "journal_share_declined":
+      return "/dashboard/journal?tab=shares";
     case "api_key":
       return "/dashboard/settings/api";
     case "webhook_sync":
@@ -451,12 +470,20 @@ function getNotificationTargetUrl(item: NotificationItem) {
     : buildNotificationUrl(item);
 }
 
+function isJournalShareInviteActionable(item: NotificationItem) {
+  return (
+    item.type === "journal_share_invite" &&
+    !item.readAt &&
+    typeof item.metadata?.inviteId === "string" &&
+    item.metadata.inviteId.length > 0
+  );
+}
+
 function showNotificationToast(item: NotificationItem) {
   toast(item.title || "Notification", {
     id: `notification-toast:${item.id}`,
     description: item.body || undefined,
-    duration:
-      getNotificationPriority(item.type) === "urgent" ? 12000 : 8000,
+    duration: getNotificationPriority(item.type) === "urgent" ? 12000 : 8000,
     classNames: {
       toast:
         "bg-sidebar ring-white/10 text-white !min-w-[300px] !max-w-[500px]",
@@ -466,14 +493,25 @@ function showNotificationToast(item: NotificationItem) {
   });
 }
 
+type InviteActionState = {
+  inviteId: string;
+  action: "accept" | "decline";
+} | null;
+
 function NotificationsList({
   items,
   markRead,
   onNavigate,
+  inviteActionState,
+  onAcceptInvite,
+  onDeclineInvite,
 }: {
   items: NotificationItem[];
   markRead: any;
   onNavigate: (url: string) => void;
+  inviteActionState: InviteActionState;
+  onAcceptInvite: (item: NotificationItem) => void;
+  onDeclineInvite: (item: NotificationItem) => void;
 }) {
   const groupedItems = groupByDate(items);
 
@@ -493,6 +531,20 @@ function NotificationsList({
             {group.items.map((item, index) => {
               const isNews = item.type === "news_upcoming";
               const targetUrl = getNotificationTargetUrl(item);
+              const isActionableInvite = isJournalShareInviteActionable(item);
+              const inviteId = item.metadata?.inviteId;
+              const canClickThrough = Boolean(targetUrl) && !isActionableInvite;
+              const isAcceptingInvite =
+                inviteId &&
+                inviteActionState?.inviteId === inviteId &&
+                inviteActionState.action === "accept";
+              const isDecliningInvite =
+                inviteId &&
+                inviteActionState?.inviteId === inviteId &&
+                inviteActionState.action === "decline";
+              const isInviteActionPending =
+                inviteActionState !== null &&
+                inviteActionState.inviteId === inviteId;
               const impact =
                 isNews && item.metadata?.impact
                   ? normalizeImpact(item.metadata.impact)
@@ -514,7 +566,7 @@ function NotificationsList({
                   <DropdownMenuItem
                     className={cn(
                       "p-2.5 flex flex-col items-start gap-1 hover:bg-sidebar-accent! rounded-sm",
-                      targetUrl && "cursor-pointer",
+                      canClickThrough && "cursor-pointer",
                       isUrgent &&
                         "ring ring-red-500/25 bg-red-500/5 hover:bg-red-500/10! transition duration-250",
                       isFundedMilestone &&
@@ -522,6 +574,9 @@ function NotificationsList({
                     )}
                     onSelect={(event) => event.preventDefault()}
                     onClick={() => {
+                      if (!canClickThrough) {
+                        return;
+                      }
                       if (!item.readAt) {
                         markRead.mutate({ ids: [item.id] });
                       }
@@ -597,14 +652,47 @@ function NotificationsList({
                         {item.body}
                       </span>
                     ) : null}
-                    {targetUrl && (
+                    {canClickThrough && (
                       <span className="text-[10px] text-teal-400/70 pl-5">
                         Click to open →
                       </span>
                     )}
-                    <span className="text-[10px] text-white/40 pl-5">
-                      {formatTimestamp(item.createdAt)}
-                    </span>
+                    <div className="flex w-full items-center justify-between gap-3 pl-5">
+                      <span className="text-[10px] text-white/40">
+                        {formatTimestamp(item.createdAt)}
+                      </span>
+                      {isActionableInvite ? (
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <Button
+                            size="sm"
+                            className={destructiveActionButtonClass}
+                            disabled={isInviteActionPending}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onDeclineInvite(item);
+                            }}
+                          >
+                            {isDecliningInvite ? "Declining..." : "Decline"}
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            className={primaryActionButtonClass}
+                            disabled={isInviteActionPending}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              onAcceptInvite(item);
+                            }}
+                          >
+                            {isAcceptingInvite ? "Accepting..." : "Accept"}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
                   </DropdownMenuItem>
                 </div>
               );
@@ -622,12 +710,18 @@ function NotificationTabPanel({
   emptyMessage,
   markRead,
   onNavigate,
+  inviteActionState,
+  onAcceptInvite,
+  onDeclineInvite,
 }: {
   value: NotificationTab;
   items: NotificationItem[];
   emptyMessage: string;
   markRead: any;
   onNavigate: (url: string) => void;
+  inviteActionState: InviteActionState;
+  onAcceptInvite: (item: NotificationItem) => void;
+  onDeclineInvite: (item: NotificationItem) => void;
 }) {
   return (
     <TabsContent
@@ -643,6 +737,9 @@ function NotificationTabPanel({
           items={items}
           markRead={markRead}
           onNavigate={onNavigate}
+          inviteActionState={inviteActionState}
+          onAcceptInvite={onAcceptInvite}
+          onDeclineInvite={onDeclineInvite}
         />
       )}
     </TabsContent>
@@ -654,12 +751,11 @@ export default function NotificationsHub() {
   const trpc = useTRPC();
   const [activeTab, setActiveTab] = useState<NotificationTab>("all");
   const [open, setOpen] = useState(false);
+  const [inviteActionState, setInviteActionState] =
+    useState<InviteActionState>(null);
   const inactivePollingIntervalMs = 60_000;
   const activePollingIntervalMs = 15_000;
-  const {
-    data: notifications = [],
-    isFetched: hasFetchedNotifications,
-  } =
+  const { data: notifications = [], isFetched: hasFetchedNotifications } =
     trpc.notifications.list.useQuery(
       { limit: 25 },
       {
@@ -672,8 +768,9 @@ export default function NotificationsHub() {
     );
   type NotificationQueryItem = (typeof notifications)[number];
   const { data: preferences } = trpc.notifications.getPreferences.useQuery();
-  const notificationsQueryKey =
-    trpcOptions.notifications.list.queryOptions({ limit: 25 }).queryKey;
+  const notificationsQueryKey = trpcOptions.notifications.list.queryOptions({
+    limit: 25,
+  }).queryKey;
   const markAllRead = trpc.notifications.markAllRead.useMutation({
     onSuccess: () => {
       const readAt = new Date().toISOString();
@@ -720,6 +817,8 @@ export default function NotificationsHub() {
       });
     },
   });
+  const acceptInvite = trpc.journal.shares.acceptInvite.useMutation();
+  const declineInvite = trpc.journal.shares.declineInvite.useMutation();
   const deliveredRef = useRef<Set<string>>(new Set());
   const initializedDeliveryRef = useRef(false);
 
@@ -740,7 +839,6 @@ export default function NotificationsHub() {
     const grouped: Record<NotificationTab, NotificationItem[]> = {
       all: visibleItems,
       trades: [],
-      "review-ready": [],
       goals: [],
       alerts: [],
       news: [],
@@ -756,8 +854,6 @@ export default function NotificationsHub() {
     const unreadCounts: Record<NotificationTab, number> = {
       all: unreadItems.length,
       trades: grouped.trades.filter((item) => !item.readAt).length,
-      "review-ready": grouped["review-ready"].filter((item) => !item.readAt)
-        .length,
       goals: grouped.goals.filter((item) => !item.readAt).length,
       alerts: grouped.alerts.filter((item) => !item.readAt).length,
       news: grouped.news.filter((item) => !item.readAt).length,
@@ -777,6 +873,62 @@ export default function NotificationsHub() {
   const handleNavigate = (url: string) => {
     setOpen(false);
     router.push(url);
+  };
+
+  const handleAcceptInvite = async (item: NotificationItem) => {
+    const inviteId = item.metadata?.inviteId;
+    if (!inviteId) return;
+
+    setInviteActionState({ inviteId, action: "accept" });
+
+    try {
+      const result = await acceptInvite.mutateAsync({ inviteId });
+      if (!item.readAt) {
+        markRead.mutate({ ids: [item.id] });
+      }
+      toast.success("Invite accepted");
+      handleNavigate(
+        item.metadata?.url ||
+          result.share.sharePath ||
+          getNotificationTargetUrl(item) ||
+          "/dashboard/journal?tab=shares"
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to accept invite"
+      );
+    } finally {
+      setInviteActionState((current) =>
+        current?.inviteId === inviteId && current.action === "accept"
+          ? null
+          : current
+      );
+    }
+  };
+
+  const handleDeclineInvite = async (item: NotificationItem) => {
+    const inviteId = item.metadata?.inviteId;
+    if (!inviteId) return;
+
+    setInviteActionState({ inviteId, action: "decline" });
+
+    try {
+      await declineInvite.mutateAsync({ inviteId });
+      if (!item.readAt) {
+        markRead.mutate({ ids: [item.id] });
+      }
+      toast.success("Invite declined");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to decline invite"
+      );
+    } finally {
+      setInviteActionState((current) =>
+        current?.inviteId === inviteId && current.action === "decline"
+          ? null
+          : current
+      );
+    }
   };
 
   useEffect(() => {
@@ -805,22 +957,10 @@ export default function NotificationsHub() {
       return;
     }
 
-    const canShowDesktopNotifications =
-      canUsePushChannel &&
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted";
-
     unreadItems.forEach((item) => {
       if (item.readAt) return;
       if (deliveredRef.current.has(item.id)) return;
       deliveredRef.current.add(item.id);
-
-      if (canShowDesktopNotifications) {
-        const title = item.title || "Notification";
-        const body = item.body || "";
-        new Notification(title, { body });
-        return;
-      }
 
       if (!canUseInAppChannel) return;
 
@@ -828,7 +968,6 @@ export default function NotificationsHub() {
     });
   }, [
     canUseInAppChannel,
-    canUsePushChannel,
     hasFetchedNotifications,
     unreadItems,
   ]);
@@ -884,7 +1023,9 @@ export default function NotificationsHub() {
             <Button
               size="sm"
               className="rounded-sm bg-sidebar-accent text-white hover:bg-sidebar-accent/80"
-              onClick={() => handleNavigate("/dashboard/settings/notifications")}
+              onClick={() =>
+                handleNavigate("/dashboard/settings/notifications")
+              }
             >
               Open settings
             </Button>
@@ -893,7 +1034,9 @@ export default function NotificationsHub() {
           <Tabs
             value={activeTab}
             onValueChange={(value) => {
-              if (VISIBLE_NOTIFICATION_TABS.includes(value as NotificationTab)) {
+              if (
+                VISIBLE_NOTIFICATION_TABS.includes(value as NotificationTab)
+              ) {
                 setActiveTab(value as NotificationTab);
               }
             }}
@@ -939,6 +1082,9 @@ export default function NotificationsHub() {
                   emptyMessage={notificationTabEmptyStates[tab]}
                   markRead={markRead}
                   onNavigate={handleNavigate}
+                  inviteActionState={inviteActionState}
+                  onAcceptInvite={handleAcceptInvite}
+                  onDeclineInvite={handleDeclineInvite}
                 />
               ))}
             </div>

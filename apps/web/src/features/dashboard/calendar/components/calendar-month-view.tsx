@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent } from "react";
+import { useState, type KeyboardEvent } from "react";
 
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -14,6 +14,7 @@ import {
 } from "@/components/trades/trade-identifier-pill";
 import { cn } from "@/lib/utils";
 
+import { GroupedTradeMultiplierChip } from "./grouped-trade-multiplier-chip";
 import type {
   CalendarPreviewState,
   DayRow,
@@ -56,6 +57,15 @@ type CalendarMonthViewProps = {
   onLeaveDay: (dateISO: string) => void;
 };
 
+type GroupedTradePreview = {
+  symbol: string;
+  totalProfit: number;
+  items: Array<{
+    id: string;
+    profit: number;
+  }>;
+};
+
 function handleDayKeyDown(
   event: KeyboardEvent<HTMLElement>,
   dateISO: string,
@@ -64,6 +74,27 @@ function handleDayKeyDown(
   if (event.key !== "Enter" && event.key !== " ") return;
   event.preventDefault();
   onSelectDay(dateISO);
+}
+
+function buildGroupedPreviewRows(rows: TradePreview[]) {
+  const groupedBySymbol = rows.reduce<Record<string, GroupedTradePreview>>(
+    (accumulator, row) => {
+      const key = (row.symbol || "(Unknown)").trim();
+      const current =
+        accumulator[key] ?? { symbol: key, totalProfit: 0, items: [] };
+      current.totalProfit += Number(row.profit || 0);
+      current.items.push({ id: row.id, profit: Number(row.profit || 0) });
+      accumulator[key] = current;
+      return accumulator;
+    },
+    {}
+  );
+
+  return Object.values(groupedBySymbol)
+    .sort(
+      (left, right) => Math.abs(right.totalProfit) - Math.abs(left.totalProfit)
+    )
+    .slice(0, 3);
 }
 
 export function CalendarMonthView({
@@ -81,6 +112,9 @@ export function CalendarMonthView({
   onHoverDay,
   onLeaveDay,
 }: CalendarMonthViewProps) {
+  const [openTooltipKey, setOpenTooltipKey] = useState<string | null>(null);
+  const [nestedTooltipKey, setNestedTooltipKey] = useState<string | null>(null);
+
   return (
     <div className="border border-white/5 bg-white dark:bg-sidebar rounded-md overflow-hidden">
       <div className="grid grid-cols-7 gap-[1px] bg-sidebar-accent">
@@ -112,6 +146,7 @@ export function CalendarMonthView({
                 new Date(left.open).getTime() - new Date(right.open).getTime()
             );
           const previewLoading = count > 0 ? preview?.loading ?? true : false;
+          const groupedPreviewRows = buildGroupedPreviewRows(previewTrades);
           const shown = previewTrades.length;
           const extra = Math.max(0, totalCount - shown);
           const countLabel =
@@ -200,7 +235,18 @@ export function CalendarMonthView({
           }
 
           return (
-            <Tooltip key={key}>
+            <Tooltip
+              key={key}
+              open={openTooltipKey === key || nestedTooltipKey === key}
+              onOpenChange={(open) => {
+                if (open) {
+                  setOpenTooltipKey(key);
+                  return;
+                }
+
+                setOpenTooltipKey((current) => (current === key ? null : current));
+              }}
+            >
               <TooltipTrigger asChild>{cell}</TooltipTrigger>
               <TooltipContent className="px-0 py-3">
                 <div className="flex max-h-72 min-w-[280px] max-w-[360px] flex-col overflow-auto">
@@ -223,38 +269,91 @@ export function CalendarMonthView({
                     </div>
                   ) : previewTrades.length > 0 ? (
                     <div className="flex flex-col gap-1 px-3 pt-2">
-                      {previewTrades.map((trade) => {
-                        const opened = trade.open
-                          ? new Date(trade.open).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "--:--";
-
+                      {groupedPreviewRows.map((group) => {
                         return (
-                          <div key={trade.id} className="flex w-full items-center gap-3">
-                            <span className="w-16 shrink-0 text-left text-[11px] tabular-nums text-white/60">
-                              {opened}
+                          <div
+                            key={group.symbol}
+                            className="flex w-full items-center justify-between gap-2"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-white">
+                              {group.symbol}
                             </span>
-                            <div className="flex min-w-0 flex-1 items-center justify-center gap-2">
-                              <span className="min-w-0 truncate text-center text-[11px] text-white/70">
-                                {trade.symbol}
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  TRADE_IDENTIFIER_PILL_CLASS,
+                                  "min-h-0 shrink-0 px-1.5 py-0 text-[10px]",
+                                  getTradePillProfitTone(
+                                    Number(group.totalProfit || 0)
+                                  )
+                                )}
+                              >
+                                {formatTradePillMoney(
+                                  Number(group.totalProfit || 0)
+                                )}
                               </span>
-                              {trade.status === "live" ? (
-                                <span className="rounded-xs bg-cyan-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-cyan-200 ring-1 ring-cyan-400/20">
-                                  Live
-                                </span>
+                              {group.items.length > 1 ? (
+                                <GroupedTradeMultiplierChip
+                                  label={`x${formatTradeCount(group.items.length)}`}
+                                  onOpenChange={(open) => {
+                                    setNestedTooltipKey((current) => {
+                                      if (open) return key;
+                                      return current === key ? null : current;
+                                    });
+                                    if (open) {
+                                      setOpenTooltipKey(key);
+                                    }
+                                  }}
+                                >
+                                  {group.items.map((item) => {
+                                    const row = previewTrades.find(
+                                      (previewTrade) =>
+                                        previewTrade.id === item.id
+                                    );
+                                    const opened = row?.open
+                                      ? new Date(
+                                          row.open
+                                        ).toLocaleTimeString([], {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })
+                                      : "--:--";
+
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className="flex w-full items-center gap-3"
+                                      >
+                                        <span className="w-14 shrink-0 text-[11px] tabular-nums text-white/60">
+                                          {opened}
+                                        </span>
+                                        {row?.status === "live" ? (
+                                          <span className="rounded-xs bg-cyan-400/12 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-cyan-200 ring-1 ring-cyan-400/20">
+                                            Live
+                                          </span>
+                                        ) : null}
+                                        <span className="min-w-0 flex-1 truncate text-center text-[11px] tabular-nums text-white/40">
+                                          {row?.symbol}
+                                        </span>
+                                        <span
+                                          className={cn(
+                                            TRADE_IDENTIFIER_PILL_CLASS,
+                                            "ml-auto min-h-0 shrink-0 px-1.5 py-0 text-[10px]",
+                                            getTradePillProfitTone(
+                                              Number(row?.profit || 0)
+                                            )
+                                          )}
+                                        >
+                                          {formatTradePillMoney(
+                                            Number(row?.profit || 0)
+                                          )}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </GroupedTradeMultiplierChip>
                               ) : null}
                             </div>
-                            <span
-                              className={cn(
-                                TRADE_IDENTIFIER_PILL_CLASS,
-                                "ml-auto min-h-0 shrink-0 px-1.5 py-0 text-[10px]",
-                                getTradePillProfitTone(Number(trade.profit || 0))
-                              )}
-                            >
-                              {formatTradePillMoney(Number(trade.profit || 0))}
-                            </span>
                           </div>
                         );
                       })}

@@ -17,6 +17,7 @@ import {
 import { user } from "../../db/schema/auth";
 import { platformConnection, syncLog } from "../../db/schema/connections";
 import { tradingAccount } from "../../db/schema/trading";
+import { isPrivateBetaAdminEmail } from "../../lib/billing/config";
 import { getServerEnv } from "../../lib/env";
 import {
   assertAlphaFeatureEnabled,
@@ -29,7 +30,10 @@ import {
   listRecentUserEvents,
   recordAppEvent,
 } from "../../lib/ops/event-log";
-import { createFeatureRequestGithubIssue } from "../../lib/ops/github-feature-requests";
+import {
+  createFeatureRequestGithubIssue,
+  createGithubIssue,
+} from "../../lib/ops/github-feature-requests";
 import { buildServerHealthSnapshot } from "../../lib/ops/health";
 import { protectedProcedure } from "../../lib/trpc";
 import {
@@ -94,6 +98,79 @@ function buildFeatureRequestGithubIssueBody(input: {
   ].join("\n");
 }
 
+function buildBugReportGithubIssueTitle(subject: string) {
+  return `[Bug report] ${subject.trim()}`;
+}
+
+function buildBugReportGithubIssueBody(input: {
+  subject: string;
+  message: string;
+  pagePath: string | null;
+  screenshotUrl: string | null;
+  userName: string | null;
+  userEmail: string | null;
+  username: string | null;
+  userId: string;
+}) {
+  return [
+    "## Bug summary",
+    input.subject.trim(),
+    "",
+    "## Details",
+    input.message.trim(),
+    "",
+    ...(input.screenshotUrl
+      ? [
+          "## Screenshot",
+          `[View screenshot](${input.screenshotUrl})`,
+          "",
+          `![Bug screenshot](${input.screenshotUrl})`,
+          "",
+        ]
+      : []),
+    "## Submitted from",
+    `- Page: ${input.pagePath ?? "Unknown"}`,
+    "- Source: Sidebar support report a bug dialog",
+    "",
+    "## Member context",
+    `- User ID: ${input.userId}`,
+    `- Name: ${input.userName ?? "Unknown"}`,
+    `- Username: ${input.username ?? "Unknown"}`,
+    `- Email: ${input.userEmail ?? "Unknown"}`,
+  ].join("\n");
+}
+
+function buildGithubDeliveryMetadata(
+  githubIssue:
+    | Awaited<ReturnType<typeof createGithubIssue>>
+    | Awaited<ReturnType<typeof createFeatureRequestGithubIssue>>
+) {
+  if (githubIssue.status === "created") {
+    return {
+      githubDeliveryStatus: "created" as const,
+      githubIssueNumber: githubIssue.issueNumber,
+      githubIssueUrl: githubIssue.issueUrl,
+      githubIssueError: null,
+    };
+  }
+
+  if (githubIssue.status === "skipped") {
+    return {
+      githubDeliveryStatus: "stored_only" as const,
+      githubIssueNumber: null,
+      githubIssueUrl: null,
+      githubIssueError: null,
+    };
+  }
+
+  return {
+    githubDeliveryStatus: "failed" as const,
+    githubIssueNumber: null,
+    githubIssueUrl: null,
+    githubIssueError: githubIssue.error,
+  };
+}
+
 export const operationsRuntimeSupportProcedures = {
   getAlphaRuntime: protectedProcedure.query(async ({ ctx }) => {
     const flags = getServerAlphaFlags();
@@ -113,10 +190,26 @@ export const operationsRuntimeSupportProcedures = {
   getSupportSnapshot: protectedProcedure.query(async ({ ctx }) => {
     assertAlphaFeatureEnabled("supportDiagnostics");
     const userId = ctx.session.user.id;
+    const profileRow = await db.query.user.findFirst({
+      where: eq(user.id, userId),
+      columns: {
+        id: true,
+        name: true,
+        email: true,
+        username: true,
+      },
+    });
+
+    if (!isPrivateBetaAdminEmail(profileRow?.email ?? null)) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Admin access required",
+      });
+    }
+
     const flags = getServerAlphaFlags();
 
     const [
-      profileRow,
       connections,
       accounts,
       milestones,
@@ -125,15 +218,6 @@ export const operationsRuntimeSupportProcedures = {
       feedback,
     ] =
       await Promise.all([
-        db.query.user.findFirst({
-          where: eq(user.id, userId),
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-            username: true,
-          },
-        }),
         db.query.platformConnection.findMany({
           where: eq(platformConnection.userId, userId),
           orderBy: desc(platformConnection.updatedAt),
@@ -340,6 +424,114 @@ export const operationsRuntimeSupportProcedures = {
       };
     }),
 
+  submitBugReport: protectedProcedure
+    .input(
+      z.object({
+        subject: z.string().min(4).max(160),
+        message: z.string().min(10).max(4000),
+        pagePath: z.string().max(400).nullable().optional(),
+        screenshotUrl: z.string().url().max(2000).nullable().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      assertAlphaFeatureEnabled("feedback");
+
+      const subject = input.subject.trim();
+      const message = input.message.trim();
+      const screenshotUrl = input.screenshotUrl?.trim() || null;
+
+      const userRow = await db.query.user.findFirst({
+        where: eq(user.id, ctx.session.user.id),
+        columns: {
+          email: true,
+          name: true,
+          username: true,
+        },
+      });
+
+      const baseMetadata = {
+        origin: "sidebar-report-bug",
+        requestType: "bug-report",
+        screenshotUrl,
+      };
+
+      const [created] = await db
+        .insert(userFeedback)
+        .values({
+          userId: ctx.session.user.id,
+          email: userRow?.email ?? null,
+          category: "bug",
+          priority: "normal",
+          subject,
+          message,
+          pagePath: input.pagePath ?? null,
+          metadata: {
+            ...baseMetadata,
+            githubDeliveryStatus: "pending",
+          },
+        })
+        .returning();
+
+      const githubIssue = await createGithubIssue({
+        title: buildBugReportGithubIssueTitle(subject),
+        body: buildBugReportGithubIssueBody({
+          subject,
+          message,
+          pagePath: input.pagePath ?? null,
+          screenshotUrl,
+          userName: userRow?.name ?? null,
+          userEmail: userRow?.email ?? null,
+          username: userRow?.username ?? null,
+          userId: ctx.session.user.id,
+        }),
+      });
+
+      const githubMetadata = buildGithubDeliveryMetadata(githubIssue);
+
+      await Promise.all([
+        db
+          .update(userFeedback)
+          .set({
+            metadata: {
+              ...baseMetadata,
+              ...githubMetadata,
+            },
+            updatedAt: new Date(),
+          })
+          .where(eq(userFeedback.id, created.id)),
+        ensureActivationMilestone({
+          userId: ctx.session.user.id,
+          key: "feedback_submitted",
+          source: "support",
+          metadata: {
+            category: "bug",
+            type: "bug-report",
+            screenshotAttached: Boolean(screenshotUrl),
+          },
+        }),
+        recordAppEvent({
+          userId: ctx.session.user.id,
+          category: "feedback",
+          name: "bug_report.submitted",
+          source: "web",
+          pagePath: input.pagePath ?? null,
+          summary: subject,
+          metadata: {
+            screenshotAttached: Boolean(screenshotUrl),
+            githubDeliveryStatus: githubMetadata.githubDeliveryStatus,
+          },
+          isUserVisible: true,
+        }),
+      ]);
+
+      return {
+        id: created.id,
+        status: created.status,
+        deliveryStatus: githubMetadata.githubDeliveryStatus,
+        issueUrl: githubMetadata.githubIssueUrl,
+      };
+    }),
+
   submitFeatureRequest: protectedProcedure
     .input(
       z.object({
@@ -443,26 +635,7 @@ export const operationsRuntimeSupportProcedures = {
         }),
       });
 
-      const githubMetadata =
-        githubIssue.status === "created"
-          ? {
-              githubDeliveryStatus: "created",
-              githubIssueNumber: githubIssue.issueNumber,
-              githubIssueUrl: githubIssue.issueUrl,
-            }
-          : githubIssue.status === "skipped"
-          ? {
-              githubDeliveryStatus: "stored_only",
-              githubIssueNumber: null,
-              githubIssueUrl: null,
-              githubIssueError: null,
-            }
-          : {
-              githubDeliveryStatus: "failed",
-              githubIssueNumber: null,
-              githubIssueUrl: null,
-              githubIssueError: githubIssue.error,
-            };
+      const githubMetadata = buildGithubDeliveryMetadata(githubIssue);
 
       await Promise.all([
         db

@@ -73,6 +73,8 @@ export interface VizDataConfig {
     b: { label: string; value: number | string; count?: number };
     delta?: number | string;
     deltaPercent?: string;
+    metricField?: string;
+    format?: "currency" | "percent" | "ratio" | "number";
   };
 
   // Trade IDs for "view trades" action
@@ -530,21 +532,25 @@ function buildComparisonData(
   plan: TradeQueryPlan
 ): VizDataConfig {
   const data = result.data || {};
+  const metricField = plan.compare?.metric.field;
+  const format = inferMetricDisplayFormat(metricField);
 
   return {
     comparison: {
       a: {
         label: data.a?.label || "Group A",
-        value: data.a?.value || 0,
+        value: toNumericValue(data.a?.value),
         count: data.a?.count,
       },
       b: {
         label: data.b?.label || "Group B",
-        value: data.b?.value || 0,
+        value: toNumericValue(data.b?.value),
         count: data.b?.count,
       },
-      delta: data.delta,
+      delta: toNumericValue(data.delta),
       deltaPercent: data.deltaPercent,
+      metricField,
+      format,
     },
   };
 }
@@ -554,7 +560,14 @@ function buildTableData(
   plan: TradeQueryPlan
 ): VizDataConfig {
   const data = result.data || [];
-  const rows = Array.isArray(data) ? data : [];
+  const aggregateRows =
+    !Array.isArray(data) && result.meta?.aggregates
+      ? Object.entries(result.meta.aggregates).map(([metric, value]) => ({
+          metric: formatFieldLabel(metric),
+          value,
+        }))
+      : [];
+  const rows = Array.isArray(data) ? data : aggregateRows;
 
   // Extract trade IDs if available
   const tradeIds = rows
@@ -819,10 +832,17 @@ function buildTradeCountsData(result: {
   const groups = result.meta?.groups || [];
 
   return {
-    rows: groups.map((g: any) => ({
-      period: g.period || g.date,
-      count: g.count || g.trade_count || 0,
-    })),
+    rows: groups.map((g: any) => {
+      const labelEntry = Object.entries(g).find(
+        ([key]) => key !== "count" && key !== "trade_count"
+      );
+      const label = g.period || g.date || labelEntry?.[1];
+      return {
+        period: label,
+        label,
+        count: g.count || g.trade_count || 0,
+      };
+    }),
     summary: {
       total: groups.reduce(
         (sum: number, g: any) => sum + (g.count || g.trade_count || 0),
@@ -830,4 +850,36 @@ function buildTradeCountsData(result: {
       ),
     },
   };
+}
+
+function toNumericValue(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (value === null || value === undefined) return 0;
+  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function inferMetricDisplayFormat(
+  field?: string
+): "currency" | "percent" | "ratio" | "number" {
+  const lower = (field || "").toLowerCase();
+  if (
+    lower.includes("profit") ||
+    lower.includes("loss") ||
+    lower.includes("balance") ||
+    lower.includes("equity") ||
+    lower.includes("commission") ||
+    lower.includes("swap") ||
+    lower.includes("expectancy") ||
+    lower.includes("drawdown")
+  ) {
+    return "currency";
+  }
+  if (lower.includes("rate") || lower.includes("efficiency")) {
+    return "percent";
+  }
+  if (lower.includes("rr") || lower.includes("factor")) {
+    return "ratio";
+  }
+  return "number";
 }

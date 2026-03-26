@@ -23,9 +23,10 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { markLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import {
+  buildPostLoginPath,
   buildSignUpPath,
-  buildPostAuthContinuePath,
   resolvePostAuthPath,
 } from "@/lib/post-auth-paths";
 import { waitForConfirmedSession } from "@/lib/session-confirmation";
@@ -75,7 +76,7 @@ const LoginPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
-  const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
+  const postLoginPath = buildPostLoginPath(requestedReturnTo);
   const signUpPath = buildSignUpPath(requestedReturnTo);
   const [socialProviderLoading, setSocialProviderLoading] = useState<
     "google" | "twitter" | null
@@ -100,7 +101,8 @@ const LoginPage = () => {
         onSuccess: async () => {
           toast.success("Login successful", { id: "auth-login-status" });
           await waitForConfirmedSession();
-          router.replace(postAuthContinuePath);
+          markLoginOnboardingBypass();
+          router.replace(postLoginPath);
         },
         onError: (error) => {
           toast.error(error.error.message || "Unable to sign in", {
@@ -116,9 +118,10 @@ const LoginPage = () => {
     setSocialProviderLoading(provider);
 
     try {
+      markLoginOnboardingBypass();
       await authClient.signIn.social({
         provider,
-        callbackURL: `${window.location.origin}${postAuthContinuePath}`,
+        callbackURL: `${window.location.origin}${postLoginPath}`,
       });
     } catch (error) {
       toast.error(

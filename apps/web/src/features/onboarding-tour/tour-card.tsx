@@ -3,7 +3,7 @@
 import React, { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useOnborda } from "onborda";
 import type { CardComponentProps } from "onborda";
 import { Button } from "@/components/ui/button";
@@ -178,14 +178,6 @@ export function TourCard({
               {step.title}
             </h3>
           </div>
-
-          <button
-            type="button"
-            onClick={handleClose}
-            className="text-muted-foreground hover:text-foreground transition-colors -mt-0.5 -mr-0.5 p-0.5 rounded"
-          >
-            <X className="size-3.5" />
-          </button>
         </div>
 
         <p className="text-xs text-muted-foreground leading-relaxed mb-4">

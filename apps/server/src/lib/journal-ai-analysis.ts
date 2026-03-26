@@ -12,11 +12,12 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { db } from "../db";
 import { journalEntry, type JournalBlock, type JournalAIInsight } from "../db/schema/journal";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   generateMeteredGeminiContent,
   hasPlatformGeminiKey,
 } from "./ai/gemini";
+import { isAllAccountsScope, resolveScopedAccountIds } from "./account-scope";
 import { hasUserAIProviderKey } from "./ai/provider-keys";
 import { logAIProviderError } from "./ai/provider-errors";
 
@@ -64,6 +65,40 @@ export interface JournalAnalysisResult {
   patterns: JournalAIInsight[];
   sentiment: 'positive' | 'negative' | 'neutral' | 'mixed';
   topics: string[];
+}
+
+function sqlStringList(values: string[]) {
+  return sql.join(values.map((value) => sql`${value}`), sql`, `);
+}
+
+async function getJournalAnalysisAccountScopeCondition(
+  userId: string,
+  accountId?: string
+) {
+  if (!accountId || isAllAccountsScope(accountId)) {
+    return {
+      condition: null,
+      isEmpty: false,
+    };
+  }
+
+  const scopedAccountIds = await resolveScopedAccountIds(userId, accountId);
+
+  if (scopedAccountIds.length === 0) {
+    return {
+      condition: null,
+      isEmpty: true,
+    };
+  }
+
+  return {
+    condition: sql`EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(COALESCE(${journalEntry.accountIds}, '[]'::jsonb)) AS account_scope(account_id)
+      WHERE account_scope.account_id IN (${sqlStringList(scopedAccountIds)})
+    )`,
+    isEmpty: false,
+  };
 }
 
 function normalizeText(text: string): string {
@@ -225,7 +260,7 @@ function inferTopics(
     entry.psychology?.emotionalState,
     ...(Array.isArray(entry.tags)
       ? entry.tags.filter(
-          (tag) => !["auto-generated", "trade-close-auto"].includes(tag)
+          (tag) => !["auto-generated"].includes(tag)
         )
       : []),
   ].filter(Boolean) as string[];
@@ -756,8 +791,21 @@ Text: ${text.slice(0, 1000)}`;
 
 export async function generateJournalContextQuery(
   userQuery: string,
-  userId: string
+  userId: string,
+  options?: {
+    accountId?: string;
+  }
 ): Promise<{ answer: string; relevantEntries: string[] }> {
+  const { condition: accountScopeCondition, isEmpty } =
+    await getJournalAnalysisAccountScopeCondition(userId, options?.accountId);
+
+  if (isEmpty) {
+    return {
+      answer: "I couldn't find any journal entries in the selected account scope yet.",
+      relevantEntries: [],
+    };
+  }
+
   const entries = await db
     .select({
       id: journalEntry.id,
@@ -767,7 +815,12 @@ export async function generateJournalContextQuery(
       plainTextContent: journalEntry.plainTextContent,
     })
     .from(journalEntry)
-    .where(eq(journalEntry.userId, userId))
+    .where(
+      and(
+        eq(journalEntry.userId, userId),
+        accountScopeCondition ?? undefined
+      )
+    )
     .limit(50);
 
   const entriesContext = entries
@@ -778,6 +831,13 @@ export async function generateJournalContextQuery(
       summary: e.aiSummary || (e.plainTextContent?.slice(0, 300) + '...'),
       topics: e.aiTopics || []
     }));
+
+  if (entriesContext.length === 0) {
+    return {
+      answer: "I couldn't find any journal entries with enough saved content in this scope yet.",
+      relevantEntries: [],
+    };
+  }
 
   const prompt = `You are analyzing a trader's journal to answer their question. Use the journal entries provided to give a helpful, contextual answer.
 

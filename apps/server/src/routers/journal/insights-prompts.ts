@@ -27,7 +27,7 @@ import {
   getCachedCorrelations,
 } from '../../lib/psychology-correlation';
 import { protectedProcedure } from '../../lib/trpc';
-import { calculateWordCount } from './shared';
+import { calculateWordCount, getJournalAccountScopeCondition } from './shared';
 
 export const journalInsightPromptProcedures = {
   analyzeEntry: protectedProcedure
@@ -81,21 +81,31 @@ export const journalInsightPromptProcedures = {
   analyzePatterns: protectedProcedure
     .input(z.object({
       entryIds: z.array(z.string()).optional(),
+      accountId: z.string().optional(),
       limit: z.number().min(3).max(20).default(10),
     }))
     .mutation(async ({ ctx, input }) => {
-      let entryIds = input.entryIds;
+      const { condition: accountScopeCondition, isEmpty } =
+        await getJournalAccountScopeCondition(ctx.session.user.id, input.accountId);
 
-      if (!entryIds || entryIds.length === 0) {
-        const entries = await db
-          .select({ id: journalEntry.id })
-          .from(journalEntry)
-          .where(eq(journalEntry.userId, ctx.session.user.id))
-          .orderBy(desc(journalEntry.updatedAt))
-          .limit(input.limit);
-
-        entryIds = entries.map((entry) => entry.id);
+      if (isEmpty) {
+        return [];
       }
+
+      const scopedEntries = await db
+        .select({ id: journalEntry.id })
+        .from(journalEntry)
+        .where(
+          and(
+            eq(journalEntry.userId, ctx.session.user.id),
+            input.entryIds?.length ? inArray(journalEntry.id, input.entryIds) : undefined,
+            accountScopeCondition ?? undefined
+          )
+        )
+        .orderBy(desc(journalEntry.updatedAt))
+        .limit(input.limit);
+
+      const entryIds = scopedEntries.map((entry) => entry.id);
 
       if (entryIds.length < 3) {
         throw new Error('Need at least 3 entries to analyze patterns');
@@ -107,9 +117,12 @@ export const journalInsightPromptProcedures = {
   askJournal: protectedProcedure
     .input(z.object({
       question: z.string().min(5),
+      accountId: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
-      return generateJournalContextQuery(input.question, ctx.session.user.id);
+      return generateJournalContextQuery(input.question, ctx.session.user.id, {
+        accountId: input.accountId,
+      });
     }),
 
   getPsychologyCorrelations: protectedProcedure

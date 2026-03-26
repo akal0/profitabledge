@@ -3,6 +3,7 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatDisplayCurrency, formatDisplayNumber } from "@/lib/format-display";
 
 export interface TableColumn {
   key: string;
@@ -28,15 +29,12 @@ function formatCellValue(value: any, type?: string): string {
   if (value === null || value === undefined) return "-";
   switch (type) {
     case "currency": {
-      const n = Number(value);
-      const abs = Math.abs(n);
-      const sign = n < 0 ? "-$" : "$";
-      return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      return formatDisplayCurrency(Number(value));
     }
     case "percent":
       return `${Number(value).toFixed(1)}%`;
     case "number":
-      return Number(value).toLocaleString();
+      return formatDisplayNumber(Number(value));
     case "date":
       return new Date(value).toLocaleDateString();
     default:
@@ -73,8 +71,8 @@ export function BaseTable({
           }));
 
   return (
-    <div className="space-y-2">
-      <div className="-mx-3.5 overflow-x-auto">
+    <div className="flex h-full min-h-0 flex-col gap-2">
+      <div className="min-h-0 flex-1 overflow-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-white/10">

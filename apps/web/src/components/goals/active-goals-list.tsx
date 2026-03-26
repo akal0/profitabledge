@@ -6,10 +6,7 @@ import { ProgressRing } from "./progress-ring";
 import { goalTemplates } from "./goal-templates";
 import { toSentenceCaseTitle } from "./goal-text";
 import { useState } from "react";
-import {
-  GoalContentSeparator,
-  GoalSurface,
-} from "./goal-surface";
+import { GoalContentSeparator, GoalSurface } from "./goal-surface";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,10 +130,10 @@ export function ActiveGoalsList({
               className={getPropAssignActionButtonClassName({
                 tone: "neutral",
                 size: "default",
-                className: "mt-4 gap-1.5 text-white",
+                className: "mt-4 gap-1 text-white",
               })}
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="size-3" />
               {emptyActionLabel ?? "Create goal"}
             </Button>
           ) : null}
@@ -259,12 +256,11 @@ export function ActiveGoalsList({
                     {goal.type.charAt(0).toUpperCase() + goal.type.slice(1)}
                   </span>
                   <span className="inline-flex items-center rounded-sm bg-white/5 px-1.5 py-0.5 text-[10px] font-medium text-white/55">
-                    {TARGET_TYPE_META[goal.targetType]?.label || goal.targetType}
+                    {TARGET_TYPE_META[goal.targetType]?.label ||
+                      goal.targetType}
                   </span>
                   {goal.status !== "active" && (
-                    <span
-                      className={goalStatusBadgeClassName(goal.status)}
-                    >
+                    <span className={goalStatusBadgeClassName(goal.status)}>
                       {goalStatusLabel(goal.status)}
                     </span>
                   )}

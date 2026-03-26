@@ -303,7 +303,13 @@ export function AIAnalysisDisplay({
   );
 }
 
-export function JournalInsightsPanel({ className }: { className?: string }) {
+export function JournalInsightsPanel({
+  accountId,
+  className,
+}: {
+  accountId?: string;
+  className?: string;
+}) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
 
@@ -312,7 +318,7 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
   const handleAsk = async () => {
     if (!question.trim()) return;
     try {
-      const result = await askJournalMutation.mutateAsync({ question });
+      const result = await askJournalMutation.mutateAsync({ question, accountId });
       setAnswer(result.answer);
     } catch (error) {
       if (!showAIErrorToast(error)) {
@@ -364,7 +370,7 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
             <p className="text-sm leading-6 text-white/80">{answer}</p>
           </div>
         ) : (
-          <div className="rounded-sm border border-dashed border-white/10 bg-sidebar/55 p-4 text-center">
+          <div className="rounded-sm border border-dashed border-white/10 bg-white/[0.02] p-4 text-center">
             <p className="text-sm font-medium text-white">No answer yet</p>
             <p className="mt-1 text-xs text-white/40">
               Ask about recurring mistakes, psychology, or what needs tightening
@@ -384,7 +390,7 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
               onClick={() => {
                 setQuestion(q);
               }}
-              className="rounded-sm border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-white/60 transition-colors hover:border-white/20 hover:text-white"
+              className="rounded-sm border border-white/10 bg-sidebar px-2.5 py-1.5 text-xs text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.02] hover:text-white"
             >
               {q}
             </button>
@@ -395,9 +401,16 @@ export function JournalInsightsPanel({ className }: { className?: string }) {
   );
 }
 
-export function PatternAnalysisCard({ className }: { className?: string }) {
+export function PatternAnalysisCard({
+  accountId,
+  className,
+}: {
+  accountId?: string;
+  className?: string;
+}) {
   const [patterns, setPatterns] = useState<any[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const initialScopeRef = React.useRef<string | null>(null);
 
   const analyzePatternsMutation = trpc.journal.analyzePatterns.useMutation({
     onSuccess: (result: any[]) => {
@@ -412,8 +425,17 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
   });
 
   React.useEffect(() => {
-    analyzePatternsMutation.mutate({ limit: 10 });
-  }, [analyzePatternsMutation]);
+    const scopeKey = accountId ?? "__all__";
+
+    if (initialScopeRef.current === scopeKey) {
+      return;
+    }
+
+    initialScopeRef.current = scopeKey;
+    setPatterns([]);
+    setErrorMessage(null);
+    analyzePatternsMutation.mutate({ limit: 10, accountId });
+  }, [accountId, analyzePatternsMutation]);
 
   const isLoading = analyzePatternsMutation.isPending && patterns.length === 0;
 
@@ -444,7 +466,7 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
       action={
         <Button
           size="sm"
-          onClick={() => analyzePatternsMutation.mutate({ limit: 10 })}
+          onClick={() => analyzePatternsMutation.mutate({ limit: 10, accountId })}
           disabled={analyzePatternsMutation.isPending}
           className={journalActionIconButtonClassName}
         >
@@ -480,7 +502,7 @@ export function PatternAnalysisCard({ className }: { className?: string }) {
               return (
                 <div
                   key={i}
-                  className="rounded-sm border border-white/10 bg-sidebar p-3 transition-colors hover:border-white/20"
+                  className="rounded-sm border border-white/5 bg-white/[0.02] p-3 transition-colors hover:border-white/15"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

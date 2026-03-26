@@ -1,20 +1,18 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { IconSidebarLeftArrow } from "central-icons";
 import { BarChart3 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { AnalysisBlockRenderer } from "@/components/ai/analysis-block-renderer";
 import { AnalysisPanelSkeleton } from "@/components/ai/analysis-skeleton";
 import { WidgetBlockRenderer, WidgetBlockSkeleton } from "@/components/ai/widget-block-renderer";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { Separator, VerticalSeparator } from "@/components/ui/separator";
 import type { AnalysisBlock, VizSpec } from "@/types/assistant-stream";
 
 export function PremiumAssistantAnalysisPanel({
   panelOpen,
-  panelTransition,
   isStreaming,
   currentVisualization,
   currentAnalysisBlocks,
@@ -24,11 +22,6 @@ export function PremiumAssistantAnalysisPanel({
   onOpen,
 }: {
   panelOpen: boolean;
-  panelTransition: {
-    x: { duration: number; ease: "easeInOut" };
-    opacity: { duration: number; ease: "easeInOut" };
-    width: { duration: number; ease: "easeInOut" } | { duration: number };
-  };
   isStreaming: boolean;
   currentVisualization: VizSpec | null | undefined;
   currentAnalysisBlocks: AnalysisBlock[];
@@ -49,41 +42,41 @@ export function PremiumAssistantAnalysisPanel({
 
   return (
     <>
-      <motion.div
-        initial={false}
-        className="min-h-0 h-full overflow-x-hidden overflow-y-auto border-l border-white/5 bg-sidebar"
-        animate={{
-          width: panelOpen ? "40%" : "0%",
-          x: panelOpen ? 0 : "100%",
-          opacity: panelOpen ? 1 : 0,
-        }}
-        transition={panelTransition}
-        style={{ pointerEvents: panelOpen ? "auto" : "none" }}
+      <div
+        className={cn(
+          "absolute inset-y-0 right-0 z-20 min-h-0 max-w-full overflow-hidden bg-sidebar transition-[opacity,transform] duration-300 ease-in-out",
+          panelOpen
+            ? "translate-x-0 opacity-100"
+            : "translate-x-full opacity-0 pointer-events-none"
+        )}
+        style={{ width: "min(100%, var(--assistant-analysis-width))" }}
       >
-        <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between px-6 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-white/90">Analysis</span>
-              {isStreaming ? (
-                <Badge variant="outline" className="animate-pulse text-[10px]">
-                  Live
-                </Badge>
-              ) : null}
+        <div className="flex h-full">
+          <VerticalSeparator className="shrink-0" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center justify-between px-6 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-white/90">Analysis</span>
+                {isStreaming ? (
+                  <Badge variant="outline" className="animate-pulse text-[10px]">
+                    Live
+                  </Badge>
+                ) : null}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-white/50 hover:text-white"
+              >
+                <IconSidebarLeftArrow className="h-4 w-4 rotate-180" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-white/50 hover:text-white"
-            >
-              <IconSidebarLeftArrow className="h-4 w-4 rotate-180" />
-            </Button>
-          </div>
 
-          <Separator />
+            <Separator />
 
-          <ScrollArea className="flex-1">
-            <div className="space-y-4 p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              <div className="space-y-4 p-4">
               {currentVisualization ? (
                 <WidgetBlockRenderer
                   viz={currentVisualization}
@@ -137,21 +130,20 @@ export function PremiumAssistantAnalysisPanel({
                   </p>
                 </div>
               ) : null}
+              </div>
             </div>
-          </ScrollArea>
+          </div>
         </div>
-      </motion.div>
+      </div>
 
       {!panelOpen && (currentVisualization || currentAnalysisBlocks.length > 0) ? (
-        <motion.button
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="absolute right-4 top-4 flex cursor-pointer items-center gap-2 border border-white/5 px-3 py-2 text-white/50 backdrop-blur-2xl transition-colors hover:bg-sidebar-accent hover:text-white"
+        <button
+          className="absolute right-4 top-4 z-30 flex cursor-pointer items-center gap-2 border border-white/5 bg-sidebar/90 px-3 py-2 text-white/50 transition-colors hover:bg-sidebar-accent hover:text-white"
           onClick={onOpen}
         >
           <IconSidebarLeftArrow className="h-4 w-4" />
           <span className="text-xs font-medium">Show analysis</span>
-        </motion.button>
+        </button>
       ) : null}
     </>
   );

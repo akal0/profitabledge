@@ -11,9 +11,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Info,
-  TrendingUp,
-  TrendingDown,
-  Target,
   AlertTriangle,
   Sparkles,
   Brain,
@@ -23,6 +20,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AnalysisBlock, VizSpec } from "@/types/assistant-stream";
+import {
+  formatDisplayCurrency,
+  formatDisplayNumber,
+} from "@/lib/format-display";
 import {
   getConfidenceLevel,
   getConfidenceLabel,
@@ -35,6 +36,12 @@ import {
   SourcesTrigger,
   Source,
 } from "@/components/ui/shadcn-io/ai/source";
+import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
+import {
+  AssistantEdgeConditionWidgets,
+  AssistantStatCardGrid,
+  AssistantProfileSummaryWidgets,
+} from "@/components/ai/assistant-insight-widgets";
 
 interface AnalysisBlockRendererProps {
   block: AnalysisBlock;
@@ -53,13 +60,9 @@ export function AnalysisBlockRenderer({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.1, duration: 0.3 }}
     >
-      {block.type === "querySummary" && (
-        <QuerySummaryBlock block={block} />
-      )}
+      {block.type === "querySummary" && <QuerySummaryBlock block={block} />}
       {block.type === "insights" && <InsightListBlock block={block} />}
-      {block.type === "recommendations" && (
-        <InsightListBlock block={block} />
-      )}
+      {block.type === "recommendations" && <InsightListBlock block={block} />}
       {block.type === "sources" && <SourcesBlock block={block} />}
       {block.type === "coverage" && <CoverageBlock block={block} />}
       {block.type === "stats" && <StatsBlock block={block} />}
@@ -70,11 +73,10 @@ export function AnalysisBlockRenderer({
         <VisualizationBlock viz={block.viz} onViewTrades={onViewTrades} />
       )}
       {block.type === "profileSummary" && (
-        <ProfileSummaryBlock profile={block.profile} />
+        <AssistantProfileSummaryWidgets profile={block.profile} />
       )}
       {block.type === "edgeConditions" && (
-        <EdgeConditionsBlock
-          title={block.title}
+        <AssistantEdgeConditionWidgets
           edges={block.edges}
           leaks={block.leaks}
         />
@@ -197,22 +199,31 @@ function CoverageBlock({
   const isLimited = confidence === "exploratory";
 
   return (
-    <div className="bg-sidebar h-full w-full border border-white/5 p-1 flex flex-col group rounded-sm">
-      <div className="flex w-full items-start justify-between gap-3 p-3.5">
+    <div className="bg-sidebar h-full w-full ring ring-white/5 p-1 flex flex-col group rounded-lg">
+      <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
         <h2 className="text-sm font-medium text-white/50">
           <span className="normal-case">{sentenceCase(block.title)}</span>
         </h2>
       </div>
-      <div className={cn(
-        "transition-all duration-150 flex flex-col h-full w-full rounded-sm",
-        isLimited
-          ? "bg-yellow-500/5"
-          : "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120"
-      )}>
+      <div
+        className={cn(
+          "transition-all duration-250 flex flex-col h-full w-full rounded-sm ring ring-white/5",
+          isLimited
+            ? "bg-yellow-500/5"
+            : "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120"
+        )}
+      >
         <div className="flex flex-col p-3.5 h-full">
           <div className="space-y-3">
             <div className="flex items-baseline gap-1">
-              <span className={cn("text-3xl font-semibold", isLimited ? "text-yellow-400" : "text-white")}>{block.n}</span>
+              <span
+                className={cn(
+                  "text-3xl font-semibold",
+                  isLimited ? "text-yellow-400" : "text-white"
+                )}
+              >
+                {block.n}
+              </span>
               <span className="text-sm text-white/50">trades</span>
             </div>
             {(block.from || block.to) && (
@@ -248,23 +259,13 @@ function StatsBlock({
 }) {
   return (
     <AnalysisShellBlockShell title={sentenceCase(block.title)}>
-      <div className="space-y-2.5">
-        {block.rows.map((row, i) => (
-          <div key={i} className="flex justify-between items-start gap-4">
-            <span className="text-sm text-white/60">
-              {sentenceCase(row.label)}
-            </span>
-            <div className="text-right">
-              <span className="text-sm font-medium text-white">
-                {row.value}
-              </span>
-              {row.note && (
-                <p className="text-xs text-white/40 mt-0.5">{row.note}</p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      <AssistantStatCardGrid
+        rows={block.rows.map((row) => ({
+          label: sentenceCase(row.label),
+          value: row.value,
+          note: row.note,
+        }))}
+      />
     </AnalysisShellBlockShell>
   );
 }
@@ -292,14 +293,14 @@ function BreakdownTableBlock({
 
   return (
     <AnalysisShellBlockShell title={sentenceCase(block.title)}>
-      <div className="-mx-3.5 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/5">
               {block.columns.map((col, i) => (
                 <th
                   key={i}
-                  className="text-left py-2 px-3.5 text-xs font-medium text-white/50 tracking-wider"
+                  className="text-left py-2 px-3.5 text-xs font-medium text-white/50"
                 >
                   {sentenceCase(col)}
                 </th>
@@ -312,7 +313,11 @@ function BreakdownTableBlock({
                 {row.map((cell, j) => (
                   <td key={j} className="py-2 px-3.5 text-white/70">
                     {cell !== null
-                      ? formatBreakdownValue(cell, block.columns[j], currencyColumns)
+                      ? formatBreakdownValue(
+                          cell,
+                          block.columns[j],
+                          currencyColumns
+                        )
                       : "—"}
                   </td>
                 ))}
@@ -365,13 +370,10 @@ function formatBreakdownValue(
     ].some((key) => columnLower.includes(key));
 
   if (isCurrency) {
-    const sign = value < 0 ? "-$" : "$";
-    return `${sign}${Math.abs(value).toLocaleString(undefined, {
-      maximumFractionDigits: 2,
-    })}`;
+    return formatDisplayCurrency(value);
   }
 
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return formatDisplayNumber(value, { maximumFractionDigits: 2 });
 }
 
 function isDateColumn(columnLower: string): boolean {
@@ -406,18 +408,18 @@ function TradePreviewBlock({
         </button>
       }
     >
-      <div className="-mx-3.5 overflow-x-auto">
+      <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-white/5">
-          {block.columns.map((col, i) => (
-            <th
-              key={i}
-                  className="text-left py-2 px-3.5 text-xs font-medium text-white/40 tracking-wider"
-            >
-              {sentenceCase(col)}
-            </th>
-          ))}
+              {block.columns.map((col, i) => (
+                <th
+                  key={i}
+                  className="text-left py-2 px-3.5 text-xs font-medium text-white/40"
+                >
+                  {sentenceCase(col)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -474,17 +476,19 @@ function CalloutBlock({
   const Icon = icons[block.tone];
 
   return (
-    <div className="bg-sidebar h-full w-full border border-white/5 p-1 flex flex-col group rounded-sm">
-      <div className="flex w-full items-start justify-between gap-3 p-3.5">
+    <div className="bg-sidebar h-full w-full ring ring-white/5 p-1 flex flex-col group rounded-lg">
+      <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
         <h2 className="text-sm font-medium text-white/50">
           <span className="normal-case">{sentenceCase(block.title)}</span>
         </h2>
       </div>
-      <div className={cn(
-        "transition-all duration-150 flex flex-col h-full w-full rounded-sm",
-        contentBg[block.tone],
-        borderColor[block.tone]
-      )}>
+      <div
+        className={cn(
+          "transition-all duration-250 flex flex-col h-full w-full rounded-sm ring ring-white/5",
+          contentBg[block.tone],
+          borderColor[block.tone]
+        )}
+      >
         <div className="flex flex-col p-3.5 h-full">
           <div className={cn("flex gap-3", textColor[block.tone])}>
             <Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
@@ -508,17 +512,20 @@ function AnalysisShellBlockShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-sidebar h-full w-full border border-white/5 p-1 flex flex-col group rounded-sm">
-      <div className="flex w-full items-start justify-between gap-3 p-3.5">
-        <h2 className="text-sm font-medium text-white/50">
-          <span className="normal-case">{sentenceCase(title)}</span>
-        </h2>
-        {actions}
-      </div>
-      <div className="bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-150 flex flex-col h-full w-full rounded-sm">
-        <div className="flex flex-col p-3.5 h-full">{children}</div>
-      </div>
-    </div>
+    <WidgetWrapper
+      className="h-full rounded-lg"
+      header={
+        <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
+          <h2 className="min-w-0 flex-1 text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
+            <span className="truncate normal-case">{sentenceCase(title)}</span>
+          </h2>
+          {actions ? <div className="shrink-0">{actions}</div> : null}
+        </div>
+      }
+      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+    >
+      <div className="flex min-h-0 flex-1 flex-col p-3.5">{children}</div>
+    </WidgetWrapper>
   );
 }
 
@@ -526,123 +533,6 @@ function sentenceCase(value: string): string {
   const trimmed = (value || "").trim();
   if (!trimmed) return "";
   return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
-}
-
-// ─── Profile Summary Block ─────────────────────────────────────
-
-function ProfileSummaryBlock({
-  profile,
-}: {
-  profile: import("@/types/assistant-stream").CondensedProfile;
-}) {
-  return (
-    <AnalysisShellBlockShell title="Your Trading Profile">
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <StatPill label="Win Rate" value={`${profile.winRate.toFixed(1)}%`} />
-          <StatPill label="Profit Factor" value={profile.profitFactor.toFixed(2)} />
-          <StatPill label="Expectancy" value={`$${profile.expectancy.toFixed(2)}`} />
-          <StatPill label="Total Trades" value={String(profile.totalTrades)} />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <StatPill label="R:R Sweet Spot" value={profile.rrSweetSpot} />
-          <StatPill label="Hold Sweet Spot" value={profile.holdTimeSweetSpot} />
-        </div>
-
-        {profile.bestSessions.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-[10px] uppercase tracking-wider text-white/30 font-medium">
-              Best Sessions
-            </p>
-            {profile.bestSessions.map((s, i) => (
-              <p key={i} className="text-xs text-emerald-400/80 flex items-center gap-1.5">
-                <TrendingUp className="h-3 w-3" /> {s}
-              </p>
-            ))}
-          </div>
-        )}
-
-        {profile.worstSessions.length > 0 && (
-          <div className="space-y-1">
-            <p className="text-[10px] uppercase tracking-wider text-white/30 font-medium">
-              Weakest Sessions
-            </p>
-            {profile.worstSessions.map((s, i) => (
-              <p key={i} className="text-xs text-red-400/80 flex items-center gap-1.5">
-                <TrendingDown className="h-3 w-3" /> {s}
-              </p>
-            ))}
-          </div>
-        )}
-
-        <p className="text-xs text-white/50 flex items-center gap-1.5">
-          <Target className="h-3 w-3" /> {profile.currentStreak}
-        </p>
-      </div>
-    </AnalysisShellBlockShell>
-  );
-}
-
-function StatPill({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-white/5 rounded px-2.5 py-1.5">
-      <p className="text-[10px] text-white/40 uppercase tracking-wider">{label}</p>
-      <p className="text-sm font-medium text-white/90">{value}</p>
-    </div>
-  );
-}
-
-// ─── Edge/Leak Conditions Block ─────────────────────────────────
-
-function EdgeConditionsBlock({
-  title,
-  edges,
-  leaks,
-}: {
-  title: string;
-  edges: Array<{ label: string; winRate: number; trades: number; confidence: string }>;
-  leaks: Array<{ label: string; winRate: number; trades: number; confidence: string }>;
-}) {
-  return (
-    <AnalysisShellBlockShell title={title}>
-      <div className="space-y-4">
-        {edges.length > 0 && (
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-emerald-400/60 font-medium mb-2 flex items-center gap-1">
-              <TrendingUp className="h-3 w-3" /> Edges (Winning Patterns)
-            </p>
-            {edges.map((e, i) => (
-              <div key={i} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-xs text-white/80">{e.label}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-emerald-400">{e.winRate.toFixed(0)}%</span>
-                  <span className="text-[10px] text-white/30">{e.trades} trades</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {leaks.length > 0 && (
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-red-400/60 font-medium mb-2 flex items-center gap-1">
-              <TrendingDown className="h-3 w-3" /> Leaks (Losing Patterns)
-            </p>
-            {leaks.map((l, i) => (
-              <div key={i} className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
-                <span className="text-xs text-white/80">{l.label}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-red-400">{l.winRate.toFixed(0)}%</span>
-                  <span className="text-[10px] text-white/30">{l.trades} trades</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </AnalysisShellBlockShell>
-  );
 }
 
 // ─── Insight Card Block ─────────────────────────────────────────
@@ -659,10 +549,22 @@ function InsightCardBlock({
   recommendation: string;
 }) {
   const config = {
-    critical: { icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10" },
-    warning: { icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-500/10" },
+    critical: {
+      icon: AlertTriangle,
+      color: "text-red-400",
+      bg: "bg-red-500/10",
+    },
+    warning: {
+      icon: AlertTriangle,
+      color: "text-amber-400",
+      bg: "bg-amber-500/10",
+    },
     info: { icon: Info, color: "text-blue-400", bg: "bg-blue-500/10" },
-    positive: { icon: Sparkles, color: "text-emerald-400", bg: "bg-emerald-500/10" },
+    positive: {
+      icon: Sparkles,
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+    },
   }[severity] || { icon: Info, color: "text-blue-400", bg: "bg-blue-500/10" };
 
   const Icon = config.icon;
@@ -675,7 +577,9 @@ function InsightCardBlock({
           <div className="space-y-1.5">
             <p className="text-xs text-white/80">{message}</p>
             {recommendation && (
-              <p className="text-xs text-teal-400/70 italic">{recommendation}</p>
+              <p className="text-xs text-teal-400/70 italic">
+                {recommendation}
+              </p>
             )}
           </div>
         </div>
@@ -698,15 +602,46 @@ function TiltStatusBlock({
   mentalScore?: number;
 }) {
   const tiltConfig = {
-    green: { color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", label: "Clear Mind" },
-    yellow: { color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20", label: "Mild Tilt" },
-    orange: { color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", label: "Tilting" },
-    red: { color: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/20", label: "Full Tilt" },
-  }[level] || { color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/20", label: "Unknown" };
+    green: {
+      color: "text-emerald-400",
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-500/20",
+      label: "Clear Mind",
+    },
+    yellow: {
+      color: "text-yellow-400",
+      bg: "bg-yellow-500/10",
+      border: "border-yellow-500/20",
+      label: "Mild Tilt",
+    },
+    orange: {
+      color: "text-orange-400",
+      bg: "bg-orange-500/10",
+      border: "border-orange-500/20",
+      label: "Tilting",
+    },
+    red: {
+      color: "text-red-400",
+      bg: "bg-red-500/10",
+      border: "border-red-500/20",
+      label: "Full Tilt",
+    },
+  }[level] || {
+    color: "text-yellow-400",
+    bg: "bg-yellow-500/10",
+    border: "border-yellow-500/20",
+    label: "Unknown",
+  };
 
   return (
     <AnalysisShellBlockShell title="Mental State">
-      <div className={cn("rounded-lg border p-3", tiltConfig.bg, tiltConfig.border)}>
+      <div
+        className={cn(
+          "rounded-lg border p-3",
+          tiltConfig.bg,
+          tiltConfig.border
+        )}
+      >
         <div className="flex items-center gap-3 mb-2">
           <Brain className={cn("h-5 w-5", tiltConfig.color)} />
           <div className="flex-1">
@@ -744,7 +679,9 @@ function TiltStatusBlock({
           <div className="space-y-1 mt-2 pt-2 border-t border-white/5">
             {indicators.map((ind, i) => (
               <div key={i} className="flex items-center gap-1.5 text-[10px]">
-                <Flame className={cn("h-2.5 w-2.5 shrink-0", tiltConfig.color)} />
+                <Flame
+                  className={cn("h-2.5 w-2.5 shrink-0", tiltConfig.color)}
+                />
                 <span className="text-white/60">
                   {ind.label ?? (ind as any).message ?? "Tilt signal"}
                 </span>
@@ -772,7 +709,12 @@ function SessionCoachingBlock({
   wins: number;
   losses: number;
   runningPnL: number;
-  nudges: Array<{ type: string; title: string; message: string; severity: string }>;
+  nudges: Array<{
+    type: string;
+    title: string;
+    message: string;
+    severity: string;
+  }>;
 }) {
   if (!isActive) return null;
 
@@ -788,7 +730,9 @@ function SessionCoachingBlock({
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-xs text-emerald-400 font-medium">Active session</span>
+          <span className="text-xs text-emerald-400 font-medium">
+            Active session
+          </span>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -798,12 +742,19 @@ function SessionCoachingBlock({
           </div>
           <div className="bg-white/5 rounded px-2.5 py-1.5 text-center">
             <p className="text-[10px] text-white/40">Score</p>
-            <p className="text-sm font-medium">{wins}W/{losses}L</p>
+            <p className="text-sm font-medium">
+              {wins}W/{losses}L
+            </p>
           </div>
           <div className="bg-white/5 rounded px-2.5 py-1.5 text-center">
             <p className="text-[10px] text-white/40">P&L</p>
-            <p className={cn("text-sm font-medium", runningPnL >= 0 ? "text-teal-400" : "text-rose-400")}>
-              ${Math.abs(runningPnL).toFixed(0)}
+            <p
+              className={cn(
+                "text-sm font-medium",
+                runningPnL >= 0 ? "text-teal-400" : "text-rose-400"
+              )}
+            >
+              {formatDisplayCurrency(runningPnL)}
             </p>
           </div>
         </div>
@@ -813,8 +764,16 @@ function SessionCoachingBlock({
             {nudges.map((nudge, i) => {
               const nc = nudgeConfig[nudge.severity] ?? nudgeConfig.info;
               return (
-                <div key={i} className={cn("flex items-start gap-1.5 text-[10px] rounded-sm p-2 border border-white/5", nc.bg)}>
-                  <Activity className={cn("h-3 w-3 shrink-0 mt-0.5", nc.color)} />
+                <div
+                  key={i}
+                  className={cn(
+                    "flex items-start gap-1.5 text-[10px] rounded-sm p-2 border border-white/5",
+                    nc.bg
+                  )}
+                >
+                  <Activity
+                    className={cn("h-3 w-3 shrink-0 mt-0.5", nc.color)}
+                  />
                   <div>
                     <p className={cn("font-medium", nc.color)}>{nudge.title}</p>
                     <p className="text-white/50">{nudge.message}</p>

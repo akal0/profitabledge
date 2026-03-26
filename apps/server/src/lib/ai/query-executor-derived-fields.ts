@@ -201,20 +201,20 @@ export const DERIVED_FIELDS: Record<
   edgeName: {
     getSelectSQL: () =>
       sql<string>`COALESCE((
-        SELECT ${edge.name}
-        FROM ${tradeEdgeAssignment}
-        INNER JOIN ${edge} ON ${edge.id} = ${tradeEdgeAssignment.edgeId}
-        WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
-        ORDER BY ${tradeEdgeAssignment.createdAt} DESC
+        SELECT "edge"."name"
+        FROM "trade_edge_assignment"
+        INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+        WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+        ORDER BY "trade_edge_assignment"."created_at" DESC
         LIMIT 1
       ), ${trade.modelTag}, 'Unassigned')`,
     getFilterSQL: (op: string, value: any) => {
       const edgeNameSQL = sql`COALESCE((
-        SELECT ${edge.name}
-        FROM ${tradeEdgeAssignment}
-        INNER JOIN ${edge} ON ${edge.id} = ${tradeEdgeAssignment.edgeId}
-        WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
-        ORDER BY ${tradeEdgeAssignment.createdAt} DESC
+        SELECT "edge"."name"
+        FROM "trade_edge_assignment"
+        INNER JOIN "edge" ON "edge"."id" = "trade_edge_assignment"."edge_id"
+        WHERE "trade_edge_assignment"."trade_id" = "trade"."id"
+        ORDER BY "trade_edge_assignment"."created_at" DESC
         LIMIT 1
       ), ${trade.modelTag}, 'Unassigned')`;
 

@@ -14,9 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import {
-  WidgetWrapper,
-} from "@/components/dashboard/widget-wrapper";
+import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
   PropAccountStatusBadges,
@@ -313,9 +311,9 @@ function EmptyState() {
           status, survival headroom, and next actions.
         </p>
         <Link href="/dashboard/accounts?tab=prop" className="mt-6">
-          <Button className="h-9 rounded-sm ring ring-white/5 bg-sidebar px-4 text-xs text-white hover:bg-sidebar-accent hover:brightness-110">
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add Prop Account
+          <Button className="h-9 rounded-sm ring ring-white/5 bg-sidebar px-4 text-xs text-white hover:bg-sidebar-accent hover:brightness-110 gap-1">
+            <Plus className="size-3" />
+            Add prop account
           </Button>
         </Link>
       </div>
@@ -681,7 +679,12 @@ export default function PropTrackerIndexPage() {
   }, [trackedAccounts]);
 
   if (isLoading) {
-    return <RouteLoadingFallback route="propTracker" className="min-h-[calc(100vh-10rem)]" />;
+    return (
+      <RouteLoadingFallback
+        route="propTracker"
+        className="min-h-[calc(100vh-10rem)]"
+      />
+    );
   }
 
   return (

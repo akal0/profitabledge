@@ -162,15 +162,15 @@ export default function MetricsSettingsPage() {
 
   return (
     <div className="flex w-full flex-col">
-      <div className="grid grid-cols-1 items-start gap-2 px-6 py-5 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-8">
+      <div className="flex flex-col items-start gap-2 px-6 py-5 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-8">
         <div>
           <div className="flex items-center gap-2">
             <Label className="text-sm font-medium text-white/80">
-              Sample Size Gating
+              Sample size gating
             </Label>
             <Badge
               variant="secondary"
-              className="border-amber-500/30 bg-amber-900/30 text-xs text-amber-400"
+              className="ring-amber-500/30 bg-amber-900/30 text-xs text-amber-400"
             >
               Advanced
             </Badge>
@@ -182,9 +182,9 @@ export default function MetricsSettingsPage() {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-2">
             <p className="text-xs text-white/50">
-              By default, advanced metrics require minimum sample sizes
-              (30-200 trades) for statistical reliability. Enable this to show
-              all metrics immediately and hide the progress banner.
+              By default, advanced metrics require minimum sample sizes (30-200
+              trades) for statistical reliability. Enable this to show all
+              metrics immediately and hide the progress banner.
             </p>
             <div className="space-y-0.5 text-xs text-white/40">
               <p>Basic metrics: Always available</p>
@@ -208,11 +208,11 @@ export default function MetricsSettingsPage() {
 
       <Separator />
 
-      <div className="grid grid-cols-1 items-start gap-2 px-6 py-5 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-8">
+      <div className="flex flex-col items-start gap-2 px-6 py-5 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-8">
         <div>
           <div className="flex items-center gap-2">
             <Label className="text-sm font-medium text-white/80">
-              Manual Trade Sizing
+              Manual trade sizing
             </Label>
             <Badge variant="secondary" className="text-xs">
               New
@@ -223,20 +223,22 @@ export default function MetricsSettingsPage() {
           </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="w-full space-y-4">
           <p className="max-w-3xl text-xs leading-5 text-white/45">
             Manual trade entry now starts from the most common market sizing by
             asset class. Adjust those defaults here if your broker uses a
             different contract size or minimum step.
           </p>
 
-          <div className="overflow-x-auto rounded-sm border border-white/5 bg-sidebar-accent/40">
-            <div className="grid min-w-[52rem] grid-cols-[10rem_repeat(4,minmax(7rem,1fr))] gap-px bg-white/5 text-[11px]">
+          <div className="w-full overflow-x-auto rounded-sm ring ring-white/5 bg-sidebar-accent/40">
+            <div className="grid min-w-[52rem] w-full grid-cols-[10rem_repeat(4,minmax(7rem,1fr))] gap-px bg-white/5 text-[11px]">
               <div className="bg-sidebar px-3 py-2 text-white/35">Asset</div>
               <div className="bg-sidebar px-3 py-2 text-white/35">
                 Default volume
               </div>
-              <div className="bg-sidebar px-3 py-2 text-white/35">Min volume</div>
+              <div className="bg-sidebar px-3 py-2 text-white/35">
+                Min volume
+              </div>
               <div className="bg-sidebar px-3 py-2 text-white/35">Step</div>
               <div className="bg-sidebar px-3 py-2 text-white/35">
                 Contract size
@@ -346,7 +348,7 @@ export default function MetricsSettingsPage() {
               <Button
                 type="button"
                 variant="outline"
-                className="border-white/10 bg-sidebar text-white/70 hover:bg-sidebar-accent"
+                className="ring-white/8! bg-sidebar text-white/70 hover:bg-sidebar-accent text-xs"
                 onClick={() =>
                   setManualTradeSizingForm(
                     createManualTradeSizingFormState(
@@ -364,6 +366,7 @@ export default function MetricsSettingsPage() {
                 disabled={
                   updateAdvancedPrefs.isPending || !manualTradeSizingIsValid
                 }
+                className="text-xs"
               >
                 Save sizing
               </Button>
@@ -374,11 +377,11 @@ export default function MetricsSettingsPage() {
 
       <Separator />
 
-      <div className="grid grid-cols-1 items-start gap-2 px-6 py-5 opacity-60 sm:grid-cols-[200px_1fr] sm:gap-6 sm:px-8">
+      <div className="flex flex-col items-start gap-2 px-6 py-5 opacity-60 sm:gap-6 sm:px-8">
         <div>
           <div className="flex items-center gap-2">
             <Label className="text-sm font-medium text-white/80">
-              Alpha Weighting
+              Alpha weighting
             </Label>
             <Badge variant="secondary" className="text-xs">
               Coming Soon

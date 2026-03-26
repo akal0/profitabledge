@@ -20,6 +20,7 @@ import {
   buildAliasCatalog,
   inferTimeframeFromMessage,
   normalizeUserMessage,
+  shouldUseProfileSummaryShortcut,
 } from "./query-normalization";
 import { generateMeteredGeminiContent } from "./gemini";
 import { cache, cacheKeys } from "../cache";
@@ -79,7 +80,7 @@ export async function generatePlan(
     }
 
     // Check for profile-summary queries (short-circuit)
-    if (traderProfile && isProfileQuery(normalizedMessage)) {
+    if (traderProfile && shouldUseProfileSummaryShortcut(normalizedMessage)) {
       return {
         success: true,
         plan: {
@@ -1406,11 +1407,11 @@ function applyWeekdayPerformanceOverrides(
   if (plan.intent !== "aggregate") return;
 
   plan.filters = plan.filters ?? [];
-  plan.groupBy = [{ field: "open" }];
-  plan.aggregates = [{ fn: "sum", field: "profit", as: "daily_profit" }];
+  plan.groupBy = [{ field: "weekday" }];
+  plan.aggregates = [{ fn: "sum", field: "profit", as: "weekday_profit" }];
   plan.vizType = "weekday_performance";
   plan.componentHint = "performance-weekday";
-  plan.displayMode = "timeline";
+  plan.displayMode = "plural";
   plan.vizTitle = "Performance by day of week";
   plan.explanation = "Calculate total profit grouped by day of week";
 }
@@ -1591,8 +1592,8 @@ function detectPeriodComparison(
       let metricAgg: "sum" | "avg" | "count" = "sum";
       
       if (lower.includes("win rate")) {
-        metricField = "profit";
-        metricAgg = "count";
+        metricField = "winRate";
+        metricAgg = "avg";
       } else if (lower.includes("count") || lower.includes("how many")) {
         metricField = "profit";
         metricAgg = "count";
@@ -1718,20 +1719,5 @@ TRADER PROFILE CONTEXT (use this to personalize your response):
 }
 
 function isProfileQuery(message: string): boolean {
-  const profilePatterns = [
-    /what('?s| is) my edge/i,
-    /what('?s| are) my (edges?|leaks?|patterns?)/i,
-    /show (me )?my (profile|edge|leak)/i,
-    /my trading (profile|summary|overview)/i,
-    /where (do i|am i) (losing|leaking)/i,
-    /what (am i|do i) do(ing)? (well|wrong|right)/i,
-    /strengths? and weaknesses?/i,
-    /how am i doing/i,
-    /leav(e|ing).*(table|money|profit)/i,
-    /money.*(table|leaving|left)/i,
-    /exit(ing)? too (early|soon|late)/i,
-    /opportunity cost/i,
-    /how much.*(miss|left|leave|table)/i,
-  ];
-  return profilePatterns.some((p) => p.test(message.trim()));
+  return shouldUseProfileSummaryShortcut(message);
 }

@@ -112,6 +112,146 @@ describe("assertWorkerSecret", () => {
     });
   });
 
+  it("boosts cold refreshes during an active post-exit tracking window", async () => {
+    const { resolveMt5ClaimQueueSelection } = await import("./worker-control");
+
+    expect(
+      resolveMt5ClaimQueueSelection(
+        {
+          status: "active",
+          meta: {
+            mt5Runtime: {
+              postExitBoostUntil: "2026-03-25T03:00:00.000Z",
+              postExitTracking: [
+                {
+                  tradeKey: "123",
+                  symbol: "EURUSD",
+                  side: "buy",
+                  closeTime: "2026-03-25T02:09:50.000Z",
+                  trackingEndTime: "2026-03-25T03:00:00.000Z",
+                },
+              ],
+            },
+          },
+          lastSyncAttemptAt: new Date("2026-03-25T02:10:00.000Z"),
+          lastSyncSuccessAt: new Date("2026-03-25T02:10:00.000Z"),
+          syncIntervalMinutes: 15,
+        },
+        {
+          active: false,
+          activeHolderCount: 0,
+          lastHeartbeatAt: null,
+          leaseUntil: null,
+          holders: {},
+          activeHolders: [],
+        },
+        new Date("2026-03-25T02:10:20.000Z").getTime()
+      )
+    ).toBeNull();
+
+    expect(
+      resolveMt5ClaimQueueSelection(
+        {
+          status: "active",
+          meta: {
+            mt5Runtime: {
+              postExitBoostUntil: "2026-03-25T03:00:00.000Z",
+              postExitTracking: [
+                {
+                  tradeKey: "123",
+                  symbol: "EURUSD",
+                  side: "buy",
+                  closeTime: "2026-03-25T02:09:50.000Z",
+                  trackingEndTime: "2026-03-25T03:00:00.000Z",
+                },
+              ],
+            },
+          },
+          lastSyncAttemptAt: new Date("2026-03-25T02:10:00.000Z"),
+          lastSyncSuccessAt: new Date("2026-03-25T02:10:00.000Z"),
+          syncIntervalMinutes: 15,
+        },
+        {
+          active: false,
+          activeHolderCount: 0,
+          lastHeartbeatAt: null,
+          leaseUntil: null,
+          holders: {},
+          activeHolders: [],
+        },
+        new Date("2026-03-25T02:10:31.000Z").getTime()
+      )
+    ).toMatchObject({
+      claimMode: "cold",
+      queueTier: 1,
+      dueAt: "2026-03-25T02:10:30.000Z",
+      lastRequestedAt: null,
+    });
+  });
+
+  it("falls back to the normal cold cadence after the post-exit boost expires", async () => {
+    const { resolveMt5ClaimQueueSelection } = await import("./worker-control");
+
+    expect(
+      resolveMt5ClaimQueueSelection(
+        {
+          status: "active",
+          meta: {
+            mt5Runtime: {
+              postExitBoostUntil: "2026-03-25T02:00:20.000Z",
+              postExitTracking: [
+                {
+                  tradeKey: "123",
+                  symbol: "EURUSD",
+                  side: "buy",
+                  closeTime: "2026-03-25T01:59:50.000Z",
+                  trackingEndTime: "2026-03-25T02:00:20.000Z",
+                },
+              ],
+            },
+          },
+          lastSyncAttemptAt: new Date("2026-03-25T02:00:00.000Z"),
+          lastSyncSuccessAt: new Date("2026-03-25T02:00:00.000Z"),
+          syncIntervalMinutes: 15,
+        },
+        {
+          active: false,
+          activeHolderCount: 0,
+          lastHeartbeatAt: null,
+          leaseUntil: null,
+          holders: {},
+          activeHolders: [],
+        },
+        new Date("2026-03-25T02:10:00.000Z").getTime()
+      )
+    ).toBeNull();
+  });
+
+  it("does not schedule cold polling for manual-only MT5 connections", async () => {
+    const { resolveMt5ClaimQueueSelection } = await import("./worker-control");
+
+    expect(
+      resolveMt5ClaimQueueSelection(
+        {
+          status: "active",
+          meta: {},
+          lastSyncAttemptAt: new Date("2026-03-25T02:00:00.000Z"),
+          lastSyncSuccessAt: new Date("2026-03-25T02:00:00.000Z"),
+          syncIntervalMinutes: 0,
+        },
+        {
+          active: false,
+          activeHolderCount: 0,
+          lastHeartbeatAt: null,
+          leaseUntil: null,
+          holders: {},
+          activeHolders: [],
+        },
+        new Date("2026-03-25T02:20:00.000Z").getTime()
+      )
+    ).toBeNull();
+  });
+
   it("does not let a different worker take over a fresh active MT5 session", async () => {
     const { canMtWorkerTakeSessionOwnership } = await import("./worker-control");
 

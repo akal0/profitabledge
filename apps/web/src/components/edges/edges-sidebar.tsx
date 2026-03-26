@@ -3,20 +3,11 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ArrowLeft,
-  Layers3,
-  LibraryBig,
-  Share2,
-  Sparkles,
-} from "lucide-react";
+import { ArrowLeft, Layers3, LibraryBig, Share2, Sparkles } from "lucide-react";
 
 import {
   Sidebar,
   SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -111,10 +102,10 @@ export function EdgesSidebar({
 
   return (
     <Sidebar className="px-0 border-none" collapsible="icon" {...props}>
-      <SidebarHeader className="p-4 pt-3 pb-1 h-[3.725rem]">
+      <SidebarHeader className="min-h-[3.725rem] p-4 pb-1 pt-3 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-4 group-data-[collapsible=icon]:py-2.5">
         <Link
           href="/dashboard"
-          className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground group-data-[collapsible=icon]:px-2"
+          className="flex items-center gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2"
         >
           <ArrowLeft className="size-4 shrink-0" />
           <span className="font-semibold group-data-[collapsible=icon]:hidden">
@@ -125,56 +116,55 @@ export function EdgesSidebar({
 
       <SidebarContent className="px-4 py-2 overflow-y-auto">
         {EDGE_NAV_SECTIONS.map((section) => (
-          <SidebarGroup
+          <div
             key={section.label}
-            className="p-0 mb-3 group-data-[collapsible=icon]:mb-0"
+            className="mb-3 group-data-[collapsible=icon]:mb-0"
           >
-            <SidebarGroupLabel className="text-[10px] text-muted-foreground/60 font-semibold px-2 h-auto py-0 mb-1.5">
+            <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 group-data-[collapsible=icon]:hidden">
               {section.label}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-0.5">
-                {section.items.map((item) => {
-                  const isActive = matchesPathname(safePathname, item.href);
+            </p>
+            <SidebarMenu className="gap-0.5">
+              {section.items.map((item) => {
+                const isActive = matchesPathname(safePathname, item.href);
 
-                  return (
-                    <SidebarMenuItem key={item.href} className="px-0">
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={item.title}
-                        className={cn(
-                          "flex items-center gap-3 px-2 py-2 cursor-pointer",
-                          isActive && "bg-sidebar-accent"
-                        )}
-                      >
-                        <Link href={item.href}>
-                          <item.icon
-                            className={cn(
-                              "size-4! shrink-0",
-                              isActive
-                                ? "stroke-foreground"
-                                : "stroke-[#8b8b97]"
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "text-xs min-w-max",
-                              isActive
-                                ? "text-foreground font-medium"
-                                : "text-[#8b8b97]"
-                            )}
-                          >
-                            {item.title}
-                          </span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                return (
+                  <SidebarMenuItem key={item.href} className="flex px-2 py-0.5">
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.title}
+                      className={cn(
+                        "group/navlink flex items-center justify-start gap-3 cursor-pointer group-data-[collapsible=icon]:justify-center",
+                        isActive &&
+                          "bg-sidebar-accent text-white dark:hover:bg-sidebar-accent"
+                      )}
+                    >
+                      <Link href={item.href}>
+                        <item.icon
+                          className={cn(
+                            "size-[18px] stroke-[#8b8b97] stroke-2 dark:fill-transparent dark:stroke-[#8b8b97]",
+                            isActive
+                              ? "fill-black dark:fill-transparent dark:stroke-white"
+                              : "group-hover/navlink:stroke-black dark:group-hover/navlink:stroke-white"
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            "min-w-max text-xs font-normal group-data-[collapsible=icon]:hidden",
+                            isActive
+                              ? "font-medium text-black dark:text-white"
+                              : "text-secondary dark:text-[#8b8b97] group-hover/navlink:!text-black dark:group-hover/navlink:!text-white"
+                          )}
+                        >
+                          {item.title}
+                        </span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </div>
         ))}
       </SidebarContent>
     </Sidebar>

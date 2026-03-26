@@ -18,6 +18,19 @@ import type {
   ConnectionRegionOption,
 } from "@/features/settings/connections/lib/connection-types";
 
+function formatCredentialFieldLabel(field: string) {
+  if (field === "serverUrl") return "Server URL";
+
+  const normalized = field
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim()
+    .toLowerCase();
+
+  if (!normalized) return field;
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 export function ConnectionCredentialDialog({
   open,
   onOpenChange,
@@ -78,9 +91,7 @@ export function ConnectionCredentialDialog({
           <Separator />
 
           <div className="px-5 py-3">
-            <h3 className="text-xs font-semibold tracking-wide text-white/70">
-              Connection
-            </h3>
+            <h3 className="text-xs font-semibold text-white/70">Connection</h3>
           </div>
           <Separator />
           <div className="space-y-4 px-5 py-4">
@@ -95,7 +106,9 @@ export function ConnectionCredentialDialog({
 
             {regionSelectionEnabled ? (
               <div className="space-y-2">
-                <Label className="text-xs text-white/50">Preferred MT5 region</Label>
+                <Label className="text-xs text-white/50">
+                  Preferred MT5 region
+                </Label>
                 <Select value={selectedRegion} onValueChange={onRegionChange}>
                   <SelectTrigger className="h-9 w-full border-white/10 bg-white/[0.03] text-white">
                     <SelectValue placeholder="Choose a region" />
@@ -120,18 +133,14 @@ export function ConnectionCredentialDialog({
           <Separator />
 
           <div className="px-5 py-3">
-            <h3 className="text-xs font-semibold tracking-wide text-white/70">
-              Credentials
-            </h3>
+            <h3 className="text-xs font-semibold text-white/70">Credentials</h3>
           </div>
           <Separator />
           <div className="space-y-4 px-5 py-4">
             {provider?.fields.map((field) => (
               <div key={field} className="space-y-2">
                 <Label className="text-xs text-white/50">
-                  {field === "serverUrl"
-                    ? "Server URL"
-                    : field.charAt(0).toUpperCase() + field.slice(1)}
+                  {formatCredentialFieldLabel(field)}
                 </Label>
                 <Input
                   type={field === "password" ? "password" : "text"}

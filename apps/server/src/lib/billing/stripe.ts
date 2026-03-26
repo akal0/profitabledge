@@ -149,26 +149,63 @@ export async function createStripeBillingPortalSession(input: {
 }) {
   const stripe = getStripeClient();
   const configuration = getStripeBillingPortalConfigurationId();
-  return stripe.billingPortal.sessions.create({
-    customer: input.customerId,
-    return_url: input.returnUrl,
-    configuration: configuration ?? undefined,
-    flow_data:
-      input.flow === "cancel" && input.subscriptionId
-        ? {
-            type: "subscription_cancel",
-            after_completion: {
-              type: "redirect",
-              redirect: {
-                return_url: input.returnUrl,
-              },
+  const flowData =
+    input.flow === "cancel" && input.subscriptionId
+      ? {
+          type: "subscription_cancel" as const,
+          after_completion: {
+            type: "redirect" as const,
+            redirect: {
+              return_url: input.returnUrl,
             },
-            subscription_cancel: {
-              subscription: input.subscriptionId,
-            },
-          }
-        : undefined,
-  });
+          },
+          subscription_cancel: {
+            subscription: input.subscriptionId,
+          },
+        }
+      : undefined;
+
+  const createSession = (configurationId?: string | null) =>
+    stripe.billingPortal.sessions.create({
+      customer: input.customerId,
+      return_url: input.returnUrl,
+      configuration: configurationId ?? undefined,
+      flow_data: flowData,
+    });
+
+  try {
+    return await createSession(configuration);
+  } catch (error) {
+    if (configuration && isStripeMissingBillingPortalConfigurationError(error)) {
+      return createSession(null);
+    }
+
+    throw error;
+  }
+}
+
+function isStripeMissingBillingPortalConfigurationError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as {
+    code?: unknown;
+    param?: unknown;
+    message?: unknown;
+  };
+
+  if (
+    candidate.code === "resource_missing" &&
+    candidate.param === "configuration"
+  ) {
+    return true;
+  }
+
+  return (
+    typeof candidate.message === "string" &&
+    candidate.message.toLowerCase().includes("no such configuration")
+  );
 }
 
 export function isStripeMissingCustomerError(error: unknown) {

@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -20,7 +15,6 @@ import Image from "next/image";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import { AuthHeroArtwork } from "@/components/auth/auth-hero-artwork";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,6 +87,12 @@ const PLAN_CARD_META: Record<
     imageSrc: "/plans/institutional.png",
     badgeClassName: "ring ring-emerald-500/20 bg-emerald-500/10 text-white",
   },
+};
+
+const BILLING_PLAN_TIER: Record<BillingPlanKey, number> = {
+  student: 0,
+  professional: 1,
+  institutional: 2,
 };
 
 function splitPriceLabel(priceLabel: string) {
@@ -273,44 +273,40 @@ function WalletHero({
     : "Plan ready";
 
   return (
-    <div className="relative h-[164px] min-h-[164px] w-full overflow-hidden rounded-[30px] bg-[#050505] ring ring-white/10 shadow-[0_24px_32px_rgba(0,0,0,0.3)] sm:h-[182px] sm:min-h-[182px] lg:h-[196px] lg:min-h-[196px]">
-      <AuthHeroArtwork />
+    <div className="relative w-full overflow-hidden rounded-[30px] bg-[#050505] ring ring-white/5 shadow-[0_24px_32px_rgba(0,0,0,0.15)]">
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-no-repeat opacity-45"
+        style={{
+          backgroundImage: "url('/landing/hero-background.svg')",
+          backgroundPosition: "86% 4%",
+        }}
+        aria-hidden="true"
+      />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,5,0.18),rgba(5,5,5,0.52)_42%,rgba(5,5,5,0.82)_100%)]" />
       <div className="absolute inset-[10px] rounded-[22px] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01))] ring ring-white/8" />
 
-      <div className="relative z-10 flex h-full flex-col justify-between p-6 sm:p-7">
-        <div className="space-y-3">
-          <Badge className="h-7 w-fit rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
-            {statusLabel}
-          </Badge>
-          <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-[0.18em] text-white/36">
-              Current plan
-            </p>
-            <div className="flex items-end gap-2">
-              <h2 className="text-2xl font-semibold tracking-[-0.05em] text-white sm:text-[2rem]">
-                {planTitle}
-              </h2>
-              <p className="pb-0.5 text-sm text-white/45">{priceLabel}</p>
-            </div>
-          </div>
-        </div>
+      <div className="relative z-10 flex flex-col p-6 sm:p-7">
+        <Badge className="h-7 w-fit rounded-sm bg-white/8 px-2.5 text-[11px] text-white/72 ring ring-white/10">
+          {statusLabel}
+        </Badge>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-sm bg-black/28 p-4 ring ring-white/10 backdrop-blur-[2px]">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/30">
-              Edge credits
-            </p>
-            <p className="mt-2 text-sm font-medium tracking-[-0.03em] text-white/78">
+        <div className="mt-auto flex items-center justify-between gap-3 pt-8 px-0.5">
+          <div>
+            <p className="text-[10px] text-white/30">Edge credits</p>
+            <p className="mt-1 text-sm font-semibold tracking-[-0.03em] text-white/78">
               {edgeCreditsLabel}
             </p>
           </div>
-          <div className="rounded-sm bg-black/28 p-4 ring ring-white/10 backdrop-blur-[2px]">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-white/30">
-              Renews
-            </p>
-            <p className="mt-2 text-sm font-medium tracking-[-0.03em] text-white/78">
+          <div>
+            <p className="text-[10px] text-white/30">Renews</p>
+            <p className="mt-1 text-sm font-semibold tracking-[-0.03em] text-white/78">
               {renewalLabel}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] text-white/30">Current plan</p>
+            <p className="mt-1 text-sm font-semibold tracking-[-0.03em] text-white/78">
+              {planTitle}
             </p>
           </div>
         </div>
@@ -392,9 +388,11 @@ export default function BillingSettingsPage() {
     latestAffiliateCodeRequestRef.current = trimmed;
 
     try {
-      const profile = (await trpcClient.billing.getAffiliatePublicProfile.query({
-        code: trimmed,
-      })) as ResolvedAffiliateProfile | null;
+      const profile = (await trpcClient.billing.getAffiliatePublicProfile.query(
+        {
+          code: trimmed,
+        }
+      )) as ResolvedAffiliateProfile | null;
 
       if (latestAffiliateCodeRequestRef.current !== trimmed) {
         return;
@@ -612,21 +610,6 @@ export default function BillingSettingsPage() {
         <div className="mb-4 flex items-center justify-between gap-4">
           <div className="flex items-center justify-between">
             <SectionLabel>Plans</SectionLabel>
-            {access?.privateBetaRequired ? (
-              <Badge
-                className={cn(
-                  "ring text-[10px]",
-                  access.hasPrivateBetaAccess
-                    ? "ring-emerald-500/20 bg-emerald-900/30 text-emerald-300"
-                    : "ring-blue-500/20 bg-blue-900/30 text-blue-300"
-                )}
-              >
-                <Shield className="mr-1 size-2.5" />
-                {access.hasPrivateBetaAccess
-                  ? "Beta access unlocked"
-                  : "Beta access required"}
-              </Badge>
-            ) : null}
           </div>
         </div>
 
@@ -636,14 +619,19 @@ export default function BillingSettingsPage() {
             const isMigrationTarget =
               Boolean(legacyMigration?.requiresCheckout) &&
               legacyMigration?.targetPlanKey === plan.key;
+            const planKey = plan.key as BillingPlanKey;
+            const activePlanTier = BILLING_PLAN_TIER[activePlanKey] ?? 0;
+            const planTier = BILLING_PLAN_TIER[planKey] ?? 0;
+            const isHigherTierThanActive = planTier > activePlanTier;
+            const isLowerPaidTierThanActive = !plan.isFree && planTier < activePlanTier;
             const isProfessional = plan.key === "professional";
             const isInstitutional = plan.key === "institutional";
             const canCheckout =
               !plan.isFree &&
               plan.isConfigured &&
-              (plan.key === "professional" || plan.key === "institutional");
+              isHigherTierThanActive;
             const meta =
-              PLAN_CARD_META[plan.key as BillingPlanKey] ??
+              PLAN_CARD_META[planKey] ??
               PLAN_CARD_META.student;
             const price = splitPriceLabel(plan.priceLabel);
             const featureLines = getPlanFeatureLines(plan);
@@ -919,7 +907,11 @@ export default function BillingSettingsPage() {
                             freePlanCn
                           )}
                         >
-                          Free forever
+                          {plan.isFree
+                            ? "Free forever"
+                            : isLowerPaidTierThanActive
+                            ? "You don't need this!"
+                            : "Unavailable"}
                         </div>
                       )}
                     </div>
@@ -971,8 +963,8 @@ export default function BillingSettingsPage() {
               Have an affiliate code?
             </DialogTitle>
             <DialogDescription className="text-sm text-white/45">
-              Enter the affiliate username or code you were given and
-              we&apos;ll apply it to checkout.
+              Enter the affiliate username or code you were given and we&apos;ll
+              apply it to checkout.
             </DialogDescription>
           </DialogHeader>
 
@@ -980,7 +972,9 @@ export default function BillingSettingsPage() {
             <div className="relative">
               <Input
                 value={affiliateCodeInput}
-                onChange={(event) => handleAffiliateCodeChange(event.target.value)}
+                onChange={(event) =>
+                  handleAffiliateCodeChange(event.target.value)
+                }
                 placeholder="Enter username or code"
                 className="h-11 border-white/10 bg-sidebar-accent text-sm text-white placeholder:text-white/28"
               />
@@ -1020,7 +1014,9 @@ export default function BillingSettingsPage() {
             <Button
               type="button"
               onClick={handleApplyAffiliateCode}
-              disabled={!affiliateCodeResolved || !resolvedAffiliate?.defaultOfferCode}
+              disabled={
+                !affiliateCodeResolved || !resolvedAffiliate?.defaultOfferCode
+              }
               className="h-9 rounded-sm bg-white text-xs font-medium text-black hover:bg-white/90"
             >
               Use code

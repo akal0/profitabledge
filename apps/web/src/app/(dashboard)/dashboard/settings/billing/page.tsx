@@ -52,6 +52,8 @@ type BillingPageState = {
   subscription?: {
     provider?: string | null;
     status?: string | null;
+    stripeSubscriptionId?: string | null;
+    cancelAtPeriodEnd?: boolean;
     currentPeriodEnd?: string | Date | null;
   } | null;
   override?: unknown;
@@ -369,6 +371,9 @@ export default function BillingSettingsPage() {
     billingData?.customer?.stripeCustomerId &&
       billingData?.subscription?.provider === "stripe"
   );
+  const cancellationScheduled = Boolean(subscription?.cancelAtPeriodEnd);
+  const canMoveToFreeTier =
+    activePlanKey !== "student" && canManageSubscription && !cancellationScheduled;
   const returnedFromStripeCheckout =
     searchParams?.get("checkout") === "success";
   const migrationCheckoutPlan = legacyMigration?.requiresCheckout
@@ -493,10 +498,25 @@ export default function BillingSettingsPage() {
     try {
       const result = await createCustomerPortalSession.mutateAsync({
         returnPath: "/dashboard/settings/billing",
+        flow: "manage",
       });
       window.location.assign(result.url);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Unable to open portal");
+    }
+  };
+
+  const handleMoveToFreeTier = async () => {
+    try {
+      const result = await createCustomerPortalSession.mutateAsync({
+        returnPath: "/dashboard/settings/billing",
+        flow: "cancel",
+      });
+      window.location.assign(result.url);
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Unable to start cancellation"
+      );
     }
   };
 
@@ -623,13 +643,13 @@ export default function BillingSettingsPage() {
             const activePlanTier = BILLING_PLAN_TIER[activePlanKey] ?? 0;
             const planTier = BILLING_PLAN_TIER[planKey] ?? 0;
             const isHigherTierThanActive = planTier > activePlanTier;
-            const isLowerPaidTierThanActive = !plan.isFree && planTier < activePlanTier;
+            const isLowerPaidTierThanActive =
+              !plan.isFree && planTier < activePlanTier;
             const isProfessional = plan.key === "professional";
             const isInstitutional = plan.key === "institutional";
-            const canCheckout =
-              !plan.isFree &&
-              plan.isConfigured &&
-              isHigherTierThanActive;
+            const canCheckout = !plan.isFree && isHigherTierThanActive;
+            const showsMoveToFreeTier =
+              plan.isFree && activePlanKey !== "student" && canManageSubscription;
             const meta =
               PLAN_CARD_META[planKey] ??
               PLAN_CARD_META.student;
@@ -899,6 +919,23 @@ export default function BillingSettingsPage() {
                           {createCheckout.isPending
                             ? "Redirecting..."
                             : `Upgrade to ${plan.title}`}
+                        </Button>
+                      ) : showsMoveToFreeTier ? (
+                        <Button
+                          variant="ghost"
+                          onClick={handleMoveToFreeTier}
+                          disabled={
+                            createCustomerPortalSession.isPending ||
+                            !canMoveToFreeTier
+                          }
+                          className="h-9 w-full cursor-pointer rounded-sm text-xs font-medium shadow-sidebar-button ring ring-white/10 bg-white/5 text-white transition-all duration-250 active:scale-95 hover:bg-white/10 hover:text-white disabled:cursor-default disabled:opacity-70"
+                        >
+                          <ExternalLink className="size-3" />
+                          {createCustomerPortalSession.isPending
+                            ? "Opening..."
+                            : cancellationScheduled
+                            ? "Cancellation scheduled"
+                            : "Move to free tier"}
                         </Button>
                       ) : (
                         <div

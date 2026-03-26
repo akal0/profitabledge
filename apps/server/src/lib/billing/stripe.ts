@@ -144,6 +144,8 @@ export async function createStripeCheckoutSession(input: {
 export async function createStripeBillingPortalSession(input: {
   customerId: string;
   returnUrl: string;
+  flow?: "manage" | "cancel";
+  subscriptionId?: string | null;
 }) {
   const stripe = getStripeClient();
   const configuration = getStripeBillingPortalConfigurationId();
@@ -151,6 +153,21 @@ export async function createStripeBillingPortalSession(input: {
     customer: input.customerId,
     return_url: input.returnUrl,
     configuration: configuration ?? undefined,
+    flow_data:
+      input.flow === "cancel" && input.subscriptionId
+        ? {
+            type: "subscription_cancel",
+            after_completion: {
+              type: "redirect",
+              redirect: {
+                return_url: input.returnUrl,
+              },
+            },
+            subscription_cancel: {
+              subscription: input.subscriptionId,
+            },
+          }
+        : undefined,
   });
 }
 

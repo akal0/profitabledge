@@ -2815,6 +2815,7 @@ export const billingRouter = router({
     .input(
       z.object({
         returnPath: z.string().optional(),
+        flow: z.enum(["manage", "cancel"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -2828,11 +2829,20 @@ export const billingRouter = router({
         });
       }
 
+      if (input.flow === "cancel" && !billing.subscription?.stripeSubscriptionId) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "No active Stripe subscription is linked to this account yet",
+        });
+      }
+
       const session = await createStripeBillingPortalSession({
         customerId: billing.customer.stripeCustomerId,
         returnUrl: buildAppUrl(
           input.returnPath ?? "/dashboard/settings/billing"
         ),
+        flow: input.flow,
+        subscriptionId: billing.subscription?.stripeSubscriptionId ?? null,
       });
 
       return {

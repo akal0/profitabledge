@@ -21,6 +21,7 @@ import {
   getBillingPlanDefinition,
   getBillingPlanDefinitions,
   getHigherBillingPlanKey,
+  BILLING_PLAN_TIER,
   getWebAppUrl,
   isPrivateBetaAdminEmail,
   isPrivateBetaRequired,
@@ -2682,9 +2683,24 @@ export const billingRouter = router({
         });
       }
 
+      const billing = await getActiveBillingState(user.id);
+      const currentPlanTier = BILLING_PLAN_TIER[billing.activePlanKey] ?? 0;
+      const targetPlanTier = BILLING_PLAN_TIER[input.planKey] ?? 0;
+
+      if (targetPlanTier <= currentPlanTier) {
+        const targetPlanTitle = getBillingPlanDefinition(input.planKey)?.title ?? "plan";
+
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            targetPlanTier === currentPlanTier
+              ? `You're already on the ${targetPlanTitle} plan`
+              : `Downgrades to ${targetPlanTitle} aren't available from this checkout flow`,
+        });
+      }
+
       const referralRewardGrant =
         await getAvailableReferralFreeMonthGrantForPlan(user.id, input.planKey);
-      const billing = await getActiveBillingState(user.id);
       const affiliateCheckout = input.affiliateOfferCode?.trim()
         ? await ensureAffiliateOfferForCheckout({
             userId: user.id,

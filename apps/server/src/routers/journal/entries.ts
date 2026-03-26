@@ -7,6 +7,9 @@ import {
   journalEntryGoal,
   journalImage,
   journalMedia,
+  journalShare,
+  journalShareEntry,
+  journalShareViewer,
   journalTemplate,
   type JournalBlock,
 } from '../../db/schema/journal';
@@ -51,6 +54,82 @@ const journalAICaptureResultSchema = z.object({
   contentBlocks: z.array(journalBlockSchema),
 });
 
+function buildJournalListPreview(blocks: JournalBlock[] | null | undefined) {
+  if (!blocks || blocks.length === 0) {
+    return "";
+  }
+
+  const firstTextBlock = blocks.find(
+    (block) => block.type === "paragraph" && block.content
+  );
+
+  return firstTextBlock
+    ? firstTextBlock.content.replace(/<[^>]*>/g, "").slice(0, 200)
+    : "";
+}
+
+function getSortableTimestamp(value: Date | string | null | undefined) {
+  if (!value) {
+    return 0;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function compareJournalListItems(
+  a: {
+    isPinned: boolean | null;
+    title: string;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    journalDate?: Date | string | null;
+  },
+  b: {
+    isPinned: boolean | null;
+    title: string;
+    createdAt: Date | string;
+    updatedAt: Date | string;
+    journalDate?: Date | string | null;
+  },
+  sortBy: "createdAt" | "updatedAt" | "journalDate" | "title",
+  sortOrder: "asc" | "desc"
+) {
+  const pinnedDelta = Number(Boolean(b.isPinned)) - Number(Boolean(a.isPinned));
+  if (pinnedDelta !== 0) {
+    return pinnedDelta;
+  }
+
+  if (sortBy === "title") {
+    const titleDelta = a.title.localeCompare(b.title, undefined, {
+      sensitivity: "base",
+    });
+
+    if (titleDelta !== 0) {
+      return sortOrder === "asc" ? titleDelta : -titleDelta;
+    }
+  } else {
+    const aValue =
+      sortBy === "createdAt"
+        ? getSortableTimestamp(a.createdAt)
+        : sortBy === "updatedAt"
+          ? getSortableTimestamp(a.updatedAt)
+          : getSortableTimestamp(a.journalDate);
+    const bValue =
+      sortBy === "createdAt"
+        ? getSortableTimestamp(b.createdAt)
+        : sortBy === "updatedAt"
+          ? getSortableTimestamp(b.updatedAt)
+          : getSortableTimestamp(b.journalDate);
+
+    if (aValue !== bValue) {
+      return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
+    }
+  }
+
+  return getSortableTimestamp(b.updatedAt) - getSortableTimestamp(a.updatedAt);
+}
+
 export const journalEntryProcedures = {
   list: protectedProcedure
     .input(z.object({
@@ -64,6 +143,7 @@ export const journalEntryProcedures = {
       linkedMissedTradeId: z.string().optional(),
       isPinned: z.boolean().optional(),
       isArchived: z.boolean().optional(),
+      includeShared: z.boolean().optional(),
       tradePhase: z.enum(['pre-trade', 'during-trade', 'post-trade']).optional(),
       sortBy: z.enum(['createdAt', 'updatedAt', 'journalDate', 'title']).default('updatedAt'),
       sortOrder: z.enum(['asc', 'desc']).default('desc'),
@@ -79,6 +159,7 @@ export const journalEntryProcedures = {
         linkedMissedTradeId,
         isPinned,
         isArchived = false,
+        includeShared = false,
         tradePhase,
         sortBy = 'updatedAt',
         sortOrder = 'desc',
@@ -152,6 +233,10 @@ export const journalEntryProcedures = {
         ? [desc(journalEntry.isPinned), desc(sortColumn)]
         : [desc(journalEntry.isPinned), asc(sortColumn)];
 
+      const ownFetchLimit = includeShared
+        ? Math.min(Math.max(limit * 3, 60), 100)
+        : limit + 1;
+
       const entries = await db
         .select({
           id: journalEntry.id,
@@ -184,33 +269,145 @@ export const journalEntryProcedures = {
         .from(journalEntry)
         .where(and(...conditions))
         .orderBy(...orderByClause)
-        .limit(limit + 1);
+        .limit(ownFetchLimit);
 
-      const processedEntries = entries.slice(0, limit).map((entry) => {
+      const processedEntries = entries
+        .slice(0, includeShared ? entries.length : limit)
+        .map((entry) => {
         const blocks = entry.content as JournalBlock[] | null;
-        let preview = '';
-
-        if (blocks && blocks.length > 0) {
-          const firstTextBlock = blocks.find(
-            (block) => block.type === 'paragraph' && block.content
-          );
-          if (firstTextBlock) {
-            preview = firstTextBlock.content
-              .replace(/<[^>]*>/g, '')
-              .slice(0, 200);
-          }
-        }
+        const preview = buildJournalListPreview(blocks);
 
         return {
           ...entry,
           preview,
           content: undefined,
+          isShared: false,
         };
       });
 
+      let sharedEntries: Array<{
+        id: string;
+        title: string;
+        emoji: string | null;
+        coverImageUrl: string | null;
+        coverImagePosition: number | null;
+        entryType: string | null;
+        tags: string[] | null;
+        journalDate: Date | string | null;
+        isPinned: boolean | null;
+        wordCount: number | null;
+        readTimeMinutes: number | null;
+        linkedEdgeId: string | null;
+        linkedMissedTradeId: string | null;
+        createdAt: Date | string;
+        updatedAt: Date | string;
+        preview: string;
+        isShared: true;
+        shareToken: string;
+        shareName: string;
+      }> = [];
+
+      if (includeShared && !isArchived && isPinned !== true) {
+        const sharedRows = await db
+          .select({
+            shareToken: journalShare.shareToken,
+            shareName: journalShare.name,
+            entry: journalEntry,
+          })
+          .from(journalShareViewer)
+          .innerJoin(journalShare, eq(journalShare.id, journalShareViewer.shareId))
+          .innerJoin(journalShareEntry, eq(journalShareEntry.shareId, journalShare.id))
+          .innerJoin(journalEntry, eq(journalEntry.id, journalShareEntry.journalEntryId))
+          .where(
+            and(
+              eq(journalShareViewer.viewerUserId, ctx.session.user.id),
+              eq(journalShareViewer.status, "approved"),
+              eq(journalShare.isActive, true)
+            )
+          )
+          .orderBy(desc(journalEntry.updatedAt))
+          .limit(ownFetchLimit);
+
+        const dedupedSharedEntries = new Map<string, (typeof sharedRows)[number]>();
+        for (const row of sharedRows) {
+          if (!dedupedSharedEntries.has(row.entry.id)) {
+            dedupedSharedEntries.set(row.entry.id, row);
+          }
+        }
+
+        sharedEntries = Array.from(dedupedSharedEntries.values())
+          .filter(({ entry }) => {
+            if (entryType && entry.entryType !== entryType) {
+              return false;
+            }
+
+            if (
+              search &&
+              !entry.title.toLowerCase().includes(search.toLowerCase())
+            ) {
+              return false;
+            }
+
+            if (linkedEdgeId && entry.linkedEdgeId !== linkedEdgeId) {
+              return false;
+            }
+
+            if (
+              linkedMissedTradeId &&
+              entry.linkedMissedTradeId !== linkedMissedTradeId
+            ) {
+              return false;
+            }
+
+            if (tradePhase && entry.tradePhase !== tradePhase) {
+              return false;
+            }
+
+            if (tags?.length) {
+              const entryTags = (entry.tags as string[] | null) ?? [];
+              const tagSet = new Set(entryTags);
+              if (!tags.some((tag) => tagSet.has(tag))) {
+                return false;
+              }
+            }
+
+            return true;
+          })
+          .map(({ entry, shareName, shareToken }) => ({
+            id: entry.id,
+            title: entry.title,
+            emoji: entry.emoji,
+            coverImageUrl: entry.coverImageUrl,
+            coverImagePosition: entry.coverImagePosition,
+            entryType: entry.entryType,
+            tags: (entry.tags as string[] | null) ?? [],
+            journalDate: entry.journalDate,
+            isPinned: false,
+            wordCount: entry.wordCount,
+            readTimeMinutes: entry.readTimeMinutes,
+            linkedEdgeId: entry.linkedEdgeId,
+            linkedMissedTradeId: entry.linkedMissedTradeId,
+            createdAt: entry.createdAt,
+            updatedAt: entry.updatedAt,
+            preview: buildJournalListPreview(entry.content as JournalBlock[] | null),
+            isShared: true as const,
+            shareToken,
+            shareName,
+          }));
+      }
+
+      const mergedEntries = includeShared
+        ? [...processedEntries, ...sharedEntries]
+            .sort((a, b) => compareJournalListItems(a, b, sortBy, sortOrder))
+            .slice(0, limit)
+        : processedEntries;
+
       return {
-        items: processedEntries,
-        nextCursor: entries.length > limit ? entries[limit - 1]?.id : undefined,
+        items: mergedEntries,
+        nextCursor:
+          includeShared || entries.length <= limit
+            ? undefined
+            : entries[limit - 1]?.id,
       };
     }),
 

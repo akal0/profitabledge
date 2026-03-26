@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
+import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import {
@@ -46,6 +47,7 @@ export function JournalList({
   className,
   forceEntryType,
 }: JournalListProps) {
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -64,6 +66,7 @@ export function JournalList({
   const { data: entriesData, isLoading, refetch } = trpc.journal.list.useQuery({
     limit: 50,
     accountId,
+    includeShared: true,
     search: search || undefined,
     sortBy,
     sortOrder: "desc",
@@ -156,6 +159,15 @@ export function JournalList({
     setDeleteConfirmTitle(title);
   };
 
+  const handleSelectEntry = (entry: JournalListEntry) => {
+    if (entry.isShared && entry.shareToken) {
+      router.push(`/share/journal/${entry.shareToken}?entryId=${entry.id}`);
+      return;
+    }
+
+    onSelectEntry(entry.id);
+  };
+
   const handleConfirmDelete = () => {
     if (!deleteConfirmId) return;
     deleteEntry.mutate({ id: deleteConfirmId });
@@ -198,7 +210,7 @@ export function JournalList({
         viewMode={viewMode}
         entryTypeLabels={entryTypeLabels}
         onCreateEntry={onCreateEntry}
-        onSelectEntry={onSelectEntry}
+        onSelectEntry={handleSelectEntry}
         onDelete={handleDeleteClick}
         onDuplicate={(id) => duplicateEntry.mutate({ id })}
         onTogglePin={(id, isPinned) =>

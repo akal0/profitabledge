@@ -13,6 +13,9 @@ export interface JournalListEntry {
   createdAt: Date | string;
   updatedAt: Date | string;
   preview?: string;
+  isShared?: boolean;
+  shareToken?: string;
+  shareName?: string;
 }
 
 export interface JournalListProps {

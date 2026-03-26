@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { BookLock, Clock3, ShieldX } from "lucide-react";
 
 import { JournalShareReader } from "@/components/journal/share/reader";
@@ -56,8 +56,10 @@ function ShareStateCard({
 export default function JournalSharePage() {
   const params = useParams<{ shareToken: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const shareToken =
     typeof params?.shareToken === "string" ? params.shareToken : "";
+  const requestedEntryId = searchParams?.get("entryId") ?? null;
   const returnTo = useMemo(
     () => buildJournalSharePath(shareToken),
     [shareToken]
@@ -121,11 +123,17 @@ export default function JournalSharePage() {
       return;
     }
 
-    const firstEntryId = entriesQuery.data?.entries[0]?.id ?? null;
-    if (!selectedEntryId && firstEntryId) {
-      setSelectedEntryId(firstEntryId);
+    const availableEntries = entriesQuery.data?.entries || [];
+    const preferredEntryId =
+      requestedEntryId &&
+      availableEntries.some((entry) => entry.id === requestedEntryId)
+        ? requestedEntryId
+        : availableEntries[0]?.id ?? null;
+
+    if (preferredEntryId && selectedEntryId !== preferredEntryId) {
+      setSelectedEntryId(preferredEntryId);
     }
-  }, [canRead, entriesQuery.data, selectedEntryId]);
+  }, [canRead, entriesQuery.data, requestedEntryId, selectedEntryId]);
 
   const entryQuery = trpc.journal.shares.getEntry.useQuery(
     { shareToken, entryId: selectedEntryId! },

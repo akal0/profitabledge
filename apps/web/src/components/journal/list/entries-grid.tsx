@@ -17,7 +17,7 @@ export function EntriesGrid({
   entries: JournalListEntry[];
   viewMode: "grid" | "list";
   entryTypeLabels: Record<string, string>;
-  onSelect: (id: string) => void;
+  onSelect: (entry: JournalListEntry) => void;
   onDelete: (id: string, title: string) => void;
   onDuplicate: (id: string) => void;
   onTogglePin: (id: string, isPinned: boolean | null) => void;
@@ -31,7 +31,7 @@ export function EntriesGrid({
             key={entry.id}
             entry={entry}
             entryTypeLabels={entryTypeLabels}
-            onSelect={() => onSelect(entry.id)}
+            onSelect={() => onSelect(entry)}
             onDelete={() => onDelete(entry.id, entry.title)}
             onDuplicate={() => onDuplicate(entry.id)}
             onTogglePin={() => onTogglePin(entry.id, entry.isPinned)}
@@ -48,7 +48,7 @@ export function EntriesGrid({
           key={entry.id}
           entry={entry}
           entryTypeLabels={entryTypeLabels}
-          onSelect={() => onSelect(entry.id)}
+          onSelect={() => onSelect(entry)}
           onDelete={() => onDelete(entry.id, entry.title)}
           onDuplicate={() => onDuplicate(entry.id)}
           onTogglePin={() => onTogglePin(entry.id, entry.isPinned)}

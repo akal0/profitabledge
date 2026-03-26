@@ -18,7 +18,7 @@ interface JournalListContentProps {
   viewMode: ViewMode;
   entryTypeLabels: Record<string, string>;
   onCreateEntry: () => void;
-  onSelectEntry: (id: string) => void;
+  onSelectEntry: (entry: JournalListEntry) => void;
   onDelete: (id: string, title: string) => void;
   onDuplicate: (id: string) => void;
   onTogglePin: (id: string, isPinned: boolean | null) => void;

@@ -246,6 +246,21 @@ export function EdgeShareSheet({
         </SheetHeader>
 
         <div className="flex flex-1 flex-col gap-6 px-6 py-6 text-xs">
+          <section className="grid gap-3 rounded-xl border border-white/8 bg-white/[0.03] p-4 text-white/70 sm:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-white/82">Direct share</p>
+              <p className="leading-relaxed text-white/42">
+                Use this panel for private collaboration, review, and editor access.
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-white/82">Fork later</p>
+              <p className="leading-relaxed text-white/42">
+                Shared Edges can stay private. Public forks are a separate choice once the setup earns proof.
+              </p>
+            </div>
+          </section>
+
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>

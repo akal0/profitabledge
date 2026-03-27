@@ -7,6 +7,7 @@ import { db } from "../db";
 import { user as userTable } from "../db/schema/auth";
 import { notification } from "../db/schema/notifications";
 import {
+  edge,
   sharedPnlCard,
   trade,
   tradeTrustEvent,
@@ -17,6 +18,7 @@ import { buildPublicProofPageData } from "../lib/public-proof/page-data";
 import { buildPublicProofPath } from "../lib/public-proof/share-slug";
 import {
   buildVerificationCode,
+  issuePublicEdgeVerification,
   issueWidgetShareVerification,
   readVerificationToken,
   widgetShareSurfaceSchema,
@@ -37,6 +39,10 @@ function parseNullableNumber(value: unknown) {
 
 const MAX_WIDGET_SNAPSHOT_HTML_LENGTH = 250_000;
 const uploadThingApi = new UTApi();
+
+function buildPublicEdgePath(edgeId: string) {
+  return `/edge/${edgeId}`;
+}
 
 function sanitizeWidgetSnapshotHtml(html: string) {
   return html
@@ -111,7 +117,102 @@ async function loadWidgetSnapshotHtml(input: {
   }
 }
 
+async function loadEdgeVerificationResource(edgeId: string) {
+  const [edgeRow] = await db
+    .select({
+      id: edge.id,
+      ownerUserId: edge.ownerUserId,
+      sourceEdgeId: edge.sourceEdgeId,
+      name: edge.name,
+      normalizedName: edge.normalizedName,
+      description: edge.description,
+      coverImageUrl: edge.coverImageUrl,
+      coverImagePosition: edge.coverImagePosition,
+      color: edge.color,
+      status: edge.status,
+      publicationMode: edge.publicationMode,
+      publicStatsVisible: edge.publicStatsVisible,
+      updatedAt: edge.updatedAt,
+      ownerName: userTable.name,
+      ownerDisplayName: userTable.displayName,
+      ownerUsername: userTable.username,
+      ownerImage: userTable.image,
+    })
+    .from(edge)
+    .innerJoin(userTable, eq(userTable.id, edge.ownerUserId))
+    .where(eq(edge.id, edgeId))
+    .limit(1);
+
+  if (!edgeRow) {
+    return null;
+  }
+
+  const [sourceRow] = edgeRow.sourceEdgeId
+    ? await db
+        .select({
+          id: edge.id,
+          name: edge.name,
+          publicationMode: edge.publicationMode,
+          status: edge.status,
+          ownerName: userTable.name,
+          ownerDisplayName: userTable.displayName,
+          ownerUsername: userTable.username,
+        })
+        .from(edge)
+        .innerJoin(userTable, eq(userTable.id, edge.ownerUserId))
+        .where(eq(edge.id, edgeRow.sourceEdgeId))
+        .limit(1)
+    : [];
+
+  return {
+    ...edgeRow,
+    source:
+      sourceRow &&
+      sourceRow.publicationMode === "library" &&
+      sourceRow.status !== "archived"
+        ? {
+            id: sourceRow.id,
+            shareId: sourceRow.id,
+            publicPath: buildPublicEdgePath(sourceRow.id),
+            name: sourceRow.name,
+            ownerName:
+              sourceRow.ownerDisplayName ?? sourceRow.ownerName ?? null,
+            ownerUsername: sourceRow.ownerUsername ?? null,
+          }
+        : null,
+  };
+}
+
 export const verificationRouter = router({
+  issuePublicEdge: publicProcedure
+    .input(
+      z.object({
+        shareId: z.string().min(1),
+      })
+    )
+    .query(async ({ input }) => {
+      const edgeRow = await loadEdgeVerificationResource(input.shareId);
+
+      if (
+        !edgeRow ||
+        edgeRow.publicationMode !== "library" ||
+        edgeRow.status === "archived"
+      ) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Public edge not found",
+        });
+      }
+
+      return issuePublicEdgeVerification({
+        edgeId: edgeRow.id,
+        username: edgeRow.ownerUsername ?? null,
+        edgeSlug: edgeRow.normalizedName,
+        edgeName: edgeRow.name,
+        ownerName: edgeRow.ownerDisplayName ?? edgeRow.ownerName ?? null,
+      });
+    }),
+
   issueWidgetShare: protectedProcedure
     .input(
       z.object({
@@ -326,6 +427,74 @@ export const verificationRouter = router({
               profitFactor: page.summary.profitFactor,
             },
             trust: page.trust,
+          },
+        };
+      }
+
+      if (payload.r === "edge") {
+        const resource = await loadEdgeVerificationResource(payload.id);
+        const fallbackPath = buildPublicEdgePath(payload.id);
+
+        if (!resource) {
+          return {
+            kind: "edge" as const,
+            status: "unavailable" as const,
+            verificationCode,
+            issuedAt,
+            fallback: {
+              shareId: payload.id,
+              username: payload.u ?? null,
+              edgeSlug: payload.s ?? null,
+              edgeName: payload.en ?? null,
+              ownerName: payload.on ?? null,
+              path: fallbackPath,
+            },
+            resource: null,
+          };
+        }
+
+        const status =
+          resource.status === "archived"
+            ? ("revoked" as const)
+            : resource.publicationMode !== "library"
+            ? ("private" as const)
+            : ("active" as const);
+
+        return {
+          kind: "edge" as const,
+          status,
+          verificationCode,
+          issuedAt,
+          fallback: {
+            shareId: payload.id,
+            username: payload.u ?? null,
+            edgeSlug: payload.s ?? null,
+            edgeName: payload.en ?? null,
+            ownerName: payload.on ?? null,
+            path: fallbackPath,
+          },
+          resource: {
+            path: buildPublicEdgePath(resource.id),
+            owner: {
+              id: resource.ownerUserId,
+              name: resource.ownerName,
+              displayName: resource.ownerDisplayName,
+              username: resource.ownerUsername,
+              image: resource.ownerImage,
+            },
+            edge: {
+              id: resource.id,
+              name: resource.name,
+              normalizedName: resource.normalizedName,
+              description: resource.description,
+              coverImageUrl: resource.coverImageUrl,
+              coverImagePosition: resource.coverImagePosition,
+              color: resource.color,
+              publicationMode: resource.publicationMode,
+              publicStatsVisible: resource.publicStatsVisible,
+              updatedAt: resource.updatedAt.toISOString(),
+            },
+            source: resource.source,
           },
         };
       }

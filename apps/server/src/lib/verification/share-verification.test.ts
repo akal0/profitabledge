@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  issuePublicEdgeVerification,
   issuePublicProofVerification,
   issueWidgetShareVerification,
   readVerificationToken,
@@ -54,6 +55,28 @@ describe("share verification tokens", () => {
     }
     expect(parsed.wk).toBe("snapshot_test_key");
     expect(parsed.tt).toBe(218);
+  });
+
+  test("round-trips a public edge verification token", () => {
+    const verification = issuePublicEdgeVerification({
+      edgeId: "edge_test_123",
+      username: "trader",
+      edgeSlug: "standard-reaccumulation",
+      edgeName: "Standard Reaccumulation",
+      ownerName: "Trader One",
+    });
+
+    const token = verification.path.split("/verify/")[1];
+    expect(token).toBeTruthy();
+
+    const parsed = readVerificationToken(token!);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.r).toBe("edge");
+    if (!parsed || parsed.r !== "edge") {
+      throw new Error("Expected edge token payload");
+    }
+    expect(parsed.id).toBe("edge_test_123");
+    expect(parsed.s).toBe("standard-reaccumulation");
   });
 
   test("rejects a tampered verification token", () => {

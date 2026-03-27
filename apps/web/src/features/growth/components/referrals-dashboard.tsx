@@ -695,6 +695,7 @@ export function ReferralsDashboard() {
                 <thead className="bg-sidebar">
                   <tr className="border-b border-white/5">
                     {[
+                      "Username",
                       "Referral code",
                       "Status",
                       "Source",
@@ -718,6 +719,13 @@ export function ReferralsDashboard() {
                       key={conversion.id}
                       className="border-b border-white/5 last:border-b-0"
                     >
+                      <td className="px-4 py-3 text-left align-top">
+                        <p className="text-xs font-medium text-white">
+                          {conversion.referredUsername
+                            ? `@${conversion.referredUsername}`
+                            : "—"}
+                        </p>
+                      </td>
                       <td className="px-4 py-3 text-left align-top">
                         <p className="text-xs font-medium text-white">
                           {conversion.referralCode}

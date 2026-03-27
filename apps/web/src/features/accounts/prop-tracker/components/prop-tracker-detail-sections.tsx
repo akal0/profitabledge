@@ -23,6 +23,7 @@ import {
 } from "@/features/dashboard/charts/components/comparison-chart-cards";
 import { WIDGET_CONTENT_SEPARATOR_CLASS } from "@/features/dashboard/widgets/lib/widget-shared";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
+import { PropAccountPhaseActionsMenu } from "@/features/accounts/prop-tracker/components/prop-account-phase-actions-menu";
 import { cn } from "@/lib/utils";
 
 import type {
@@ -78,6 +79,14 @@ type PropTrackerHeaderCardProps = {
   dailyDrawdown: number;
   maxDrawdown: number;
   targetValue: number | null;
+  dashboard?: {
+    account?: {
+      propCurrentPhase?: number | null;
+    } | null;
+    challengeRule?: {
+      phases?: unknown;
+    } | null;
+  } | null;
   onRemoved: () => void;
 };
 
@@ -195,6 +204,7 @@ export function PropTrackerHeaderCard({
   dailyDrawdown,
   maxDrawdown,
   targetValue,
+  dashboard,
   onRemoved,
 }: PropTrackerHeaderCardProps) {
   return (
@@ -210,6 +220,11 @@ export function PropTrackerHeaderCard({
             >
               {statusInfo.label}
             </Badge>
+            <PropAccountPhaseActionsMenu
+              accountId={account.id}
+              accountName={account.name}
+              dashboard={dashboard ?? undefined}
+            />
             <RemovePropAccountButton
               accountId={account.id}
               accountName={account.name}

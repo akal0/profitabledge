@@ -30,9 +30,7 @@ export default function Home() {
 
         {/* Main content */}
         <AnimatePresence>
-          {showContent && (
-            <Hero heroOpacity={heroOpacity} />
-          )}
+          {showContent && <Hero heroOpacity={heroOpacity} />}
         </AnimatePresence>
       </main>
     </>

@@ -22,6 +22,7 @@ import {
   isFundedPropTrackerAccount,
 } from "@/components/prop-account-status-badges";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
+import { PropAccountPhaseActionsMenu } from "@/features/accounts/prop-tracker/components/prop-account-phase-actions-menu";
 import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -373,7 +374,10 @@ function PropAccountCard({
       ? "Funded"
       : dashboard?.currentPhase?.name ||
         `Phase ${account.propCurrentPhase || 1}`;
-  const phaseTarget = dashboard?.currentPhase?.profitTarget || 10;
+  const phaseTarget =
+    dashboard?.currentPhase?.profitTarget != null
+      ? Number(dashboard.currentPhase.profitTarget)
+      : null;
 
   return (
     <PropAccountFrame
@@ -384,6 +388,11 @@ function PropAccountCard({
             account={account}
             dashboard={dashboard}
             badgeClassName={HEADER_BADGE_CLASS}
+          />
+          <PropAccountPhaseActionsMenu
+            accountId={account.id}
+            accountName={account.name}
+            dashboard={dashboard}
           />
           <RemovePropAccountButton
             accountId={account.id}
@@ -483,7 +492,7 @@ function PropAccountCard({
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Target</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {phaseTarget}%
+            {phaseTarget != null ? `${phaseTarget}%` : "—"}
           </p>
         </div>
       </div>

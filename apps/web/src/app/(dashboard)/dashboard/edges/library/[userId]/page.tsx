@@ -11,6 +11,7 @@ import {
   EDGE_PAGE_SHELL_CLASS,
   EdgeMetricCard,
 } from "@/components/edges/edge-page-primitives";
+import { getEdgeReadinessSnapshot } from "@/components/edges/edge-surface-badges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
@@ -24,6 +25,11 @@ type LibraryEdge = {
   publicationMode?: string | null;
   publicStatsVisible?: boolean | null;
   isFeatured?: boolean | null;
+  sourceEdgeId?: string | null;
+  sourceEdge?: {
+    id?: string | null;
+    name?: string | null;
+  } | null;
   owner?: {
     id: string;
     name: string;
@@ -36,6 +42,18 @@ type LibraryEdge = {
     winRate?: number | null;
     expectancy?: number | null;
     netPnl?: number | null;
+  } | null;
+  passport?: {
+    readiness?: {
+      label?: string | null;
+      score?: number | null;
+      note?: string | null;
+    } | null;
+    lineage?: {
+      forkCount?: number | null;
+      descendantCount?: number | null;
+      forkDepth?: number | null;
+    } | null;
   } | null;
 };
 
@@ -117,8 +135,8 @@ export default function EdgeCreatorLibraryPage({
         accumulator.winRateSum += currentEdge.metrics.winRate ?? 0;
         accumulator.statsVisibleCount += 1;
       }
-      if (currentEdge.isFeatured) {
-        accumulator.featuredCount += 1;
+      if (getEdgeReadinessSnapshot(currentEdge).tone === "ready") {
+        accumulator.readyCount += 1;
       }
       return accumulator;
     },
@@ -128,7 +146,7 @@ export default function EdgeCreatorLibraryPage({
       netPnl: 0,
       winRateSum: 0,
       statsVisibleCount: 0,
-      featuredCount: 0,
+      readyCount: 0,
     }
   );
 
@@ -167,7 +185,7 @@ export default function EdgeCreatorLibraryPage({
                 </div>
                 <p className="max-w-3xl text-sm leading-6 text-white/52">
                   {data.owner.bio ||
-                    "Public Edges from this creator, grouped into one library so you can inspect their templates in one place."}
+                    "Public Edges from this creator, grouped into one library so you can inspect the template, fork it privately, and publish your own branch later if it earns proof."}
                 </p>
               </div>
             </div>
@@ -191,9 +209,9 @@ export default function EdgeCreatorLibraryPage({
         />
         <EdgeMetricCard
           icon={Sparkles}
-          label="Featured"
-          value={summary.featuredCount}
-          detail="Shown in Featured"
+          label="Ready to fork"
+          value={summary.readyCount}
+          detail="Stronger public templates"
         />
         <EdgeMetricCard
           icon={UsersRound}
@@ -226,7 +244,7 @@ export default function EdgeCreatorLibraryPage({
           <div>
             <p className="text-sm font-medium text-white/72">Public Edges</p>
             <p className="text-sm text-white/40">
-              Every public Edge from this creator, with profile context and template metrics up front.
+              Every public Edge from this creator, with readiness, lineage, and proof signals up front before you fork your own branch.
             </p>
           </div>
           <p className="text-xs text-white/34">{summary.edgeCount} total</p>

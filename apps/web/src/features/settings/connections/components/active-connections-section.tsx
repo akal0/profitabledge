@@ -90,6 +90,10 @@ export function ActiveConnectionsSection({
   onShowLinkDialog,
   scheduledSyncEnabled,
   mt5IngestionEnabled,
+  activePlanTitle,
+  liveSyncSlotsIncluded,
+  liveSyncSlotsUsed,
+  liveSyncSlotsRemaining,
 }: {
   connections: ConnectionRow[] | undefined;
   isSyncing: boolean;
@@ -100,15 +104,51 @@ export function ActiveConnectionsSection({
   onShowLinkDialog: (connectionId: string) => void;
   scheduledSyncEnabled: boolean;
   mt5IngestionEnabled: boolean;
+  activePlanTitle: string;
+  liveSyncSlotsIncluded: number;
+  liveSyncSlotsUsed: number;
+  liveSyncSlotsRemaining: number;
 }) {
+  const liveSyncSummaryLabel =
+    liveSyncSlotsIncluded > 0
+      ? `${liveSyncSlotsRemaining} left of ${liveSyncSlotsIncluded}`
+      : "No live sync slots";
+
+  const liveSyncSummaryToneClassName =
+    liveSyncSlotsIncluded === 0
+      ? "ring-white/10 bg-white/5 text-white/55"
+      : liveSyncSlotsRemaining > 0
+      ? "ring-teal-400/20 bg-teal-500/10 text-teal-300"
+      : "ring-amber-400/20 bg-amber-500/10 text-amber-200";
+
   return (
     <>
       <div className="px-6 py-5 sm:px-8">
-        <h2 className="text-sm font-semibold text-white">Active connections</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-white">
+              Active connections
+            </h2>
+            <p className="mt-0.5 text-xs text-white/40">
+              {scheduledSyncEnabled
+                ? "Manage your linked trading platforms."
+                : "Manage your linked trading platforms. Background sync is disabled for this beta, so connected accounts sync on demand only."}
+            </p>
+          </div>
+
+          <Badge
+            className={cn(
+              "rounded-sm px-2.5 py-1 text-[10px] font-medium",
+              liveSyncSummaryToneClassName
+            )}
+          >
+            {activePlanTitle}: {liveSyncSummaryLabel}
+          </Badge>
+        </div>
         <p className="mt-0.5 text-xs text-white/40">
-          {scheduledSyncEnabled
-            ? "Manage your linked trading platforms."
-            : "Manage your linked trading platforms. Background sync is disabled for this beta, so connected accounts sync on demand only."}
+          {liveSyncSlotsIncluded > 0
+            ? `${liveSyncSlotsUsed} connection${liveSyncSlotsUsed === 1 ? "" : "s"} linked. ${liveSyncSlotsRemaining} live sync slot${liveSyncSlotsRemaining === 1 ? "" : "s"} remaining on ${activePlanTitle}.`
+            : `${activePlanTitle} does not include live sync slots.`}
         </p>
       </div>
 

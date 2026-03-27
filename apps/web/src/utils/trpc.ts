@@ -32,6 +32,7 @@ function getCandidateBases(): string[] {
 
 const DEFAULT_QUERY_STALE_TIME = 10_000;
 const DEFAULT_QUERY_GC_TIME = 30 * 60_000;
+const NOTIFICATIONS_LIST_QUERY_KEY_PREFIX = [["notifications", "list"]];
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,12 @@ export const queryClient = new QueryClient({
     },
   }),
   mutationCache: new MutationCache({
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: NOTIFICATIONS_LIST_QUERY_KEY_PREFIX,
+        refetchType: "active",
+      });
+    },
     onError: (error) => {
       showAIErrorToast(error);
     },

@@ -65,11 +65,11 @@ export function RemovePropAccountButton({
       disabled={removeMutation.isPending}
       title={title}
       className={cn(
-        "h-7 rounded-sm ring-1 ring-white/10 bg-sidebar px-2 text-[10px] text-white/65 hover:bg-sidebar-accent hover:text-white",
+        "h-7 rounded-sm ring-1 ring-white/10 bg-sidebar px-2 text-[10px] text-white/65 hover:bg-sidebar-accent hover:text-white ",
         className
       )}
     >
-      <Undo2 className="size-3" />
+      <Undo2 className="size-2.5" />
       {removeMutation.isPending ? "Removing..." : label}
     </Button>
   );

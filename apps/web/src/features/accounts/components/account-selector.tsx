@@ -52,6 +52,7 @@ import {
   pickPreferredAccountConnection,
   type ConnectionRow,
 } from "@/features/dashboard-shell/lib/connection-status";
+import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
 
 export type Account = {
   id: string;
@@ -105,7 +106,7 @@ const AccountSwitcher = ({ accounts }: { accounts: Account[] }) => {
     () => ({
       id: ALL_ACCOUNTS_ID,
       name: "All accounts",
-      image: "/brokers/pe.svg",
+      image: PROFITABLEDGE_FAVICON_PATH,
     }),
     []
   );

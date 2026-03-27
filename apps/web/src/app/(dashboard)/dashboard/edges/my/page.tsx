@@ -19,6 +19,13 @@ import {
   EdgeMetricCard,
   EdgePageHeader,
 } from "@/components/edges/edge-page-primitives";
+import {
+  EdgeForkBadge,
+  EdgeReadinessBadge,
+  EdgeVisibilityBadge,
+  getEdgeLineageHint,
+  getEdgeReadinessSnapshot,
+} from "@/components/edges/edge-surface-badges";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
@@ -31,6 +38,10 @@ type EdgeSummary = {
   status: string;
   publicationMode: string;
   sourceEdgeId?: string | null;
+  sourceEdge?: {
+    id?: string | null;
+    name?: string | null;
+  } | null;
   color?: string | null;
   metrics?: {
     tradeCount?: number | null;
@@ -38,6 +49,19 @@ type EdgeSummary = {
     netPnl?: number | null;
     expectancy?: number | null;
   };
+  publicStatsVisible?: boolean | null;
+  passport?: {
+    readiness?: {
+      label?: string | null;
+      score?: number | null;
+      note?: string | null;
+    } | null;
+    lineage?: {
+      forkCount?: number | null;
+      descendantCount?: number | null;
+      forkDepth?: number | null;
+    } | null;
+  } | null;
 };
 
 function formatPercent(value: number | null | undefined) {
@@ -79,6 +103,10 @@ export default function EdgesMyPage() {
       accumulator.winRateSum += currentEdge.metrics?.winRate ?? 0;
       accumulator.publishedCount +=
         currentEdge.publicationMode === "library" ? 1 : 0;
+      accumulator.forkCount += currentEdge.sourceEdgeId || currentEdge.sourceEdge ? 1 : 0;
+      if (getEdgeReadinessSnapshot(currentEdge).tone === "ready") {
+        accumulator.readyCount += 1;
+      }
       accumulator.edgeCount += 1;
       return accumulator;
     },
@@ -88,6 +116,8 @@ export default function EdgesMyPage() {
       expectancySum: 0,
       winRateSum: 0,
       publishedCount: 0,
+      forkCount: 0,
+      readyCount: 0,
       edgeCount: 0,
     }
   );
@@ -101,7 +131,7 @@ export default function EdgesMyPage() {
       <EdgePageHeader
         eyebrow="Your Edge library"
         title="Edges"
-        description="Build, refine, and review your own setups in one place. These are the Edges you apply to trades, measure over time, and evolve into repeatable execution."
+        description="Build, refine, and review your own setups in one place. Keep branches private while they mature, then publish the forks that earn proof."
         actions={
           <>
             <Button
@@ -152,13 +182,9 @@ export default function EdgesMyPage() {
         />
         <EdgeMetricCard
           icon={Sparkles}
-          label="Average expectancy"
-          value={
-            summary.edgeCount > 0
-              ? formatR(summary.expectancySum / summary.edgeCount)
-              : "0R"
-          }
-          detail={`${summary.publishedCount} published`}
+          label="Ready Edges"
+          value={summary.readyCount}
+          detail={`${summary.publishedCount} public, ${summary.forkCount} forked`}
         />
       </div>
 
@@ -166,8 +192,8 @@ export default function EdgesMyPage() {
         <div>
           <p className="text-sm font-medium text-white/72">Edges library</p>
           <p className="text-sm text-white/45">
-            Owned Edges, imported forks, and the live metrics that tell you
-            which setups are actually repeatable.
+            Owned Edges, forked variants, and the readiness signals that show
+            which branches are strong enough to keep private, publish, or scale.
           </p>
         </div>
 
@@ -204,11 +230,26 @@ export default function EdgesMyPage() {
                           {currentEdge.name}
                         </span>
                       </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <EdgeVisibilityBadge edge={currentEdge} />
+                        <EdgeForkBadge edge={currentEdge} />
+                        <EdgeReadinessBadge edge={currentEdge} />
+                      </div>
+                      {getEdgeLineageHint(currentEdge) ? (
+                        <p className="mt-2 truncate text-xs text-white/38">
+                          {getEdgeLineageHint(currentEdge)}
+                        </p>
+                      ) : null}
                     </div>
 
-                    <p className="truncate text-white/45">
-                      {currentEdge.description || "No description yet."}
-                    </p>
+                    <div className="min-w-0">
+                      <p className="truncate text-white/45">
+                        {currentEdge.description || "No description yet."}
+                      </p>
+                      <p className="mt-2 truncate text-xs text-white/34">
+                        {getEdgeReadinessSnapshot(currentEdge).detail}
+                      </p>
+                    </div>
 
                     <div className="flex items-center">
                       <Badge
@@ -218,9 +259,9 @@ export default function EdgesMyPage() {
                         {currentEdge.status === "archived"
                           ? "Archived"
                           : currentEdge.publicationMode === "library"
-                          ? "Published"
-                          : currentEdge.sourceEdgeId
-                          ? "Imported"
+                          ? "Public"
+                          : currentEdge.sourceEdgeId || currentEdge.sourceEdge
+                          ? "Fork"
                           : "Private"}
                       </Badge>
                     </div>

@@ -247,7 +247,7 @@ export function MoneyLeftOnTableCard({
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0,
               }),
-              valueClassName: "text-lg font-bold text-rose-400",
+              valueClassName: "font-medium text-rose-400",
             },
             {
               label: "During trade",

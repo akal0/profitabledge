@@ -42,6 +42,7 @@ import { PremiumAssistantResponseCards } from "@/features/ai/premium-assistant/c
 import { PremiumAssistantStreamingContent } from "@/features/ai/premium-assistant/components/premium-assistant-streaming-content";
 import { usePremiumAssistantController } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-controller";
 import { TRADING_SUGGESTIONS } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
+import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
 
 function SidebarToggleButton() {
   const { toggleSidebar } = useSidebar();
@@ -164,7 +165,7 @@ export function PremiumAssistant({
                         src={
                           message.role === "user"
                             ? userImage || ""
-                            : "/brokers/pe.svg"
+                            : PROFITABLEDGE_FAVICON_PATH
                         }
                         name={
                           message.role === "user"

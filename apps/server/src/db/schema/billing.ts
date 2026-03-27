@@ -242,6 +242,12 @@ export const affiliateProfile = pgTable(
     code: varchar("code", { length: 64 }).notNull(),
     displayName: text("display_name"),
     commissionBps: integer("commission_bps").notNull().default(2000),
+    tierKey: varchar("tier_key", { length: 24 }).notNull().default("partner"),
+    tierMode: varchar("tier_mode", { length: 24 }).notNull().default("automatic"),
+    tierAssignedAt: timestamp("tier_assigned_at"),
+    tierAssignedByUserId: text("tier_assigned_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     isActive: boolean("is_active").notNull().default(true),
     approvedAt: timestamp("approved_at"),
     approvedByUserId: text("approved_by_user_id").references(() => user.id, {

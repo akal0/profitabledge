@@ -50,6 +50,7 @@ import {
   getBrokerSupplementalCsvReports,
   isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
+import { showAppNotificationToast } from "@/components/notifications/notification-toast";
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
 import { useTourStore } from "@/features/onboarding-tour/tour-store";
@@ -296,6 +297,26 @@ export function AddAccountSheet({
   }) {
     if (!canSubmit || form.files.length === 0) return;
     setSubmitting(true);
+    const notificationsQueryKey = trpcOptions.notifications.list.queryOptions({
+      limit: 25,
+    }).queryKey;
+    const importProcessingToastId = showAppNotificationToast({
+      title: "Importing account file",
+      body: form.name.trim()
+        ? `Importing files for ${form.name.trim()}.`
+        : "Importing your account file.",
+      type: "trade_imported",
+      metadata: {
+        kind: "trade_import_processing",
+        status: "processing",
+        accountName: form.name.trim() || null,
+        broker: form.broker || null,
+      },
+      action: {
+        kind: "progress",
+        label: "Trade import is in progress",
+      },
+    });
 
     try {
       const encodedFiles = await Promise.all(
@@ -318,6 +339,9 @@ export function AddAccountSheet({
       });
 
       if (res.status === "requires_account_resolution") {
+        if (importProcessingToastId) {
+          toast.dismiss(importProcessingToastId);
+        }
         setPendingCsvImportResolution({
           matchedAccount: res.matchedExistingAccount,
           warnings: res.warnings,
@@ -329,13 +353,31 @@ export function AddAccountSheet({
       setPendingCsvImportResolution(null);
 
       if (res.status === "enriched_existing") {
+        if (importProcessingToastId) {
+          toast.dismiss(importProcessingToastId);
+        }
         setSelectedAccountId(res.matchedExistingAccount.id);
         void refreshWorkspaceQueries("trade-imported");
-        toast.success(
-          getCsvImportFeedbackMessage(res, {
+        void queryClient.invalidateQueries({
+          queryKey: notificationsQueryKey,
+          refetchType: "active",
+        });
+        showAppNotificationToast({
+          title: "Trade enrichment complete",
+          body: getCsvImportFeedbackMessage(res, {
             accountName: res.matchedExistingAccount.name,
-          })
-        );
+          }),
+          type: "trade_imported",
+          metadata: {
+            accountId: res.matchedExistingAccount.id,
+            accountName: res.matchedExistingAccount.name,
+            broker: res.matchedExistingAccount.broker,
+            tradesUpdated: "tradesUpdated" in res ? res.tradesUpdated : null,
+            tradesCreated: "tradesCreated" in res ? res.tradesCreated : null,
+            parserId: "parserId" in res ? res.parserId : null,
+            reportType: "reportType" in res ? res.reportType : null,
+          },
+        });
         setSubmitting(false);
         handleOpenChange(false);
         resetAll();
@@ -354,9 +396,32 @@ export function AddAccountSheet({
       });
       setSelectedAccountId(res.accountId);
       void refreshWorkspaceQueries("trade-imported");
+      void queryClient.invalidateQueries({
+        queryKey: notificationsQueryKey,
+        refetchType: "active",
+      });
+      if (importProcessingToastId) {
+        toast.dismiss(importProcessingToastId);
+      }
+      showAppNotificationToast({
+        title: "Trade import complete",
+        body: `${res.tradesImported} trades imported into ${form.name}.`,
+        type: "trade_imported",
+        metadata: {
+          accountId: res.accountId,
+          accountName: form.name,
+          broker: form.broker,
+          tradesImported: res.tradesImported,
+          parserId: res.parserId,
+          reportType: res.reportType,
+        },
+      });
       setSubmitting(false);
       setStep(3);
     } catch (error: any) {
+      if (importProcessingToastId) {
+        toast.dismiss(importProcessingToastId);
+      }
       toast.error(error?.message || "Failed to import CSV");
       setSubmitting(false);
     }
@@ -473,17 +538,32 @@ export function AddAccountSheet({
   }
 
   async function handleDemoWorkspace() {
-    const hadExistingDemoWorkspace = demoAccounts.length > 0;
     const previousDemoCreated = useTourStore.getState().demoCreated;
     const isGuidedDemoTourStep =
       currentTour === TOUR_ID && currentStep === ADD_ACCOUNT_SHEET_LAST_STEP;
     const releaseTabAttention = startTabAttentionActivity("demo-workspace");
-    const loadingToastId = toast.loading(
-      hadExistingDemoWorkspace
-        ? "Refreshing demo workspace. The dashboard may look empty until the new data finishes loading."
-        : "Preparing demo workspace. The dashboard may look empty until the seeded data finishes loading."
-    );
+    const notificationsQueryKey = trpcOptions.notifications.list.queryOptions({
+      limit: 25,
+    }).queryKey;
     let hydrationStarted = false;
+    const demoProgressToastId = showAppNotificationToast({
+      title: "Preparing demo workspace",
+      body:
+        demoAccounts.length > 0
+          ? "Refreshing Profitabledge demo workspace."
+          : "Preparing Profitabledge demo workspace.",
+      type: "system_update",
+      metadata: {
+        kind: "demo_workspace_generating",
+        status: "processing",
+        accountName: "Profitabledge demo",
+        broker: "Profitabledge",
+      },
+      action: {
+        kind: "progress",
+        label: "Demo workspace is being prepared",
+      },
+    });
 
     try {
       setSubmitting(true);
@@ -496,9 +576,10 @@ export function AddAccountSheet({
       const createdAccount = result.account;
       if (!createdAccount) {
         setDemoCreated(previousDemoCreated);
-        toast.error("Demo account was created without account metadata", {
-          id: loadingToastId,
-        });
+        if (demoProgressToastId) {
+          toast.dismiss(demoProgressToastId);
+        }
+        toast.error("Demo account was created without account metadata");
         return;
       }
 
@@ -506,6 +587,29 @@ export function AddAccountSheet({
       upsertAccountInCache(createdAccount);
       setSelectedAccountId(createdAccount.id);
       void refreshWorkspaceQueries("demo-provisioned");
+      void queryClient.invalidateQueries({
+        queryKey: notificationsQueryKey,
+        refetchType: "active",
+      });
+      showAppNotificationToast({
+        title: "Preparing demo workspace",
+        body:
+          demoAccounts.length > 0
+            ? `${createdAccount.name} is being refreshed in the background.`
+            : `${createdAccount.name} is being prepared in the background.`,
+        type: "system_update",
+        metadata: {
+          kind: "demo_workspace_generating",
+          status: "processing",
+          accountId: createdAccount.id,
+          accountName: createdAccount.name,
+          broker: createdAccount.broker ?? "Profitabledge",
+        },
+        action: {
+          kind: "progress",
+          label: "Demo workspace is being prepared",
+        },
+      });
 
       if (isGuidedDemoTourStep) {
         setAddAccountSheetCompleted(true);
@@ -536,21 +640,51 @@ export function AddAccountSheet({
       hydrationStarted = true;
       void trpcClient.accounts
         .hydrateDemoWorkspace.mutate({ accountId: createdAccount.id })
-        .then(async (hydrated) => {
-          await refreshWorkspaceQueries("demo-hydrated");
-
-          toast.success(
-            hadExistingDemoWorkspace
-              ? `Demo workspace refreshed with ${hydrated.tradeCount} trades and ${hydrated.openTradeCount} live positions.`
-              : `Demo workspace is ready with ${hydrated.tradeCount} trades and ${hydrated.openTradeCount} live positions.`,
-            { id: loadingToastId }
-          );
+        .then(async () => {
+          if (demoProgressToastId) {
+            toast.dismiss(demoProgressToastId);
+          }
+          showAppNotificationToast({
+            title: "Demo workspace ready",
+            body: `${createdAccount.name} is ready.`,
+            type: "system_update",
+            metadata: {
+              kind: "demo_workspace_ready",
+              accountId: createdAccount.id,
+              accountName: createdAccount.name,
+              broker: createdAccount.broker ?? "Profitabledge",
+            },
+          });
+          void refreshWorkspaceQueries("demo-hydrated");
+          void queryClient.invalidateQueries({
+            queryKey: notificationsQueryKey,
+            refetchType: "active",
+          });
         })
-        .catch((error: any) => {
+        .catch(async (error: any) => {
+          if (demoProgressToastId) {
+            toast.dismiss(demoProgressToastId);
+          }
+          showAppNotificationToast({
+            title: "Demo workspace failed",
+            body:
+              error?.message ||
+              "Demo workspace is taking longer than expected. You can keep using the platform and refresh shortly.",
+            type: "system_update",
+            metadata: {
+              kind: "demo_workspace_failed",
+              accountId: createdAccount.id,
+              accountName: createdAccount.name,
+              broker: createdAccount.broker ?? "Profitabledge",
+            },
+          });
+          void queryClient.invalidateQueries({
+            queryKey: notificationsQueryKey,
+            refetchType: "active",
+          });
           toast.error(
             error?.message ||
-              "Demo workspace is taking longer than expected. You can keep using the platform and refresh shortly.",
-            { id: loadingToastId }
+              "Demo workspace is taking longer than expected. You can keep using the platform and refresh shortly."
           );
         })
         .finally(() => {
@@ -559,12 +693,14 @@ export function AddAccountSheet({
     } catch (e: any) {
       setDemoWorkspaceStatus("idle");
       setDemoCreated(previousDemoCreated);
+      if (demoProgressToastId) {
+        toast.dismiss(demoProgressToastId);
+      }
       toast.error(
         e.message ||
           (demoAccounts.length > 0
             ? "Failed to regenerate demo workspace"
-            : "Failed to create demo account"),
-        { id: loadingToastId }
+            : "Failed to create demo account")
       );
     } finally {
       if (!hydrationStarted) {

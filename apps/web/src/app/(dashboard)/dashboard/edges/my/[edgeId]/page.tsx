@@ -15,6 +15,7 @@ import {
   EyeOff,
   Globe2,
   GripVertical,
+  History,
   ImageIcon,
   Layers3,
   Lock,
@@ -36,8 +37,30 @@ import {
   EdgePanel,
 } from "@/components/edges/edge-page-primitives";
 import { EdgeCoverBanner } from "@/components/edges/edge-cover-banner";
+import {
+  EdgeAccountFitSection,
+  type EdgeAccountFitData,
+} from "@/components/edges/edge-account-fit-section";
 import { EdgeExecutedTradesTable } from "@/components/edges/edge-executed-trades-table";
+import {
+  EdgeForkSheet,
+  type EdgeForkSheetSubmit,
+} from "@/components/edges/edge-fork-sheet";
+import {
+  EdgeLineageGraph,
+  type EdgeLineageData,
+} from "@/components/edges/edge-lineage-graph";
+import { EdgeMissedTradesSection } from "@/components/edges/edge-missed-trades-section";
+import { EdgePassportSection } from "@/components/edges/edge-passport-section";
+import {
+  EdgeReadinessSection,
+  type EdgeReadinessData,
+} from "@/components/edges/edge-readiness-section";
 import { EdgeShareSheet } from "@/components/edges/edge-share-sheet";
+import {
+  EdgeVersionHistoryPanel,
+  type EdgeVersionHistoryData,
+} from "@/components/edges/edge-version-history-panel";
 import {
   CoverImageCropDialog,
   type CoverFrameDimensions,
@@ -67,22 +90,19 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { trpc, trpcOptions } from "@/utils/trpc";
 
 const EDGE_TABS = [
-  "content",
-  "rules",
-  "examples",
   "overview",
+  "content",
+  "examples",
+  "rules",
   "executed-trades",
   "missed-trades",
+  "passport",
+  "versions",
   "entries",
 ] as const;
 
@@ -95,6 +115,8 @@ type EdgeDetailResponse = {
     id: string;
     name: string;
     description?: string | null;
+    createdAt?: string | Date | null;
+    updatedAt?: string | Date | null;
     color?: string | null;
     isDemoSeeded?: boolean;
     isFeatured?: boolean;
@@ -135,14 +157,69 @@ type EdgeDetailResponse = {
         rDistribution: Array<{ label: string; value: number }>;
       };
     } | null;
+    passport?: {
+      cards: {
+        sample: {
+          label: string;
+          value: string;
+          detail: string;
+          tone: "teal" | "blue" | "amber" | "rose" | "slate";
+        };
+        proof: {
+          label: string;
+          value: string;
+          detail: string;
+          tone: "teal" | "blue" | "amber" | "rose" | "slate";
+        };
+        process: {
+          label: string;
+          value: string;
+          detail: string;
+          tone: "teal" | "blue" | "amber" | "rose" | "slate";
+        };
+        prop: {
+          label: string;
+          value: string;
+          detail: string;
+          tone: "teal" | "blue" | "amber" | "rose" | "slate";
+        };
+      };
+      fitNotes: Array<{
+        label: string;
+        value: string;
+      }>;
+      lineage: {
+        publicationLabel: string;
+        forkCount: number;
+        shareCount: number;
+        source: {
+          id: string;
+          name: string;
+          ownerName: string | null;
+          ownerUsername: string | null;
+        } | null;
+      };
+    } | null;
+    sourceEdge?: {
+      id: string;
+      name: string;
+      ownerName: string | null;
+      ownerUsername: string | null;
+    } | null;
+    readiness?: EdgeReadinessData | null;
+    accountFit?: EdgeAccountFitData | null;
+    lineageGraph?: EdgeLineageData | null;
+    versionHistory?: EdgeVersionHistoryData | null;
   };
   canEdit: boolean;
   viewerCanSeeStats: boolean;
   viewerCanSeePrivateActivity: boolean;
-  publishCapabilities: {
-    canFeature: boolean;
-    canPublishLibrary: boolean;
-  } | undefined;
+  publishCapabilities:
+    | {
+        canFeature: boolean;
+        canPublishLibrary: boolean;
+      }
+    | undefined;
   sections: Array<{
     id: string;
     title: string;
@@ -184,15 +261,30 @@ type EdgeDetailResponse = {
   }>;
   missedTrades: Array<{
     id: string;
+    accountId?: string | null;
     symbol?: string | null;
     tradeType?: string | null;
+    volume?: number | null;
+    openPrice?: number | null;
+    closePrice?: number | null;
     sessionTag?: string | null;
+    modelTag?: string | null;
+    customTags?: string[] | null;
     setupTime?: string | Date | null;
+    closeTime?: string | Date | null;
+    sl?: number | null;
+    tp?: number | null;
     reasonMissed?: string | null;
     notes?: string | null;
     estimatedOutcome?: string | null;
+    estimatedProfit?: number | null;
     estimatedRR?: number | null;
     estimatedPnl?: number | null;
+    commissions?: number | null;
+    swap?: number | null;
+    mediaUrls?: string[] | null;
+    createdAt?: string | Date | null;
+    updatedAt?: string | Date | null;
   }>;
   entries: Array<{
     id: string;
@@ -267,23 +359,16 @@ function formatDate(value: string | Date | null | undefined) {
   }).format(date);
 }
 
-function formatTradeOutcome(outcome: string | null | undefined) {
-  if (!outcome) return "Unclassified";
-
-  switch (outcome) {
-    case "Win":
-      return "Winner";
-    case "PW":
-      return "Partial win";
-    case "Loss":
-      return "Loser";
-    case "BE":
-      return "Breakeven";
-    default:
-      return outcome
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (character) => character.toUpperCase());
+function formatPublicationModeLabel(mode: EdgePublicationState) {
+  if (mode === "featured") {
+    return "Featured";
   }
+
+  if (mode === "library") {
+    return "Library";
+  }
+
+  return "Private";
 }
 
 function formatEntryTypeLabel(entryType: string) {
@@ -415,6 +500,7 @@ export default function EdgeDetailPage({
   const [builderEditorSeed, setBuilderEditorSeed] = useState(0);
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
+  const [forkSheetOpen, setForkSheetOpen] = useState(false);
   const [cropDialogOpen, setCropDialogOpen] = useState(false);
   const [pendingCoverSrc, setPendingCoverSrc] = useState("");
   const [coverFrameDimensions, setCoverFrameDimensions] =
@@ -440,9 +526,8 @@ export default function EdgeDetailPage({
   const [sectionDrafts, setSectionDrafts] = useState<
     Record<string, { title: string; description: string }>
   >({});
-  const [activeRuleComposerSectionId, setActiveRuleComposerSectionId] = useState<
-    string | null
-  >(null);
+  const [activeRuleComposerSectionId, setActiveRuleComposerSectionId] =
+    useState<string | null>(null);
   const [overviewEntriesPage, setOverviewEntriesPage] = useState(0);
   const [newRuleDrafts, setNewRuleDrafts] = useState<Record<string, RuleDraft>>(
     {}
@@ -520,8 +605,8 @@ export default function EdgeDetailPage({
       publicationMode: detailEdge.isFeatured
         ? "featured"
         : detailEdge.publicationMode === "library"
-          ? "library"
-          : "private",
+        ? "library"
+        : "private",
       publicStatsVisible: detailEdge.publicStatsVisible ?? true,
       status: detailEdge.status,
     });
@@ -572,7 +657,8 @@ export default function EdgeDetailPage({
     setNewRuleDrafts((previousDrafts) => {
       const nextDrafts = { ...previousDrafts };
       for (const section of detail.sections) {
-        nextDrafts[section.id] = nextDrafts[section.id] ?? createEmptyRuleDraft();
+        nextDrafts[section.id] =
+          nextDrafts[section.id] ?? createEmptyRuleDraft();
       }
       return nextDrafts;
     });
@@ -586,7 +672,8 @@ export default function EdgeDetailPage({
             (detailEdge.description ?? "") ||
           (edgeDraft.coverImageUrl ?? null) !==
             (detailEdge.coverImageUrl ?? null) ||
-          edgeDraft.coverImagePosition !== (detailEdge.coverImagePosition ?? 50) ||
+          edgeDraft.coverImagePosition !==
+            (detailEdge.coverImagePosition ?? 50) ||
           (edgeDraft.contentHtml || "") !== (detailEdge.contentHtml ?? "") ||
           (edgeDraft.examplesHtml || "") !== (detailEdge.examplesHtml ?? "") ||
           edgeDraft.color !== (detailEdge.color ?? "#3B82F6") ||
@@ -594,14 +681,307 @@ export default function EdgeDetailPage({
             (detailEdge.isFeatured
               ? "featured"
               : detailEdge.publicationMode === "library"
-                ? "library"
-                : "private") ||
+              ? "library"
+              : "private") ||
           edgeDraft.publicStatsVisible !==
             (detailEdge.publicStatsVisible ?? true) ||
           edgeDraft.status !== detailEdge.status
         : false,
     [detailEdge, edgeDraft]
   );
+
+  const resolvedReadiness = useMemo<EdgeReadinessData | null>(() => {
+    if (!detailEdge) {
+      return null;
+    }
+
+    if (detailEdge.readiness) {
+      return detailEdge.readiness;
+    }
+
+    const fallbackMetrics = detailEdge.metrics;
+    const fallbackPassport = detailEdge.passport;
+
+    if (!fallbackMetrics && !fallbackPassport) {
+      return null;
+    }
+
+    const tradeCount = fallbackMetrics?.tradeCount ?? 0;
+    const expectancy = fallbackMetrics?.expectancy ?? 0;
+    const winRate = fallbackMetrics?.winRate ?? 0;
+    const followThrough = fallbackMetrics?.followThroughRate ?? 0;
+    const reviewCoverage = fallbackMetrics?.reviewCoverage ?? 0;
+    const proofTone = fallbackPassport?.cards.proof.tone;
+
+    let score = 8;
+    score += Math.min(tradeCount, 40) * 0.85;
+    score += expectancy > 0 ? 18 : tradeCount > 0 ? 6 : 0;
+    score += Math.min(Math.max(winRate, 0), 1) * 16;
+    score += Math.min(Math.max(followThrough, 0), 1) * 12;
+    score += Math.min(Math.max(reviewCoverage, 0), 1) * 12;
+    score +=
+      proofTone === "teal" || proofTone === "blue"
+        ? 8
+        : proofTone === "amber"
+        ? 4
+        : 0;
+
+    const normalizedScore = Math.max(0, Math.min(100, Math.round(score)));
+    const blockers: string[] = [];
+    if (tradeCount < 12) {
+      blockers.push("Sample size is still thin for reliable deployment.");
+    }
+    if (fallbackMetrics && expectancy <= 0) {
+      blockers.push("Expectancy is not positive yet.");
+    }
+    if (fallbackMetrics && reviewCoverage < 0.55) {
+      blockers.push("Review coverage is too low to trust the rule stack.");
+    }
+    if (fallbackMetrics && followThrough < 0.6) {
+      blockers.push("Execution discipline is not yet stable across reviews.");
+    }
+
+    const nextActions: string[] = [];
+    if (tradeCount < 20) {
+      nextActions.push(
+        "Tag 20+ clean samples before treating this as a primary Edge."
+      );
+    }
+    if (fallbackMetrics && reviewCoverage < 0.8) {
+      nextActions.push(
+        "Review more completed trades so the edge profile reflects actual behavior."
+      );
+    }
+    if (fallbackMetrics && followThrough < 0.75) {
+      nextActions.push(
+        "Tighten guardrails around rule adherence before sizing up."
+      );
+    }
+
+    return {
+      score: normalizedScore,
+      label:
+        normalizedScore >= 75
+          ? "Deployment ready"
+          : normalizedScore >= 50
+          ? "Building conviction"
+          : "Needs more proof",
+      summary:
+        normalizedScore >= 75
+          ? "This Edge has enough structure and proof to deploy with confidence, while still benefiting from version tracking."
+          : normalizedScore >= 50
+          ? "The pattern is promising, but it still needs cleaner execution and a deeper sample before it becomes a core allocation."
+          : "This Edge is still in proof-building mode. Keep iterating privately until the sample and process signals stabilize.",
+      badges: [
+        {
+          label: "Sample",
+          value: `${tradeCount} trades`,
+          tone:
+            tradeCount >= 40
+              ? "positive"
+              : tradeCount >= 15
+              ? "warning"
+              : "critical",
+        },
+        {
+          label: "Expectancy",
+          value: formatR(fallbackMetrics?.expectancy),
+          tone:
+            fallbackMetrics?.expectancy != null &&
+            fallbackMetrics.expectancy > 0
+              ? "positive"
+              : fallbackMetrics?.expectancy != null
+              ? "critical"
+              : "neutral",
+        },
+        {
+          label: "Review coverage",
+          value: formatPercent(fallbackMetrics?.reviewCoverage),
+          tone:
+            reviewCoverage >= 0.75
+              ? "positive"
+              : reviewCoverage >= 0.5
+              ? "warning"
+              : "critical",
+        },
+        {
+          label: "Discipline",
+          value: formatPercent(fallbackMetrics?.followThroughRate),
+          tone:
+            followThrough >= 0.75
+              ? "positive"
+              : followThrough >= 0.5
+              ? "warning"
+              : "critical",
+        },
+      ],
+      blockers,
+      nextActions,
+    };
+  }, [detailEdge]);
+
+  const resolvedAccountFit = useMemo<EdgeAccountFitData | null>(() => {
+    if (!detailEdge) {
+      return null;
+    }
+
+    if (detailEdge.accountFit) {
+      return detailEdge.accountFit;
+    }
+
+    const propCard = detailEdge.passport?.cards.prop;
+    const fitNotes = detailEdge.passport?.fitNotes ?? [];
+
+    if (!propCard && fitNotes.length === 0) {
+      return null;
+    }
+
+    const toneScore =
+      propCard?.tone === "teal"
+        ? 86
+        : propCard?.tone === "blue"
+        ? 74
+        : propCard?.tone === "amber"
+        ? 57
+        : propCard?.tone === "rose"
+        ? 33
+        : null;
+
+    return {
+      summary:
+        "Current account-fit recommendations are inferred from this Edge passport until account-level matching data is available.",
+      recommendations: [
+        {
+          accountId: `${detailEdge.id}-fit-profile`,
+          accountName: propCard?.value || "Best-fit account profile",
+          label:
+            toneScore != null ? `${toneScore}% profile match` : "Profile match",
+          score: toneScore,
+          isProp:
+            /prop/i.test(propCard?.value ?? "") ||
+            fitNotes.some(
+              (item) => /prop/i.test(item.label) || /prop/i.test(item.value)
+            ),
+          reasons: [
+            ...(propCard?.detail ? [propCard.detail] : []),
+            ...fitNotes.map((item) => `${item.label}: ${item.value}`),
+          ],
+        },
+      ],
+      cautions:
+        detailEdge.status === "archived"
+          ? [
+              "This Edge is archived. Re-validate the setup before routing fresh capital into it.",
+            ]
+          : undefined,
+    };
+  }, [detailEdge]);
+
+  const resolvedLineageGraph = useMemo<EdgeLineageData | null>(() => {
+    if (!detailEdge) {
+      return null;
+    }
+
+    if (detailEdge.lineageGraph) {
+      return detailEdge.lineageGraph;
+    }
+
+    const rootSource =
+      detailEdge.passport?.lineage.source ?? detailEdge.sourceEdge;
+    const forkCount =
+      detailEdge.passport?.lineage.forkCount ??
+      detailEdge.metrics?.copyCount ??
+      0;
+    const shareCount =
+      detailEdge.passport?.lineage.shareCount ??
+      detailEdge.metrics?.shareCount ??
+      0;
+
+    if (!rootSource && forkCount === 0 && shareCount === 0) {
+      return null;
+    }
+
+    return {
+      current: {
+        id: detailEdge.id,
+        name: detailEdge.name,
+        publicationLabel: formatPublicationModeLabel(
+          detailEdge.isFeatured
+            ? "featured"
+            : detailEdge.publicationMode === "library"
+            ? "library"
+            : "private"
+        ),
+      },
+      root: rootSource
+        ? {
+            id: rootSource.id,
+            name: rootSource.name,
+            ownerName: rootSource.ownerName,
+            publicationLabel:
+              detailEdge.passport?.lineage.publicationLabel ?? null,
+          }
+        : null,
+      forkCount,
+      shareCount,
+    };
+  }, [detailEdge]);
+
+  const resolvedVersionHistory = useMemo<EdgeVersionHistoryData | null>(() => {
+    if (!detailEdge) {
+      return null;
+    }
+
+    if (detailEdge.versionHistory) {
+      return detailEdge.versionHistory;
+    }
+
+    const publicationMode: EdgePublicationState = detailEdge.isFeatured
+      ? "featured"
+      : detailEdge.publicationMode === "library"
+      ? "library"
+      : "private";
+
+    return {
+      versions: [
+        {
+          id: `${detailEdge.id}-current`,
+          label: "Current live version",
+          createdAt: detailEdge.updatedAt ?? detailEdge.createdAt ?? null,
+          authorName: detail.canEdit
+            ? "You"
+            : detailEdge.sourceEdge?.ownerName ?? null,
+          summary:
+            "This is the active Edge snapshot. Dedicated version records will appear here once backend history is available.",
+          isCurrent: true,
+          isPublished: publicationMode !== "private",
+          changes: [
+            {
+              label: "Visibility",
+              value: formatPublicationModeLabel(publicationMode),
+            },
+            {
+              label: "Rules",
+              value: `${
+                detail.sections.length
+              } sections / ${detail.sections.reduce(
+                (count, section) => count + section.rules.length,
+                0
+              )} rules`,
+            },
+            ...(detailEdge.metrics
+              ? [
+                  {
+                    label: "Sample",
+                    value: `${detailEdge.metrics.tradeCount} trades`,
+                  },
+                ]
+              : []),
+          ],
+        },
+      ],
+    };
+  }, [detail, detailEdge]);
 
   if (detailQuery.isLoading) {
     return <RouteLoadingFallback route="edges" className="min-h-full" />;
@@ -619,6 +999,7 @@ export default function EdgeDetailPage({
 
   const currentEdge = detail.edge;
   const metrics = currentEdge.metrics;
+  const passport = currentEdge.passport ?? null;
   const canShowStats = detail.viewerCanSeeStats && metrics != null;
   const canShowPrivateActivity = detail.viewerCanSeePrivateActivity;
   const isPublicTemplateView =
@@ -644,10 +1025,10 @@ export default function EdgeDetailPage({
   const visiblePublicationMode = detail.canEdit
     ? edgeDraft.publicationMode
     : currentEdge.isFeatured
-      ? "featured"
-      : currentEdge.publicationMode === "library"
-        ? "library"
-        : "private";
+    ? "featured"
+    : currentEdge.publicationMode === "library"
+    ? "library"
+    : "private";
   const visiblePublicStatsVisible = detail.canEdit
     ? edgeDraft.publicStatsVisible
     : currentEdge.publicStatsVisible ?? true;
@@ -665,17 +1046,20 @@ export default function EdgeDetailPage({
     (clampedOverviewEntriesPage + 1) * EDGE_OVERVIEW_ENTRIES_PAGE_SIZE
   );
   const visibleTabs = [
-    { id: "content", label: "Content", icon: Edit3 },
-    { id: "rules", label: "Rules", icon: ListChecks },
-    { id: "examples", label: "Examples", icon: ImageIcon },
     { id: "overview", label: "Overview", icon: BarChart3 },
+    { id: "content", label: "Content", icon: Edit3 },
+    { id: "examples", label: "Examples", icon: ImageIcon },
+    { id: "rules", label: "Rules", icon: ListChecks },
     ...(canShowPrivateActivity
       ? ([
           { id: "executed-trades", label: "Executed Trades", icon: Table2 },
           { id: "missed-trades", label: "Missed Trades", icon: Clock3 },
-          { id: "entries", label: "Entries", icon: BookOpenText },
         ] as const)
       : []),
+    ...(canShowStats && passport
+      ? ([{ id: "passport", label: "Passport", icon: Layers3 }] as const)
+      : []),
+    { id: "versions", label: "Versions", icon: History },
   ];
   const resolvedActiveTab = visibleTabs.some((tab) => tab.id === activeTab)
     ? activeTab
@@ -728,7 +1112,9 @@ export default function EdgeDetailPage({
           icon: Layers3,
           label: "Profit factor",
           value:
-            metrics!.profitFactor != null ? metrics!.profitFactor.toFixed(2) : "—",
+            metrics!.profitFactor != null
+              ? metrics!.profitFactor.toFixed(2)
+              : "—",
           detail: "Gross wins / losses",
         },
         {
@@ -755,12 +1141,19 @@ export default function EdgeDetailPage({
           : []),
         {
           icon: UsersRound,
-          label: "Copies / shares",
+          label: "Forks / shares",
           value: `${metrics!.copyCount} / ${metrics!.shareCount}`,
-          detail: "Imported / shared",
+          detail: "Forked / shared",
         },
       ]
     : [];
+  const defaultForkName = `${currentEdge.name} Copy`;
+  const canPublishForkToLibrary = !currentEdge.isDemoSeeded;
+  const forkSheetHelperText = canPublishForkToLibrary
+    ? "Start private or publish your fork straight to the Library. You can change visibility later from your own Edge."
+    : "Demo Edges can only be forked privately.";
+  const isForkPending =
+    duplicateEdge.isPending || publishEdge.isPending || updateEdge.isPending;
 
   const handleReorderRules = async (
     sectionId: string,
@@ -811,15 +1204,14 @@ export default function EdgeDetailPage({
           title: rule.title,
           description: rule.description ?? null,
           sortOrder,
-          appliesOutcomes:
-            (rule.appliesOutcomes as Array<
-              | "winner"
-              | "partial_win"
-              | "loser"
-              | "breakeven"
-              | "cut_trade"
-              | "all"
-            > | null) ?? ["all"],
+          appliesOutcomes: (rule.appliesOutcomes as Array<
+            | "winner"
+            | "partial_win"
+            | "loser"
+            | "breakeven"
+            | "cut_trade"
+            | "all"
+          > | null) ?? ["all"],
         });
       }
 
@@ -830,7 +1222,9 @@ export default function EdgeDetailPage({
     }
   };
 
-  const handleCoverImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverImageChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = event.target.files?.[0];
     event.target.value = "";
 
@@ -909,13 +1303,13 @@ export default function EdgeDetailPage({
         examplesHtml: edgeDraft.examplesHtml || null,
         color: edgeDraft.color,
         publicStatsVisible: edgeDraft.publicStatsVisible,
-        status:
-          edgeDraft.status === "archived" ? "archived" : "active",
+        status: edgeDraft.status === "archived" ? "archived" : "active",
       });
 
-      const currentPublicationState: EdgePublicationState = currentEdge.isFeatured
-        ? "featured"
-        : currentEdge.publicationMode === "library"
+      const currentPublicationState: EdgePublicationState =
+        currentEdge.isFeatured
+          ? "featured"
+          : currentEdge.publicationMode === "library"
           ? "library"
           : "private";
 
@@ -992,7 +1386,9 @@ export default function EdgeDetailPage({
         title: draft.title.trim(),
         description: draft.description.trim() || null,
         sortOrder,
-        appliesOutcomes: normalizeOutcomeSelection(draft.appliesOutcomes) as Array<
+        appliesOutcomes: normalizeOutcomeSelection(
+          draft.appliesOutcomes
+        ) as Array<
           "winner" | "partial_win" | "loser" | "breakeven" | "cut_trade" | "all"
         >,
       });
@@ -1008,23 +1404,47 @@ export default function EdgeDetailPage({
     }
   };
 
-  const handleImportEdge = async () => {
+  const handleForkEdge = async ({
+    name,
+    publicationMode,
+    publicStatsVisible,
+  }: EdgeForkSheetSubmit) => {
     try {
-      const importedEdge = await duplicateEdge.mutateAsync({ edgeId });
+      const forkedEdge = await (duplicateEdge as any).mutateAsync({
+        edgeId,
+        name,
+        publicationMode,
+        publicStatsVisible,
+      });
+
+      if (publicationMode === "library") {
+        await updateEdge.mutateAsync({
+          edgeId: forkedEdge.id,
+          publicStatsVisible,
+        });
+        await publishEdge.mutateAsync({
+          edgeId: forkedEdge.id,
+          publicationMode: "library",
+          featured: false,
+        });
+      }
+
       await utils.edges.listMy.invalidate();
-      await utils.edges.getDetail.invalidate({ edgeId: importedEdge.id });
-      toast.success("Edge imported to My Edges");
-      router.push(`/dashboard/edges/${importedEdge.id}`);
+      await utils.edges.getDetail.invalidate({ edgeId: forkedEdge.id });
+      setForkSheetOpen(false);
+      toast.success(
+        publicationMode === "library"
+          ? "Fork published to Library"
+          : "Edge forked to My Edges"
+      );
+      router.push(`/dashboard/edges/${forkedEdge.id}`);
     } catch {
       // Mutation cache handles the error toast.
     }
   };
 
   return (
-    <div
-      ref={pageContainerRef}
-      className="flex min-h-0 w-full flex-1 flex-col"
-    >
+    <div ref={pageContainerRef} className="flex min-h-0 w-full flex-1 flex-col">
       <div className="sticky top-0 z-20 bg-sidebar backdrop-blur supports-[backdrop-filter]:bg-sidebar/60">
         <div className="flex items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-2">
@@ -1079,29 +1499,28 @@ export default function EdgeDetailPage({
                   size="sm"
                   className={journalActionButtonMutedClassName}
                   disabled={!hasEdgeChanges}
-                  onClick={() =>
-                    {
-                      setEdgeDraft({
-                        name: currentEdge.name,
-                        description: currentEdge.description ?? "",
-                        coverImageUrl: currentEdge.coverImageUrl ?? null,
-                        coverImagePosition: currentEdge.coverImagePosition ?? 50,
-                        contentBlocks: currentEdge.contentBlocks ?? [],
-                        contentHtml: currentEdge.contentHtml ?? "",
-                        examplesBlocks: currentEdge.examplesBlocks ?? [],
-                        examplesHtml: currentEdge.examplesHtml ?? "",
-                        color: currentEdge.color ?? "#3B82F6",
-                        publicationMode: currentEdge.isFeatured
-                          ? "featured"
-                          : currentEdge.publicationMode === "library"
-                            ? "library"
-                            : "private",
-                        publicStatsVisible: currentEdge.publicStatsVisible ?? true,
-                        status: currentEdge.status,
-                      });
-                      setIsEditingDescription(false);
-                    }
-                  }
+                  onClick={() => {
+                    setEdgeDraft({
+                      name: currentEdge.name,
+                      description: currentEdge.description ?? "",
+                      coverImageUrl: currentEdge.coverImageUrl ?? null,
+                      coverImagePosition: currentEdge.coverImagePosition ?? 50,
+                      contentBlocks: currentEdge.contentBlocks ?? [],
+                      contentHtml: currentEdge.contentHtml ?? "",
+                      examplesBlocks: currentEdge.examplesBlocks ?? [],
+                      examplesHtml: currentEdge.examplesHtml ?? "",
+                      color: currentEdge.color ?? "#3B82F6",
+                      publicationMode: currentEdge.isFeatured
+                        ? "featured"
+                        : currentEdge.publicationMode === "library"
+                        ? "library"
+                        : "private",
+                      publicStatsVisible:
+                        currentEdge.publicStatsVisible ?? true,
+                      status: currentEdge.status,
+                    });
+                    setIsEditingDescription(false);
+                  }}
                 >
                   <X className="size-3" />
                   Reset changes
@@ -1111,13 +1530,11 @@ export default function EdgeDetailPage({
               <Button
                 size="sm"
                 className={journalActionButtonMutedClassName}
-                disabled={duplicateEdge.isPending}
-                onClick={handleImportEdge}
+                disabled={isForkPending}
+                onClick={() => setForkSheetOpen(true)}
               >
                 <Plus className="size-3" />
-                {duplicateEdge.isPending
-                  ? "Importing..."
-                  : "Import to My Edges"}
+                {isForkPending ? "Forking..." : "Fork Edge"}
               </Button>
             )}
           </div>
@@ -1152,8 +1569,8 @@ export default function EdgeDetailPage({
           }
           className="h-48 rounded-none border-x-0 border-t-0 md:h-64"
         />
-        <div className="mx-auto w-full max-w-[1200px] px-4 py-8 sm:px-6 lg:px-8">
-          <div className="mx-auto mb-8 max-w-3xl">
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-8 w-full">
             {detail.canEdit ? (
               <input
                 type="text"
@@ -1168,7 +1585,9 @@ export default function EdgeDetailPage({
                 className="w-full border-none bg-transparent text-4xl font-bold text-white outline-none placeholder:text-white/20"
               />
             ) : (
-              <h1 className="text-4xl font-bold text-white">{currentEdge.name}</h1>
+              <h1 className="text-4xl font-bold text-white">
+                {currentEdge.name}
+              </h1>
             )}
 
             {detail.canEdit ? (
@@ -1200,11 +1619,13 @@ export default function EdgeDetailPage({
                   className="mt-3 block w-full text-left text-sm leading-6 text-white/52 transition-colors hover:text-white/72"
                 >
                   {visibleDescription ? (
-                    <span className="whitespace-pre-wrap">{visibleDescription}</span>
+                    <span className="whitespace-pre-wrap">
+                      {visibleDescription}
+                    </span>
                   ) : (
                     <span className="text-white/32">
-                      Add a description in Edge details to explain how this setup
-                      should be traded and reviewed.
+                      Add a description in Edge details to explain how this
+                      setup should be traded and reviewed.
                     </span>
                   )}
                 </button>
@@ -1219,7 +1640,9 @@ export default function EdgeDetailPage({
               <div className="mb-3 flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-1.5">
                   <Target className="size-3.5" />
-                  {canShowStats ? `${metrics!.tradeCount} executed trades` : "Public stats hidden"}
+                  {canShowStats
+                    ? `${metrics!.tradeCount} executed trades`
+                    : "Public stats hidden"}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <ListChecks className="size-3.5" />
@@ -1313,7 +1736,9 @@ export default function EdgeDetailPage({
 
                     {edgeDraft.publicationMode === "library" ? (
                       <Select
-                        value={edgeDraft.publicStatsVisible ? "shown" : "hidden"}
+                        value={
+                          edgeDraft.publicStatsVisible ? "shown" : "hidden"
+                        }
                         onValueChange={(value) =>
                           setEdgeDraft((currentDraft) => ({
                             ...currentDraft,
@@ -1344,7 +1769,7 @@ export default function EdgeDetailPage({
                         variant="secondary"
                         className="border-white/10 bg-white/5 text-white/72"
                       >
-                        <Eye className="mr-2 size-3.5" />
+                        <Eye className="size-3" />
                         Featured stats visible
                       </Badge>
                     ) : null}
@@ -1380,7 +1805,7 @@ export default function EdgeDetailPage({
                         className="border-white/10 bg-white/5 text-white/72"
                       >
                         <span
-                          className="mr-2 inline-flex size-2 rounded-full"
+                          className="mr-1 inline-flex size-2 rounded-full"
                           style={{ backgroundColor: visibleColor }}
                         />
                         Color mapped
@@ -1393,15 +1818,15 @@ export default function EdgeDetailPage({
                       {visiblePublicationMode === "featured"
                         ? "Featured Edge"
                         : visiblePublicationMode === "library"
-                          ? "Library Edge"
-                          : "Private"}
+                        ? "Library Edge"
+                        : "Private"}
                     </Badge>
                     {visiblePublicationMode === "featured" ? (
                       <Badge
                         variant="secondary"
                         className="border-white/10 bg-white/5 text-white/72"
                       >
-                        <Eye className="mr-2 size-3.5" />
+                        <Eye className="size-3" />
                         Stats visible
                       </Badge>
                     ) : visiblePublicationMode === "library" ? (
@@ -1410,11 +1835,13 @@ export default function EdgeDetailPage({
                         className="border-white/10 bg-white/5 text-white/72"
                       >
                         {visiblePublicStatsVisible ? (
-                          <Eye className="mr-2 size-3.5" />
+                          <Eye className="size-3.5" />
                         ) : (
-                          <EyeOff className="mr-2 size-3.5" />
+                          <EyeOff className="size-3.5" />
                         )}
-                        {visiblePublicStatsVisible ? "Stats shown" : "Stats hidden"}
+                        {visiblePublicStatsVisible
+                          ? "Stats shown"
+                          : "Stats hidden"}
                       </Badge>
                     ) : null}
                     <Badge
@@ -1425,12 +1852,24 @@ export default function EdgeDetailPage({
                     </Badge>
                   </>
                 )}
-                {currentEdge.sourceEdgeId ? (
+                {currentEdge.sourceEdge ? (
+                  <Link
+                    href={`/dashboard/edges/${currentEdge.sourceEdge.id}`}
+                    className="inline-flex"
+                  >
+                    <Badge
+                      variant="secondary"
+                      className="border-white/10 bg-white/5 text-white/72 transition-colors hover:bg-white/10"
+                    >
+                      Forked from {currentEdge.sourceEdge.name}
+                    </Badge>
+                  </Link>
+                ) : currentEdge.sourceEdgeId ? (
                   <Badge
                     variant="secondary"
                     className="border-white/10 bg-white/5 text-white/72"
                   >
-                    Forked from shared source
+                    Forked from source Edge
                   </Badge>
                 ) : null}
               </div>
@@ -1449,13 +1888,13 @@ export default function EdgeDetailPage({
             }}
             className="w-full"
           >
-            <div className="mx-auto max-w-3xl overflow-x-auto">
-              <TabsList className="mb-6 h-auto rounded-none border-b border-white/10 bg-transparent p-0">
+            <div className="mx-auto w-full">
+              <TabsList className="mb-6 flex h-auto w-full flex-wrap rounded-none border-b border-white/10 bg-transparent p-0 xl:flex-nowrap">
                 {visibleTabs.map((item) => (
                   <TabsTrigger
                     key={item.id}
                     value={item.id}
-                    className="rounded-none border-b-2 border-transparent px-4 py-2 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent"
+                    className="rounded-none border-b-2 border-transparent px-4 py-2 text-xs whitespace-nowrap xl:flex-1 xl:justify-center data-[state=active]:border-primary data-[state=active]:bg-transparent"
                   >
                     <item.icon className="mr-2 size-3.5" />
                     {item.label}
@@ -1464,798 +1903,848 @@ export default function EdgeDetailPage({
               </TabsList>
             </div>
 
-        <TabsContent value="content" className="mt-0">
-          <div className="mx-auto w-full max-w-3xl space-y-6">
-            <div className="border-b border-white/8 pb-4">
-              <p className="text-xs font-medium text-white/72">Content</p>
-              <p className="mt-1 text-xs text-white/45">
-                Write the core thesis for this Edge: the market context, setup
-                structure, execution framework, and what should stand out when
-                you review it later.
-              </p>
-            </div>
-
-            {detail.canEdit ? (
-              <JournalEditor
-                key={`${currentEdge.id}-content-${builderEditorSeed}`}
-                compact
-                initialContent={edgeDraft.contentBlocks}
-                onChange={(content, html) =>
-                  setEdgeDraft((currentDraft) => ({
-                    ...currentDraft,
-                    contentBlocks: content,
-                    contentHtml: html,
-                  }))
-                }
-                placeholder="Start writing the Edge thesis, context, and execution framework..."
-              />
-            ) : (
-              <EdgeBuilderPreview
-                html={currentEdge.contentHtml}
-                emptyLabel="No Edge content has been published yet."
-                transparent={isPublicTemplateView}
-              />
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="overview" className="mt-0">
-          <div className="w-full space-y-6">
-          {canShowStats ? (
-            <>
-              <div className={getOverviewGridClass(overviewMetricCards.length)}>
-                {overviewMetricCards.map((card) => (
-                  <EdgeMetricCard
-                    key={card.label}
-                    icon={card.icon}
-                    label={card.label}
-                    value={card.value}
-                    detail={card.detail}
-                  />
-                ))}
-              </div>
-
-              <div className="space-y-6">
-                <EdgeEquityCurveCard className="w-full" points={metrics!.charts.equityCurve} />
-
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-sm font-medium text-white/72">Edge profile</p>
-                    <p className="text-sm text-white/40">
-                      The current operating characteristics of this Edge.
-                    </p>
-                  </div>
-
-                  <div className={getOverviewGridClass(edgeProfileCards.length)}>
-                    {edgeProfileCards.map((card) => (
-                      <EdgeMetricCard
-                        key={card.label}
-                        icon={card.icon}
-                        label={card.label}
-                        value={card.value}
-                        detail={card.detail}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-3">
-                <EdgeBreakdownBarCard
-                  title="Outcome mix"
-                  items={metrics!.charts.outcomeBreakdown}
-                  emptyLabel="No outcome breakdown yet."
-                />
-                <EdgeBreakdownBarCard
-                  title="Session mix"
-                  items={metrics!.charts.sessionBreakdown}
-                  emptyLabel="Session data will appear after assignments."
-                />
-                <EdgeRMultipleSpreadCard items={metrics!.charts.rDistribution} />
-              </div>
-            </>
-          ) : (
-            <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-5 py-6 text-xs text-white/48">
-              This creator chose to hide public Library stats for this Edge.
-              Featured Edges always show their public performance metrics.
-            </div>
-          )}
-
-          {canShowPrivateActivity ? (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-white/72">Linked entries</p>
-                  <p className="text-sm text-white/40">
-                    Edge-linked reflections, reviews, and notes.
+            <TabsContent value="content" className="mt-0">
+              <div className="w-full space-y-6">
+                <div className="border-b border-white/8 pb-4">
+                  <p className="text-xs font-medium text-white/72">Content</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Write the core thesis for this Edge: the market context,
+                    setup structure, execution framework, and what should stand
+                    out when you review it later.
                   </p>
                 </div>
-                <p className="text-xs text-white/34">
-                  {detail.entries.length} total entries
-                </p>
+
+                {detail.canEdit ? (
+                  <JournalEditor
+                    key={`${currentEdge.id}-content-${builderEditorSeed}`}
+                    compact
+                    initialContent={edgeDraft.contentBlocks}
+                    onChange={(content, html) =>
+                      setEdgeDraft((currentDraft) => ({
+                        ...currentDraft,
+                        contentBlocks: content,
+                        contentHtml: html,
+                      }))
+                    }
+                    placeholder="Start writing the Edge thesis, context, and execution framework..."
+                  />
+                ) : (
+                  <EdgeBuilderPreview
+                    html={currentEdge.contentHtml}
+                    emptyLabel="No Edge content has been published yet."
+                    transparent={isPublicTemplateView}
+                  />
+                )}
               </div>
+            </TabsContent>
 
-              {detail.entries.length > 0 ? (
-                <>
-                  <div className="overflow-hidden border border-white/5 bg-sidebar/45">
-                    <table className="min-w-full text-xs">
-                      <thead className="border-b border-white/5 bg-sidebar-accent">
-                        <tr>
-                          <th className="px-6 py-4 text-left font-medium text-white/70">
-                            Entry
-                          </th>
-                          <th className="px-6 py-4 text-left font-medium text-white/70">
-                            Type
-                          </th>
-                          <th className="px-6 py-4 text-left font-medium text-white/70">
-                            Journal date
-                          </th>
-                          <th className="px-6 py-4 text-left font-medium text-white/70">
-                            Updated
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {overviewEntries.map((entry) => (
-                          <tr
-                            key={entry.id}
-                            className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.03] last:border-b-0"
-                            onClick={() =>
-                              router.push(`/dashboard/journal?entryId=${entry.id}`)
-                            }
-                          >
-                            <td className="px-6 py-4">
-                              <Link
-                                href={`/dashboard/journal?entryId=${entry.id}`}
-                                onClick={(event) => event.stopPropagation()}
-                                className="font-medium text-white transition-colors hover:text-teal-300"
-                              >
-                                {entry.title}
-                              </Link>
-                            </td>
-                            <td className="px-6 py-4 text-white/55">
-                              {formatEntryTypeLabel(entry.entryType)}
-                            </td>
-                            <td className="px-6 py-4 text-white/55">
-                              {formatDate(entry.journalDate)}
-                            </td>
-                            <td className="px-6 py-4 text-white/55">
-                              {formatDate(entry.updatedAt)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-white/38">
-                      Showing{" "}
-                      {clampedOverviewEntriesPage * EDGE_OVERVIEW_ENTRIES_PAGE_SIZE + 1}
-                      -
-                      {Math.min(
-                        (clampedOverviewEntriesPage + 1) *
-                          EDGE_OVERVIEW_ENTRIES_PAGE_SIZE,
-                        detail.entries.length
-                      )}{" "}
-                      of {detail.entries.length}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
-                        disabled={clampedOverviewEntriesPage === 0}
-                        onClick={() =>
-                          setOverviewEntriesPage((currentPage) =>
-                            Math.max(currentPage - 1, 0)
-                          )
-                        }
-                      >
-                        Previous
-                      </Button>
-                      <div className="text-xs text-white/48">
-                        Page {clampedOverviewEntriesPage + 1} of{" "}
-                        {overviewEntriesPageCount}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
-                        disabled={
-                          clampedOverviewEntriesPage >= overviewEntriesPageCount - 1
-                        }
-                        onClick={() =>
-                          setOverviewEntriesPage((currentPage) =>
-                            Math.min(
-                              currentPage + 1,
-                              Math.max(overviewEntriesPageCount - 1, 0)
-                            )
-                          )
-                        }
-                      >
-                        Next
-                      </Button>
+            <TabsContent value="overview" className="mt-0">
+              <div className="w-full space-y-6">
+                {canShowStats ? (
+                  <>
+                    <div
+                      className={getOverviewGridClass(
+                        overviewMetricCards.length
+                      )}
+                    >
+                      {overviewMetricCards.map((card) => (
+                        <EdgeMetricCard
+                          key={card.label}
+                          icon={card.icon}
+                          label={card.label}
+                          value={card.value}
+                          detail={card.detail}
+                        />
+                      ))}
                     </div>
+
+                    <div className="space-y-6">
+                      <EdgeEquityCurveCard
+                        className="w-full"
+                        points={metrics!.charts.equityCurve}
+                      />
+
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm font-medium text-white/72">
+                            Edge profile
+                          </p>
+                          <p className="text-sm text-white/40">
+                            The current operating characteristics of this Edge.
+                          </p>
+                        </div>
+
+                        <div
+                          className={getOverviewGridClass(
+                            edgeProfileCards.length
+                          )}
+                        >
+                          {edgeProfileCards.map((card) => (
+                            <EdgeMetricCard
+                              key={card.label}
+                              icon={card.icon}
+                              label={card.label}
+                              value={card.value}
+                              detail={card.detail}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-6 xl:grid-cols-3">
+                      <EdgeBreakdownBarCard
+                        title="Outcome mix"
+                        items={metrics!.charts.outcomeBreakdown}
+                        emptyLabel="No outcome breakdown yet."
+                      />
+                      <EdgeBreakdownBarCard
+                        title="Session mix"
+                        items={metrics!.charts.sessionBreakdown}
+                        emptyLabel="Session data will appear after assignments."
+                      />
+                      <EdgeRMultipleSpreadCard
+                        items={metrics!.charts.rDistribution}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-5 py-6 text-xs text-white/48">
+                    This creator chose to hide public Library stats for this
+                    Edge. Featured Edges always show their public performance
+                    metrics.
                   </div>
-                </>
-              ) : (
-                <div className="rounded-md border border-dashed border-white/10 bg-sidebar px-5 py-6 text-sm text-white/45">
-                  No linked entries yet.
+                )}
+
+                <EdgeReadinessSection readiness={resolvedReadiness} />
+                <EdgeAccountFitSection accountFit={resolvedAccountFit} />
+                <EdgeLineageGraph lineage={resolvedLineageGraph} />
+
+                {canShowPrivateActivity ? (
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-end justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-white/72">
+                          Linked entries
+                        </p>
+                        <p className="text-sm text-white/40">
+                          Edge-linked reflections, reviews, and notes.
+                        </p>
+                      </div>
+                      <p className="text-xs text-white/34">
+                        {detail.entries.length} total entries
+                      </p>
+                    </div>
+
+                    {detail.entries.length > 0 ? (
+                      <>
+                        <div className="overflow-hidden border border-white/5 bg-sidebar/45">
+                          <table className="min-w-full text-xs">
+                            <thead className="border-b border-white/5 bg-sidebar-accent">
+                              <tr>
+                                <th className="px-6 py-4 text-left font-medium text-white/70">
+                                  Entry
+                                </th>
+                                <th className="px-6 py-4 text-left font-medium text-white/70">
+                                  Type
+                                </th>
+                                <th className="px-6 py-4 text-left font-medium text-white/70">
+                                  Journal date
+                                </th>
+                                <th className="px-6 py-4 text-left font-medium text-white/70">
+                                  Updated
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {overviewEntries.map((entry) => (
+                                <tr
+                                  key={entry.id}
+                                  className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.03] last:border-b-0"
+                                  onClick={() =>
+                                    router.push(
+                                      `/dashboard/journal?entryId=${entry.id}`
+                                    )
+                                  }
+                                >
+                                  <td className="px-6 py-4">
+                                    <Link
+                                      href={`/dashboard/journal?entryId=${entry.id}`}
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      className="font-medium text-white transition-colors hover:text-teal-300"
+                                    >
+                                      {entry.title}
+                                    </Link>
+                                  </td>
+                                  <td className="px-6 py-4 text-white/55">
+                                    {formatEntryTypeLabel(entry.entryType)}
+                                  </td>
+                                  <td className="px-6 py-4 text-white/55">
+                                    {formatDate(entry.journalDate)}
+                                  </td>
+                                  <td className="px-6 py-4 text-white/55">
+                                    {formatDate(entry.updatedAt)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-xs text-white/38">
+                            Showing{" "}
+                            {clampedOverviewEntriesPage *
+                              EDGE_OVERVIEW_ENTRIES_PAGE_SIZE +
+                              1}
+                            -
+                            {Math.min(
+                              (clampedOverviewEntriesPage + 1) *
+                                EDGE_OVERVIEW_ENTRIES_PAGE_SIZE,
+                              detail.entries.length
+                            )}{" "}
+                            of {detail.entries.length}
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
+                              disabled={clampedOverviewEntriesPage === 0}
+                              onClick={() =>
+                                setOverviewEntriesPage((currentPage) =>
+                                  Math.max(currentPage - 1, 0)
+                                )
+                              }
+                            >
+                              Previous
+                            </Button>
+                            <div className="text-xs text-white/48">
+                              Page {clampedOverviewEntriesPage + 1} of{" "}
+                              {overviewEntriesPageCount}
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
+                              disabled={
+                                clampedOverviewEntriesPage >=
+                                overviewEntriesPageCount - 1
+                              }
+                              onClick={() =>
+                                setOverviewEntriesPage((currentPage) =>
+                                  Math.min(
+                                    currentPage + 1,
+                                    Math.max(overviewEntriesPageCount - 1, 0)
+                                  )
+                                )
+                              }
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="rounded-md border border-dashed border-white/10 bg-sidebar px-5 py-6 text-sm text-white/45">
+                        No linked entries yet.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="passport" className="mt-0">
+              <div className="w-full space-y-6">
+                <div className="border-b border-white/8 pb-4">
+                  <p className="text-xs font-medium text-white/72">Passport</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Review the proof, sample quality, process context, and
+                    lineage attached to this Edge.
+                  </p>
                 </div>
-              )}
-            </div>
-          ) : null}
-          </div>
-        </TabsContent>
 
-        <TabsContent value="rules" className="mt-0 space-y-6">
-          <div className="mx-auto w-full max-w-4xl space-y-6">
-            <div className="border-b border-white/8 pb-4">
-              <p className="text-xs font-medium text-white/72">Rules</p>
-              <p className="mt-1 text-xs text-white/45">
-                Break the Edge into reviewable sections, define the exact rules
-                that matter, and control which outcomes each rule should appear
-                against when trades get reviewed.
-              </p>
-            </div>
+                {canShowStats && passport ? (
+                  <EdgePassportSection passport={passport} />
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-5 py-6 text-xs text-white/48">
+                    Edge passport data is not available for this view.
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
-            {detail.canEdit ? (
-              <EdgePanel
-                icon={Plus}
-                title="Create section"
-                description="Add another rule section for this Edge, like entry rules, exit rules, or anything specific to your workflow."
-                bodyClassName="space-y-3"
-              >
-                <div className="grid gap-3 xl:grid-cols-[0.9fr_1.1fr_auto]">
-                  <Input
-                    value={newSectionDraft.title}
-                    onChange={(event) =>
-                      setNewSectionDraft((currentDraft) => ({
-                        ...currentDraft,
-                        title: event.target.value,
-                      }))
-                    }
-                    placeholder="Section title"
-                  />
-                  <Input
-                    value={newSectionDraft.description}
-                    onChange={(event) =>
-                      setNewSectionDraft((currentDraft) => ({
-                        ...currentDraft,
-                        description: event.target.value,
-                      }))
-                    }
-                    placeholder="What should this section measure?"
-                  />
-                  <Button
-                    className={EDGE_ACTION_BUTTON_CLASSNAME}
-                    disabled={upsertSection.isPending}
-                    onClick={handleCreateSection}
+            <TabsContent value="versions" className="mt-0">
+              <div className="w-full space-y-6">
+                <div className="border-b border-white/8 pb-4">
+                  <p className="text-xs font-medium text-white/72">Versions</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Track how this Edge evolves over time, from the current live
+                    snapshot to future saved versions and forks.
+                  </p>
+                </div>
+
+                <EdgeVersionHistoryPanel
+                  versionHistory={resolvedVersionHistory}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="rules" className="mt-0 space-y-6">
+              <div className="w-full space-y-6">
+                <div className="border-b border-white/8 pb-4">
+                  <p className="text-xs font-medium text-white/72">Rules</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Break the Edge into reviewable sections, define the exact
+                    rules that matter, and control which outcomes each rule
+                    should appear against when trades get reviewed.
+                  </p>
+                </div>
+
+                {detail.canEdit ? (
+                  <EdgePanel
+                    icon={Plus}
+                    title="Create section"
+                    description="Add another rule section for this Edge, like entry rules, exit rules, or anything specific to your workflow."
+                    bodyClassName="space-y-3"
                   >
-                    <Plus className="size-3" />
-                    Add section
-                  </Button>
-                </div>
-              </EdgePanel>
-            ) : null}
-
-            {detail.sections.length > 0 ? (
-              detail.sections.map((section) => (
-                <EdgePanel
-                  key={section.id}
-                  icon={ListChecks}
-                  title={section.title}
-                  description={
-                    section.description ||
-                    "Rules inside this section are measured against reviewed trades."
-                  }
-                  bodyClassName="space-y-4"
-                  action={
-                    detail.canEdit ? (
-                      <Button
-                        className={EDGE_ACTION_BUTTON_CLASSNAME}
-                        onClick={() =>
-                          setActiveRuleComposerSectionId((currentSectionId) =>
-                            currentSectionId === section.id ? null : section.id
-                          )
-                        }
-                      >
-                        <Plus className="size-3" />
-                        Add rule
-                      </Button>
-                    ) : null
-                  }
-                >
-                  {detail.canEdit ? (
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="grid gap-3 xl:grid-cols-[0.9fr_1.1fr_auto]">
                       <Input
-                        className="min-w-[15rem] flex-1"
-                        value={sectionDrafts[section.id]?.title ?? ""}
+                        value={newSectionDraft.title}
                         onChange={(event) =>
-                          setSectionDrafts((currentDrafts) => ({
-                            ...currentDrafts,
-                            [section.id]: {
-                              title: event.target.value,
-                              description:
-                                currentDrafts[section.id]?.description ?? "",
-                            },
+                          setNewSectionDraft((currentDraft) => ({
+                            ...currentDraft,
+                            title: event.target.value,
                           }))
                         }
                         placeholder="Section title"
                       />
                       <Input
-                        className="min-w-[18rem] flex-[1.2]"
-                        value={sectionDrafts[section.id]?.description ?? ""}
+                        value={newSectionDraft.description}
                         onChange={(event) =>
-                          setSectionDrafts((currentDrafts) => ({
-                            ...currentDrafts,
-                            [section.id]: {
-                              title: currentDrafts[section.id]?.title ?? "",
-                              description: event.target.value,
-                            },
+                          setNewSectionDraft((currentDraft) => ({
+                            ...currentDraft,
+                            description: event.target.value,
                           }))
                         }
-                        placeholder="Section description"
+                        placeholder="What should this section measure?"
                       />
                       <Button
                         className={EDGE_ACTION_BUTTON_CLASSNAME}
-                        disabled={
-                          upsertSection.isPending ||
-                          (sectionDrafts[section.id]?.title ?? "").trim() ===
-                            section.title &&
-                            (sectionDrafts[section.id]?.description ?? "").trim() ===
-                              (section.description ?? "")
-                        }
-                        onClick={() => handleSaveSection(section.id)}
+                        disabled={upsertSection.isPending}
+                        onClick={handleCreateSection}
                       >
-                        <Save className="size-3" />
-                        Save section
+                        <Plus className="size-3" />
+                        Add section
                       </Button>
                     </div>
-                  ) : null}
+                  </EdgePanel>
+                ) : null}
 
-                  <div className="grid gap-3 sm:grid-cols-4">
-                    {[
-                      {
-                        label: "Follow-through",
-                        value: formatPercent(section.metrics.followThroughRate),
-                      },
-                      {
-                        label: "Reviewed",
-                        value: `${section.metrics.reviewedCount}/${section.metrics.sampleSize}`,
-                      },
-                      {
-                        label: "Review coverage",
-                        value: formatPercent(section.metrics.reviewCoverage),
-                      },
-                      {
-                        label: "Net P&L",
-                        value: formatMoney(section.metrics.netPnl),
-                      },
-                    ].map((item) => (
-                      <div
-                        key={`${section.id}-${item.label}`}
-                        className="rounded-lg border border-white/8 bg-black/20 px-4 py-3"
-                      >
-                        <p className="text-xs text-white/34">
-                          {item.label}
-                        </p>
-                        <p className="mt-1 text-xs font-medium text-white">
-                          {item.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="space-y-4">
-                    {section.rules.length > 0 ? (
-                      section.rules.map((rule) => (
-                        <div
-                          key={rule.id}
-                          draggable={detail.canEdit && section.rules.length > 1}
-                          onDragStart={() => {
-                            if (!detail.canEdit || section.rules.length <= 1) {
-                              return;
+                {detail.sections.length > 0 ? (
+                  detail.sections.map((section) => (
+                    <EdgePanel
+                      key={section.id}
+                      icon={ListChecks}
+                      title={section.title}
+                      description={
+                        section.description ||
+                        "Rules inside this section are measured against reviewed trades."
+                      }
+                      bodyClassName="space-y-4"
+                      action={
+                        detail.canEdit ? (
+                          <Button
+                            className={EDGE_ACTION_BUTTON_CLASSNAME}
+                            onClick={() =>
+                              setActiveRuleComposerSectionId(
+                                (currentSectionId) =>
+                                  currentSectionId === section.id
+                                    ? null
+                                    : section.id
+                              )
                             }
-                            setDraggedRule({
-                              sectionId: section.id,
-                              ruleId: rule.id,
-                            });
-                            setDragOverRuleId(rule.id);
-                          }}
-                          onDragOver={(event) => {
-                            if (
-                              !detail.canEdit ||
-                              !draggedRule ||
-                              draggedRule.sectionId !== section.id ||
-                              draggedRule.ruleId === rule.id
-                            ) {
-                              return;
+                          >
+                            <Plus className="size-3" />
+                            Add rule
+                          </Button>
+                        ) : null
+                      }
+                    >
+                      {detail.canEdit ? (
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Input
+                            className="min-w-[15rem] flex-1"
+                            value={sectionDrafts[section.id]?.title ?? ""}
+                            onChange={(event) =>
+                              setSectionDrafts((currentDrafts) => ({
+                                ...currentDrafts,
+                                [section.id]: {
+                                  title: event.target.value,
+                                  description:
+                                    currentDrafts[section.id]?.description ??
+                                    "",
+                                },
+                              }))
                             }
-
-                            event.preventDefault();
-                            setDragOverRuleId(rule.id);
-                          }}
-                          onDrop={async (event) => {
-                            event.preventDefault();
-                            if (
-                              !detail.canEdit ||
-                              !draggedRule ||
-                              draggedRule.sectionId !== section.id
-                            ) {
-                              return;
+                            placeholder="Section title"
+                          />
+                          <Input
+                            className="min-w-[18rem] flex-[1.2]"
+                            value={sectionDrafts[section.id]?.description ?? ""}
+                            onChange={(event) =>
+                              setSectionDrafts((currentDrafts) => ({
+                                ...currentDrafts,
+                                [section.id]: {
+                                  title: currentDrafts[section.id]?.title ?? "",
+                                  description: event.target.value,
+                                },
+                              }))
                             }
-
-                            await handleReorderRules(
-                              section.id,
-                              draggedRule.ruleId,
-                              rule.id
-                            );
-                          }}
-                          onDragEnd={() => {
-                            setDraggedRule(null);
-                            setDragOverRuleId(null);
-                          }}
-                          className={cn(
-                            "w-full rounded-lg border border-white/8 bg-black/20 p-4 transition-colors",
-                            detail.canEdit &&
-                              section.rules.length > 1 &&
-                              "cursor-grab active:cursor-grabbing",
-                            draggedRule?.ruleId === rule.id && "opacity-55",
-                            dragOverRuleId === rule.id &&
-                              draggedRule?.ruleId !== rule.id &&
-                              "border-teal-400/35 bg-teal-400/[0.04]"
-                          )}
-                        >
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex min-w-0 items-start gap-3">
-                              {detail.canEdit && section.rules.length > 1 ? (
-                                <div className="mt-0.5 text-white/28">
-                                  <GripVertical className="size-4" />
-                                </div>
-                              ) : null}
-                              <div className="min-w-0 space-y-1">
-                                <p className="text-xs font-medium text-white">
-                                  {rule.title}
-                                </p>
-                                <p className="text-xs leading-5 text-white/50">
-                                  {rule.description || "No rule note yet."}
-                                </p>
-                              </div>
-                            </div>
-                            <Badge
-                              variant="secondary"
-                              className="border-white/10 bg-white/5 text-white/70"
-                            >
-                              {rule.metrics.reviewedCount} reviewed
-                            </Badge>
-                          </div>
-
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {(rule.appliesOutcomes ?? []).map((outcome) => (
-                              <Badge
-                                key={`${rule.id}-${outcome}`}
-                                variant="outline"
-                                className="border-white/10 bg-black/20 text-white/62"
-                              >
-                                {formatRuleOutcomeLabel(outcome)}
-                              </Badge>
-                            ))}
-                          </div>
-
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            {[
-                              {
-                                label: "Follow-through",
-                                value: formatPercent(rule.metrics.followThroughRate),
-                              },
-                              {
-                                label: "Expectancy",
-                                value: formatMoney(rule.metrics.expectancy),
-                              },
-                              {
-                                label: "Win rate when followed",
-                                value: formatPercent(rule.metrics.winRateWhenFollowed),
-                              },
-                              {
-                                label: "Win rate when broken",
-                                value: formatPercent(rule.metrics.winRateWhenBroken),
-                              },
-                            ].map((item) => (
-                              <div key={`${rule.id}-${item.label}`}>
-                                <p className="text-xs text-white/34">
-                                  {item.label}
-                                </p>
-                                <p className="mt-1 text-xs font-medium text-white">
-                                  {item.value}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
+                            placeholder="Section description"
+                          />
+                          <Button
+                            className={EDGE_ACTION_BUTTON_CLASSNAME}
+                            disabled={
+                              upsertSection.isPending ||
+                              ((
+                                sectionDrafts[section.id]?.title ?? ""
+                              ).trim() === section.title &&
+                                (
+                                  sectionDrafts[section.id]?.description ?? ""
+                                ).trim() === (section.description ?? ""))
+                            }
+                            onClick={() => handleSaveSection(section.id)}
+                          >
+                            <Save className="size-3" />
+                            Save section
+                          </Button>
                         </div>
-                      ))
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-4 py-5 text-xs text-white/48">
-                        No rules in this section yet.
+                      ) : null}
+
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        {[
+                          {
+                            label: "Follow-through",
+                            value: formatPercent(
+                              section.metrics.followThroughRate
+                            ),
+                          },
+                          {
+                            label: "Reviewed",
+                            value: `${section.metrics.reviewedCount}/${section.metrics.sampleSize}`,
+                          },
+                          {
+                            label: "Review coverage",
+                            value: formatPercent(
+                              section.metrics.reviewCoverage
+                            ),
+                          },
+                          {
+                            label: "Net P&L",
+                            value: formatMoney(section.metrics.netPnl),
+                          },
+                        ].map((item) => (
+                          <div
+                            key={`${section.id}-${item.label}`}
+                            className="rounded-lg border border-white/8 bg-black/20 px-4 py-3"
+                          >
+                            <p className="text-xs text-white/34">
+                              {item.label}
+                            </p>
+                            <p className="mt-1 text-xs font-medium text-white">
+                              {item.value}
+                            </p>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </div>
 
-                  {detail.canEdit && activeRuleComposerSectionId === section.id ? (
-                    <div className="space-y-3 rounded-lg border border-white/8 bg-black/20 p-4">
-                      <div className="grid gap-3 xl:grid-cols-2">
-                        <Input
-                          value={newRuleDrafts[section.id]?.title ?? ""}
-                          onChange={(event) =>
-                            setNewRuleDrafts((currentDrafts) => ({
-                              ...currentDrafts,
-                              [section.id]: {
-                                ...(currentDrafts[section.id] ?? createEmptyRuleDraft()),
-                                title: event.target.value,
-                              },
-                            }))
-                          }
-                          placeholder="Rule title"
-                        />
-                        <Input
-                          value={newRuleDrafts[section.id]?.description ?? ""}
-                          onChange={(event) =>
-                            setNewRuleDrafts((currentDrafts) => ({
-                              ...currentDrafts,
-                              [section.id]: {
-                                ...(currentDrafts[section.id] ?? createEmptyRuleDraft()),
-                                description: event.target.value,
-                              },
-                            }))
-                          }
-                          placeholder="How should this rule be reviewed?"
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        {RULE_OUTCOME_OPTIONS.map((option) => {
-                          const selectedOutcomes = normalizeOutcomeSelection(
-                            newRuleDrafts[section.id]?.appliesOutcomes ?? ["all"]
-                          );
-                          const isSelected = selectedOutcomes.includes(option.value);
-
-                          return (
-                            <button
-                              key={`${section.id}-${option.value}`}
-                              type="button"
-                              onClick={() =>
-                                setNewRuleDrafts((currentDrafts) => {
-                                  const currentDraft =
-                                    currentDrafts[section.id] ?? createEmptyRuleDraft();
-                                  const currentOutcomes = normalizeOutcomeSelection(
-                                    currentDraft.appliesOutcomes
-                                  );
-                                  const nextOutcomes =
-                                    option.value === "all"
-                                      ? ["all"]
-                                      : currentOutcomes.includes(option.value)
-                                      ? currentOutcomes.filter(
-                                          (outcome) => outcome !== option.value
-                                        )
-                                      : currentOutcomes
-                                          .filter((outcome) => outcome !== "all")
-                                          .concat(option.value);
-
-                                  return {
-                                    ...currentDrafts,
-                                    [section.id]: {
-                                      ...currentDraft,
-                                      appliesOutcomes:
-                                        normalizeOutcomeSelection(nextOutcomes),
-                                    },
-                                  };
-                                })
+                      <div className="space-y-4">
+                        {section.rules.length > 0 ? (
+                          section.rules.map((rule) => (
+                            <div
+                              key={rule.id}
+                              draggable={
+                                detail.canEdit && section.rules.length > 1
                               }
+                              onDragStart={() => {
+                                if (
+                                  !detail.canEdit ||
+                                  section.rules.length <= 1
+                                ) {
+                                  return;
+                                }
+                                setDraggedRule({
+                                  sectionId: section.id,
+                                  ruleId: rule.id,
+                                });
+                                setDragOverRuleId(rule.id);
+                              }}
+                              onDragOver={(event) => {
+                                if (
+                                  !detail.canEdit ||
+                                  !draggedRule ||
+                                  draggedRule.sectionId !== section.id ||
+                                  draggedRule.ruleId === rule.id
+                                ) {
+                                  return;
+                                }
+
+                                event.preventDefault();
+                                setDragOverRuleId(rule.id);
+                              }}
+                              onDrop={async (event) => {
+                                event.preventDefault();
+                                if (
+                                  !detail.canEdit ||
+                                  !draggedRule ||
+                                  draggedRule.sectionId !== section.id
+                                ) {
+                                  return;
+                                }
+
+                                await handleReorderRules(
+                                  section.id,
+                                  draggedRule.ruleId,
+                                  rule.id
+                                );
+                              }}
+                              onDragEnd={() => {
+                                setDraggedRule(null);
+                                setDragOverRuleId(null);
+                              }}
                               className={cn(
-                                "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                                isSelected
-                                  ? "border-teal-400/30 bg-teal-400/12 text-teal-200"
-                                  : "border-white/10 bg-white/5 text-white/52 hover:bg-white/10"
+                                "w-full rounded-lg border border-white/8 bg-black/20 p-4 transition-colors",
+                                detail.canEdit &&
+                                  section.rules.length > 1 &&
+                                  "cursor-grab active:cursor-grabbing",
+                                draggedRule?.ruleId === rule.id && "opacity-55",
+                                dragOverRuleId === rule.id &&
+                                  draggedRule?.ruleId !== rule.id &&
+                                  "border-teal-400/35 bg-teal-400/[0.04]"
                               )}
                             >
-                              {option.label}
-                            </button>
-                          );
-                        })}
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex min-w-0 items-start gap-3">
+                                  {detail.canEdit &&
+                                  section.rules.length > 1 ? (
+                                    <div className="mt-0.5 text-white/28">
+                                      <GripVertical className="size-4" />
+                                    </div>
+                                  ) : null}
+                                  <div className="min-w-0 space-y-1">
+                                    <p className="text-xs font-medium text-white">
+                                      {rule.title}
+                                    </p>
+                                    <p className="text-xs leading-5 text-white/50">
+                                      {rule.description || "No rule note yet."}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge
+                                  variant="secondary"
+                                  className="border-white/10 bg-white/5 text-white/70"
+                                >
+                                  {rule.metrics.reviewedCount} reviewed
+                                </Badge>
+                              </div>
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {(rule.appliesOutcomes ?? []).map((outcome) => (
+                                  <Badge
+                                    key={`${rule.id}-${outcome}`}
+                                    variant="outline"
+                                    className="border-white/10 bg-black/20 text-white/62"
+                                  >
+                                    {formatRuleOutcomeLabel(outcome)}
+                                  </Badge>
+                                ))}
+                              </div>
+
+                              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                {[
+                                  {
+                                    label: "Follow-through",
+                                    value: formatPercent(
+                                      rule.metrics.followThroughRate
+                                    ),
+                                  },
+                                  {
+                                    label: "Expectancy",
+                                    value: formatMoney(rule.metrics.expectancy),
+                                  },
+                                  {
+                                    label: "Win rate when followed",
+                                    value: formatPercent(
+                                      rule.metrics.winRateWhenFollowed
+                                    ),
+                                  },
+                                  {
+                                    label: "Win rate when broken",
+                                    value: formatPercent(
+                                      rule.metrics.winRateWhenBroken
+                                    ),
+                                  },
+                                ].map((item) => (
+                                  <div key={`${rule.id}-${item.label}`}>
+                                    <p className="text-xs text-white/34">
+                                      {item.label}
+                                    </p>
+                                    <p className="mt-1 text-xs font-medium text-white">
+                                      {item.value}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-4 py-5 text-xs text-white/48">
+                            No rules in this section yet.
+                          </div>
+                        )}
                       </div>
 
-                      <div className="flex flex-wrap gap-3">
-                        <Button
-                          className={EDGE_ACTION_BUTTON_CLASSNAME}
-                          disabled={upsertRule.isPending}
-                          onClick={() => handleCreateRule(section.id, section.rules.length)}
-                        >
-                          <Save className="size-3" />
-                          Save rule
-                        </Button>
-                        <Button
-                          className={EDGE_ACTION_BUTTON_CLASSNAME}
-                          onClick={() => {
-                            setActiveRuleComposerSectionId(null);
-                            setNewRuleDrafts((currentDrafts) => ({
-                              ...currentDrafts,
-                              [section.id]: createEmptyRuleDraft(),
-                            }));
-                          }}
-                        >
-                          <X className="size-3" />
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </EdgePanel>
-              ))
-            ) : (
-              <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-5 py-6 text-xs text-white/48">
-                No rule sections yet.
+                      {detail.canEdit &&
+                      activeRuleComposerSectionId === section.id ? (
+                        <div className="space-y-3 rounded-lg border border-white/8 bg-black/20 p-4">
+                          <div className="grid gap-3 xl:grid-cols-2">
+                            <Input
+                              value={newRuleDrafts[section.id]?.title ?? ""}
+                              onChange={(event) =>
+                                setNewRuleDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [section.id]: {
+                                    ...(currentDrafts[section.id] ??
+                                      createEmptyRuleDraft()),
+                                    title: event.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="Rule title"
+                            />
+                            <Input
+                              value={
+                                newRuleDrafts[section.id]?.description ?? ""
+                              }
+                              onChange={(event) =>
+                                setNewRuleDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [section.id]: {
+                                    ...(currentDrafts[section.id] ??
+                                      createEmptyRuleDraft()),
+                                    description: event.target.value,
+                                  },
+                                }))
+                              }
+                              placeholder="How should this rule be reviewed?"
+                            />
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            {RULE_OUTCOME_OPTIONS.map((option) => {
+                              const selectedOutcomes =
+                                normalizeOutcomeSelection(
+                                  newRuleDrafts[section.id]
+                                    ?.appliesOutcomes ?? ["all"]
+                                );
+                              const isSelected = selectedOutcomes.includes(
+                                option.value
+                              );
+
+                              return (
+                                <button
+                                  key={`${section.id}-${option.value}`}
+                                  type="button"
+                                  onClick={() =>
+                                    setNewRuleDrafts((currentDrafts) => {
+                                      const currentDraft =
+                                        currentDrafts[section.id] ??
+                                        createEmptyRuleDraft();
+                                      const currentOutcomes =
+                                        normalizeOutcomeSelection(
+                                          currentDraft.appliesOutcomes
+                                        );
+                                      const nextOutcomes =
+                                        option.value === "all"
+                                          ? ["all"]
+                                          : currentOutcomes.includes(
+                                              option.value
+                                            )
+                                          ? currentOutcomes.filter(
+                                              (outcome) =>
+                                                outcome !== option.value
+                                            )
+                                          : currentOutcomes
+                                              .filter(
+                                                (outcome) => outcome !== "all"
+                                              )
+                                              .concat(option.value);
+
+                                      return {
+                                        ...currentDrafts,
+                                        [section.id]: {
+                                          ...currentDraft,
+                                          appliesOutcomes:
+                                            normalizeOutcomeSelection(
+                                              nextOutcomes
+                                            ),
+                                        },
+                                      };
+                                    })
+                                  }
+                                  className={cn(
+                                    "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                                    isSelected
+                                      ? "border-teal-400/30 bg-teal-400/12 text-teal-200"
+                                      : "border-white/10 bg-white/5 text-white/52 hover:bg-white/10"
+                                  )}
+                                >
+                                  {option.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="flex flex-wrap gap-3">
+                            <Button
+                              className={EDGE_ACTION_BUTTON_CLASSNAME}
+                              disabled={upsertRule.isPending}
+                              onClick={() =>
+                                handleCreateRule(
+                                  section.id,
+                                  section.rules.length
+                                )
+                              }
+                            >
+                              <Save className="size-3" />
+                              Save rule
+                            </Button>
+                            <Button
+                              className={EDGE_ACTION_BUTTON_CLASSNAME}
+                              onClick={() => {
+                                setActiveRuleComposerSectionId(null);
+                                setNewRuleDrafts((currentDrafts) => ({
+                                  ...currentDrafts,
+                                  [section.id]: createEmptyRuleDraft(),
+                                }));
+                              }}
+                            >
+                              <X className="size-3" />
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </EdgePanel>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-5 py-6 text-xs text-white/48">
+                    No rule sections yet.
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </TabsContent>
+            </TabsContent>
 
-        <TabsContent value="examples" className="mt-0">
-          <div className="mx-auto w-full max-w-3xl space-y-6">
-            <div className="border-b border-white/8 pb-4">
-              <p className="text-xs font-medium text-white/72">Examples</p>
-              <p className="mt-1 text-xs text-white/45">
-                Keep reference charts, annotated screenshots, and concrete
-                examples of what this Edge should and should not look like in
-                the wild.
-              </p>
-            </div>
+            <TabsContent value="examples" className="mt-0">
+              <div className="w-full space-y-6">
+                <div className="border-b border-white/8 pb-4">
+                  <p className="text-xs font-medium text-white/72">Examples</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Keep reference charts, annotated screenshots, and concrete
+                    examples of what this Edge should and should not look like
+                    in the wild.
+                  </p>
+                </div>
 
-            {detail.canEdit ? (
-              <JournalEditor
-                key={`${currentEdge.id}-examples-${builderEditorSeed}`}
-                compact
-                initialContent={edgeDraft.examplesBlocks}
-                onChange={(content, html) =>
-                  setEdgeDraft((currentDraft) => ({
-                    ...currentDraft,
-                    examplesBlocks: content,
-                    examplesHtml: html,
-                  }))
-                }
-                placeholder="Add annotated examples, screenshots, and scenario breakdowns..."
-              />
-            ) : (
-              <EdgeBuilderPreview
-                html={currentEdge.examplesHtml}
-                emptyLabel="No Edge examples have been published yet."
-                transparent={isPublicTemplateView}
-              />
-            )}
-          </div>
-        </TabsContent>
+                {detail.canEdit ? (
+                  <JournalEditor
+                    key={`${currentEdge.id}-examples-${builderEditorSeed}`}
+                    compact
+                    initialContent={edgeDraft.examplesBlocks}
+                    onChange={(content, html) =>
+                      setEdgeDraft((currentDraft) => ({
+                        ...currentDraft,
+                        examplesBlocks: content,
+                        examplesHtml: html,
+                      }))
+                    }
+                    placeholder="Add annotated examples, screenshots, and scenario breakdowns..."
+                  />
+                ) : (
+                  <EdgeBuilderPreview
+                    html={currentEdge.examplesHtml}
+                    emptyLabel="No Edge examples have been published yet."
+                    transparent={isPublicTemplateView}
+                  />
+                )}
+              </div>
+            </TabsContent>
 
-        {canShowPrivateActivity ? (
-          <TabsContent value="executed-trades" className="mt-0">
-            <EdgeExecutedTradesTable edgeId={edgeId} />
-          </TabsContent>
-        ) : null}
+            {canShowPrivateActivity ? (
+              <TabsContent value="executed-trades" className="mt-0">
+                <EdgeExecutedTradesTable edgeId={edgeId} />
+              </TabsContent>
+            ) : null}
 
-        {canShowPrivateActivity ? (
-          <TabsContent value="missed-trades" className="mt-0">
-            <EdgePanel
-              icon={Clock3}
-              title="Missed trades"
-              description="Manual opportunity log for setups that matched the Edge but were not executed."
-              bodyClassName="space-y-3"
-            >
-              {detail.missedTrades.length > 0 ? (
-                detail.missedTrades.map((tradeRow) => (
-                  <div
-                    key={tradeRow.id}
-                    className="rounded-lg border border-white/8 bg-black/20 p-4"
-                  >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium text-white">
-                            {tradeRow.symbol || "Unspecified market"}
-                          </p>
+            {canShowPrivateActivity ? (
+              <TabsContent value="missed-trades" className="mt-0">
+                <EdgeMissedTradesSection
+                  edgeId={edgeId}
+                  edgeName={currentEdge.name}
+                  canEdit={detail.canEdit}
+                  missedTrades={detail.missedTrades}
+                  onChanged={refreshEdgeData}
+                />
+              </TabsContent>
+            ) : null}
+
+            {canShowPrivateActivity ? (
+              <TabsContent value="entries" className="mt-0">
+                <EdgePanel
+                  icon={BookOpenText}
+                  title="Entries"
+                  description="Edge-specific journal entries linked back into your broader journal workspace."
+                  bodyClassName="space-y-3"
+                >
+                  {detail.entries.length > 0 ? (
+                    detail.entries.map((entry) => (
+                      <Link
+                        key={entry.id}
+                        href={`/dashboard/journal?entryId=${entry.id}`}
+                        className="block rounded-lg border border-white/8 bg-black/20 px-4 py-4 transition-colors hover:border-teal-400/30 hover:bg-black/25"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-1">
+                            <p className="font-medium text-white">
+                              {entry.title}
+                            </p>
+                            <p className="text-xs text-white/48">
+                              {formatDate(entry.journalDate ?? entry.updatedAt)}
+                            </p>
+                          </div>
                           <Badge
                             variant="secondary"
                             className="border-white/10 bg-white/5 text-white/70"
                           >
-                            {tradeRow.tradeType || "Missed"}
+                            {entry.entryType.replace(/_/g, " ")}
                           </Badge>
-                          {tradeRow.estimatedOutcome ? (
-                            <Badge
-                              variant="outline"
-                              className="border-white/10 bg-black/20 text-white/62"
-                            >
-                              {formatTradeOutcome(tradeRow.estimatedOutcome)}
-                            </Badge>
-                          ) : null}
                         </div>
-                        <p className="text-xs text-white/50">
-                          {formatDate(tradeRow.setupTime)} ·{" "}
-                          {tradeRow.sessionTag || "Unassigned session"}
-                        </p>
-                        <p className="text-xs leading-5 text-white/50">
-                          {tradeRow.reasonMissed || tradeRow.notes || "No note yet."}
-                        </p>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-lg border border-white/8 bg-white/5 px-4 py-3">
-                          <p className="text-xs text-white/34">
-                            Estimated P&L
-                          </p>
-                          <p className="mt-1 text-xs font-medium text-white">
-                            {formatMoney(tradeRow.estimatedPnl)}
-                          </p>
-                        </div>
-                        <div className="rounded-lg border border-white/8 bg-white/5 px-4 py-3">
-                          <p className="text-xs text-white/34">
-                            Estimated R
-                          </p>
-                          <p className="mt-1 text-xs font-medium text-white">
-                            {formatR(tradeRow.estimatedRR)}
-                          </p>
-                        </div>
-                      </div>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-4 py-5 text-xs text-white/48">
+                      No entries linked to this Edge yet.
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-4 py-5 text-xs text-white/48">
-                  No missed trades logged for this Edge yet.
-                </div>
-              )}
-            </EdgePanel>
-          </TabsContent>
-        ) : null}
-
-        {canShowPrivateActivity ? (
-          <TabsContent value="entries" className="mt-0">
-            <EdgePanel
-              icon={BookOpenText}
-              title="Entries"
-              description="Edge-specific journal entries linked back into your broader journal workspace."
-              bodyClassName="space-y-3"
-            >
-              {detail.entries.length > 0 ? (
-                detail.entries.map((entry) => (
-                  <Link
-                    key={entry.id}
-                    href={`/dashboard/journal?entryId=${entry.id}`}
-                    className="block rounded-lg border border-white/8 bg-black/20 px-4 py-4 transition-colors hover:border-teal-400/30 hover:bg-black/25"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-1">
-                        <p className="font-medium text-white">{entry.title}</p>
-                        <p className="text-xs text-white/48">
-                          {formatDate(entry.journalDate ?? entry.updatedAt)}
-                        </p>
-                      </div>
-                      <Badge
-                        variant="secondary"
-                        className="border-white/10 bg-white/5 text-white/70"
-                      >
-                        {entry.entryType.replace(/_/g, " ")}
-                      </Badge>
-                    </div>
-                  </Link>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-4 py-5 text-xs text-white/48">
-                  No entries linked to this Edge yet.
-                </div>
-              )}
-            </EdgePanel>
-          </TabsContent>
-        ) : null}
-      </Tabs>
-    </div>
+                  )}
+                </EdgePanel>
+              </TabsContent>
+            ) : null}
+          </Tabs>
+        </div>
       </div>
       <CoverImageCropDialog
         open={cropDialogOpen}
@@ -2271,6 +2760,18 @@ export default function EdgeDetailPage({
         edgeName={edgeDraft.name.trim() || currentEdge.name}
         sharedMembers={detail.sharedMembers ?? []}
         onSharedStateChange={refreshEdgeData}
+      />
+      <EdgeForkSheet
+        open={forkSheetOpen}
+        onOpenChange={setForkSheetOpen}
+        edgeName={currentEdge.name}
+        defaultName={defaultForkName}
+        defaultPublicationMode="private"
+        defaultPublicStatsVisible={true}
+        canPublishPublicFork={canPublishForkToLibrary}
+        helperText={forkSheetHelperText}
+        isPending={isForkPending}
+        onSubmit={handleForkEdge}
       />
     </div>
   );

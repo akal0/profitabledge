@@ -13,6 +13,7 @@ import {
 import { AccountCardActionsMenu } from "@/features/accounts/components/account-card-actions-menu";
 import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
+import { PropAccountPhaseActionsMenu } from "@/features/accounts/prop-tracker/components/prop-account-phase-actions-menu";
 import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
 import {
   getAccountImage,
@@ -255,7 +256,10 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
       ? "Funded"
       : dashboard?.currentPhase?.name ||
         `Phase ${account.propCurrentPhase || 1}`;
-  const phaseTarget = dashboard?.currentPhase?.profitTarget || 10;
+  const phaseTarget =
+    dashboard?.currentPhase?.profitTarget != null
+      ? Number(dashboard.currentPhase.profitTarget)
+      : null;
 
   return (
     <AccountWidgetFrame
@@ -267,6 +271,11 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             account={account}
             dashboard={dashboard}
             badgeClassName={HEADER_BADGE_CLASS}
+          />
+          <PropAccountPhaseActionsMenu
+            accountId={account.id}
+            accountName={account.name}
+            dashboard={dashboard}
           />
           <RemovePropAccountButton
             accountId={account.id}
@@ -359,7 +368,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Target</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {phaseTarget}%
+            {phaseTarget != null ? `${phaseTarget}%` : "—"}
           </p>
         </div>
       </div>

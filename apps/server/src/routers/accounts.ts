@@ -21,6 +21,7 @@ import {
   ensureRecentAutoPropClassificationForUser,
 } from "../lib/prop-firm-detection";
 import { ensurePropChallengeLineageForAccount } from "../lib/prop-challenge-lineage";
+import { createNotification } from "../lib/notifications";
 import {
   getArchivedIdsProcedure,
   toggleArchiveProcedure,
@@ -717,6 +718,24 @@ export const accountsRouter = router({
       resetCount?: number;
     };
 
+    if (result.account) {
+      await createNotification({
+        userId: ctx.session.user.id,
+        accountId: result.account.id,
+        type: "system_update",
+        title: "Preparing demo workspace",
+        body: `${result.account.name} is being refreshed in the background.`,
+        metadata: {
+          kind: "demo_workspace_generating",
+          status: "processing",
+          accountId: result.account.id,
+          accountName: result.account.name,
+          broker: result.account.broker,
+          url: "/dashboard",
+        },
+      });
+    }
+
     return {
       account: result.account,
       resetCount: result.resetCount,
@@ -728,6 +747,24 @@ export const accountsRouter = router({
 
   createSampleAccount: protectedProcedure.mutation(async ({ ctx }) => {
     const result = await provisionDemoWorkspaceAccount(ctx.session.user.id);
+
+    if (result.account) {
+      await createNotification({
+        userId: ctx.session.user.id,
+        accountId: result.account.id,
+        type: "system_update",
+        title: "Preparing demo workspace",
+        body: `${result.account.name} is being prepared in the background.`,
+        metadata: {
+          kind: "demo_workspace_generating",
+          status: "processing",
+          accountId: result.account.id,
+          accountName: result.account.name,
+          broker: result.account.broker,
+          url: "/dashboard",
+        },
+      });
+    }
 
     return {
       ...result,
@@ -744,9 +781,66 @@ export const accountsRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      return seedSampleAccount(ctx.session.user.id, {
-        accountId: input.accountId,
-        provisionShell: false,
-      });
+      const [account] = await db
+        .select({
+          name: tradingAccount.name,
+          broker: tradingAccount.broker,
+        })
+        .from(tradingAccount)
+        .where(
+          and(
+            eq(tradingAccount.id, input.accountId),
+            eq(tradingAccount.userId, ctx.session.user.id)
+          )
+        )
+        .limit(1);
+
+      try {
+        const hydrated = await seedSampleAccount(ctx.session.user.id, {
+          accountId: input.accountId,
+          provisionShell: false,
+        });
+
+        await createNotification({
+          userId: ctx.session.user.id,
+          accountId: input.accountId,
+          type: "system_update",
+          title: "Demo workspace ready",
+          body: account?.name
+            ? `${account.name} is ready with ${hydrated.tradeCount} trades and ${hydrated.openTradeCount} live positions.`
+            : `Your demo workspace is ready with ${hydrated.tradeCount} trades and ${hydrated.openTradeCount} live positions.`,
+          metadata: {
+            kind: "demo_workspace_ready",
+            accountId: input.accountId,
+            accountName: account?.name ?? null,
+            broker: account?.broker ?? null,
+            tradeCount: hydrated.tradeCount,
+            openTradeCount: hydrated.openTradeCount,
+            url: "/dashboard",
+          },
+        });
+
+        return hydrated;
+      } catch (error) {
+        await createNotification({
+          userId: ctx.session.user.id,
+          accountId: input.accountId,
+          type: "system_update",
+          title: "Demo workspace failed",
+          body:
+            error instanceof Error
+              ? error.message
+              : "Demo workspace generation failed.",
+          metadata: {
+            kind: "demo_workspace_failed",
+            accountId: input.accountId,
+            accountName: account?.name ?? null,
+            broker: account?.broker ?? null,
+            url: "/dashboard",
+          },
+        });
+
+        throw error;
+      }
     }),
 });

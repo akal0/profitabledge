@@ -396,6 +396,8 @@ export const alertsRouter = router({
               title,
               body: message,
               metadata: {
+                kind: "risk_warning",
+                ruleName: rule.name,
                 alertType: rule.ruleType,
                 severity: rule.alertSeverity,
                 currentValue,

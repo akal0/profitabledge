@@ -11,9 +11,11 @@ import {
   edgeRule,
   edgeSection,
   edgeShareMember,
+  edgeVersion,
   trade,
   tradeEdgeAssignment,
   tradeEdgeRuleEvaluation,
+  tradingAccount,
 } from "../db/schema/trading";
 import {
   EDGE_PUBLICATION_MODES,
@@ -32,10 +34,21 @@ import {
   normalizeEdgeName,
   setTradeEdgeRuleEvaluations,
 } from "../lib/edges/service";
+import {
+  ensureEdgeVersionBaseline,
+  recordEdgeVersion,
+} from "../lib/edges/versioning";
+import { issuePublicEdgeVerification } from "../lib/verification/share-verification";
 import { getApprovedAffiliateProfile } from "../lib/billing/growth";
 import { backfillUserEdgesFromLegacy } from "../lib/edges/compatibility";
 import { createNotification } from "../lib/notifications";
-import { protectedProcedure, router } from "../lib/trpc";
+import {
+  deriveClosedTradeClosePrice,
+  deriveClosedTradeProfit,
+  parseManualTradeDate,
+} from "../lib/trades/manual/derive";
+import { normalizeTradeTags } from "../lib/trades/tags";
+import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
 import {
   ensureTradeBatchOwnership,
   ensureTradeOwnership,
@@ -55,6 +68,9 @@ function isPositiveTradeOutcome(outcome: string | null | undefined) {
 type EdgeTradeMetricRow = {
   id: string;
   accountId: string;
+  broker: string | null;
+  verificationLevel: string | null;
+  isPropAccount: boolean | null;
   symbol: string | null;
   tradeType: string | null;
   profit: number | null;
@@ -293,6 +309,886 @@ function calculateEdgeMetrics(args: {
   };
 }
 
+function formatRatioAsPercent(
+  value: number | null | undefined,
+  fractionDigits = 0
+) {
+  if (value == null || !Number.isFinite(value)) {
+    return "—";
+  }
+
+  return `${(value * 100).toFixed(fractionDigits)}%`;
+}
+
+function collectTopLabels(
+  values: Array<string | null | undefined>,
+  options?: {
+    limit?: number;
+    excludeLabels?: string[];
+  }
+) {
+  const counts = new Map<string, number>();
+  const excluded = new Set(options?.excludeLabels ?? []);
+
+  for (const value of values) {
+    const label = value?.trim();
+    if (!label || excluded.has(label)) {
+      continue;
+    }
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, options?.limit ?? 3)
+    .map(([label]) => label);
+}
+
+function describeDirectionBias(trades: EdgeTradeMetricRow[]) {
+  let longCount = 0;
+  let shortCount = 0;
+
+  for (const currentTrade of trades) {
+    const tradeType = String(currentTrade.tradeType ?? "").toLowerCase();
+    if (tradeType === "short") {
+      shortCount += 1;
+    } else if (tradeType === "long") {
+      longCount += 1;
+    }
+  }
+
+  const total = longCount + shortCount;
+  if (total === 0) {
+    return "No directional sample yet";
+  }
+
+  const dominantShare = Math.max(longCount, shortCount) / total;
+  if (dominantShare < 0.6) {
+    return "Balanced long / short sample";
+  }
+
+  return longCount >= shortCount
+    ? "Long-biased execution sample"
+    : "Short-biased execution sample";
+}
+
+function describeAccountContext(trades: EdgeTradeMetricRow[]) {
+  if (trades.length === 0) {
+    return "No account context yet";
+  }
+
+  const propTradeCount = trades.filter((tradeRow) => tradeRow.isPropAccount).length;
+  if (propTradeCount === 0) {
+    return "Mostly personal-account sample";
+  }
+
+  const propShare = propTradeCount / trades.length;
+  if (propShare >= 0.7) {
+    return "Mostly executed on prop accounts";
+  }
+
+  if (propShare >= 0.3) {
+    return "Mixed prop and personal-account sample";
+  }
+
+  return "Mostly personal-account sample";
+}
+
+function describeEdgePublication(edgeRow: typeof edge.$inferSelect) {
+  if (edgeRow.isFeatured) {
+    return "Featured edge";
+  }
+
+  if (edgeRow.publicationMode === "library") {
+    return "Library edge";
+  }
+
+  return "Private edge";
+}
+
+function buildEdgePassport(args: {
+  edgeRow: typeof edge.$inferSelect;
+  metrics: ReturnType<typeof calculateEdgeMetrics>;
+  trades: EdgeTradeMetricRow[];
+  source:
+    | {
+        id: string;
+        name: string;
+        ownerName: string | null;
+        ownerUsername: string | null;
+      }
+    | null;
+}) {
+  const { edgeRow, metrics, trades, source } = args;
+  const verifiedTradeCount = trades.filter((tradeRow) => {
+    const verificationLevel = String(tradeRow.verificationLevel ?? "").toLowerCase();
+    return verificationLevel.length > 0 && verificationLevel !== "unverified";
+  }).length;
+  const propTradeCount = trades.filter((tradeRow) => tradeRow.isPropAccount).length;
+  const verifiedShare =
+    metrics.tradeCount > 0 ? verifiedTradeCount / metrics.tradeCount : null;
+  const propShare = metrics.tradeCount > 0 ? propTradeCount / metrics.tradeCount : null;
+  const topSessions = collectTopLabels(
+    trades.map((tradeRow) => tradeRow.sessionTag),
+    { limit: 3, excludeLabels: ["Unassigned"] }
+  );
+  const topSymbols = collectTopLabels(
+    trades.map((tradeRow) => tradeRow.symbol),
+    { limit: 3 }
+  );
+
+  const sampleCard =
+    metrics.tradeCount >= 50
+      ? {
+          value: "Validated",
+          detail: `${metrics.tradeCount} tagged trades`,
+          tone: "teal",
+        }
+      : metrics.tradeCount >= 20
+      ? {
+          value: "Building",
+          detail: `${metrics.tradeCount} tagged trades`,
+          tone: "blue",
+        }
+      : metrics.tradeCount >= 8
+      ? {
+          value: "Early",
+          detail: `${metrics.tradeCount} tagged trades`,
+          tone: "amber",
+        }
+      : metrics.tradeCount > 0
+      ? {
+          value: "Thin",
+          detail: `${metrics.tradeCount} tagged trades`,
+          tone: "rose",
+        }
+      : {
+          value: "Empty",
+          detail: "No executed trades linked yet",
+          tone: "slate",
+        };
+
+  const proofCard =
+    metrics.tradeCount === 0
+      ? {
+          value: "No proof yet",
+          detail: "No executed trades linked yet",
+          tone: "slate",
+        }
+      : verifiedTradeCount === 0
+      ? {
+          value: "Self-reported",
+          detail: "No synced / verified trades in sample",
+          tone: "rose",
+        }
+      : verifiedShare != null && verifiedShare >= 0.8
+      ? {
+          value: "Verified sample",
+          detail: `${verifiedTradeCount} of ${metrics.tradeCount} trades from synced or verified accounts`,
+          tone: "teal",
+        }
+      : {
+          value: "Mixed proof",
+          detail: `${verifiedTradeCount} of ${metrics.tradeCount} trades from synced or verified accounts`,
+          tone: "blue",
+        };
+
+  const processCard =
+    metrics.reviewCounts.reviewed === 0
+      ? {
+          value: "Needs review loop",
+          detail: "No rule reviews logged yet",
+          tone: "amber",
+        }
+      : (metrics.followThroughRate ?? 0) >= 0.7 &&
+        (metrics.reviewCoverage ?? 0) >= 0.5
+      ? {
+          value: "Tight process",
+          detail: `${formatRatioAsPercent(metrics.followThroughRate)} follow-through across ${metrics.reviewCounts.reviewed} reviewed trades`,
+          tone: "teal",
+        }
+      : (metrics.followThroughRate ?? 0) >= 0.55 ||
+        (metrics.reviewCoverage ?? 0) >= 0.3
+      ? {
+          value: "Mixed process",
+          detail: `${formatRatioAsPercent(metrics.followThroughRate)} follow-through across ${metrics.reviewCounts.reviewed} reviewed trades`,
+          tone: "amber",
+        }
+      : {
+          value: "Loose process",
+          detail: `${formatRatioAsPercent(metrics.followThroughRate)} follow-through across ${metrics.reviewCounts.reviewed} reviewed trades`,
+          tone: "rose",
+        };
+
+  const propCard =
+    metrics.tradeCount === 0
+      ? {
+          value: "No sample",
+          detail: "No account context yet",
+          tone: "slate",
+        }
+      : propTradeCount === 0
+      ? {
+          value: "No prop usage yet",
+          detail: "Sample comes from personal or unclassified accounts",
+          tone: "slate",
+        }
+      : (propShare ?? 0) >= 0.65
+      ? {
+          value: "Prop-tested",
+          detail: `${propTradeCount} of ${metrics.tradeCount} trades came from prop accounts`,
+          tone: "teal",
+        }
+      : {
+          value: "Mixed account sample",
+          detail: `${propTradeCount} of ${metrics.tradeCount} trades came from prop accounts`,
+          tone: "amber",
+        };
+
+  return {
+    cards: {
+      sample: {
+        label: "Sample",
+        ...sampleCard,
+      },
+      proof: {
+        label: "Proof",
+        ...proofCard,
+      },
+      process: {
+        label: "Process",
+        ...processCard,
+      },
+      prop: {
+        label: "Prop context",
+        ...propCard,
+      },
+    },
+    fitNotes: [
+      {
+        label: "Most traded sessions",
+        value:
+          topSessions.length > 0 ? topSessions.join(", ") : "No session tags yet",
+      },
+      {
+        label: "Most tested symbols",
+        value:
+          topSymbols.length > 0 ? topSymbols.join(", ") : "No symbol sample yet",
+      },
+      {
+        label: "Direction bias",
+        value: describeDirectionBias(trades),
+      },
+      {
+        label: "Account context",
+        value: describeAccountContext(trades),
+      },
+    ],
+    lineage: {
+      publicationLabel: describeEdgePublication(edgeRow),
+      forkCount: metrics.copyCount,
+      shareCount: metrics.shareCount,
+      source,
+    },
+  };
+}
+
+function clamp(value: number, min = 0, max = 100) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function getReadinessLabel(score: number) {
+  if (score >= 80) {
+    return "Ready";
+  }
+
+  if (score >= 55) {
+    return "Building";
+  }
+
+  if (score >= 30) {
+    return "Early";
+  }
+
+  return "Draft";
+}
+
+function buildEdgeReadiness(args: {
+  edgeRow: typeof edge.$inferSelect;
+  metrics: ReturnType<typeof calculateEdgeMetrics>;
+  trades: EdgeTradeMetricRow[];
+  versionCount: number;
+}) {
+  const { edgeRow, metrics, trades, versionCount } = args;
+  const verifiedTradeCount = trades.filter((tradeRow) => {
+    const verificationLevel = String(tradeRow.verificationLevel ?? "").toLowerCase();
+    return verificationLevel.length > 0 && verificationLevel !== "unverified";
+  }).length;
+  const verifiedShare =
+    metrics.tradeCount > 0 ? verifiedTradeCount / metrics.tradeCount : 0;
+  const sampleScore =
+    metrics.tradeCount > 0
+      ? clamp((Math.min(metrics.tradeCount, 40) / 40) * 30)
+      : 0;
+  const expectancyScore =
+    metrics.expectancy != null && metrics.expectancy > 0
+      ? clamp(Math.min(metrics.expectancy, 2) / 2 * 15)
+      : 0;
+  const processScore = clamp(
+    (metrics.followThroughRate ?? 0) * 15 + (metrics.reviewCoverage ?? 0) * 10
+  );
+  const proofScore = clamp(verifiedShare * 15);
+  const documentationScore =
+    (edgeRow.contentHtml?.trim() ? 5 : 0) +
+    (edgeRow.examplesHtml?.trim() ? 3 : 0) +
+    (edgeRow.description?.trim() ? 2 : 0);
+  const versionScore = clamp(Math.min(versionCount, 5));
+  const score = clamp(
+    sampleScore +
+      expectancyScore +
+      processScore +
+      proofScore +
+      documentationScore +
+      versionScore
+  );
+  const label = getReadinessLabel(score);
+
+  const blockers: string[] = [];
+  const nextActions: string[] = [];
+
+  if (metrics.tradeCount < 20) {
+    blockers.push("Sample is still thin for repeatable deployment.");
+    nextActions.push("Tag at least 20 executed trades to strengthen the sample.");
+  }
+
+  if ((metrics.expectancy ?? 0) <= 0) {
+    blockers.push("Expectancy is not positive yet.");
+    nextActions.push("Refine the setup rules before allocating more risk to it.");
+  }
+
+  if ((metrics.reviewCoverage ?? 0) < 0.35) {
+    blockers.push("Rule review coverage is too light to trust the process data.");
+    nextActions.push("Review more trades so the process score reflects reality.");
+  }
+
+  if ((metrics.followThroughRate ?? 0) < 0.6 && metrics.reviewCounts.reviewed > 0) {
+    blockers.push("Execution discipline is below the level expected for scaling.");
+    nextActions.push("Use pre-trade guardrails to stop low-conviction executions.");
+  }
+
+  if (!edgeRow.contentHtml?.trim()) {
+    blockers.push("The edge thesis is not documented yet.");
+    nextActions.push("Write the market context and execution framework in the thesis tab.");
+  }
+
+  if (!edgeRow.examplesHtml?.trim()) {
+    nextActions.push("Add annotated examples so forks inherit cleaner context.");
+  }
+
+  if (nextActions.length === 0) {
+    nextActions.push("Keep collecting clean samples and maintain the review loop.");
+  }
+
+  const summary =
+    label === "Ready"
+      ? "This Edge has enough evidence, process coverage, and documentation to deploy repeatedly or publish confidently."
+      : label === "Building"
+      ? "The pattern is promising, but it still needs more proof or tighter process before you scale it."
+      : label === "Early"
+      ? "A real setup is forming here, but the sample and review loop are still too thin for strong confidence."
+      : "This Edge is still a draft. Keep it private while you define the rules and build the sample.";
+
+  return {
+    score,
+    label,
+    summary,
+    badges: [
+      {
+        label: "Sample",
+        value:
+          metrics.tradeCount >= 40
+            ? "Deep"
+            : metrics.tradeCount >= 20
+            ? "Building"
+            : metrics.tradeCount >= 8
+            ? "Early"
+            : "Thin",
+        tone:
+          metrics.tradeCount >= 40
+            ? "positive"
+            : metrics.tradeCount >= 20
+            ? "warning"
+            : "critical",
+      },
+      {
+        label: "Proof",
+        value:
+          metrics.tradeCount === 0
+            ? "None"
+            : verifiedShare >= 0.75
+            ? "Verified"
+            : verifiedShare >= 0.3
+            ? "Mixed"
+            : "Self-reported",
+        tone:
+          verifiedShare >= 0.75
+            ? "positive"
+            : verifiedShare >= 0.3
+            ? "warning"
+            : "critical",
+      },
+      {
+        label: "Process",
+        value:
+          (metrics.followThroughRate ?? 0) >= 0.7
+            ? "Tight"
+            : (metrics.followThroughRate ?? 0) >= 0.55
+            ? "Mixed"
+            : "Loose",
+        tone:
+          (metrics.followThroughRate ?? 0) >= 0.7
+            ? "positive"
+            : (metrics.followThroughRate ?? 0) >= 0.55
+            ? "warning"
+            : "critical",
+      },
+      {
+        label: "Docs",
+        value:
+          edgeRow.contentHtml?.trim() && edgeRow.examplesHtml?.trim()
+            ? "Complete"
+            : edgeRow.contentHtml?.trim()
+            ? "Partial"
+            : "Missing",
+        tone:
+          edgeRow.contentHtml?.trim() && edgeRow.examplesHtml?.trim()
+            ? "positive"
+            : edgeRow.contentHtml?.trim()
+            ? "warning"
+            : "critical",
+      },
+    ],
+    blockers,
+    nextActions,
+  };
+}
+
+function buildEdgeAccountFit(args: {
+  accounts: Array<{
+    id: string;
+    name: string;
+    broker: string | null;
+    isPropAccount: boolean | null;
+    verificationLevel: string | null;
+    lastSyncedAt: Date | null;
+    createdAt: Date;
+  }>;
+  trades: EdgeTradeMetricRow[];
+}) {
+  const { accounts, trades } = args;
+  if (accounts.length === 0) {
+    return null;
+  }
+
+  const dominantBroker = collectTopLabels(
+    trades.map((tradeRow) => tradeRow.broker),
+    { limit: 1 }
+  )[0];
+  const propTradeCount = trades.filter((tradeRow) => tradeRow.isPropAccount).length;
+  const propShare = trades.length > 0 ? propTradeCount / trades.length : 0;
+  const tradeUsage = new Map<
+    string,
+    { count: number; lastUsedAt: Date | null }
+  >();
+
+  for (const tradeRow of trades) {
+    const existing = tradeUsage.get(tradeRow.accountId) ?? {
+      count: 0,
+      lastUsedAt: null,
+    };
+    const tradeTimestamp = tradeRow.closeTime ?? tradeRow.openTime ?? null;
+    tradeUsage.set(tradeRow.accountId, {
+      count: existing.count + 1,
+      lastUsedAt:
+        existing.lastUsedAt == null ||
+        (tradeTimestamp != null &&
+          tradeTimestamp.getTime() > existing.lastUsedAt.getTime())
+          ? tradeTimestamp
+          : existing.lastUsedAt,
+    });
+  }
+
+  const recommendations = accounts
+    .map((account) => {
+      const usage = tradeUsage.get(account.id) ?? { count: 0, lastUsedAt: null };
+      const reasons: string[] = [];
+      let score = trades.length > 0 ? 35 : 20;
+
+      if (usage.count > 0) {
+        score += 30;
+        reasons.push(
+          `Already used on ${usage.count} ${usage.count === 1 ? "edge trade" : "edge trades"}.`
+        );
+      } else {
+        reasons.push("No direct Edge history on this account yet.");
+      }
+
+      if (dominantBroker && account.broker === dominantBroker) {
+        score += 20;
+        reasons.push(`Broker matches the strongest sample (${dominantBroker}).`);
+      }
+
+      if (propShare >= 0.6) {
+        if (account.isPropAccount) {
+          score += 18;
+          reasons.push("Edge sample is prop-heavy and this account matches that pressure.");
+        } else {
+          score -= 10;
+          reasons.push("This edge was mostly executed on prop accounts.");
+        }
+      } else if (trades.length > 0 && propShare <= 0.25) {
+        if (!account.isPropAccount) {
+          score += 12;
+          reasons.push("Edge sample is mostly personal-account execution.");
+        } else {
+          reasons.push("Prop rules may add pressure that is not dominant in the sample.");
+        }
+      }
+
+      const verificationLevel = String(account.verificationLevel ?? "").toLowerCase();
+      if (verificationLevel.length > 0 && verificationLevel !== "unverified") {
+        score += 8;
+        reasons.push("Verified account helps preserve proof quality.");
+      }
+
+      const roundedScore = clamp(score);
+
+      return {
+        accountId: account.id,
+        accountName: account.name,
+        label:
+          roundedScore >= 80
+            ? "Best fit"
+            : roundedScore >= 60
+            ? "Good fit"
+            : roundedScore >= 40
+            ? "Usable"
+            : "Weak fit",
+        score: roundedScore,
+        broker: account.broker,
+        isProp: account.isPropAccount ?? false,
+        reasons,
+        lastUsedAt: usage.lastUsedAt ?? account.lastSyncedAt ?? account.createdAt,
+      };
+    })
+    .sort((left, right) => {
+      const scoreDelta = (right.score ?? 0) - (left.score ?? 0);
+      if (scoreDelta !== 0) {
+        return scoreDelta;
+      }
+
+      const leftTs = left.lastUsedAt ? new Date(left.lastUsedAt).getTime() : 0;
+      const rightTs = right.lastUsedAt ? new Date(right.lastUsedAt).getTime() : 0;
+      return rightTs - leftTs;
+    })
+    .slice(0, 4);
+
+  const cautions: string[] = [];
+  if (trades.length < 8) {
+    cautions.push("Account matching is still early because the trade sample is thin.");
+  }
+
+  if (propShare >= 0.6 && !accounts.some((account) => account.isPropAccount)) {
+    cautions.push("The edge looks prop-oriented, but you do not have a prop account connected here.");
+  }
+
+  const topRecommendation = recommendations[0] ?? null;
+
+  return {
+    summary: topRecommendation
+      ? `${topRecommendation.accountName} is the strongest current fit based on broker overlap, account context, and where this edge already has proof.`
+      : "Connect trading accounts to start matching this edge to the right capital lane.",
+    recommendations,
+    cautions,
+  };
+}
+
+function formatVersionFieldLabel(field: string) {
+  switch (field) {
+    case "contentBlocks":
+    case "contentHtml":
+      return "Content";
+    case "examplesBlocks":
+    case "examplesHtml":
+      return "Examples";
+    case "coverImageUrl":
+    case "coverImagePosition":
+      return "Cover";
+    case "publicStatsVisible":
+      return "Stats";
+    case "publicationMode":
+      return "Publication";
+    case "sourceEdgeId":
+      return "Lineage";
+    case "sections":
+      return "Sections";
+    case "rules":
+      return "Rules";
+    default:
+      return field
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/\b\w/g, (character) => character.toUpperCase());
+  }
+}
+
+async function buildEdgeVersionHistory(edgeId: string) {
+  const versionRows = await db
+    .select({
+      id: edgeVersion.id,
+      versionNumber: edgeVersion.versionNumber,
+      createdByUserId: edgeVersion.createdByUserId,
+      changeType: edgeVersion.changeType,
+      changeSummary: edgeVersion.changeSummary,
+      changedFields: edgeVersion.changedFields,
+      diffSummary: edgeVersion.diffSummary,
+      snapshot: edgeVersion.snapshot,
+      createdAt: edgeVersion.createdAt,
+    })
+    .from(edgeVersion)
+    .where(eq(edgeVersion.edgeId, edgeId))
+    .orderBy(desc(edgeVersion.versionNumber))
+    .limit(20);
+
+  if (versionRows.length === 0) {
+    return {
+      versions: [],
+      count: 0,
+    };
+  }
+
+  const actorIds = Array.from(
+    new Set(
+      versionRows
+        .map((versionRow) => versionRow.createdByUserId)
+        .filter((value): value is string => Boolean(value))
+    )
+  );
+  const actorProfiles = await getEdgeOwnerProfiles(actorIds);
+  const latestVersionNumber = versionRows[0]?.versionNumber ?? 0;
+
+  return {
+    count: versionRows.length,
+    versions: versionRows.map((versionRow) => {
+      const actor =
+        versionRow.createdByUserId != null
+          ? actorProfiles.get(versionRow.createdByUserId) ?? null
+          : null;
+      const snapshot =
+        (versionRow.snapshot as
+          | { edge?: { publicationMode?: string | null } }
+          | null
+          | undefined) ?? null;
+      const diffSummary =
+        (versionRow.diffSummary as
+          | {
+              previousSectionCount?: number;
+              nextSectionCount?: number;
+              previousRuleCount?: number;
+              nextRuleCount?: number;
+              structuralChange?: boolean;
+            }
+          | null
+          | undefined) ?? null;
+      const changedFields =
+        (versionRow.changedFields as string[] | null | undefined) ?? [];
+
+      const changes = [
+        changedFields.length > 0
+          ? {
+              label: "Changed",
+              value: changedFields
+                .slice(0, 3)
+                .map(formatVersionFieldLabel)
+                .join(", "),
+            }
+          : null,
+        diffSummary?.structuralChange
+          ? {
+              label: "Structure",
+              value: `${diffSummary.previousSectionCount ?? 0} -> ${diffSummary.nextSectionCount ?? 0} sections · ${diffSummary.previousRuleCount ?? 0} -> ${diffSummary.nextRuleCount ?? 0} rules`,
+            }
+          : null,
+      ].filter(
+        (
+          value
+        ): value is {
+          label: string;
+          value: string;
+        } => Boolean(value)
+      );
+
+      return {
+        id: versionRow.id,
+        label: `Version ${versionRow.versionNumber}`,
+        createdAt: versionRow.createdAt,
+        authorName:
+          actor?.displayName?.trim() ||
+          actor?.name?.trim() ||
+          actor?.username?.trim() ||
+          null,
+        summary:
+          versionRow.changeSummary ??
+          formatVersionFieldLabel(versionRow.changeType),
+        isCurrent: versionRow.versionNumber === latestVersionNumber,
+        isPublished: snapshot?.edge?.publicationMode === "library",
+        changes,
+      };
+    }),
+  };
+}
+
+function buildPublicEdgePath(edgeId: string) {
+  return `/edge/${edgeId}`;
+}
+
+async function buildEdgeSourceSummary(args: {
+  viewerUserId?: string | null;
+  edgeRow: Pick<typeof edge.$inferSelect, "sourceEdgeId">;
+}) {
+  if (!args.edgeRow.sourceEdgeId) {
+    return null;
+  }
+
+  const rootSourceEdge = await resolveRootSourceEdge(args.edgeRow);
+  const preferredSourceId = rootSourceEdge?.id ?? args.edgeRow.sourceEdgeId;
+  const sourceEdgeRows =
+    args.viewerUserId != null
+      ? [
+          await getAccessibleEdgeById(args.viewerUserId, preferredSourceId),
+          preferredSourceId !== args.edgeRow.sourceEdgeId
+            ? await getAccessibleEdgeById(args.viewerUserId, args.edgeRow.sourceEdgeId)
+            : null,
+        ]
+      : await Promise.all([
+          db
+            .select()
+            .from(edge)
+            .where(eq(edge.id, preferredSourceId))
+            .limit(1)
+            .then((rows) => rows[0] ?? null),
+          preferredSourceId !== args.edgeRow.sourceEdgeId
+            ? db
+                .select()
+                .from(edge)
+                .where(eq(edge.id, args.edgeRow.sourceEdgeId))
+                .limit(1)
+                .then((rows) => rows[0] ?? null)
+            : Promise.resolve(null),
+        ]);
+  const sourceEdgeRow = sourceEdgeRows.find(Boolean) ?? null;
+
+  if (!sourceEdgeRow) {
+    return null;
+  }
+
+  const ownerProfiles = await getEdgeOwnerProfiles([sourceEdgeRow.ownerUserId]);
+  const sourceOwner = ownerProfiles.get(sourceEdgeRow.ownerUserId) ?? null;
+  const isPublicSource =
+    sourceEdgeRow.isFeatured || sourceEdgeRow.publicationMode === "library";
+
+  if (args.viewerUserId == null && !isPublicSource) {
+    return null;
+  }
+
+  return {
+    id: sourceEdgeRow.id,
+    name: sourceEdgeRow.name,
+    ownerName: sourceOwner?.displayName ?? sourceOwner?.name ?? null,
+    ownerUsername: sourceOwner?.username ?? null,
+    shareId: isPublicSource ? sourceEdgeRow.id : null,
+    publicPath: isPublicSource ? buildPublicEdgePath(sourceEdgeRow.id) : null,
+  };
+}
+
+function buildEdgeSummaryPassport(args: {
+  edgeRow: typeof edge.$inferSelect;
+  metrics: ReturnType<typeof calculateEdgeMetrics>;
+  readiness: ReturnType<typeof buildEdgeReadiness>;
+}) {
+  return {
+    readiness: {
+      label: args.readiness.label,
+      score: args.readiness.score,
+      note: args.readiness.summary,
+    },
+    lineage: {
+      forkCount: args.metrics.copyCount,
+      descendantCount: args.metrics.copyCount,
+      forkDepth: args.edgeRow.sourceEdgeId ? 1 : 0,
+    },
+  };
+}
+
+async function buildEdgeLineageGraph(args: {
+  viewerUserId: string;
+  edgeRow: typeof edge.$inferSelect;
+  shareCount: number;
+}) {
+  const { viewerUserId, edgeRow, shareCount } = args;
+  const [parent, root, descendantRows] = await Promise.all([
+    edgeRow.sourceEdgeId
+      ? db
+          .select()
+          .from(edge)
+          .where(eq(edge.id, edgeRow.sourceEdgeId))
+          .limit(1)
+          .then((rows) => rows[0] ?? null)
+      : Promise.resolve(null),
+    edgeRow.sourceEdgeId ? resolveRootSourceEdge(edgeRow) : Promise.resolve(null),
+    db
+      .select()
+      .from(edge)
+      .where(eq(edge.sourceEdgeId, edgeRow.id))
+      .orderBy(desc(edge.updatedAt), asc(edge.name))
+      .limit(12),
+  ]);
+
+  const accessibleDescendants = descendantRows.filter(
+    (descendant) =>
+      descendant.ownerUserId === viewerUserId ||
+      descendant.isFeatured ||
+      descendant.publicationMode === "library"
+  );
+  const ownerIds = Array.from(
+    new Set([
+      edgeRow.ownerUserId,
+      ...(parent ? [parent.ownerUserId] : []),
+      ...(root ? [root.ownerUserId] : []),
+      ...accessibleDescendants.map((descendant) => descendant.ownerUserId),
+    ])
+  );
+  const ownerProfiles = await getEdgeOwnerProfiles(ownerIds);
+
+  const mapNode = (edgeRowValue: typeof edge.$inferSelect) => {
+    const owner = ownerProfiles.get(edgeRowValue.ownerUserId) ?? null;
+    return {
+      id: edgeRowValue.id,
+      name: edgeRowValue.name,
+      ownerName: owner?.displayName ?? owner?.name ?? null,
+      publicationLabel: describeEdgePublication(edgeRowValue),
+    };
+  };
+
+  return {
+    current: mapNode(edgeRow),
+    parent: parent ? mapNode(parent) : null,
+    root: root ? mapNode(root) : null,
+    descendants: accessibleDescendants.map(mapNode),
+    forkCount: descendantRows.length,
+    shareCount,
+  };
+}
+
 async function getEdgeTradeRows(edgeIds: string[]) {
   if (edgeIds.length === 0) {
     return [] as Array<EdgeTradeMetricRow & { edgeId: string }>;
@@ -303,6 +1199,9 @@ async function getEdgeTradeRows(edgeIds: string[]) {
       edgeId: tradeEdgeAssignment.edgeId,
       id: trade.id,
       accountId: trade.accountId,
+      broker: tradingAccount.broker,
+      verificationLevel: tradingAccount.verificationLevel,
+      isPropAccount: tradingAccount.isPropAccount,
       symbol: trade.symbol,
       tradeType: trade.tradeType,
       profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
@@ -314,6 +1213,7 @@ async function getEdgeTradeRows(edgeIds: string[]) {
     })
     .from(tradeEdgeAssignment)
     .innerJoin(trade, eq(trade.id, tradeEdgeAssignment.tradeId))
+    .innerJoin(tradingAccount, eq(tradingAccount.id, trade.accountId))
     .where(inArray(tradeEdgeAssignment.edgeId, edgeIds));
 
   return rows.map((row) => ({
@@ -426,10 +1326,109 @@ async function getEdgeOwnerProfiles(ownerUserIds: string[]) {
   return new Map(rows.map((row) => [row.id, row]));
 }
 
-async function buildEdgeSummaries(edgeRows: Array<typeof edge.$inferSelect>) {
+async function resolveRootSourceEdge(
+  edgeRow: Pick<typeof edge.$inferSelect, "sourceEdgeId">
+) {
+  let currentSourceId = edgeRow.sourceEdgeId;
+  let currentSource: typeof edge.$inferSelect | null = null;
+  const visitedSourceIds = new Set<string>();
+
+  while (currentSourceId && !visitedSourceIds.has(currentSourceId)) {
+    visitedSourceIds.add(currentSourceId);
+
+    const [nextSource] = await db
+      .select()
+      .from(edge)
+      .where(eq(edge.id, currentSourceId))
+      .limit(1);
+
+    if (!nextSource) {
+      break;
+    }
+
+    currentSource = nextSource;
+    currentSourceId = nextSource.sourceEdgeId;
+  }
+
+  return currentSource;
+}
+
+async function createUserForkedEdge(input: {
+  userId: string;
+  baseName: string;
+  color?: string | null;
+  description?: string | null;
+}) {
+  const formattedBaseName = formatEdgeName(input.baseName);
+
+  if (!formattedBaseName) {
+    throw new Error("Edge name is required");
+  }
+
+  let nextName = formattedBaseName;
+  let suffix = 2;
+
+  while (true) {
+    const nextNormalizedName = normalizeEdgeName(nextName);
+    const [existingEdge] = await db
+      .select({ id: edge.id })
+      .from(edge)
+      .where(
+        and(
+          eq(edge.ownerUserId, input.userId),
+          eq(edge.normalizedName, nextNormalizedName)
+        )
+      )
+      .limit(1);
+
+    if (!existingEdge) {
+      const [createdEdge] = await db
+        .insert(edge)
+        .values({
+          ownerUserId: input.userId,
+          name: nextName,
+          normalizedName: nextNormalizedName,
+          description: input.description ?? null,
+          color: input.color ?? "#3B82F6",
+        })
+        .returning();
+
+      if (!createdEdge) {
+        throw new Error("Failed to create forked Edge");
+      }
+
+      return createdEdge;
+    }
+
+    nextName = `${formattedBaseName} ${suffix}`;
+    suffix += 1;
+  }
+}
+
+async function buildEdgeSummaries(
+  edgeRows: Array<typeof edge.$inferSelect>,
+  options?: {
+    viewerUserId?: string | null;
+  }
+) {
+  if (edgeRows.length === 0) {
+    return [];
+  }
+
   const edgeIds = edgeRows.map((currentEdge) => currentEdge.id);
   const ownerUserIds = Array.from(
     new Set(edgeRows.map((currentEdge) => currentEdge.ownerUserId))
+  );
+  const versionCountRows = await db
+    .select({
+      edgeId: edgeVersion.edgeId,
+      count: sql<number>`COUNT(*)::int`,
+    })
+    .from(edgeVersion)
+    .where(inArray(edgeVersion.edgeId, edgeIds))
+    .groupBy(edgeVersion.edgeId);
+  const versionCountByEdgeId = new Map(
+    versionCountRows.map((row) => [row.edgeId, row.count])
   );
   const [
     tradeRows,
@@ -448,9 +1447,10 @@ async function buildEdgeSummaries(edgeRows: Array<typeof edge.$inferSelect>) {
       getEdgeOwnerProfiles(ownerUserIds),
     ]);
 
-  return edgeRows.map((currentEdge) => {
+  return Promise.all(edgeRows.map(async (currentEdge) => {
+    const currentTradeRows = tradeRows.filter((row) => row.edgeId === currentEdge.id);
     const metrics = calculateEdgeMetrics({
-      trades: tradeRows.filter((row) => row.edgeId === currentEdge.id),
+      trades: currentTradeRows,
       evaluations: evaluationRows.filter((row) => row.edgeId === currentEdge.id),
       missedTrades: missedTradeRows.filter(
         (row) => row.edgeId === currentEdge.id
@@ -458,14 +1458,37 @@ async function buildEdgeSummaries(edgeRows: Array<typeof edge.$inferSelect>) {
       shareCount: shareCounts.get(currentEdge.id) ?? 0,
       copyCount: copyCounts.get(currentEdge.id) ?? 0,
     });
+    const readiness = buildEdgeReadiness({
+      edgeRow: currentEdge,
+      metrics,
+      trades: currentTradeRows,
+      versionCount: versionCountByEdgeId.get(currentEdge.id) ?? 0,
+    });
+    const sourceEdge = await buildEdgeSourceSummary({
+      viewerUserId: options?.viewerUserId ?? null,
+      edgeRow: currentEdge,
+    });
 
     return {
       ...currentEdge,
       owner: ownerProfiles.get(currentEdge.ownerUserId) ?? null,
+      sourceEdge,
       metrics,
+      passport: buildEdgeSummaryPassport({
+        edgeRow: currentEdge,
+        metrics,
+        readiness,
+      }),
+      publicPage:
+        currentEdge.isFeatured || currentEdge.publicationMode === "library"
+          ? {
+              shareId: currentEdge.id,
+              path: buildPublicEdgePath(currentEdge.id),
+            }
+          : null,
       legacy: applyEdgeLegacyProjection(currentEdge),
     };
-  });
+  }));
 }
 
 function applyPublicSummaryStatsVisibility<
@@ -474,6 +1497,12 @@ function applyPublicSummaryStatsVisibility<
     isFeatured?: boolean | null;
     publicStatsVisible?: boolean | null;
     metrics?: unknown;
+    passport?: {
+      cards?: unknown;
+      fitNotes?: unknown;
+      readiness?: unknown;
+      lineage?: unknown;
+    } | null;
   },
 >(summary: TSummary) {
   if (
@@ -489,6 +1518,14 @@ function applyPublicSummaryStatsVisibility<
   return {
     ...summary,
     metrics: null,
+    passport: summary.passport
+      ? {
+          ...summary.passport,
+          cards: null,
+          fitNotes: [],
+          readiness: null,
+        }
+      : summary.passport,
   };
 }
 
@@ -507,6 +1544,146 @@ async function assertOwnedEdge(userId: string, edgeId: string) {
   }
 
   return ownedEdge;
+}
+
+async function resolveOwnedAccountId(
+  userId: string,
+  accountId: string | null | undefined
+) {
+  if (!accountId) {
+    return null;
+  }
+
+  const [ownedAccount] = await db
+    .select({ id: tradingAccount.id })
+    .from(tradingAccount)
+    .where(
+      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+    )
+    .limit(1);
+
+  if (!ownedAccount) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Account not found",
+    });
+  }
+
+  return ownedAccount.id;
+}
+
+function parseStoredNullableNumber(
+  value: string | number | null | undefined
+) {
+  if (value == null) {
+    return null;
+  }
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolveMissedTradeTimestamp(
+  value: string | null | undefined,
+  label: string
+) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return parseManualTradeDate(value, label);
+  } catch (error: any) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: error?.message || `${label} is invalid`,
+    });
+  }
+}
+
+function deriveMissedTradeMetrics(input: {
+  symbol: string;
+  tradeType: string | null | undefined;
+  volume?: number | null;
+  openPrice?: number | null;
+  closePrice?: number | null;
+  sl?: number | null;
+  tp?: number | null;
+  estimatedProfit?: number | null;
+  estimatedRR?: number | null;
+  estimatedPnl?: number | null;
+  commissions?: number | null;
+  swap?: number | null;
+}) {
+  const normalizedTradeType =
+    input.tradeType === "long" || input.tradeType === "short"
+      ? input.tradeType
+      : null;
+  const volume = parseStoredNullableNumber(input.volume);
+  const openPrice = parseStoredNullableNumber(input.openPrice);
+  let closePrice = parseStoredNullableNumber(input.closePrice);
+  let estimatedProfit = parseStoredNullableNumber(input.estimatedProfit);
+  const commissions = parseStoredNullableNumber(input.commissions) ?? 0;
+  const swap = parseStoredNullableNumber(input.swap) ?? 0;
+
+  if (
+    normalizedTradeType &&
+    volume != null &&
+    openPrice != null &&
+    closePrice == null &&
+    estimatedProfit != null
+  ) {
+    closePrice = deriveClosedTradeClosePrice({
+      tradeType: normalizedTradeType,
+      openPrice,
+      volume,
+      symbol: input.symbol,
+      profit: estimatedProfit,
+    });
+  }
+
+  if (
+    normalizedTradeType &&
+    volume != null &&
+    openPrice != null &&
+    closePrice != null
+  ) {
+    estimatedProfit = deriveClosedTradeProfit({
+      tradeType: normalizedTradeType,
+      openPrice,
+      closePrice,
+      volume,
+      symbol: input.symbol,
+    });
+  }
+
+  let estimatedRR = parseStoredNullableNumber(input.estimatedRR);
+  const sl = parseStoredNullableNumber(input.sl);
+  const tp = parseStoredNullableNumber(input.tp);
+
+  if (openPrice != null && sl != null && tp != null) {
+    const risk = Math.abs(openPrice - sl);
+    const target = Math.abs(tp - openPrice);
+    estimatedRR =
+      risk > 0 && Number.isFinite(target) ? target / risk : estimatedRR;
+  }
+
+  const fallbackEstimatedPnl = parseStoredNullableNumber(input.estimatedPnl);
+  const estimatedPnl =
+    estimatedProfit != null
+      ? estimatedProfit + commissions + swap
+      : fallbackEstimatedPnl;
+
+  return {
+    closePrice,
+    estimatedProfit,
+    estimatedRR,
+    estimatedPnl,
+  };
 }
 
 const createEdgeSchema = z.object({
@@ -549,7 +1726,9 @@ export const edgesRouter = router({
         .where(and(...conditions))
         .orderBy(desc(edge.updatedAt), asc(edge.name));
 
-      return buildEdgeSummaries(rows);
+      return buildEdgeSummaries(rows, {
+        viewerUserId: ctx.session.user.id,
+      });
     }),
 
   listShared: protectedProcedure
@@ -620,11 +1799,17 @@ export const edgesRouter = router({
       const featuredRows = libraryRows.filter((row) => row.isFeatured);
 
       return {
-        library: (await buildEdgeSummaries(libraryRows)).map(
+        library: (await buildEdgeSummaries(libraryRows, {
+          viewerUserId: ctx.session.user.id,
+        })).map(
           applyPublicSummaryStatsVisibility
         ),
-        sharedWithMe: await buildEdgeSummaries(sharedRows),
-        featured: await buildEdgeSummaries(featuredRows),
+        sharedWithMe: await buildEdgeSummaries(sharedRows, {
+          viewerUserId: ctx.session.user.id,
+        }),
+        featured: await buildEdgeSummaries(featuredRows, {
+          viewerUserId: ctx.session.user.id,
+        }),
       };
     }),
 
@@ -676,6 +1861,94 @@ export const edgesRouter = router({
       };
     }),
 
+  getPublicEdgePage: publicProcedure
+    .input(
+      z.object({
+        shareId: z.string().min(1),
+      })
+    )
+    .query(async ({ input }) => {
+      const [publicEdge] = await db
+        .select()
+        .from(edge)
+        .where(
+          and(
+            eq(edge.id, input.shareId),
+            not(eq(edge.status, "archived")),
+            or(eq(edge.publicationMode, "library"), eq(edge.isFeatured, true))
+          )
+        )
+        .limit(1);
+
+      if (!publicEdge) {
+        return null;
+      }
+
+      const [summary] = await buildEdgeSummaries([publicEdge]);
+      const tradeRows = await getEdgeTradeRows([publicEdge.id]);
+      const sourceEdgeSummary = await buildEdgeSourceSummary({
+        edgeRow: publicEdge,
+      });
+      const viewerCanSeeStats = shouldExposePublicEdgeStats({
+        publicationMode: publicEdge.publicationMode,
+        isFeatured: publicEdge.isFeatured,
+        publicStatsVisible: publicEdge.publicStatsVisible,
+      });
+      const passportBase = summary?.metrics
+        ? buildEdgePassport({
+            edgeRow: publicEdge,
+            metrics: summary.metrics,
+            trades: tradeRows,
+            source: sourceEdgeSummary,
+          })
+        : null;
+      const passport = passportBase
+        ? {
+            ...passportBase,
+            cards: viewerCanSeeStats ? passportBase.cards : null,
+            fitNotes: viewerCanSeeStats ? passportBase.fitNotes : [],
+            lineage: {
+              ...passportBase.lineage,
+              descendantCount: summary?.metrics?.copyCount ?? 0,
+              forkDepth: publicEdge.sourceEdgeId ? 1 : 0,
+            },
+          }
+        : null;
+      const owner =
+        summary?.owner != null
+          ? {
+              id: summary.owner.id,
+              name: summary.owner.name,
+              displayName: summary.owner.displayName,
+              username: summary.owner.username,
+              image: summary.owner.image,
+            }
+          : null;
+
+      return {
+        edge: {
+          id: publicEdge.id,
+          name: publicEdge.name,
+          description: publicEdge.description,
+          coverImageUrl: publicEdge.coverImageUrl,
+          coverImagePosition: publicEdge.coverImagePosition,
+          color: publicEdge.color,
+          contentHtml: publicEdge.contentHtml,
+          examplesHtml: publicEdge.examplesHtml,
+          metrics: viewerCanSeeStats ? summary?.metrics ?? null : null,
+          passport,
+        },
+        owner,
+        verification: issuePublicEdgeVerification({
+          edgeId: publicEdge.id,
+          username: owner?.username ?? null,
+          edgeName: publicEdge.name,
+          ownerName:
+            owner?.displayName ?? owner?.name ?? owner?.username ?? null,
+        }),
+      };
+    }),
+
   getDetail: protectedProcedure
     .input(
       z.object({
@@ -697,7 +1970,9 @@ export const edgesRouter = router({
         });
       }
 
-      const summaries = await buildEdgeSummaries([accessibleEdge]);
+      const summaries = await buildEdgeSummaries([accessibleEdge], {
+        viewerUserId: ctx.session.user.id,
+      });
       const summary = summaries[0];
       const viewerIsOwner = accessibleEdge.ownerUserId === ctx.session.user.id;
       const viewerHasDirectShare = viewerIsOwner
@@ -725,6 +2000,7 @@ export const edgesRouter = router({
       const viewerCanSeePrivateActivity = viewerIsOwner || viewerHasDirectShare;
 
       const [
+        sourceEdgeSummary,
         sectionRows,
         ruleRows,
         tradeRows,
@@ -732,9 +2008,16 @@ export const edgesRouter = router({
         missedTrades,
         entryRows,
         shareMemberRows,
+        viewerAccountRows,
+        versionHistory,
+        lineageGraph,
         approvedAffiliateProfile,
       ] =
         await Promise.all([
+          buildEdgeSourceSummary({
+            viewerUserId: ctx.session.user.id,
+            edgeRow: accessibleEdge,
+          }),
           db
             .select()
             .from(edgeSection)
@@ -750,15 +2033,27 @@ export const edgesRouter = router({
           db
             .select({
               id: edgeMissedTrade.id,
+              accountId: edgeMissedTrade.accountId,
               symbol: edgeMissedTrade.symbol,
               tradeType: edgeMissedTrade.tradeType,
+              volume: sql<number | null>`CAST(${edgeMissedTrade.volume} AS NUMERIC)`,
+              openPrice: sql<number | null>`CAST(${edgeMissedTrade.openPrice} AS NUMERIC)`,
+              closePrice: sql<number | null>`CAST(${edgeMissedTrade.closePrice} AS NUMERIC)`,
               sessionTag: edgeMissedTrade.sessionTag,
+              modelTag: edgeMissedTrade.modelTag,
+              customTags: edgeMissedTrade.customTags,
               setupTime: edgeMissedTrade.setupTime,
+              closeTime: edgeMissedTrade.closeTime,
+              sl: sql<number | null>`CAST(${edgeMissedTrade.sl} AS NUMERIC)`,
+              tp: sql<number | null>`CAST(${edgeMissedTrade.tp} AS NUMERIC)`,
               reasonMissed: edgeMissedTrade.reasonMissed,
               notes: edgeMissedTrade.notes,
               estimatedOutcome: edgeMissedTrade.estimatedOutcome,
+              estimatedProfit: sql<number | null>`CAST(${edgeMissedTrade.estimatedProfit} AS NUMERIC)`,
               estimatedRR: sql<number | null>`CAST(${edgeMissedTrade.estimatedRR} AS NUMERIC)`,
               estimatedPnl: sql<number | null>`CAST(${edgeMissedTrade.estimatedPnl} AS NUMERIC)`,
+              commissions: sql<number | null>`CAST(${edgeMissedTrade.commissions} AS NUMERIC)`,
+              swap: sql<number | null>`CAST(${edgeMissedTrade.swap} AS NUMERIC)`,
               mediaUrls: edgeMissedTrade.mediaUrls,
               createdAt: edgeMissedTrade.createdAt,
               updatedAt: edgeMissedTrade.updatedAt,
@@ -801,6 +2096,25 @@ export const edgesRouter = router({
                   asc(userTable.username)
                 )
             : Promise.resolve([]),
+          db
+            .select({
+              id: tradingAccount.id,
+              name: tradingAccount.name,
+              broker: tradingAccount.broker,
+              isPropAccount: tradingAccount.isPropAccount,
+              verificationLevel: tradingAccount.verificationLevel,
+              lastSyncedAt: tradingAccount.lastSyncedAt,
+              createdAt: tradingAccount.createdAt,
+            })
+            .from(tradingAccount)
+            .where(eq(tradingAccount.userId, ctx.session.user.id))
+            .orderBy(desc(tradingAccount.lastSyncedAt), asc(tradingAccount.name)),
+          buildEdgeVersionHistory(accessibleEdge.id),
+          buildEdgeLineageGraph({
+            viewerUserId: ctx.session.user.id,
+            edgeRow: accessibleEdge,
+            shareCount: summary.metrics?.shareCount ?? 0,
+          }),
           accessibleEdge.ownerUserId === ctx.session.user.id
             ? getApprovedAffiliateProfile(ctx.session.user.id)
             : Promise.resolve(null),
@@ -902,10 +2216,79 @@ export const edgesRouter = router({
         };
       });
 
+      const readiness =
+        viewerCanSeeStats && summary.metrics
+          ? buildEdgeReadiness({
+              edgeRow: accessibleEdge,
+              metrics: summary.metrics,
+              trades: tradeRows,
+              versionCount: versionHistory.count,
+            })
+          : null;
+      const accountFit =
+        viewerCanSeeStats
+          ? buildEdgeAccountFit({
+              accounts: viewerAccountRows,
+              trades: tradeRows,
+            })
+          : null;
+      const passportBase = summary.metrics
+        ? buildEdgePassport({
+            edgeRow: accessibleEdge,
+            metrics: summary.metrics,
+            trades: tradeRows,
+            source: sourceEdgeSummary,
+          })
+        : null;
+      const passport =
+        viewerCanSeeStats && passportBase
+          ? {
+              ...passportBase,
+              readiness: readiness
+                ? {
+                    label: readiness.label,
+                    score: readiness.score,
+                    note: readiness.summary,
+                  }
+                : null,
+              lineage: {
+                ...passportBase.lineage,
+                descendantCount: summary.metrics?.copyCount ?? 0,
+                forkDepth: accessibleEdge.sourceEdgeId ? 1 : 0,
+              },
+            }
+          : null;
+      const publicPage =
+        accessibleEdge.isFeatured || accessibleEdge.publicationMode === "library"
+          ? {
+              shareId: accessibleEdge.id,
+              path: buildPublicEdgePath(accessibleEdge.id),
+              verification: issuePublicEdgeVerification({
+                edgeId: accessibleEdge.id,
+                username: summary.owner?.username ?? null,
+                edgeName: accessibleEdge.name,
+                ownerName:
+                  summary.owner?.displayName ??
+                  summary.owner?.name ??
+                  summary.owner?.username ??
+                  null,
+              }),
+            }
+          : null;
+
       return {
         edge: {
           ...summary,
           metrics: viewerCanSeeStats ? summary.metrics : null,
+          passport,
+          readiness,
+          accountFit,
+          lineageGraph,
+          versionHistory: {
+            versions: versionHistory.versions,
+          },
+          sourceEdge: sourceEdgeSummary,
+          publicPage,
           publicStatsVisible: accessibleEdge.publicStatsVisible ?? true,
           coverImageUrl: accessibleEdge.coverImageUrl ?? null,
           coverImagePosition: accessibleEdge.coverImagePosition ?? 50,
@@ -1044,6 +2427,13 @@ export const edgesRouter = router({
         ]);
       }
 
+      await ensureEdgeVersionBaseline({
+        edgeId: createdEdge.id,
+        userId: ctx.session.user.id,
+        changeType: "create",
+        changeSummary: "Initial edge scaffold",
+      });
+
       return createdEdge;
     }),
 
@@ -1150,6 +2540,14 @@ export const edgesRouter = router({
         }
       }
 
+      if (updatedEdge) {
+        await recordEdgeVersion({
+          edgeId: updatedEdge.id,
+          userId: ctx.session.user.id,
+          changeType: "update",
+        });
+      }
+
       return updatedEdge;
     }),
 
@@ -1158,6 +2556,8 @@ export const edgesRouter = router({
       z.object({
         edgeId: z.string().min(1),
         name: z.string().trim().min(1).max(120).optional(),
+        publicationMode: edgePublicationModeSchema.optional(),
+        publicStatsVisible: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -1173,20 +2573,60 @@ export const edgesRouter = router({
         });
       }
 
+      const rootSourceEdge = await resolveRootSourceEdge(sourceEdge);
+      const canonicalSourceEdge = rootSourceEdge ?? sourceEdge;
       const nextName = input.name?.trim() || `${sourceEdge.name} Copy`;
-      const duplicatedEdge = await ensureUserOwnedEdge({
+      const nextPublicationMode = input.publicationMode ?? "private";
+      const nextPublicStatsVisible =
+        input.publicStatsVisible ?? sourceEdge.publicStatsVisible ?? true;
+      const approvedAffiliateProfile =
+        nextPublicationMode === "library"
+          ? await getApprovedAffiliateProfile(ctx.session.user.id)
+          : null;
+
+      if (sourceEdge.isDemoSeeded && nextPublicationMode === "library") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Demo workspace Edges cannot be published to the Library",
+        });
+      }
+
+      const duplicatedEdge = await createUserForkedEdge({
         userId: ctx.session.user.id,
-        name: nextName,
+        baseName: nextName,
         description: sourceEdge.description,
         color: sourceEdge.color,
       });
 
+      if (approvedAffiliateProfile && nextPublicationMode === "library") {
+        await db
+          .update(edge)
+          .set({
+            publicationMode: "private",
+            isFeatured: false,
+            featuredAt: null,
+            featuredByUserId: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(edge.ownerUserId, ctx.session.user.id),
+              eq(edge.publicationMode, "library"),
+              not(eq(edge.id, duplicatedEdge.id))
+            )
+          );
+      }
+
       await db
         .update(edge)
         .set({
-          sourceEdgeId: sourceEdge.id,
+          sourceEdgeId: canonicalSourceEdge.id,
           isDemoSeeded: sourceEdge.isDemoSeeded,
-          publicStatsVisible: sourceEdge.publicStatsVisible ?? true,
+          publicationMode: nextPublicationMode,
+          isFeatured: false,
+          featuredAt: null,
+          featuredByUserId: null,
+          publicStatsVisible: nextPublicStatsVisible,
           coverImageUrl: sourceEdge.coverImageUrl ?? null,
           coverImagePosition: sourceEdge.coverImagePosition ?? 50,
           contentBlocks:
@@ -1259,6 +2699,13 @@ export const edgesRouter = router({
         );
       }
 
+      await ensureEdgeVersionBaseline({
+        edgeId: duplicatedEdge.id,
+        userId: ctx.session.user.id,
+        changeType: "fork",
+        changeSummary: `Forked from ${canonicalSourceEdge.name}`,
+      });
+
       return duplicatedEdge;
     }),
 
@@ -1325,6 +2772,20 @@ export const edgesRouter = router({
         })
         .where(eq(edge.id, input.edgeId))
         .returning();
+
+      if (updatedEdge) {
+        await recordEdgeVersion({
+          edgeId: updatedEdge.id,
+          userId: ctx.session.user.id,
+          changeType: "publish",
+          changeSummary:
+            input.publicationMode === "library"
+              ? wantsFeatured
+                ? "Published as a featured edge"
+                : "Published to the Library"
+              : "Returned to private",
+        });
+      }
 
       return updatedEdge;
     }),
@@ -1494,9 +2955,23 @@ export const edgesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+      const ownedEdge = await assertOwnedEdge(ctx.session.user.id, input.edgeId);
 
       if (input.sectionId) {
+        const [existingSection] = await db
+          .select({
+            title: edgeSection.title,
+            description: edgeSection.description,
+            sortOrder: edgeSection.sortOrder,
+          })
+          .from(edgeSection)
+          .where(
+            and(
+              eq(edgeSection.id, input.sectionId),
+              eq(edgeSection.edgeId, input.edgeId)
+            )
+          )
+          .limit(1);
         const [updatedSection] = await db
           .update(edgeSection)
           .set({
@@ -1515,6 +2990,22 @@ export const edgesRouter = router({
           )
           .returning();
 
+        if (
+          updatedSection &&
+          (existingSection?.title !== input.title ||
+            (existingSection?.description ?? null) !==
+              (input.description ?? null) ||
+            existingSection?.sortOrder !==
+              (input.sortOrder ?? existingSection?.sortOrder))
+        ) {
+          await recordEdgeVersion({
+            edgeId: ownedEdge.id,
+            userId: ctx.session.user.id,
+            changeType: "section-update",
+            changeSummary: `Updated section ${updatedSection.title}`,
+          });
+        }
+
         return updatedSection;
       }
 
@@ -1528,6 +3019,13 @@ export const edgesRouter = router({
         })
         .returning();
 
+      await recordEdgeVersion({
+        edgeId: ownedEdge.id,
+        userId: ctx.session.user.id,
+        changeType: "section-create",
+        changeSummary: `Added section ${createdSection.title}`,
+      });
+
       return createdSection;
     }),
 
@@ -1539,7 +3037,20 @@ export const edgesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+      const ownedEdge = await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+
+      const [existingSection] = await db
+        .select({
+          title: edgeSection.title,
+        })
+        .from(edgeSection)
+        .where(
+          and(
+            eq(edgeSection.id, input.sectionId),
+            eq(edgeSection.edgeId, input.edgeId)
+          )
+        )
+        .limit(1);
 
       await db
         .delete(edgeSection)
@@ -1549,6 +3060,15 @@ export const edgesRouter = router({
             eq(edgeSection.edgeId, input.edgeId)
           )
         );
+
+      await recordEdgeVersion({
+        edgeId: ownedEdge.id,
+        userId: ctx.session.user.id,
+        changeType: "section-delete",
+        changeSummary: existingSection?.title
+          ? `Removed section ${existingSection.title}`
+          : "Removed section",
+      });
 
       return { success: true };
     }),
@@ -1567,9 +3087,21 @@ export const edgesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+      const ownedEdge = await assertOwnedEdge(ctx.session.user.id, input.edgeId);
 
       if (input.ruleId) {
+        const [existingRule] = await db
+          .select({
+            sectionId: edgeRule.sectionId,
+            title: edgeRule.title,
+            description: edgeRule.description,
+            sortOrder: edgeRule.sortOrder,
+            isActive: edgeRule.isActive,
+            appliesOutcomes: edgeRule.appliesOutcomes,
+          })
+          .from(edgeRule)
+          .where(and(eq(edgeRule.id, input.ruleId), eq(edgeRule.edgeId, input.edgeId)))
+          .limit(1);
         const [updatedRule] = await db
           .update(edgeRule)
           .set({
@@ -1588,6 +3120,28 @@ export const edgesRouter = router({
           )
           .returning();
 
+        const existingAppliesOutcomes =
+          (existingRule?.appliesOutcomes as string[] | null | undefined) ?? ["all"];
+        const onlySortOrderChanged =
+          updatedRule != null &&
+          existingRule != null &&
+          existingRule.sectionId === input.sectionId &&
+          existingRule.title === input.title &&
+          (existingRule.description ?? null) === (input.description ?? null) &&
+          existingRule.isActive === (input.isActive ?? existingRule.isActive) &&
+          JSON.stringify(existingAppliesOutcomes) ===
+            JSON.stringify(input.appliesOutcomes) &&
+          existingRule.sortOrder !== (input.sortOrder ?? existingRule.sortOrder);
+
+        if (updatedRule && !onlySortOrderChanged) {
+          await recordEdgeVersion({
+            edgeId: ownedEdge.id,
+            userId: ctx.session.user.id,
+            changeType: "rule-update",
+            changeSummary: `Updated rule ${updatedRule.title}`,
+          });
+        }
+
         return updatedRule;
       }
 
@@ -1604,6 +3158,13 @@ export const edgesRouter = router({
         })
         .returning();
 
+      await recordEdgeVersion({
+        edgeId: ownedEdge.id,
+        userId: ctx.session.user.id,
+        changeType: "rule-create",
+        changeSummary: `Added rule ${createdRule.title}`,
+      });
+
       return createdRule;
     }),
 
@@ -1615,11 +3176,28 @@ export const edgesRouter = router({
       })
     )
     .mutation(async ({ ctx, input }) => {
-      await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+      const ownedEdge = await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+
+      const [existingRule] = await db
+        .select({
+          title: edgeRule.title,
+        })
+        .from(edgeRule)
+        .where(and(eq(edgeRule.id, input.ruleId), eq(edgeRule.edgeId, input.edgeId)))
+        .limit(1);
 
       await db
         .delete(edgeRule)
         .where(and(eq(edgeRule.id, input.ruleId), eq(edgeRule.edgeId, input.edgeId)));
+
+      await recordEdgeVersion({
+        edgeId: ownedEdge.id,
+        userId: ctx.session.user.id,
+        changeType: "rule-delete",
+        changeSummary: existingRule?.title
+          ? `Removed rule ${existingRule.title}`
+          : "Removed rule",
+      });
 
       return { success: true };
     }),
@@ -1797,36 +3375,97 @@ export const edgesRouter = router({
         accountId: z.string().nullable().optional(),
         symbol: z.string().trim().min(1).max(64),
         tradeType: z.enum(["long", "short"]).nullable().optional(),
+        volume: z.number().positive().nullable().optional(),
+        openPrice: z.number().positive().nullable().optional(),
+        closePrice: z.number().positive().nullable().optional(),
         sessionTag: z.string().trim().max(120).nullable().optional(),
+        modelTag: z.string().trim().max(80).nullable().optional(),
+        customTags: z.array(z.string().trim().min(1)).max(50).optional(),
         setupTime: z.string().nullable().optional(),
+        closeTime: z.string().nullable().optional(),
+        sl: z.number().positive().nullable().optional(),
+        tp: z.number().positive().nullable().optional(),
         reasonMissed: z.string().trim().max(4000).nullable().optional(),
         notes: z.string().trim().max(12000).nullable().optional(),
         estimatedOutcome: z.string().trim().max(50).nullable().optional(),
+        estimatedProfit: z.number().finite().nullable().optional(),
         estimatedRR: z.number().finite().nullable().optional(),
         estimatedPnl: z.number().finite().nullable().optional(),
+        commissions: z.number().finite().nullable().optional(),
+        swap: z.number().finite().nullable().optional(),
         mediaUrls: z.array(z.string().url()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+      const ownedAccountId = await resolveOwnedAccountId(
+        ctx.session.user.id,
+        input.accountId
+      );
+      const normalizedSymbol = input.symbol.trim().toUpperCase();
+      const setupTime = resolveMissedTradeTimestamp(input.setupTime, "Open time");
+      const closeTime = resolveMissedTradeTimestamp(
+        input.closeTime,
+        "Close time"
+      );
+
+      if (setupTime && closeTime && closeTime <= setupTime) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Close time must be after open time",
+        });
+      }
+
+      const derived = deriveMissedTradeMetrics({
+        symbol: normalizedSymbol,
+        tradeType: input.tradeType ?? null,
+        volume: input.volume ?? null,
+        openPrice: input.openPrice ?? null,
+        closePrice: input.closePrice ?? null,
+        sl: input.sl ?? null,
+        tp: input.tp ?? null,
+        estimatedProfit: input.estimatedProfit ?? null,
+        estimatedRR: input.estimatedRR ?? null,
+        estimatedPnl: input.estimatedPnl ?? null,
+        commissions: input.commissions ?? null,
+        swap: input.swap ?? null,
+      });
 
       const [createdMissedTrade] = await db
         .insert(edgeMissedTrade)
         .values({
           edgeId: input.edgeId,
           userId: ctx.session.user.id,
-          accountId: input.accountId ?? null,
-          symbol: input.symbol.trim().toUpperCase(),
+          accountId: ownedAccountId,
+          symbol: normalizedSymbol,
           tradeType: input.tradeType ?? null,
+          volume: input.volume != null ? input.volume.toString() : null,
+          openPrice: input.openPrice != null ? input.openPrice.toString() : null,
+          closePrice:
+            derived.closePrice != null ? derived.closePrice.toString() : null,
           sessionTag: input.sessionTag ?? null,
-          setupTime: input.setupTime ? new Date(input.setupTime) : null,
+          modelTag: input.modelTag ?? null,
+          customTags: normalizeTradeTags(input.customTags),
+          setupTime: setupTime ?? null,
+          closeTime: closeTime ?? null,
+          sl: input.sl != null ? input.sl.toString() : null,
+          tp: input.tp != null ? input.tp.toString() : null,
           reasonMissed: input.reasonMissed ?? null,
           notes: input.notes ?? null,
           estimatedOutcome: input.estimatedOutcome ?? null,
+          estimatedProfit:
+            derived.estimatedProfit != null
+              ? derived.estimatedProfit.toString()
+              : null,
           estimatedRR:
-            input.estimatedRR != null ? input.estimatedRR.toString() : null,
+            derived.estimatedRR != null ? derived.estimatedRR.toString() : null,
           estimatedPnl:
-            input.estimatedPnl != null ? input.estimatedPnl.toString() : null,
+            derived.estimatedPnl != null
+              ? derived.estimatedPnl.toString()
+              : null,
+          commissions:
+            input.commissions != null ? input.commissions.toString() : null,
+          swap: input.swap != null ? input.swap.toString() : null,
           mediaUrls: input.mediaUrls ?? [],
         })
         .returning();
@@ -1839,33 +3478,156 @@ export const edgesRouter = router({
       z.object({
         missedTradeId: z.string().min(1),
         edgeId: z.string().min(1),
+        accountId: z.string().nullable().optional(),
         symbol: z.string().trim().min(1).max(64).optional(),
         tradeType: z.enum(["long", "short"]).nullable().optional(),
+        volume: z.number().positive().nullable().optional(),
+        openPrice: z.number().positive().nullable().optional(),
+        closePrice: z.number().positive().nullable().optional(),
         sessionTag: z.string().trim().max(120).nullable().optional(),
+        modelTag: z.string().trim().max(80).nullable().optional(),
+        customTags: z.array(z.string().trim().min(1)).max(50).optional(),
         setupTime: z.string().nullable().optional(),
+        closeTime: z.string().nullable().optional(),
+        sl: z.number().positive().nullable().optional(),
+        tp: z.number().positive().nullable().optional(),
         reasonMissed: z.string().trim().max(4000).nullable().optional(),
         notes: z.string().trim().max(12000).nullable().optional(),
         estimatedOutcome: z.string().trim().max(50).nullable().optional(),
+        estimatedProfit: z.number().finite().nullable().optional(),
         estimatedRR: z.number().finite().nullable().optional(),
         estimatedPnl: z.number().finite().nullable().optional(),
+        commissions: z.number().finite().nullable().optional(),
+        swap: z.number().finite().nullable().optional(),
         mediaUrls: z.array(z.string().url()).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       await assertOwnedEdge(ctx.session.user.id, input.edgeId);
+      const ownedAccountId =
+        input.accountId !== undefined
+          ? await resolveOwnedAccountId(ctx.session.user.id, input.accountId)
+          : undefined;
+      const [existingMissedTrade] = await db
+        .select()
+        .from(edgeMissedTrade)
+        .where(
+          and(
+            eq(edgeMissedTrade.id, input.missedTradeId),
+            eq(edgeMissedTrade.edgeId, input.edgeId),
+            eq(edgeMissedTrade.userId, ctx.session.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!existingMissedTrade) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Missed trade not found",
+        });
+      }
+
+      const nextSymbol =
+        input.symbol !== undefined
+          ? input.symbol.trim().toUpperCase()
+          : existingMissedTrade.symbol;
+      const nextSetupTime =
+        input.setupTime !== undefined
+          ? resolveMissedTradeTimestamp(input.setupTime, "Open time")
+          : existingMissedTrade.setupTime;
+      const nextCloseTime =
+        input.closeTime !== undefined
+          ? resolveMissedTradeTimestamp(input.closeTime, "Close time")
+          : existingMissedTrade.closeTime;
+
+      if (nextSetupTime && nextCloseTime && nextCloseTime <= nextSetupTime) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Close time must be after open time",
+        });
+      }
+
+      const derived = deriveMissedTradeMetrics({
+        symbol: nextSymbol,
+        tradeType:
+          input.tradeType !== undefined
+            ? input.tradeType
+            : existingMissedTrade.tradeType,
+        volume:
+          input.volume !== undefined
+            ? input.volume
+            : parseStoredNullableNumber(existingMissedTrade.volume),
+        openPrice:
+          input.openPrice !== undefined
+            ? input.openPrice
+            : parseStoredNullableNumber(existingMissedTrade.openPrice),
+        closePrice:
+          input.closePrice !== undefined
+            ? input.closePrice
+            : parseStoredNullableNumber(existingMissedTrade.closePrice),
+        sl:
+          input.sl !== undefined
+            ? input.sl
+            : parseStoredNullableNumber(existingMissedTrade.sl),
+        tp:
+          input.tp !== undefined
+            ? input.tp
+            : parseStoredNullableNumber(existingMissedTrade.tp),
+        estimatedProfit:
+          input.estimatedProfit !== undefined
+            ? input.estimatedProfit
+            : parseStoredNullableNumber(existingMissedTrade.estimatedProfit),
+        estimatedRR:
+          input.estimatedRR !== undefined
+            ? input.estimatedRR
+            : parseStoredNullableNumber(existingMissedTrade.estimatedRR),
+        estimatedPnl:
+          input.estimatedPnl !== undefined
+            ? input.estimatedPnl
+            : parseStoredNullableNumber(existingMissedTrade.estimatedPnl),
+        commissions:
+          input.commissions !== undefined
+            ? input.commissions
+            : parseStoredNullableNumber(existingMissedTrade.commissions),
+        swap:
+          input.swap !== undefined
+            ? input.swap
+            : parseStoredNullableNumber(existingMissedTrade.swap),
+      });
 
       const [updatedMissedTrade] = await db
         .update(edgeMissedTrade)
         .set({
-          ...(input.symbol !== undefined
-            ? { symbol: input.symbol.trim().toUpperCase() }
-            : {}),
+          ...(ownedAccountId !== undefined ? { accountId: ownedAccountId } : {}),
+          ...(input.symbol !== undefined ? { symbol: nextSymbol } : {}),
           ...(input.tradeType !== undefined ? { tradeType: input.tradeType } : {}),
+          ...(input.volume !== undefined
+            ? { volume: input.volume != null ? input.volume.toString() : null }
+            : {}),
+          ...(input.openPrice !== undefined
+            ? {
+                openPrice:
+                  input.openPrice != null ? input.openPrice.toString() : null,
+              }
+            : {}),
+          closePrice:
+            derived.closePrice != null ? derived.closePrice.toString() : null,
           ...(input.sessionTag !== undefined
             ? { sessionTag: input.sessionTag }
             : {}),
+          ...(input.modelTag !== undefined ? { modelTag: input.modelTag } : {}),
+          ...(input.customTags !== undefined
+            ? { customTags: normalizeTradeTags(input.customTags) }
+            : {}),
           ...(input.setupTime !== undefined
-            ? { setupTime: input.setupTime ? new Date(input.setupTime) : null }
+            ? { setupTime: nextSetupTime }
+            : {}),
+          ...(input.closeTime !== undefined ? { closeTime: nextCloseTime } : {}),
+          ...(input.sl !== undefined
+            ? { sl: input.sl != null ? input.sl.toString() : null }
+            : {}),
+          ...(input.tp !== undefined
+            ? { tp: input.tp != null ? input.tp.toString() : null }
             : {}),
           ...(input.reasonMissed !== undefined
             ? { reasonMissed: input.reasonMissed }
@@ -1874,19 +3636,26 @@ export const edgesRouter = router({
           ...(input.estimatedOutcome !== undefined
             ? { estimatedOutcome: input.estimatedOutcome }
             : {}),
-          ...(input.estimatedRR !== undefined
+          estimatedProfit:
+            derived.estimatedProfit != null
+              ? derived.estimatedProfit.toString()
+              : null,
+          estimatedRR:
+            derived.estimatedRR != null ? derived.estimatedRR.toString() : null,
+          estimatedPnl:
+            derived.estimatedPnl != null
+              ? derived.estimatedPnl.toString()
+              : null,
+          ...(input.commissions !== undefined
             ? {
-                estimatedRR:
-                  input.estimatedRR != null ? input.estimatedRR.toString() : null,
-              }
-            : {}),
-          ...(input.estimatedPnl !== undefined
-            ? {
-                estimatedPnl:
-                  input.estimatedPnl != null
-                    ? input.estimatedPnl.toString()
+                commissions:
+                  input.commissions != null
+                    ? input.commissions.toString()
                     : null,
               }
+            : {}),
+          ...(input.swap !== undefined
+            ? { swap: input.swap != null ? input.swap.toString() : null }
             : {}),
           ...(input.mediaUrls !== undefined ? { mediaUrls: input.mediaUrls } : {}),
           updatedAt: new Date(),

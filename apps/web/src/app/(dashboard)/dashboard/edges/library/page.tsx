@@ -11,6 +11,7 @@ import {
   EdgeMetricCard,
   EdgePageHeader,
 } from "@/components/edges/edge-page-primitives";
+import { getEdgeReadinessSnapshot } from "@/components/edges/edge-surface-badges";
 import { Button } from "@/components/ui/button";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { trpcOptions } from "@/utils/trpc";
@@ -23,6 +24,11 @@ type LibraryEdge = {
   publicStatsVisible?: boolean | null;
   color?: string | null;
   isFeatured?: boolean | null;
+  sourceEdgeId?: string | null;
+  sourceEdge?: {
+    id?: string | null;
+    name?: string | null;
+  } | null;
   owner?: {
     id: string;
     name: string;
@@ -35,6 +41,18 @@ type LibraryEdge = {
     winRate?: number | null;
     expectancy?: number | null;
     netPnl?: number | null;
+  } | null;
+  passport?: {
+    readiness?: {
+      label?: string | null;
+      score?: number | null;
+      note?: string | null;
+    } | null;
+    lineage?: {
+      forkCount?: number | null;
+      descendantCount?: number | null;
+      forkDepth?: number | null;
+    } | null;
   } | null;
 };
 
@@ -63,8 +81,8 @@ export default function EdgeLibraryIndexPage() {
         accumulator.winRateSum += currentEdge.metrics.winRate ?? 0;
         accumulator.statsVisibleCount += 1;
       }
-      if (currentEdge.isFeatured) {
-        accumulator.featuredCount += 1;
+      if (getEdgeReadinessSnapshot(currentEdge).tone === "ready") {
+        accumulator.readyCount += 1;
       }
       if (currentEdge.owner?.id) {
         accumulator.ownerIds.add(currentEdge.owner.id);
@@ -76,7 +94,7 @@ export default function EdgeLibraryIndexPage() {
       tradeCount: 0,
       winRateSum: 0,
       statsVisibleCount: 0,
-      featuredCount: 0,
+      readyCount: 0,
       ownerIds: new Set<string>(),
     }
   );
@@ -86,7 +104,7 @@ export default function EdgeLibraryIndexPage() {
       <EdgePageHeader
         eyebrow="Public Edge templates"
         title="Library"
-        description="Browse every public Edge in one place. Featured Edges stay in this library as reusable templates while direct shares live in their own workspace."
+        description="Browse public Edge templates in one place. Fork privately by default, then decide later whether your version should stay private or go public."
         actions={
           <>
             <Button
@@ -114,9 +132,9 @@ export default function EdgeLibraryIndexPage() {
         />
         <EdgeMetricCard
           icon={Sparkles}
-          label="Featured"
-          value={summary.featuredCount}
-          detail="Also shown in Featured"
+          label="Ready to fork"
+          value={summary.readyCount}
+          detail="Higher-confidence public templates"
         />
         <EdgeMetricCard
           icon={UsersRound}
@@ -145,7 +163,7 @@ export default function EdgeLibraryIndexPage() {
           <div>
             <p className="text-sm font-medium text-white/72">All public Edges</p>
             <p className="text-sm text-white/40">
-              Open a creator library, copy an Edge, or inspect the public metrics before you adapt it to your own trading.
+              Open a creator library, inspect the proof, and fork privately before you decide whether your branch should become public.
             </p>
           </div>
           <p className="text-xs text-white/34">{summary.edgeCount} templates</p>

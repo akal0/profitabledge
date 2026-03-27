@@ -49,6 +49,16 @@ const verificationTokenSchema = z.union([
   }),
   z.object({
     v: z.literal(1),
+    r: z.literal("edge"),
+    id: z.string().min(1),
+    i: z.number().int().positive(),
+    u: z.string().nullable().optional(),
+    s: z.string().nullable().optional(),
+    en: z.string().nullable().optional(),
+    on: z.string().nullable().optional(),
+  }),
+  z.object({
+    v: z.literal(1),
     r: z.literal("card"),
     id: z.string().min(1),
     i: z.number().int().positive(),
@@ -227,6 +237,28 @@ export function issuePublicProofVerification(input: {
     s: input.publicAccountSlug,
     an: input.accountName ?? null,
     br: input.broker ?? null,
+  });
+
+  return toVerificationEnvelope(token, issuedAtMs);
+}
+
+export function issuePublicEdgeVerification(input: {
+  edgeId: string;
+  username?: string | null;
+  edgeSlug?: string | null;
+  edgeName?: string | null;
+  ownerName?: string | null;
+}) {
+  const issuedAtMs = Date.now();
+  const token = createVerificationToken({
+    v: 1,
+    r: "edge",
+    id: input.edgeId,
+    i: issuedAtMs,
+    u: input.username ?? null,
+    s: input.edgeSlug ?? null,
+    en: input.edgeName ?? null,
+    on: input.ownerName ?? null,
   });
 
   return toVerificationEnvelope(token, issuedAtMs);

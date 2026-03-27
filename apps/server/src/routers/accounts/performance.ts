@@ -456,7 +456,7 @@ export const randomInsightProcedure = protectedProcedure
         type: "info" as const,
         title: "Getting Started",
         message:
-          "Keep trading to build your profile. We need at least 15 closed trades to generate personalized insights.",
+          "Sample size isn't significant enough to generate insights.",
         severity: "info" as const,
       };
     }
@@ -468,6 +468,7 @@ export const randomInsightProcedure = protectedProcedure
       title: insight.title,
       message: insight.message,
       severity: insight.severity,
+      data: insight.data ?? null,
     };
   });
 

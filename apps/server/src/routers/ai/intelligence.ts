@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { db } from "../../db";
 import { traderDigest } from "../../db/schema/coaching";
-import { trade as tradeTable } from "../../db/schema/trading";
+import { trade as tradeTable, tradingAccount } from "../../db/schema/trading";
 import {
   calculateRiskOfRuin,
   computeDrawdownProfile,
@@ -21,6 +21,7 @@ import {
   saveMemory,
   updateMemory,
 } from "../../lib/ai/engine";
+import { createNotification } from "../../lib/notifications";
 import { protectedProcedure } from "../../lib/trpc";
 
 export const aiIntelligenceProcedures = {
@@ -65,6 +66,67 @@ export const aiIntelligenceProcedures = {
       }
 
       await saveDigest(digest);
+
+      const [account] = await db
+        .select({
+          name: tradingAccount.name,
+          initialCurrency: tradingAccount.initialCurrency,
+        })
+        .from(tradingAccount)
+        .where(
+          and(
+            eq(tradingAccount.id, input.accountId),
+            eq(tradingAccount.userId, ctx.session.user.id)
+          )
+        )
+        .limit(1);
+
+      const review = (digest.content as Record<string, unknown> | null)
+        ?.review as Record<string, unknown> | undefined;
+      const progress = (digest.content as Record<string, unknown> | null)
+        ?.progress as Record<string, unknown> | undefined;
+      const focusItem = (digest.content as Record<string, unknown> | null)
+        ?.focusItem as Record<string, unknown> | undefined;
+      const reviewedAt =
+        typeof review?.reviewedAt === "string" || review?.reviewedAt instanceof Date
+          ? new Date(review.reviewedAt as string | Date)
+          : new Date();
+      const dedupeDay = Number.isNaN(reviewedAt.getTime())
+        ? new Date().toISOString().slice(0, 10)
+        : reviewedAt.toISOString().slice(0, 10);
+
+      await createNotification({
+        userId: ctx.session.user.id,
+        accountId: input.accountId,
+        type: "system_update",
+        title: "Daily report ready",
+        body: account?.name
+          ? `${account.name} has a fresh daily report.`
+          : "Your daily report is ready.",
+        metadata: {
+          kind: "daily_report",
+          reportType: "daily_report",
+          accountName: account?.name ?? null,
+          currencyCode: account?.initialCurrency ?? null,
+          reviewedLabel:
+            typeof review?.label === "string" ? review.label : null,
+          tradeCount:
+            typeof review?.tradesToday === "number" ? review.tradesToday : null,
+          winRate:
+            typeof review?.winRate === "number" ? review.winRate : null,
+          pnl: typeof review?.pnl === "number" ? review.pnl : null,
+          weeklyPnL:
+            typeof progress?.weeklyPnL === "number" ? progress.weeklyPnL : null,
+          focusTitle:
+            typeof focusItem?.title === "string" ? focusItem.title : null,
+          data: {
+            trend:
+              typeof progress?.trend === "string" ? progress.trend : null,
+          },
+          url: "/dashboard",
+        },
+        dedupeKey: `daily-report:${input.accountId}:${dedupeDay}`,
+      });
 
       return { success: true, digest };
     }),

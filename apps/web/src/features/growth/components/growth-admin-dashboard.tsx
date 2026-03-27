@@ -25,6 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -132,13 +133,19 @@ export function GrowthAdminDashboard() {
     code: "",
     maxRedemptions: "",
   });
-  const [offerDrafts, setOfferDrafts] = useState<
+  const [tierDrafts, setTierDrafts] = useState<
     Record<
       string,
       {
+        tierMode: "automatic" | "manual";
+        tierKey: string;
         code: string;
+        label: string;
         discountPercent: string;
         commissionPercent: string;
+        badgeLabel: string;
+        effectVariant: string;
+        benefitFlags: Record<string, boolean>;
       }
     >
   >({});
@@ -188,37 +195,20 @@ export function GrowthAdminDashboard() {
       );
     },
   });
-  const saveAffiliateOffer = useMutation({
-    ...(billingV2.saveAffiliateOffer?.mutationOptions?.() ?? {
+  const saveAffiliateTierSettings = useMutation({
+    ...(billingV2.saveAffiliateTierSettings?.mutationOptions?.() ?? {
       mutationFn: async () => {
-        throw new Error("Affiliate offers are not available yet");
+        throw new Error("Affiliate tier settings are not available yet");
       },
     }),
     onSuccess: () => {
       void affiliatePayoutQueueQuery.refetch();
-      toast.success("Affiliate offer saved");
+      void billingStateQuery.refetch();
+      toast.success("Affiliate tier settings saved");
     },
     onError: (error: unknown) => {
       toast.error(
-        error instanceof Error ? error.message : "Unable to save affiliate offer"
-      );
-    },
-  });
-  const saveAffiliateCommissionSplit = useMutation({
-    ...(billingV2.saveAffiliateCommissionSplit?.mutationOptions?.() ?? {
-      mutationFn: async () => {
-        throw new Error("Affiliate commission splits are not available yet");
-      },
-    }),
-    onSuccess: () => {
-      void affiliatePayoutQueueQuery.refetch();
-      toast.success("Affiliate commission split saved");
-    },
-    onError: (error: unknown) => {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Unable to save affiliate commission split"
+        error instanceof Error ? error.message : "Unable to save affiliate tier settings"
       );
     },
   });
@@ -335,30 +325,56 @@ export function GrowthAdminDashboard() {
     }
   };
 
-  const getOfferDraft = (entry: any) =>
-    offerDrafts[entry.affiliate.id] ?? {
+  const getTierDraft = (entry: any) =>
+    tierDrafts[entry.affiliate.id] ?? {
+      tierMode: entry.tier?.mode ?? "automatic",
+      tierKey: entry.tier?.key ?? "partner",
       code: entry.defaultOffer?.code ?? `${entry.affiliate.code}10`,
+      label: entry.defaultOffer?.label ?? `${entry.affiliate.code} Affiliate Offer`,
       discountPercent: formatPercentInput(
-        entry.defaultOffer?.discountBasisPoints ?? 1000
+        entry.tier?.effectiveDiscountBasisPoints ??
+          entry.defaultOffer?.discountBasisPoints ??
+          1000
       ),
-      commissionPercent: formatPercentInput(entry.affiliate.commissionBps ?? 2000),
+      commissionPercent: formatPercentInput(
+        entry.tier?.effectiveCommissionBps ?? entry.affiliate.commissionBps ?? 2000
+      ),
+      badgeLabel: entry.tier?.publicProof?.badgeLabel ?? "Affiliate",
+      effectVariant: entry.tier?.publicProof?.effectVariant ?? "gold-emerald",
+      benefitFlags:
+        entry.tier?.benefitFlags ??
+        Object.fromEntries(
+          (entry.tier?.benefits ?? []).map((benefit: any) => [benefit.key, Boolean(benefit.enabled)])
+        ),
     };
 
-  const updateOfferDraft = (
+  const updateTierDraft = (
     affiliateUserId: string,
     patch: Partial<{
+      tierMode: "automatic" | "manual";
+      tierKey: string;
       code: string;
+      label: string;
       discountPercent: string;
       commissionPercent: string;
+      badgeLabel: string;
+      effectVariant: string;
+      benefitFlags: Record<string, boolean>;
     }>
   ) => {
-    setOfferDrafts((current) => ({
+    setTierDrafts((current) => ({
       ...current,
       [affiliateUserId]: {
         ...(current[affiliateUserId] ?? {
+          tierMode: "automatic",
+          tierKey: "partner",
           code: "",
+          label: "",
           discountPercent: "10",
           commissionPercent: "20",
+          badgeLabel: "Affiliate",
+          effectVariant: "gold-emerald",
+          benefitFlags: {},
         }),
         ...patch,
       },
@@ -366,18 +382,35 @@ export function GrowthAdminDashboard() {
   };
 
   const handleSaveAffiliateSettings = async (entry: any) => {
-    const draft = getOfferDraft(entry);
-    const discountBasisPoints = parsePercentToBasisPoints(draft.discountPercent, {
-      min: 1,
-      max: 100,
-    });
-    const commissionBps = parsePercentToBasisPoints(draft.commissionPercent, {
-      min: 0,
-      max: 100,
-    });
+    const draft = getTierDraft(entry);
+    const discountBasisPoints =
+      draft.tierMode === "manual"
+        ? parsePercentToBasisPoints(draft.discountPercent, {
+            min: 1,
+            max: 100,
+          })
+        : parsePercentToBasisPoints(draft.discountPercent, {
+            min: 1,
+            max: 100,
+          });
+    const commissionBps =
+      draft.tierMode === "manual"
+        ? parsePercentToBasisPoints(draft.commissionPercent, {
+            min: 0,
+            max: 100,
+          })
+        : parsePercentToBasisPoints(draft.commissionPercent, {
+            min: 0,
+            max: 100,
+          });
 
     if (!draft.code.trim()) {
       toast.error("Offer code is required");
+      return;
+    }
+
+    if (!draft.label.trim()) {
+      toast.error("Offer label is required");
       return;
     }
 
@@ -391,18 +424,19 @@ export function GrowthAdminDashboard() {
       return;
     }
 
-    await saveAffiliateOffer.mutateAsync({
+    await saveAffiliateTierSettings.mutateAsync({
       affiliateUserId: entry.affiliate.id,
-      affiliateOfferId: entry.defaultOffer?.id ?? undefined,
-      code: draft.code.trim().toUpperCase(),
-      label: `${entry.affiliate.name || entry.affiliate.code} Affiliate Offer`,
-      discountBasisPoints,
-      isDefault: true,
-    } as any);
-
-    await saveAffiliateCommissionSplit.mutateAsync({
-      affiliateUserId: entry.affiliate.id,
-      commissionBps,
+      tierMode: draft.tierMode,
+      tierKey: draft.tierMode === "manual" ? "elite" : entry.tier?.key ?? "partner",
+      offerCode: draft.code.trim().toUpperCase(),
+      offerLabel: draft.label.trim(),
+      discountPercent: discountBasisPoints / 100,
+      payoutSplitPercent: commissionBps / 100,
+      badgeLabel: draft.badgeLabel.trim(),
+      effectVariant: draft.effectVariant,
+      benefits: Object.fromEntries(
+        Object.entries(draft.benefitFlags).map(([key, value]) => [key, Boolean(value)])
+      ),
     } as any);
 
     setAffiliateSettingsDialogOpen(false);
@@ -438,16 +472,14 @@ export function GrowthAdminDashboard() {
   const selectedPayouts = (selectedAffiliateEntry?.payouts ??
     selectedAffiliateEntry?.recentPayouts ??
     []) as any[];
-  const selectedOfferDraft = selectedAffiliateEntry
-    ? getOfferDraft(selectedAffiliateEntry)
+  const selectedTierDraft = selectedAffiliateEntry
+    ? getTierDraft(selectedAffiliateEntry)
     : null;
   const isSavingSelectedAffiliateSettings = Boolean(
     selectedAffiliateEntry &&
-      (saveAffiliateOffer.isPending || saveAffiliateCommissionSplit.isPending) &&
-      (((saveAffiliateOffer.variables as any)?.affiliateUserId ===
-        selectedAffiliateEntry.affiliate.id) ||
-        ((saveAffiliateCommissionSplit.variables as any)?.affiliateUserId ===
-          selectedAffiliateEntry.affiliate.id))
+      saveAffiliateTierSettings.isPending &&
+      (saveAffiliateTierSettings.variables as any)?.affiliateUserId ===
+        selectedAffiliateEntry.affiliate.id
   );
 
   useEffect(() => {
@@ -823,7 +855,7 @@ export function GrowthAdminDashboard() {
               {selectedAffiliateEntry ? (
                 <>
                   <GoalSurface>
-                    <div className="p-4">
+                    <div className="space-y-4 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-white">
@@ -849,32 +881,124 @@ export function GrowthAdminDashboard() {
                         </div>
                       </div>
 
-                      <div className="mt-4 grid gap-3 text-[11px] text-white/40 md:grid-cols-4">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <div>
+                          <p className="text-[10px] text-white/25">Tier</p>
+                          <p className="mt-1 text-sm font-medium text-white">
+                            {selectedAffiliateEntry.tier?.label ?? "Partner"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-white/40">
+                            {selectedAffiliateEntry.tier?.modeLabel ?? "Automatic"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25">Revenue</p>
+                          <p className="mt-1 text-sm font-medium text-white">
+                            {formatCurrency(
+                              selectedAffiliateEntry.tier?.referredRevenueAmount ?? 0
+                            )}
+                          </p>
+                          <p className="mt-1 text-[11px] text-white/40">
+                            Referred commissionable revenue
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25">Premium access</p>
+                          <p className="mt-1 text-sm font-medium text-white">
+                            {selectedAffiliateEntry.premiumAccess?.isActive
+                              ? formatStatusLabel(
+                                  selectedAffiliateEntry.premiumAccess.planKey
+                                )
+                              : "Inactive"}
+                          </p>
+                          <p className="mt-1 text-[11px] text-white/40">
+                            {selectedAffiliateEntry.premiumAccess?.isActive
+                              ? "Entitlement override active"
+                              : "No affiliate override"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-white/25">Progress</p>
+                          <p className="mt-1 text-sm font-medium text-white">
+                            {selectedAffiliateEntry.tier?.progress?.statusMessage ??
+                              "Elite is manually assigned"}
+                          </p>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5">
+                            <div
+                              className="h-full rounded-full bg-emerald-400"
+                              style={{
+                                width: `${
+                                  selectedAffiliateEntry.tier?.progress?.progressPercent ??
+                                  100
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-sm border border-white/5 bg-sidebar-accent/70 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-[10px] text-white/25">Tier summary</p>
+                            <p className="mt-1 text-sm font-medium text-white">
+                              {selectedAffiliateEntry.tier?.summary ?? "Affiliate status"}
+                            </p>
+                          </div>
+                          <Badge className="bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+                            {selectedAffiliateEntry.tier?.benefits?.length ?? 0} benefits
+                          </Badge>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Badge className="bg-emerald-900/30 text-[10px] text-emerald-300 ring ring-emerald-500/20">
+                            {selectedAffiliateEntry.tier?.modeLabel ?? "Automatic"}
+                          </Badge>
+                          <Badge className="bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+                            {selectedAffiliateEntry.tier?.statusMessage ??
+                              "Tier settings ready"}
+                          </Badge>
+                          {selectedAffiliateEntry.tier?.canCustomizeProof ? (
+                            <Badge className="bg-teal-900/30 text-[10px] text-teal-300 ring ring-teal-500/20">
+                              Proof customization enabled
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-white/5 text-[10px] text-white/45 ring ring-white/10">
+                              Proof uses tier defaults
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <div className="rounded-sm border border-white/5 bg-sidebar-accent/70 p-3">
                           <p className="text-[10px] text-white/25">Default offer</p>
-                          <p className="mt-1 text-white/60">
+                          <p className="mt-1 text-sm text-white/75">
                             {selectedAffiliateEntry.defaultOffer?.code ?? "No default offer"}
                           </p>
                         </div>
-                        <div>
+                        <div className="rounded-sm border border-white/5 bg-sidebar-accent/70 p-3">
                           <p className="text-[10px] text-white/25">Discount</p>
-                          <p className="mt-1 text-white/60">
+                          <p className="mt-1 text-sm text-white/75">
                             {formatPercentValue(
-                              selectedAffiliateEntry.defaultOffer?.discountBasisPoints ?? 0
+                              selectedAffiliateEntry.tier
+                                ?.effectiveDiscountBasisPoints ??
+                                selectedAffiliateEntry.defaultOffer?.discountBasisPoints ??
+                                0
                             )}
                           </p>
                         </div>
-                        <div>
+                        <div className="rounded-sm border border-white/5 bg-sidebar-accent/70 p-3">
                           <p className="text-[10px] text-white/25">Payout split</p>
-                          <p className="mt-1 text-white/60">
+                          <p className="mt-1 text-sm text-white/75">
                             {formatPercentValue(
-                              selectedAffiliateEntry.affiliate.commissionBps
+                              selectedAffiliateEntry.tier?.effectiveCommissionBps ??
+                                selectedAffiliateEntry.affiliate.commissionBps
                             )}
                           </p>
                         </div>
-                        <div>
+                        <div className="rounded-sm border border-white/5 bg-sidebar-accent/70 p-3">
                           <p className="text-[10px] text-white/25">Default link</p>
-                          <p className="mt-1 truncate text-white/60">
+                          <p className="mt-1 truncate text-sm text-white/75">
                             {selectedAffiliateEntry.defaultLink?.shareUrl ?? "No default link"}
                           </p>
                         </div>
@@ -890,32 +1014,144 @@ export function GrowthAdminDashboard() {
                       <div className="p-5">
                         <DialogHeader>
                           <DialogTitle className="text-white">
-                            Edit affiliate settings
+                            Edit affiliate tier
                           </DialogTitle>
                           <DialogDescription className="text-white/45">
-                            Update the default offer code, discount percent, and payout split for{" "}
+                            Update program mode, offer settings, proof styling, and benefits for{" "}
                             {selectedAffiliateEntry.affiliate.name ||
                               selectedAffiliateEntry.affiliate.email}
                             .
                           </DialogDescription>
                         </DialogHeader>
 
-                        {selectedOfferDraft ? (
-                          <div className="mt-5 space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[11px] text-white/35">
-                                Default offer code
-                              </Label>
-                              <Input
-                                value={selectedOfferDraft.code}
-                                onChange={(event) =>
-                                  updateOfferDraft(selectedAffiliateEntry.affiliate.id, {
-                                    code: event.target.value,
-                                  })
-                                }
-                                placeholder="Offer code"
-                                className="h-10 bg-sidebar-accent text-xs ring-white/10"
-                              />
+                        {selectedTierDraft ? (
+                          <div className="mt-5 space-y-5">
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-white/35">
+                                  Program mode
+                                </Label>
+                                <Select
+                                  value={selectedTierDraft.tierMode}
+                                  onValueChange={(value) =>
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                      tierMode: value as "automatic" | "manual",
+                                      tierKey:
+                                        value === "manual"
+                                          ? "elite"
+                                          : selectedAffiliateEntry.tier?.key ?? "partner",
+                                      code: value === "automatic"
+                                        ? selectedAffiliateEntry.defaultOffer?.code ??
+                                          selectedTierDraft.code
+                                        : selectedTierDraft.code,
+                                      label: value === "automatic"
+                                        ? selectedAffiliateEntry.defaultOffer?.label ??
+                                          selectedTierDraft.label
+                                        : selectedTierDraft.label,
+                                      discountPercent:
+                                        value === "automatic"
+                                          ? formatPercentInput(
+                                              selectedAffiliateEntry.tier
+                                                ?.effectiveDiscountBasisPoints ??
+                                                selectedAffiliateEntry.defaultOffer
+                                                  ?.discountBasisPoints ??
+                                                1000
+                                            )
+                                          : selectedTierDraft.discountPercent,
+                                      commissionPercent:
+                                        value === "automatic"
+                                          ? formatPercentInput(
+                                              selectedAffiliateEntry.tier
+                                                ?.effectiveCommissionBps ??
+                                                selectedAffiliateEntry.affiliate
+                                                  .commissionBps ??
+                                                2000
+                                            )
+                                          : selectedTierDraft.commissionPercent,
+                                      badgeLabel:
+                                        value === "automatic"
+                                          ? selectedAffiliateEntry.tier?.publicProof
+                                              ?.badgeLabel ?? "Affiliate"
+                                          : selectedTierDraft.badgeLabel,
+                                      effectVariant:
+                                        value === "automatic"
+                                          ? selectedAffiliateEntry.tier?.publicProof
+                                              ?.effectVariant ?? "gold-emerald"
+                                          : selectedTierDraft.effectVariant,
+                                      benefitFlags:
+                                        value === "automatic"
+                                          ? selectedAffiliateEntry.tier
+                                              ?.benefitFlags ?? {}
+                                          : selectedTierDraft.benefitFlags,
+                                    })
+                                  }
+                                >
+                                  <SelectTrigger className="h-10 bg-sidebar-accent text-xs ring-white/10">
+                                    <SelectValue placeholder="Select mode" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="automatic">
+                                      Automatic
+                                    </SelectItem>
+                                    <SelectItem value="manual">
+                                      Manual elite
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+
+                              <div className="rounded-sm border border-white/5 bg-sidebar-accent/60 p-3">
+                                <p className="text-[10px] text-white/25">Current tier</p>
+                                <p className="mt-1 text-sm font-medium text-white">
+                                  {selectedAffiliateEntry.tier?.label ?? "Partner"}
+                                </p>
+                                <p className="mt-1 text-[11px] text-white/45">
+                                  {selectedAffiliateEntry.tier?.summary ??
+                                    "Affiliate status"}
+                                </p>
+                                <p className="mt-2 text-[10px] text-white/25">
+                                  Revenue
+                                </p>
+                                <p className="mt-1 text-sm text-white/75">
+                                  {formatCurrency(
+                                    selectedAffiliateEntry.tier?.referredRevenueAmount ?? 0
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-white/35">
+                                  Offer code
+                                </Label>
+                                <Input
+                                  value={selectedTierDraft.code}
+                                  onChange={(event) =>
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                      code: event.target.value.toUpperCase(),
+                                    })
+                                  }
+                                  placeholder="Offer code"
+                                  className="h-10 bg-sidebar-accent text-xs ring-white/10"
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-white/35">
+                                  Offer label
+                                </Label>
+                                <Input
+                                  value={selectedTierDraft.label}
+                                  onChange={(event) =>
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                      label: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Affiliate offer label"
+                                  className="h-10 bg-sidebar-accent text-xs ring-white/10"
+                                />
+                              </div>
                             </div>
 
                             <div className="grid gap-3 md:grid-cols-2">
@@ -924,17 +1160,20 @@ export function GrowthAdminDashboard() {
                                   Discount percent
                                 </Label>
                                 <Input
-                                  value={selectedOfferDraft.discountPercent}
+                                  value={selectedTierDraft.discountPercent}
                                   onChange={(event) =>
-                                    updateOfferDraft(selectedAffiliateEntry.affiliate.id, {
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
                                       discountPercent: event.target.value,
                                     })
                                   }
                                   placeholder="10"
-                                  className="h-10 bg-sidebar-accent text-xs ring-white/10"
+                                  disabled={selectedTierDraft.tierMode === "automatic"}
+                                  className="h-10 bg-sidebar-accent text-xs ring-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <p className="text-[10px] text-white/35">
-                                  Enter a normal percentage, for example `10` for 10% off.
+                                  {selectedTierDraft.tierMode === "automatic"
+                                    ? "Automatic tiers use the default discount for that tier."
+                                    : "Enter a normal percentage, for example `15` for 15% off."}
                                 </p>
                               </div>
 
@@ -943,26 +1182,131 @@ export function GrowthAdminDashboard() {
                                   Payout split percent
                                 </Label>
                                 <Input
-                                  value={selectedOfferDraft.commissionPercent}
+                                  value={selectedTierDraft.commissionPercent}
                                   onChange={(event) =>
-                                    updateOfferDraft(selectedAffiliateEntry.affiliate.id, {
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
                                       commissionPercent: event.target.value,
                                     })
                                   }
                                   placeholder="20"
-                                  className="h-10 bg-sidebar-accent text-xs ring-white/10"
+                                  disabled={selectedTierDraft.tierMode === "automatic"}
+                                  className="h-10 bg-sidebar-accent text-xs ring-white/10 disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                                 <p className="text-[10px] text-white/35">
-                                  Enter a normal percentage, for example `20` for a 20% split.
+                                  {selectedTierDraft.tierMode === "automatic"
+                                    ? "Automatic tiers use the default payout split for that tier."
+                                    : "Enter a normal percentage, for example `25` for a 25% split."}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="rounded-sm border border-white/5 bg-sidebar-accent/60 p-3 text-[11px] text-white/45">
-                              <p>Affiliate link</p>
-                              <p className="mt-1 truncate text-white/70">
-                                {selectedAffiliateEntry.defaultLink?.shareUrl ?? "No default link"}
-                              </p>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-white/35">
+                                  Badge label
+                                </Label>
+                                <Input
+                                  value={selectedTierDraft.badgeLabel}
+                                  onChange={(event) =>
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                      badgeLabel: event.target.value,
+                                    })
+                                  }
+                                  placeholder="Affiliate"
+                                  disabled={selectedTierDraft.tierMode === "automatic"}
+                                  className="h-10 bg-sidebar-accent text-xs ring-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                                />
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-white/35">
+                                  Proof effect variant
+                                </Label>
+                                <Select
+                                  value={selectedTierDraft.effectVariant}
+                                  onValueChange={(value) =>
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                      effectVariant: value,
+                                    })
+                                  }
+                                  disabled={selectedTierDraft.tierMode === "automatic"}
+                                >
+                                  <SelectTrigger className="h-10 bg-sidebar-accent text-xs ring-white/10 disabled:cursor-not-allowed disabled:opacity-50">
+                                    <SelectValue placeholder="Select effect" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {[
+                                      "gold-emerald",
+                                      "emerald_aurora",
+                                      "teal_signal",
+                                    ].map((variant) => (
+                                      <SelectItem key={variant} value={variant}>
+                                        {variant.replace(/_/g, " ")}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-[11px] text-white/35">
+                                    Benefit toggles
+                                  </p>
+                                  <p className="mt-1 text-[10px] text-white/25">
+                                    {selectedTierDraft.tierMode === "automatic"
+                                      ? "Automatic tiers keep the default benefit set."
+                                      : "Enable or disable tier-specific perks for this elite affiliate."}
+                                  </p>
+                                </div>
+                                <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
+                                  {selectedAffiliateEntry.tier?.benefits?.length ?? 0} perks
+                                </Badge>
+                              </div>
+
+                              <div className="grid gap-3 md:grid-cols-2">
+                                {(selectedAffiliateEntry.tier?.benefits ?? []).map(
+                                  (benefit: any) => (
+                                    <div
+                                      key={benefit.key}
+                                      className="rounded-sm border border-white/5 bg-sidebar-accent/60 p-3"
+                                    >
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <p className="text-sm text-white">
+                                            {benefit.label}
+                                          </p>
+                                          <p className="mt-1 text-[11px] leading-5 text-white/35">
+                                            {benefit.description}
+                                          </p>
+                                        </div>
+                                        <Switch
+                                          checked={
+                                            selectedTierDraft.benefitFlags?.[benefit.key] ??
+                                            benefit.enabled
+                                          }
+                                          disabled={
+                                            selectedTierDraft.tierMode === "automatic"
+                                          }
+                                          onCheckedChange={(checked) =>
+                                            updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                              benefitFlags: {
+                                                ...(selectedTierDraft.benefitFlags ?? {}),
+                                                [benefit.key]: checked,
+                                              },
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                      <p className="mt-3 text-[10px] text-white/25">
+                                        {benefit.ctaLabel}
+                                      </p>
+                                    </div>
+                                  )
+                                )}
+                              </div>
                             </div>
                           </div>
                         ) : null}

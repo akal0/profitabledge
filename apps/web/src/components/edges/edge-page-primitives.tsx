@@ -29,9 +29,7 @@ export function EdgePageHeader({
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div className="space-y-2">
         {eyebrow ? (
-          <p className="text-[11px] font-medium text-teal-400/78">
-            {eyebrow}
-          </p>
+          <p className="text-[11px] font-medium text-teal-400/78">{eyebrow}</p>
         ) : null}
         <div className="space-y-2">
           <h1 className="text-2xl font-semibold text-white md:text-3xl">
@@ -53,28 +51,36 @@ export function EdgeMetricCard({
   value,
   detail,
   iconClassName,
+  badgeClassName,
 }: {
   icon: LucideIcon;
   label: string;
   value: string | number;
   detail?: string;
   iconClassName?: string;
+  badgeClassName?: string;
 }) {
   return (
     <GoalSurface className="w-full">
-      <div className="p-3.5 text-xs">
+      <div className="p-3.5">
         <div className="flex items-center gap-2">
-          <Icon className={cn("h-4 w-4 text-teal-300", iconClassName)} />
+          <Icon className={cn("h-3.5 w-3.5 text-teal-300", iconClassName)} />
           <span className="text-xs text-white/50">{label}</span>
         </div>
         <GoalContentSeparator className="mb-3.5 mt-3.5" />
-        <div className="flex items-end justify-between gap-3">
-          <div className="text-xl font-semibold text-white">{value}</div>
+        <div className="space-y-1.5">
           {detail ? (
-            <div className="text-right text-xs leading-4 text-white/38">
-              {detail}
-            </div>
+            <p className="text-xs leading-4 text-white/40">{detail}</p>
           ) : null}
+
+          <span
+            className={cn(
+              "inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium text-white ring ring-white/8",
+              badgeClassName
+            )}
+          >
+            {value}
+          </span>
         </div>
       </div>
     </GoalSurface>

@@ -4,6 +4,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 
+import {
+  EdgeForkBadge,
+  EdgeReadinessBadge,
+  EdgeVisibilityBadge,
+  getEdgeForkCount,
+  getEdgeForkPolicyHint,
+  getEdgeLineageHint,
+} from "@/components/edges/edge-surface-badges";
 import { EntryCoverPattern } from "@/components/journal/list/entry-cover-pattern";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +27,28 @@ type LibraryEdgeCard = {
   publicationMode?: string | null;
   publicStatsVisible?: boolean | null;
   isFeatured?: boolean | null;
+  sourceEdgeId?: string | null;
+  sourceEdge?: {
+    id?: string | null;
+    name?: string | null;
+  } | null;
   metrics?: {
     tradeCount?: number | null;
     winRate?: number | null;
     expectancy?: number | null;
     netPnl?: number | null;
+  } | null;
+  passport?: {
+    readiness?: {
+      label?: string | null;
+      score?: number | null;
+      note?: string | null;
+    } | null;
+    lineage?: {
+      forkCount?: number | null;
+      descendantCount?: number | null;
+      forkDepth?: number | null;
+    } | null;
   } | null;
   owner?: {
     id: string;
@@ -58,6 +83,18 @@ function getOwnerName(edge: LibraryEdgeCard) {
   return edge.owner?.displayName || edge.owner?.name || "Trader";
 }
 
+function getOwnerContext(edge: LibraryEdgeCard) {
+  if (edge.publicationMode === "library") {
+    return "Creator library";
+  }
+
+  if (edge.sourceEdgeId || edge.sourceEdge) {
+    return "Fork lineage";
+  }
+
+  return "Shared Edge";
+}
+
 function getOwnerFallback(edge: LibraryEdgeCard) {
   return getOwnerName(edge)
     .split(" ")
@@ -79,6 +116,9 @@ export function EdgeLibraryCard({
   className?: string;
 }) {
   const router = useRouter();
+  const lineageHint = getEdgeLineageHint(edge);
+  const forkPolicyHint = getEdgeForkPolicyHint(edge);
+  const forkCount = getEdgeForkCount(edge);
   const ownerRow = (
     <div className="flex items-center gap-2">
       <Avatar className="size-7 border border-white/10">
@@ -94,7 +134,7 @@ export function EdgeLibraryCard({
           {getOwnerName(edge)}
         </p>
         <p className="truncate text-xs text-white/38">
-          {edge.owner?.username ? `@${edge.owner.username}` : "Published library"}
+          {edge.owner?.username ? `@${edge.owner.username}` : getOwnerContext(edge)}
         </p>
       </div>
     </div>
@@ -173,23 +213,36 @@ export function EdgeLibraryCard({
             {edge.isFeatured ? (
               <Badge
                 variant="outline"
-                className="border-teal-400/25 bg-teal-400/10 text-xs text-teal-200"
+                className="ring-teal-400/25 bg-teal-400/10 text-xs text-teal-200"
               >
                 Featured
               </Badge>
             ) : null}
-            <Badge
-              variant="outline"
-              className="border-white/10 text-xs text-white/45"
-            >
-              {edge.isFeatured
-                ? "Featured Edge"
-                : edge.publicationMode === "library"
-                  ? "Library Edge"
-                  : "Edge"}
-            </Badge>
           </div>
         </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <EdgeVisibilityBadge edge={edge} className="text-xs" />
+          <EdgeForkBadge edge={edge} className="text-xs" />
+          <EdgeReadinessBadge edge={edge} className="text-xs" />
+          {edge.publicationMode === "library" && edge.publicStatsVisible === false ? (
+            <Badge
+              variant="outline"
+              className="border-white/10 bg-white/5 text-xs text-white/58"
+            >
+              Stats hidden
+            </Badge>
+          ) : null}
+        </div>
+
+        {(lineageHint || forkPolicyHint) && (
+          <div className="mt-3 space-y-1">
+            {lineageHint ? (
+              <p className="line-clamp-1 text-xs text-white/48">{lineageHint}</p>
+            ) : null}
+            <p className="line-clamp-2 text-xs text-white/34">{forkPolicyHint}</p>
+          </div>
+        )}
 
         <div className="mt-4 flex flex-1 flex-wrap content-start gap-2">
           {edge.metrics ? (
@@ -227,6 +280,14 @@ export function EdgeLibraryCard({
               Stats hidden
             </Badge>
           )}
+          {forkCount > 0 ? (
+            <Badge
+              variant="secondary"
+              className="border-white/10 bg-white/5 text-white/70"
+            >
+              {forkCount} {forkCount === 1 ? "fork" : "forks"}
+            </Badge>
+          ) : null}
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
@@ -236,15 +297,15 @@ export function EdgeLibraryCard({
               className="text-xs font-medium text-white/55 transition-colors hover:text-white/85"
               onClick={(event) => event.stopPropagation()}
             >
-              View library
+              View creator library
             </Link>
           ) : (
             <span className="text-xs text-white/30">
-              {edge.isFeatured
-                ? "Featured Edge"
-                : edge.publicationMode === "library"
-                  ? "Library Edge"
-                  : "Shared Edge"}
+              {edge.publicationMode === "library"
+                ? "Public template"
+                : edge.sourceEdgeId || edge.sourceEdge
+                ? "Private fork"
+                : "Private Edge"}
             </span>
           )}
 
@@ -253,7 +314,11 @@ export function EdgeLibraryCard({
             className="inline-flex items-center gap-1 text-xs font-medium text-teal-300 transition-colors hover:text-teal-200"
             onClick={(event) => event.stopPropagation()}
           >
-            Open Edge
+            {edge.publicationMode === "library"
+              ? "Open and fork"
+              : edge.sourceEdgeId || edge.sourceEdge
+              ? "Open fork"
+              : "Open Edge"}
             <ArrowRight className="size-3.5" />
           </Link>
         </div>

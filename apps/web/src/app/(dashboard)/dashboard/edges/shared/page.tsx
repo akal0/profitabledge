@@ -11,6 +11,7 @@ import {
   EdgeMetricCard,
   EdgePageHeader,
 } from "@/components/edges/edge-page-primitives";
+import { getEdgeReadinessSnapshot } from "@/components/edges/edge-surface-badges";
 import { Button } from "@/components/ui/button";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { trpcOptions } from "@/utils/trpc";
@@ -22,6 +23,12 @@ type SharedEdge = {
   publicationMode?: string | null;
   color?: string | null;
   isFeatured?: boolean | null;
+  publicStatsVisible?: boolean | null;
+  sourceEdgeId?: string | null;
+  sourceEdge?: {
+    id?: string | null;
+    name?: string | null;
+  } | null;
   owner?: {
     id: string;
     name: string;
@@ -35,22 +42,19 @@ type SharedEdge = {
     expectancy?: number | null;
     netPnl?: number | null;
   } | null;
+  passport?: {
+    readiness?: {
+      label?: string | null;
+      score?: number | null;
+      note?: string | null;
+    } | null;
+    lineage?: {
+      forkCount?: number | null;
+      descendantCount?: number | null;
+      forkDepth?: number | null;
+    } | null;
+  } | null;
 };
-
-function formatPercent(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return "0%";
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatMoney(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return "$0";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 export default function EdgesSharedPage() {
   const router = useRouter();
@@ -68,8 +72,12 @@ export default function EdgesSharedPage() {
     (accumulator, currentEdge) => {
       accumulator.edgeCount += 1;
       accumulator.tradeCount += currentEdge.metrics?.tradeCount ?? 0;
-      accumulator.netPnl += currentEdge.metrics?.netPnl ?? 0;
-      accumulator.winRateSum += currentEdge.metrics?.winRate ?? 0;
+      if (getEdgeReadinessSnapshot(currentEdge).tone === "ready") {
+        accumulator.readyCount += 1;
+      }
+      if (currentEdge.publicationMode === "library") {
+        accumulator.publicCount += 1;
+      }
       if (currentEdge.owner?.id) {
         accumulator.ownerIds.add(currentEdge.owner.id);
       }
@@ -78,8 +86,8 @@ export default function EdgesSharedPage() {
     {
       edgeCount: 0,
       tradeCount: 0,
-      netPnl: 0,
-      winRateSum: 0,
+      readyCount: 0,
+      publicCount: 0,
       ownerIds: new Set<string>(),
     }
   );
@@ -89,7 +97,7 @@ export default function EdgesSharedPage() {
       <EdgePageHeader
         eyebrow="Direct Edge shares"
         title="Shared Edges"
-        description="Edges other traders have shared directly with you. Public templates stay in the library, while private collaborations and editor invites stay here."
+        description="Edges other traders have shared directly with you. Collaborate privately here, then fork into your own stack and decide later whether your branch should be public."
         actions={
           <>
             <Button
@@ -123,19 +131,19 @@ export default function EdgesSharedPage() {
         />
         <EdgeMetricCard
           icon={Target}
-          label="Average win rate"
-          value={
-            summary.edgeCount > 0
-              ? formatPercent(summary.winRateSum / summary.edgeCount)
-              : "0%"
-          }
-          detail={`${summary.tradeCount} tagged trades`}
+          label="Ready to adapt"
+          value={summary.readyCount}
+          detail={`${summary.tradeCount} tagged trades across shared Edges`}
         />
         <EdgeMetricCard
           icon={TrendingUp}
-          label="Net P&L"
-          value={formatMoney(summary.netPnl)}
-          detail="Executed trade sample"
+          label="Also public"
+          value={summary.publicCount}
+          detail={
+            summary.publicCount > 0
+              ? "Open the creator library or fork privately"
+              : "Private collaboration only"
+          }
         />
       </div>
 
@@ -144,7 +152,7 @@ export default function EdgesSharedPage() {
           <div>
             <p className="text-sm font-medium text-white/72">Shared with you</p>
             <p className="text-sm text-white/40">
-              Open each shared Edge directly, or jump into the creator library when the Edge is also public.
+              Open each shared Edge directly, collaborate privately, or jump into the creator library when the Edge is also public and forkable.
             </p>
           </div>
           <p className="text-xs text-white/34">{summary.edgeCount} shared</p>

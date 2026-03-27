@@ -1,3 +1,5 @@
+import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
+
 export type BrokerOption = {
   value: string;
   label: string;
@@ -123,12 +125,12 @@ type AccountImageLike = {
  * - Everything else → FTMO logo as default
  */
 export function getAccountImage(account?: AccountImageLike | null): string {
-  if (!account) return "/brokers/pe.svg";
+  if (!account) return PROFITABLEDGE_FAVICON_PATH;
 
   const broker = account.broker?.toLowerCase() ?? "";
 
   // 1. Broker name match
-  if (broker === "demo broker") return "/brokers/pe.svg";
+  if (broker === "demo broker") return PROFITABLEDGE_FAVICON_PATH;
   if (broker.includes("ftmo")) return "/brokers/FTMO.png";
   if (broker.includes("metaquotes")) return "/brokers/mt5.png";
   if (broker.includes("tradovate")) return "/brokers/tradovate.png";
@@ -144,7 +146,7 @@ export function getAccountImage(account?: AccountImageLike | null): string {
     return "/brokers/tradovate.png";
   }
 
-  return "/brokers/pe.svg";
+  return PROFITABLEDGE_FAVICON_PATH;
 }
 
 export function brokerSupportsMultiCsvImport(broker?: string | null): boolean {

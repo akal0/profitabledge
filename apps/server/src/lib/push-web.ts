@@ -1,12 +1,26 @@
 import { createPrivateKey, createSign } from "node:crypto";
 import { nanoid } from "nanoid";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { buildNotificationPresentation } from "@profitabledge/platform";
 
 import { db } from "../db";
 import { notification, pushSubscription } from "../db/schema/notifications";
 import { getServerEnv } from "./env";
 
 type StoredPushSubscription = typeof pushSubscription.$inferSelect;
+type StoredNotification = typeof notification.$inferSelect;
+
+export type WebPushNotificationItem = {
+  id: string;
+  title: string;
+  body: string | null;
+  pushTitle: string;
+  pushBody: string;
+  type: string;
+  url: string;
+  requireInteraction: boolean;
+  createdAt: string;
+};
 
 function decodeBase64Url(value: string) {
   return Buffer.from(value, "base64url");
@@ -208,25 +222,59 @@ export async function removeWebPushSubscription(input: {
 }
 
 export async function getLatestUnreadNotificationForUser(userId: string) {
-  const rows = await db
-    .select()
-    .from(notification)
-    .where(and(eq(notification.userId, userId), isNull(notification.readAt)))
-    .orderBy(desc(notification.createdAt))
-    .limit(1);
+  const { notifications } = await getRecentUnreadNotificationsForUser(userId, 1);
+  return notifications[0] ?? null;
+}
 
-  const item = rows[0];
-  if (!item) return null;
+function toWebPushNotificationItem(item: StoredNotification): WebPushNotificationItem {
+  const presentation = buildNotificationPresentation({
+    title: item.title,
+    body: item.body,
+    type: item.type,
+    metadata: (item.metadata as Record<string, unknown> | null) ?? null,
+  });
 
   return {
     id: item.id,
     title: item.title,
     body: item.body,
+    pushTitle: presentation.pushTitle,
+    pushBody: presentation.pushBody,
     type: item.type,
     url: buildNotificationUrl({
       type: item.type,
       metadata: (item.metadata as Record<string, unknown> | null) ?? null,
     }),
+    requireInteraction: presentation.requireInteraction,
+    createdAt: item.createdAt.toISOString(),
+  };
+}
+
+export async function getRecentUnreadNotificationsForUser(
+  userId: string,
+  limit: number = 1
+) {
+  const normalizedLimit = Math.max(1, Math.min(limit, 10));
+  const unreadFilter = and(
+    eq(notification.userId, userId),
+    isNull(notification.readAt)
+  );
+  const [rows, unreadCountRows] = await Promise.all([
+    db
+      .select()
+      .from(notification)
+      .where(unreadFilter)
+      .orderBy(desc(notification.createdAt))
+      .limit(normalizedLimit),
+    db
+      .select({ value: count() })
+      .from(notification)
+      .where(unreadFilter),
+  ]);
+
+  return {
+    notifications: rows.map((item) => toWebPushNotificationItem(item)),
+    unreadCount: Number(unreadCountRows[0]?.value ?? 0),
   };
 }
 

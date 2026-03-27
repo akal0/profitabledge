@@ -93,6 +93,11 @@ export default function ConnectionsSettingsPage() {
     enabled: connectionsEnabled,
   });
 
+  const { data: billingConfig } = useQuery({
+    ...trpcOptions.billing.getPublicConfig.queryOptions(),
+    enabled: connectionsEnabled,
+  });
+
   const { data: connections, refetch: refetchConnections } = useQuery({
     ...trpcOptions.connections.list.queryOptions(),
     enabled: connectionsEnabled,
@@ -103,6 +108,15 @@ export default function ConnectionsSettingsPage() {
 
   const terminalConnections = (connections ?? []).filter((connection) =>
     isTerminalProvider(connection.provider)
+  );
+  const activePlanKey = billingState?.billing?.activePlanKey ?? "student";
+  const activePlan =
+    billingConfig?.plans.find((plan) => plan.key === activePlanKey) ?? null;
+  const liveSyncSlotsIncluded = activePlan?.includedLiveSyncSlots ?? 0;
+  const liveSyncSlotsUsed = connections?.length ?? 0;
+  const liveSyncSlotsRemaining = Math.max(
+    0,
+    liveSyncSlotsIncluded - liveSyncSlotsUsed
   );
   const canViewTerminalWorkerStatus = billingState?.admin?.isAdmin === true;
 
@@ -463,6 +477,10 @@ export default function ConnectionsSettingsPage() {
                 isSyncing={syncNow.isPending}
                 scheduledSyncEnabled={scheduledSyncEnabled}
                 mt5IngestionEnabled={mt5IngestionEnabled}
+                activePlanTitle={activePlan?.title ?? "Student"}
+                liveSyncSlotsIncluded={liveSyncSlotsIncluded}
+                liveSyncSlotsUsed={liveSyncSlotsUsed}
+                liveSyncSlotsRemaining={liveSyncSlotsRemaining}
                 onSync={(connectionId) => {
                   void handleSync(connectionId);
                 }}

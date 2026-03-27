@@ -78,14 +78,19 @@ import {
   requestAffiliateWithdrawal,
   saveAffiliateCommissionSplit,
   saveAffiliateOffer,
+  saveAffiliateTierSettings,
   saveAffiliatePaymentMethod,
   saveAffiliateTrackingLink,
   sendAffiliateStripeWithdrawal,
   setDefaultAffiliatePaymentMethod,
+  syncUserPremiumFlag,
   updateAffiliateProfileEffects,
   updatePrivateBetaWaitlistEntry,
   approveAffiliateWithdrawal,
   getAffiliatePublicProfile,
+  AFFILIATE_TIER_KEYS,
+  AFFILIATE_TIER_MODES,
+  AFFILIATE_TIER_EFFECT_VARIANTS,
   AFFILIATE_PFP_EFFECTS,
   AFFILIATE_NAME_EFFECTS,
   AFFILIATE_NAME_FONTS,
@@ -359,6 +364,23 @@ async function getOnboardingStatus(userId: string) {
     completedAt: null,
     source: "pending" as const,
   };
+}
+
+async function claimPendingGrowthAttributionIfOnboardingPending(input: {
+  userId: string;
+  visitorToken?: string | null;
+  source?: string | null;
+}) {
+  const onboarding = await getOnboardingStatus(input.userId);
+  if (onboarding.isComplete) {
+    return {
+      referral: null,
+      affiliate: null,
+      pending: null,
+    };
+  }
+
+  return claimPendingGrowthAttribution(input);
 }
 
 async function redeemPrivateBetaCode(input: {
@@ -887,20 +909,7 @@ async function upsertBillingOrderFromStripe(input: {
 }
 
 async function updateUserPremiumFlag(userId: string) {
-  const { activePlanKey, subscription, override } = await getActiveBillingState(userId);
-  const isPremium =
-    activePlanKey !== "student" &&
-    Boolean(
-      (subscription && isActiveSubscriptionStatus(subscription.status)) || override
-    );
-
-  await db
-    .update(userTable)
-    .set({
-      isPremium,
-      updatedAt: new Date(),
-    })
-    .where(eq(userTable.id, userId));
+  await syncUserPremiumFlag(userId);
 }
 
 async function ensureStripeCustomerForUser(user: Awaited<ReturnType<typeof getUserRow>>) {
@@ -2296,7 +2305,7 @@ export const billingRouter = router({
   claimPendingGrowthAttribution: protectedProcedure.mutation(async ({ ctx }) => {
     const { visitorToken, storedTouch } = getGrowthCookieContext(ctx);
 
-    return claimPendingGrowthAttribution({
+    return claimPendingGrowthAttributionIfOnboardingPending({
       userId: ctx.session.user.id,
       visitorToken: visitorToken ?? storedTouch?.visitorToken ?? null,
       source: "auth_claim",
@@ -2475,6 +2484,64 @@ export const billingRouter = router({
       return saveAffiliateCommissionSplit({
         affiliateUserId: input.affiliateUserId,
         commissionBps: input.commissionBps,
+      });
+    }),
+
+  saveAffiliateTierSettings: protectedProcedure
+    .input(
+      z.object({
+        affiliateUserId: z.string(),
+        tierMode: z.enum(AFFILIATE_TIER_MODES),
+        tierKey: z.enum(AFFILIATE_TIER_KEYS),
+        offerCode: z.string().min(3).max(64),
+        offerLabel: z.string().min(2).max(80),
+        offerDescription: z.string().max(300).optional(),
+        discountPercent: z.number().min(1).max(100).optional(),
+        payoutSplitPercent: z.number().min(0).max(100).optional(),
+        badgeLabel: z.string().min(1).max(40).optional(),
+        effectVariant: z.enum(AFFILIATE_TIER_EFFECT_VARIANTS).optional(),
+        benefits: z
+          .object({
+            customCodeLinks: z.boolean().optional(),
+            affiliateDashboard: z.boolean().optional(),
+            withdrawals: z.boolean().optional(),
+            proofBadge: z.boolean().optional(),
+            premiumAccess: z.boolean().optional(),
+            creatorKit: z.boolean().optional(),
+            prioritySupport: z.boolean().optional(),
+            earlyAccess: z.boolean().optional(),
+            featuredProof: z.boolean().optional(),
+            coBrandedCampaigns: z.boolean().optional(),
+            milestoneBonuses: z.boolean().optional(),
+            brandedEdge: z.boolean().optional(),
+            founderSupport: z.boolean().optional(),
+          })
+          .optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin(user.email);
+
+      return saveAffiliateTierSettings({
+        affiliateUserId: input.affiliateUserId,
+        updatedByUserId: user.id,
+        tierMode: input.tierMode,
+        tierKey: input.tierKey,
+        offerCode: input.offerCode,
+        offerLabel: input.offerLabel,
+        offerDescription: input.offerDescription ?? null,
+        discountBasisPoints:
+          typeof input.discountPercent === "number"
+            ? Math.round(input.discountPercent * 100)
+            : null,
+        commissionBps:
+          typeof input.payoutSplitPercent === "number"
+            ? Math.round(input.payoutSplitPercent * 100)
+            : null,
+        badgeLabel: input.badgeLabel ?? null,
+        effectVariant: input.effectVariant ?? null,
+        benefits: input.benefits ?? null,
       });
     }),
 
@@ -2667,7 +2734,7 @@ export const billingRouter = router({
       const user = await getUserRow(ctx.session.user.id);
       const stripeCustomer = await ensureStripeCustomerForUser(user);
       const growthCookieContext = getGrowthCookieContext(ctx);
-      await claimPendingGrowthAttribution({
+      await claimPendingGrowthAttributionIfOnboardingPending({
         userId: user.id,
         visitorToken:
           growthCookieContext.visitorToken ??

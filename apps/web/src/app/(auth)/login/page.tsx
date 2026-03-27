@@ -34,7 +34,7 @@ import Google from "@/public/icons/social-media/google.svg";
 import X from "@/public/icons/social-media/x.svg";
 
 const SOCIAL_BUTTON_CLASS =
-  "group h-max w-full justify-center rounded-sm ring ring-white/10 bg-sidebar px-4 text-sm font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white";
+  "group h-max w-full justify-center rounded-sm ring ring-white/10 bg-sidebar px-4 text-sm font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white gap-1";
 
 const PRIMARY_BUTTON_CLASS =
   "h-max py-3  w-full rounded-sm bg-sidebar text-xs font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white ring ring-white/10";
@@ -49,7 +49,7 @@ const LOGIN_HERO_SLIDES: AuthHeroSlide[] = [
   {
     title: "See the edge before the same mistake repeats.",
     description:
-      "Turn raw fills, journal notes, and prop-account pressure into a review loop that actually sharpens your next session.",
+      "Turn raw fills, edge reviews, and prop-account pressure into a proof-first loop that sharpens your next session.",
   },
   {
     title: "Your cleanest trades already told you what to scale.",
@@ -157,7 +157,7 @@ const LoginPage = () => {
             <span>
               {socialProviderLoading === "google"
                 ? "Redirecting..."
-                : "Log in with Google"}
+                : "Login with Google"}
             </span>
           </Button>
 
@@ -172,7 +172,7 @@ const LoginPage = () => {
             <span>
               {socialProviderLoading === "twitter"
                 ? "Redirecting..."
-                : "Log in with X"}
+                : "Login with X"}
             </span>
           </Button>
         </div>

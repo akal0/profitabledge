@@ -159,7 +159,12 @@ export const accountWebhookProcedures = {
               eq(tradingAccount.accountNumber, input.accountNumber)
             )
           )
-          .returning({ id: tradingAccount.id });
+          .returning({
+            id: tradingAccount.id,
+            name: tradingAccount.name,
+            initialBalance: tradingAccount.initialBalance,
+            initialCurrency: tradingAccount.initialCurrency,
+          });
 
         if (!result.length) {
           console.error(
@@ -201,11 +206,30 @@ export const accountWebhookProcedures = {
           accountId: result[0].id,
           type: "webhook_sync",
           title: "EA sync active",
-          body: `Account ${input.accountNumber} is syncing live status.`,
+          body: `Account ${result[0].name} is syncing live status.`,
           metadata: {
+            kind: "account_summary",
+            accountName: result[0].name,
             accountNumber: input.accountNumber,
             balance: input.balance,
             equity: input.equity,
+            initialBalance:
+              result[0].initialBalance == null
+                ? null
+                : Number(result[0].initialBalance),
+            currencyCode: result[0].initialCurrency,
+            pnl:
+              result[0].initialBalance == null
+                ? null
+                : input.equity - Number(result[0].initialBalance),
+            returnPct:
+              result[0].initialBalance == null ||
+              Number(result[0].initialBalance) === 0
+                ? null
+                : ((input.equity - Number(result[0].initialBalance)) /
+                    Number(result[0].initialBalance)) *
+                  100,
+            url: "/dashboard",
           },
           dedupeKey: `webhook:account-status:${result[0].id}:${hourKey}`,
         });

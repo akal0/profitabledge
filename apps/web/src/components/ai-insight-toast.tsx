@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { buildNotificationPresentation } from "@profitabledge/platform";
 import { useAccountStore } from "@/stores/account";
 import { trpcClient } from "@/utils/trpc";
 import { toast } from "sonner";
-import { AlertTriangle, Info, Lightbulb, Sparkles } from "lucide-react";
+import { Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { NotificationSurface } from "@/components/notifications/notification-surface";
 
 const INSIGHT_INTERVAL = 30 * 60 * 1000; // 30 minutes
 const STORAGE_KEY = "lastInsightTime";
@@ -39,34 +41,34 @@ export async function showInsightToast(
     accountId,
   });
   if (!insight) return;
+  const insightData =
+    "data" in insight && insight.data && typeof insight.data === "object"
+      ? (insight.data as Record<string, unknown>)
+      : null;
 
-  const IconComponent =
-    insight.severity === "positive"
-      ? Sparkles
-      : insight.severity === "warning"
-      ? AlertTriangle
-      : Info;
-
-  const iconColor =
-    insight.severity === "positive"
-      ? "text-teal-400"
-      : insight.severity === "warning"
-      ? "text-amber-400"
-      : "text-blue-400";
-
-  toast(formatInsightTitle(insight.title), {
-    description: insight.message,
-    icon: <IconComponent className={`size-4 ${iconColor}`} />,
-    duration: 8000,
-    classNames: {
-      toast:
-        "bg-sidebar ring-white/10 text-white !min-w-[300px] !max-w-[500px]",
-      title: "text-white font-medium",
-      description: "text-white/70",
-      actionButton:
-        "bg-teal-500/20 text-teal-400 hover:bg-teal-500/30 ring-teal-500/30",
+  const presentation = buildNotificationPresentation({
+    title: formatInsightTitle(insight.title),
+    body: insight.message,
+    type: "system_update",
+    metadata: {
+      kind: "trading_insight",
+      severity: insight.severity,
+      category: insight.type,
+      data: insightData,
     },
   });
+
+  toast.custom(
+    (toastId) => (
+      <NotificationSurface
+        presentation={presentation}
+        onClose={() => toast.dismiss(toastId)}
+      />
+    ),
+    {
+      duration: 8000,
+    }
+  );
 
   if (recordShownAt) {
     localStorage.setItem(STORAGE_KEY, Date.now().toString());

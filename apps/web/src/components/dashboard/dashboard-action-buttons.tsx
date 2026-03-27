@@ -45,6 +45,7 @@ type Props = {
     spans: Partial<Record<WidgetType, number>>
   ) => void;
 };
+
 const DashboardActionButtons: React.FC<Props> = ({
   isEditing = false,
   onToggleEdit,
@@ -95,6 +96,9 @@ const DashboardActionButtons: React.FC<Props> = ({
         ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
         : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
     );
+
+  const controlButtonClassName =
+    "cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-md hover:bg-sidebar-accent px-3";
 
   return (
     <div className="flex gap-2 items-center">
@@ -202,10 +206,7 @@ const DashboardActionButtons: React.FC<Props> = ({
           className="h-[38px] rounded-md px-3"
         />
       ) : null}
-      <Button
-        onClick={onToggleEdit}
-        className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-md hover:bg-sidebar-accent px-3"
-      >
+      <Button onClick={onToggleEdit} className={controlButtonClassName}>
         <EditWidgets className="size-3.5 fill-white/75" />
         <span>{isEditing ? "Save" : "Customize widgets"}</span>
       </Button>

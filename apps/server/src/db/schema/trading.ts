@@ -350,6 +350,85 @@ export const edgeRule = pgTable(
   })
 );
 
+export type EdgeVersionSnapshot = {
+  edge: {
+    id: string;
+    name: string;
+    description: string | null;
+    color: string | null;
+    status: string;
+    publicationMode: string;
+    publicStatsVisible: boolean;
+    sourceEdgeId: string | null;
+    coverImageUrl: string | null;
+    coverImagePosition: number | null;
+    contentBlocks: Record<string, unknown>[];
+    contentHtml: string | null;
+    examplesBlocks: Record<string, unknown>[];
+    examplesHtml: string | null;
+  };
+  sections: Array<{
+    id: string;
+    title: string;
+    description: string | null;
+    sortOrder: number;
+  }>;
+  rules: Array<{
+    id: string;
+    sectionId: string;
+    title: string;
+    description: string | null;
+    sortOrder: number;
+    isActive: boolean;
+    appliesOutcomes: string[];
+  }>;
+};
+
+export type EdgeVersionDiffSummary = {
+  changedFields: string[];
+  previousSectionCount: number;
+  nextSectionCount: number;
+  previousRuleCount: number;
+  nextRuleCount: number;
+  structuralChange: boolean;
+};
+
+export const edgeVersion = pgTable(
+  "edge_version",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => crypto.randomUUID()),
+    edgeId: text("edge_id")
+      .notNull()
+      .references(() => edge.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    createdByUserId: text("created_by_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    changeType: varchar("change_type", { length: 40 }).notNull(),
+    changeSummary: text("change_summary"),
+    changedFields: jsonb("changed_fields")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    diffSummary: jsonb("diff_summary").$type<EdgeVersionDiffSummary>(),
+    snapshot: jsonb("snapshot").$type<EdgeVersionSnapshot>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => ({
+    edgeVersionIdx: uniqueIndex("edge_version_edge_version_idx").on(
+      table.edgeId,
+      table.versionNumber
+    ),
+    edgeCreatedIdx: index("idx_edge_version_edge_created").on(
+      table.edgeId,
+      table.createdAt
+    ),
+    actorIdx: index("idx_edge_version_actor").on(table.createdByUserId),
+  })
+);
+
 export const tradeEdgeAssignment = pgTable(
   "trade_edge_assignment",
   {
@@ -431,14 +510,25 @@ export const edgeMissedTrade = pgTable(
     }),
     symbol: varchar("symbol", { length: 64 }).notNull(),
     tradeType: varchar("trade_type", { length: 8 }),
+    volume: numeric("volume"),
+    openPrice: numeric("open_price"),
+    closePrice: numeric("close_price"),
     sessionTag: text("session_tag"),
+    modelTag: text("model_tag"),
+    customTags: jsonb("custom_tags").$type<string[]>().notNull().default([]),
     setupTime: timestamp("setup_time"),
+    closeTime: timestamp("close_time"),
+    sl: numeric("sl"),
+    tp: numeric("tp"),
     reasonMissed: text("reason_missed"),
     notes: text("notes"),
     mediaUrls: jsonb("media_urls").$type<string[]>().notNull().default([]),
     estimatedOutcome: varchar("estimated_outcome", { length: 20 }),
+    estimatedProfit: numeric("estimated_profit"),
     estimatedRR: numeric("estimated_rr"),
     estimatedPnl: numeric("estimated_pnl"),
+    commissions: numeric("commissions"),
+    swap: numeric("swap"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -1304,6 +1394,7 @@ export const edgeRelations = relations(edge, ({ one, many }) => ({
   ruleEvaluations: many(tradeEdgeRuleEvaluation),
   missedTrades: many(edgeMissedTrade),
   shareMembers: many(edgeShareMember),
+  versions: many(edgeVersion),
 }));
 
 export const edgeSectionRelations = relations(edgeSection, ({ one, many }) => ({
@@ -1324,6 +1415,17 @@ export const edgeRuleRelations = relations(edgeRule, ({ one, many }) => ({
     references: [edgeSection.id],
   }),
   evaluations: many(tradeEdgeRuleEvaluation),
+}));
+
+export const edgeVersionRelations = relations(edgeVersion, ({ one }) => ({
+  edge: one(edge, {
+    fields: [edgeVersion.edgeId],
+    references: [edge.id],
+  }),
+  createdBy: one(user, {
+    fields: [edgeVersion.createdByUserId],
+    references: [user.id],
+  }),
 }));
 
 export const tradeEdgeAssignmentRelations = relations(

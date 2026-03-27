@@ -1,5 +1,21 @@
 "use client";
 
+import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
+
+type EnsureWebPushSubscriptionOptions = {
+  requestPermission?: boolean;
+};
+
+type DesktopNotificationInput = {
+  title: string;
+  body?: string | null;
+  url?: string | null;
+  tag?: string;
+  requireInteraction?: boolean;
+  icon?: string | null;
+  badge?: string | null;
+};
+
 type PushConfigResponse = {
   supported: boolean;
   publicKey: string | null;
@@ -44,7 +60,9 @@ async function getServiceWorkerRegistration() {
   return registration;
 }
 
-export async function ensureWebPushSubscription() {
+export async function ensureWebPushSubscription(
+  options: EnsureWebPushSubscriptionOptions = {}
+) {
   if (typeof window === "undefined" || typeof Notification === "undefined") {
     return false;
   }
@@ -54,10 +72,14 @@ export async function ensureWebPushSubscription() {
     return false;
   }
 
-  const permission =
-    Notification.permission === "granted"
-      ? "granted"
-      : await Notification.requestPermission();
+  let permission = Notification.permission;
+  if (permission !== "granted") {
+    if (options.requestPermission === false) {
+      return false;
+    }
+
+    permission = await Notification.requestPermission();
+  }
 
   if (permission !== "granted") {
     return false;
@@ -89,6 +111,46 @@ export async function ensureWebPushSubscription() {
   if (!response.ok) {
     throw new Error("Failed to save push subscription");
   }
+
+  return true;
+}
+
+export async function showDesktopNotification(
+  input: DesktopNotificationInput
+) {
+  if (typeof window === "undefined" || typeof Notification === "undefined") {
+    return false;
+  }
+
+  if (Notification.permission !== "granted") {
+    return false;
+  }
+
+  const title = input.title.trim() || "Profitabledge";
+  const notificationOptions = {
+    body: input.body ?? undefined,
+    data: {
+      url: input.url || "/dashboard/settings/notifications",
+    },
+    tag: input.tag,
+    icon: input.icon || PROFITABLEDGE_FAVICON_PATH,
+    badge: input.badge || input.icon || PROFITABLEDGE_FAVICON_PATH,
+    requireInteraction: input.requireInteraction ?? false,
+  };
+
+  const registration = await getServiceWorkerRegistration();
+  if (registration && typeof registration.showNotification === "function") {
+    await registration.showNotification(title, notificationOptions);
+    return true;
+  }
+
+  const notification = new Notification(title, notificationOptions);
+  notification.onclick = () => {
+    window.focus();
+    const targetUrl = input.url || "/dashboard/settings/notifications";
+    window.location.assign(targetUrl);
+    notification.close();
+  };
 
   return true;
 }

@@ -62,6 +62,210 @@ const GROWTH_TOUCH_COOKIE = "pe_growth_touch";
 const REWARD_TYPE_EDGE_CREDITS = "edge_credits";
 const REWARD_TYPE_FREE_MONTH = "free_month";
 const REWARD_TYPE_UPGRADE_TRIAL = "upgrade_trial";
+const AFFILIATE_TIER_OVERRIDE_SOURCE = "affiliate_tier";
+const AFFILIATE_PREMIUM_PLAN_KEY = "professional" as BillingPlanKey;
+const AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS = 250_000;
+const AFFILIATE_TIER_OVERRIDE_ENDS_AT = new Date("2099-12-31T23:59:59.999Z");
+
+export const AFFILIATE_TIER_KEYS = ["partner", "pro", "elite"] as const;
+export const AFFILIATE_TIER_MODES = ["automatic", "manual"] as const;
+export const AFFILIATE_TIER_EFFECT_VARIANTS = [
+  "gold-emerald",
+  "emerald_aurora",
+  "teal_signal",
+] as const;
+
+type AffiliateTierKey = (typeof AFFILIATE_TIER_KEYS)[number];
+type AffiliateTierMode = (typeof AFFILIATE_TIER_MODES)[number];
+type AffiliateEffectVariant = (typeof AFFILIATE_TIER_EFFECT_VARIANTS)[number];
+
+const AFFILIATE_BENEFIT_KEYS = [
+  "customCodeLinks",
+  "affiliateDashboard",
+  "withdrawals",
+  "proofBadge",
+  "premiumAccess",
+  "creatorKit",
+  "prioritySupport",
+  "earlyAccess",
+  "featuredProof",
+  "coBrandedCampaigns",
+  "milestoneBonuses",
+  "brandedEdge",
+  "founderSupport",
+] as const;
+
+type AffiliateBenefitKey = (typeof AFFILIATE_BENEFIT_KEYS)[number];
+
+const AFFILIATE_BENEFIT_COPY: Record<
+  AffiliateBenefitKey,
+  {
+    label: string;
+    description: string;
+    ctaLabel: string;
+  }
+> = {
+  customCodeLinks: {
+    label: "Custom code + tracked link",
+    description: "Share a branded discount code and tracked link from your affiliate dashboard.",
+    ctaLabel: "Share assets",
+  },
+  affiliateDashboard: {
+    label: "Affiliate dashboard",
+    description: "Track revenue, commissions, channels, and referred customers from one route.",
+    ctaLabel: "Open dashboard",
+  },
+  withdrawals: {
+    label: "Withdrawals",
+    description: "Connect Stripe and request payout withdrawals once commission becomes available.",
+    ctaLabel: "Open billing",
+  },
+  proofBadge: {
+    label: "Proof-page badge",
+    description: "Show an affiliate badge and public proof treatment tied to your current tier.",
+    ctaLabel: "View proof treatment",
+  },
+  premiumAccess: {
+    label: "Premium platform access",
+    description: "Stay on a paid platform plan while your affiliate profile remains active.",
+    ctaLabel: "Premium included",
+  },
+  creatorKit: {
+    label: "Creator kit",
+    description: "Unlock partner assets and launch material once you reach the Pro tier.",
+    ctaLabel: "Access creator kit",
+  },
+  prioritySupport: {
+    label: "Priority support",
+    description: "Get faster responses and partner support once your affiliate account levels up.",
+    ctaLabel: "Partner support",
+  },
+  earlyAccess: {
+    label: "Early access",
+    description: "Preview upcoming product releases before the main rollout.",
+    ctaLabel: "Early access",
+  },
+  featuredProof: {
+    label: "Featured proof treatment",
+    description: "Upgrade your public proof styling once you reach a higher affiliate tier.",
+    ctaLabel: "Proof treatment",
+  },
+  coBrandedCampaigns: {
+    label: "Co-branded campaigns",
+    description: "Run deeper launch campaigns and custom partner pages as an Elite affiliate.",
+    ctaLabel: "Campaign access",
+  },
+  milestoneBonuses: {
+    label: "Milestone bonuses",
+    description: "Become eligible for custom bonus payouts tied to launch or referral milestones.",
+    ctaLabel: "Bonus eligibility",
+  },
+  brandedEdge: {
+    label: "Branded Edge",
+    description: "Unlock your own Edge-style creator asset as part of the Elite program.",
+    ctaLabel: "Branded Edge",
+  },
+  founderSupport: {
+    label: "Founder line",
+    description: "Get the highest-touch support path reserved for Elite affiliate partners.",
+    ctaLabel: "Founder line",
+  },
+};
+
+const AFFILIATE_TIER_CONFIG: Record<
+  AffiliateTierKey,
+  {
+    label: string;
+    mode: AffiliateTierMode;
+    summary: string;
+    defaultCommissionBps: number;
+    defaultDiscountBasisPoints: number;
+    publicProof: {
+      badgeLabel: string;
+      effectVariant: AffiliateEffectVariant;
+    };
+    benefits: Record<AffiliateBenefitKey, boolean>;
+  }
+> = {
+  partner: {
+    label: "Partner",
+    mode: "automatic",
+    summary: "Default affiliate tier with recurring revenue share, tracked links, and standard proof treatment.",
+    defaultCommissionBps: 2000,
+    defaultDiscountBasisPoints: 1000,
+    publicProof: {
+      badgeLabel: "Affiliate",
+      effectVariant: "gold-emerald",
+    },
+    benefits: {
+      customCodeLinks: true,
+      affiliateDashboard: true,
+      withdrawals: true,
+      proofBadge: true,
+      premiumAccess: true,
+      creatorKit: false,
+      prioritySupport: false,
+      earlyAccess: false,
+      featuredProof: false,
+      coBrandedCampaigns: false,
+      milestoneBonuses: false,
+      brandedEdge: false,
+      founderSupport: false,
+    },
+  },
+  pro: {
+    label: "Pro",
+    mode: "automatic",
+    summary: "Automatic upgrade tier for affiliates who cross the referred revenue threshold.",
+    defaultCommissionBps: 2500,
+    defaultDiscountBasisPoints: 1000,
+    publicProof: {
+      badgeLabel: "Pro Affiliate",
+      effectVariant: "emerald_aurora",
+    },
+    benefits: {
+      customCodeLinks: true,
+      affiliateDashboard: true,
+      withdrawals: true,
+      proofBadge: true,
+      premiumAccess: true,
+      creatorKit: true,
+      prioritySupport: true,
+      earlyAccess: true,
+      featuredProof: true,
+      coBrandedCampaigns: false,
+      milestoneBonuses: false,
+      brandedEdge: false,
+      founderSupport: false,
+    },
+  },
+  elite: {
+    label: "Elite",
+    mode: "manual",
+    summary: "Manual partner tier for curated affiliates with custom economics and partner treatment.",
+    defaultCommissionBps: 2500,
+    defaultDiscountBasisPoints: 1500,
+    publicProof: {
+      badgeLabel: "Elite Affiliate",
+      effectVariant: "teal_signal",
+    },
+    benefits: {
+      customCodeLinks: true,
+      affiliateDashboard: true,
+      withdrawals: true,
+      proofBadge: true,
+      premiumAccess: true,
+      creatorKit: true,
+      prioritySupport: true,
+      earlyAccess: true,
+      featuredProof: true,
+      coBrandedCampaigns: true,
+      milestoneBonuses: true,
+      brandedEdge: true,
+      founderSupport: true,
+    },
+  },
+};
 
 type MinimalUser = {
   id: string;
@@ -261,6 +465,12 @@ function formatAffiliatePlanLabel(planKey?: string | null) {
 export function buildAffiliatePublicProofMetadata(
   metadata?: Record<string, unknown> | null
 ) {
+  const program =
+    metadata?.program && typeof metadata.program === "object"
+      ? (metadata.program as Record<string, unknown>)
+      : null;
+  const tierKey = isAffiliateTierKey(program?.tierKey) ? program.tierKey : "partner";
+  const tierDefaults = AFFILIATE_TIER_CONFIG[tierKey].publicProof;
   const publicProof =
     metadata && typeof metadata === "object"
       ? ((metadata.publicProof as Record<string, unknown> | undefined) ?? undefined)
@@ -270,12 +480,205 @@ export function buildAffiliatePublicProofMetadata(
     badgeLabel:
       typeof publicProof?.badgeLabel === "string" && publicProof.badgeLabel.trim()
         ? publicProof.badgeLabel.trim()
-        : "Affiliate",
+        : tierDefaults.badgeLabel,
     effectVariant:
       typeof publicProof?.effectVariant === "string" &&
       publicProof.effectVariant.trim()
         ? publicProof.effectVariant.trim()
-        : "gold-emerald",
+        : tierDefaults.effectVariant,
+  };
+}
+
+function isAffiliateTierKey(value: unknown): value is AffiliateTierKey {
+  return typeof value === "string" && AFFILIATE_TIER_KEYS.includes(value as AffiliateTierKey);
+}
+
+function isAffiliateTierMode(value: unknown): value is AffiliateTierMode {
+  return (
+    typeof value === "string" &&
+    AFFILIATE_TIER_MODES.includes(value as AffiliateTierMode)
+  );
+}
+
+function isAffiliateEffectVariant(value: unknown): value is AffiliateEffectVariant {
+  return (
+    typeof value === "string" &&
+    AFFILIATE_TIER_EFFECT_VARIANTS.includes(value as AffiliateEffectVariant)
+  );
+}
+
+function normalizeAffiliateTierKey(value: unknown): AffiliateTierKey {
+  return isAffiliateTierKey(value) ? value : "partner";
+}
+
+function normalizeAffiliateTierMode(value: unknown): AffiliateTierMode {
+  return isAffiliateTierMode(value) ? value : "automatic";
+}
+
+function getAffiliateMetadataObject(
+  metadata?: Record<string, unknown> | null
+): Record<string, unknown> {
+  return metadata && typeof metadata === "object" ? metadata : {};
+}
+
+function buildAffiliateBenefitFlags(
+  tierKey: AffiliateTierKey,
+  overrides?: Partial<Record<AffiliateBenefitKey, boolean>> | null
+) {
+  return AFFILIATE_BENEFIT_KEYS.reduce(
+    (acc, key) => {
+      acc[key] = overrides?.[key] ?? AFFILIATE_TIER_CONFIG[tierKey].benefits[key];
+      return acc;
+    },
+    {} as Record<AffiliateBenefitKey, boolean>
+  );
+}
+
+function parseAffiliateBenefitFlags(
+  program?: Record<string, unknown> | null,
+  tierKey: AffiliateTierKey = "partner"
+) {
+  const rawBenefits =
+    program?.benefits && typeof program.benefits === "object"
+      ? (program.benefits as Record<string, unknown>)
+      : null;
+
+  return buildAffiliateBenefitFlags(
+    tierKey,
+    rawBenefits
+      ? AFFILIATE_BENEFIT_KEYS.reduce(
+          (acc, key) => {
+            if (typeof rawBenefits[key] === "boolean") {
+              acc[key] = rawBenefits[key] as boolean;
+            }
+            return acc;
+          },
+          {} as Partial<Record<AffiliateBenefitKey, boolean>>
+        )
+      : null
+  );
+}
+
+function buildAffiliateProgramMetadata(input: {
+  tierKey: AffiliateTierKey;
+  tierMode: AffiliateTierMode;
+  referredRevenueAmount: number;
+  commissionBps: number;
+  discountBasisPoints: number;
+  benefits?: Partial<Record<AffiliateBenefitKey, boolean>> | null;
+}) {
+  return {
+    tierKey: input.tierKey,
+    tierMode: input.tierMode,
+    referredRevenueAmount: input.referredRevenueAmount,
+    commissionBps: input.commissionBps,
+    discountBasisPoints: input.discountBasisPoints,
+    premiumPlanKey: AFFILIATE_PREMIUM_PLAN_KEY,
+    benefits: buildAffiliateBenefitFlags(input.tierKey, input.benefits),
+  };
+}
+
+function getAffiliateAutomaticTierKey(referredRevenueAmount: number): AffiliateTierKey {
+  return referredRevenueAmount >= AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS
+    ? "pro"
+    : "partner";
+}
+
+function buildAffiliateTierProgress(
+  tierKey: AffiliateTierKey,
+  referredRevenueAmount: number
+) {
+  if (tierKey === "partner") {
+    const remaining = Math.max(
+      AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS - referredRevenueAmount,
+      0
+    );
+
+    return {
+      currentTierKey: tierKey,
+      nextTierKey: "pro" as AffiliateTierKey,
+      nextTierLabel: AFFILIATE_TIER_CONFIG.pro.label,
+      thresholdAmount: AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS,
+      remainingAmount: remaining,
+      progressPercent: Math.min(
+        100,
+        Math.round(
+          (Math.max(referredRevenueAmount, 0) / AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS) *
+            100
+        )
+      ),
+      statusMessage:
+        remaining > 0
+          ? `${new Intl.NumberFormat("en-US", {
+              style: "currency",
+              currency: "USD",
+            }).format(remaining / 100)} in referred revenue until Pro`
+          : "Pro unlocked",
+      isAutomatic: true,
+    };
+  }
+
+  return {
+    currentTierKey: tierKey,
+    nextTierKey: "elite" as AffiliateTierKey,
+    nextTierLabel: AFFILIATE_TIER_CONFIG.elite.label,
+    thresholdAmount: null,
+    remainingAmount: null,
+    progressPercent: null,
+    statusMessage: "Elite is manually assigned for top affiliate partners.",
+    isAutomatic: false,
+  };
+}
+
+function buildAffiliateBenefitsList(input: {
+  tierKey: AffiliateTierKey;
+  benefitFlags: Record<AffiliateBenefitKey, boolean>;
+}) {
+  return AFFILIATE_BENEFIT_KEYS.map((key) => ({
+    key,
+    label: AFFILIATE_BENEFIT_COPY[key].label,
+    description: AFFILIATE_BENEFIT_COPY[key].description,
+    ctaLabel: AFFILIATE_BENEFIT_COPY[key].ctaLabel,
+    enabled: input.benefitFlags[key],
+  }));
+}
+
+function buildAffiliateTierSnapshot(input: {
+  profile: typeof affiliateProfile.$inferSelect;
+  referredRevenueAmount: number;
+  discountBasisPoints: number;
+}) {
+  const metadata = getAffiliateMetadataObject(
+    (input.profile.metadata as Record<string, unknown> | null | undefined) ?? null
+  );
+  const program =
+    metadata.program && typeof metadata.program === "object"
+      ? (metadata.program as Record<string, unknown>)
+      : null;
+  const tierKey = normalizeAffiliateTierKey(input.profile.tierKey);
+  const tierMode = normalizeAffiliateTierMode(input.profile.tierMode);
+  const benefitFlags = parseAffiliateBenefitFlags(program, tierKey);
+  const publicProof = buildAffiliatePublicProofMetadata(metadata);
+
+  return {
+    key: tierKey,
+    label: AFFILIATE_TIER_CONFIG[tierKey].label,
+    mode: tierMode,
+    modeLabel: tierMode === "manual" ? "Manual" : "Automatic",
+    summary: AFFILIATE_TIER_CONFIG[tierKey].summary,
+    referredRevenueAmount: input.referredRevenueAmount,
+    effectiveCommissionBps: input.profile.commissionBps,
+    effectiveDiscountBasisPoints: input.discountBasisPoints,
+    publicProof,
+    benefits: buildAffiliateBenefitsList({
+      tierKey,
+      benefitFlags,
+    }),
+    benefitFlags,
+    progress: buildAffiliateTierProgress(tierKey, input.referredRevenueAmount),
+    premiumPlanKey: AFFILIATE_PREMIUM_PLAN_KEY,
+    canCustomizeProof:
+      tierKey === "elite" && tierMode === "manual",
   };
 }
 
@@ -428,6 +831,127 @@ export async function getEffectiveBillingState(userId: string) {
     override: override ?? null,
     activePlanKey,
   };
+}
+
+export async function syncUserPremiumFlag(userId: string) {
+  const { activePlanKey, subscription, override } = await getEffectiveBillingState(userId);
+  const isPremium =
+    activePlanKey !== "student" &&
+    Boolean(
+      (subscription && isActiveSubscriptionStatus(subscription.status)) || override
+    );
+
+  await db
+    .update(userTable)
+    .set({
+      isPremium,
+      updatedAt: new Date(),
+    })
+    .where(eq(userTable.id, userId));
+}
+
+async function getAffiliateReferredRevenueAmount(affiliateUserId: string) {
+  const [row] = await db
+    .select({
+      amount:
+        sql<number>`coalesce(sum(${affiliateCommissionEvent.orderAmount}), 0)::int`,
+    })
+    .from(affiliateCommissionEvent)
+    .where(eq(affiliateCommissionEvent.affiliateUserId, affiliateUserId));
+
+  return row?.amount ?? 0;
+}
+
+async function getAffiliatePremiumOverrideRow(userId: string) {
+  const now = new Date();
+  const [override] = await db
+    .select()
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, userId),
+        eq(billingEntitlementOverride.sourceType, AFFILIATE_TIER_OVERRIDE_SOURCE),
+        lte(billingEntitlementOverride.startsAt, now),
+        gte(billingEntitlementOverride.endsAt, now)
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt))
+    .limit(1);
+
+  return override ?? null;
+}
+
+async function syncAffiliatePremiumAccess(input: {
+  userId: string;
+  shouldGrant: boolean;
+}) {
+  const rows = await db
+    .select()
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, input.userId),
+        eq(billingEntitlementOverride.sourceType, AFFILIATE_TIER_OVERRIDE_SOURCE)
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt), desc(billingEntitlementOverride.createdAt));
+
+  const now = new Date();
+
+  if (!input.shouldGrant) {
+    for (const row of rows) {
+      if (row.endsAt.getTime() > now.getTime()) {
+        await db
+          .update(billingEntitlementOverride)
+          .set({
+            endsAt: now,
+            updatedAt: now,
+          })
+          .where(eq(billingEntitlementOverride.id, row.id));
+      }
+    }
+    await syncUserPremiumFlag(input.userId);
+    return null;
+  }
+
+  const [primary, ...duplicates] = rows;
+  for (const duplicate of duplicates) {
+    if (duplicate.endsAt.getTime() > now.getTime()) {
+      await db
+        .update(billingEntitlementOverride)
+        .set({
+          endsAt: now,
+          updatedAt: now,
+        })
+        .where(eq(billingEntitlementOverride.id, duplicate.id));
+    }
+  }
+
+  if (primary) {
+    await db
+      .update(billingEntitlementOverride)
+      .set({
+        planKey: AFFILIATE_PREMIUM_PLAN_KEY,
+        startsAt:
+          primary.startsAt.getTime() <= now.getTime() ? primary.startsAt : now,
+        endsAt: AFFILIATE_TIER_OVERRIDE_ENDS_AT,
+        updatedAt: now,
+      })
+      .where(eq(billingEntitlementOverride.id, primary.id));
+  } else {
+    await db.insert(billingEntitlementOverride).values({
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      sourceType: AFFILIATE_TIER_OVERRIDE_SOURCE,
+      sourceRewardGrantId: null,
+      planKey: AFFILIATE_PREMIUM_PLAN_KEY,
+      startsAt: now,
+      endsAt: AFFILIATE_TIER_OVERRIDE_ENDS_AT,
+    });
+  }
+
+  await syncUserPremiumFlag(input.userId);
+  return getAffiliatePremiumOverrideRow(input.userId);
 }
 
 async function getReferralProfileRow(userId: string) {
@@ -645,6 +1169,202 @@ async function getAffiliateTrackingLinkRows(userId: string) {
       )
     )
     .orderBy(desc(affiliateTrackingLink.isDefault), desc(affiliateTrackingLink.createdAt));
+}
+
+async function ensureAffiliateDefaultOfferForTier(input: {
+  profile: typeof affiliateProfile.$inferSelect;
+  desiredDiscountBasisPoints: number;
+  forceDiscount: boolean;
+}) {
+  const createdByUserId =
+    input.profile.tierAssignedByUserId ??
+    input.profile.approvedByUserId ??
+    input.profile.userId;
+  const offers = await getAffiliateOfferRows(input.profile.userId);
+  let defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+
+  if (!defaultOffer) {
+    defaultOffer = await ensureAffiliateOfferRow(input.profile, createdByUserId);
+  }
+
+  if (
+    !defaultOffer ||
+    (!input.forceDiscount &&
+      defaultOffer.discountBasisPoints === input.desiredDiscountBasisPoints)
+  ) {
+    return defaultOffer;
+  }
+
+  return saveAffiliateOffer({
+    affiliateUserId: input.profile.userId,
+    createdByUserId,
+    affiliateOfferId: defaultOffer.id,
+    code: defaultOffer.code,
+    label: defaultOffer.label,
+    description: defaultOffer.description ?? null,
+    discountBasisPoints: input.desiredDiscountBasisPoints,
+    isDefault: true,
+  });
+}
+
+async function syncAffiliateTierState(affiliateUserId: string) {
+  const profile = await getApprovedAffiliateProfile(affiliateUserId);
+  if (!profile) {
+    await syncAffiliatePremiumAccess({
+      userId: affiliateUserId,
+      shouldGrant: false,
+    });
+    return null;
+  }
+
+  const referredRevenueAmount = await getAffiliateReferredRevenueAmount(
+    affiliateUserId
+  );
+  const metadata = getAffiliateMetadataObject(
+    (profile.metadata as Record<string, unknown> | null | undefined) ?? null
+  );
+  const currentProgram =
+    metadata.program && typeof metadata.program === "object"
+      ? (metadata.program as Record<string, unknown>)
+      : null;
+  const tierMode = normalizeAffiliateTierMode(profile.tierMode);
+  const tierKey =
+    tierMode === "manual"
+      ? "elite"
+      : getAffiliateAutomaticTierKey(referredRevenueAmount);
+  const tierDefaults = AFFILIATE_TIER_CONFIG[tierKey];
+  const defaultOffer = await ensureAffiliateDefaultOfferForTier({
+    profile,
+    desiredDiscountBasisPoints:
+      tierMode === "manual"
+        ? normalizeAffiliateTierKey(profile.tierKey) === "elite"
+          ? (currentProgram && typeof currentProgram.discountBasisPoints === "number"
+              ? Math.round(currentProgram.discountBasisPoints)
+              : tierDefaults.defaultDiscountBasisPoints)
+          : tierDefaults.defaultDiscountBasisPoints
+        : tierDefaults.defaultDiscountBasisPoints,
+    forceDiscount: tierMode !== "manual",
+  });
+
+  const manualBenefitFlags =
+    tierMode === "manual"
+      ? parseAffiliateBenefitFlags(currentProgram, "elite")
+      : null;
+  const currentPublicProof = buildAffiliatePublicProofMetadata(metadata);
+  const nextPublicProof =
+    tierMode === "manual"
+      ? {
+          badgeLabel:
+            typeof currentPublicProof.badgeLabel === "string" &&
+            currentPublicProof.badgeLabel.trim()
+              ? currentPublicProof.badgeLabel.trim()
+              : tierDefaults.publicProof.badgeLabel,
+          effectVariant: isAffiliateEffectVariant(currentPublicProof.effectVariant)
+            ? currentPublicProof.effectVariant
+            : tierDefaults.publicProof.effectVariant,
+        }
+      : {
+          badgeLabel: tierDefaults.publicProof.badgeLabel,
+          effectVariant: tierDefaults.publicProof.effectVariant,
+        };
+  const nextProgram = buildAffiliateProgramMetadata({
+    tierKey,
+    tierMode,
+    referredRevenueAmount,
+    commissionBps:
+      tierMode === "manual"
+        ? profile.commissionBps
+        : tierDefaults.defaultCommissionBps,
+    discountBasisPoints:
+      defaultOffer?.discountBasisPoints ?? tierDefaults.defaultDiscountBasisPoints,
+    benefits: manualBenefitFlags,
+  });
+
+  const nextMetadata =
+    tierMode === "manual"
+      ? {
+          ...metadata,
+          publicProof: {
+            ...(metadata.publicProof && typeof metadata.publicProof === "object"
+              ? (metadata.publicProof as Record<string, unknown>)
+              : {}),
+            badgeLabel: nextPublicProof.badgeLabel,
+            effectVariant: nextPublicProof.effectVariant,
+          },
+          program: nextProgram,
+        }
+      : {
+          ...metadata,
+          publicProof: {
+            badgeLabel: nextPublicProof.badgeLabel,
+            effectVariant: nextPublicProof.effectVariant,
+          },
+          program: nextProgram,
+        };
+
+  const shouldUpdateProfile =
+    profile.commissionBps !==
+      (tierMode === "manual"
+        ? profile.commissionBps
+        : tierDefaults.defaultCommissionBps) ||
+    normalizeAffiliateTierKey(profile.tierKey) !== tierKey ||
+    normalizeAffiliateTierMode(profile.tierMode) !== tierMode ||
+    !profile.tierAssignedAt ||
+    JSON.stringify(metadata) !== JSON.stringify(nextMetadata);
+
+  let resolvedProfile = profile;
+  if (shouldUpdateProfile) {
+    const [updated] = await db
+      .update(affiliateProfile)
+      .set({
+        commissionBps:
+          tierMode === "manual"
+            ? profile.commissionBps
+            : tierDefaults.defaultCommissionBps,
+        tierKey,
+        tierMode,
+        tierAssignedAt:
+          normalizeAffiliateTierKey(profile.tierKey) !== tierKey ||
+          normalizeAffiliateTierMode(profile.tierMode) !== tierMode
+            ? new Date()
+            : profile.tierAssignedAt ?? new Date(),
+        tierAssignedByUserId:
+          tierMode === "manual"
+            ? profile.tierAssignedByUserId ?? profile.approvedByUserId
+            : null,
+        metadata: nextMetadata,
+        updatedAt: new Date(),
+      })
+      .where(eq(affiliateProfile.id, profile.id))
+      .returning();
+
+    if (updated) {
+      resolvedProfile = updated;
+    }
+  }
+
+  const premiumOverride = await syncAffiliatePremiumAccess({
+    userId: affiliateUserId,
+    shouldGrant: true,
+  });
+
+  return {
+    profile: resolvedProfile,
+    defaultOffer:
+      defaultOffer ??
+      (await ensureAffiliateDefaultOfferForTier({
+        profile: resolvedProfile,
+        desiredDiscountBasisPoints: tierDefaults.defaultDiscountBasisPoints,
+        forceDiscount: false,
+      })),
+    premiumOverride,
+    tier: buildAffiliateTierSnapshot({
+      profile: resolvedProfile,
+      referredRevenueAmount,
+      discountBasisPoints:
+        defaultOffer?.discountBasisPoints ?? tierDefaults.defaultDiscountBasisPoints,
+    }),
+  };
 }
 
 async function getAffiliateTrackingLinkById(trackingLinkId?: string | null) {
@@ -1180,11 +1900,16 @@ async function ensureAffiliateProfileApproved(
 ) {
   const existing = await getAffiliateProfileRow(user.id);
   const referral = await ensureReferralProfile(user.id);
+  const partnerDefaults = AFFILIATE_TIER_CONFIG.partner;
   const publicProofDefaults = {
-    publicProof: {
-      badgeLabel: "Affiliate",
-      effectVariant: "gold-emerald",
-    },
+    publicProof: partnerDefaults.publicProof,
+    program: buildAffiliateProgramMetadata({
+      tierKey: "partner",
+      tierMode: "automatic",
+      referredRevenueAmount: 0,
+      commissionBps: partnerDefaults.defaultCommissionBps,
+      discountBasisPoints: partnerDefaults.defaultDiscountBasisPoints,
+    }),
   };
 
   if (existing) {
@@ -1193,7 +1918,13 @@ async function ensureAffiliateProfileApproved(
       .set({
         code: existing.code || referral.code,
         displayName: existing.displayName || user.name,
-        commissionBps: existing.commissionBps ?? getAffiliateCommissionBps(),
+        commissionBps:
+          existing.commissionBps ?? partnerDefaults.defaultCommissionBps,
+        tierKey: normalizeAffiliateTierKey(existing.tierKey),
+        tierMode: normalizeAffiliateTierMode(existing.tierMode),
+        tierAssignedAt: existing.tierAssignedAt ?? new Date(),
+        tierAssignedByUserId:
+          existing.tierAssignedByUserId ?? approvedByUserId,
         isActive: true,
         approvedAt: new Date(),
         approvedByUserId,
@@ -1228,7 +1959,11 @@ async function ensureAffiliateProfileApproved(
           userId: user.id,
           code,
           displayName: user.name,
-          commissionBps: getAffiliateCommissionBps(),
+          commissionBps: partnerDefaults.defaultCommissionBps,
+          tierKey: "partner",
+          tierMode: "automatic",
+          tierAssignedAt: new Date(),
+          tierAssignedByUserId: approvedByUserId,
           isActive: true,
           approvedAt: new Date(),
           approvedByUserId,
@@ -1509,12 +2244,15 @@ export async function approveAffiliateApplication(input: {
     .where(eq(affiliateApplication.id, application.id))
     .returning();
 
+  const synced = await syncAffiliateTierState(user.id);
+
   return {
     application: updatedApplication ?? application,
-    profile: approvedProfile,
+    profile: synced?.profile ?? approvedProfile,
     group,
-    offer,
+    offer: synced?.defaultOffer ?? offer,
     trackingLink,
+    tier: synced?.tier ?? null,
   };
 }
 
@@ -1631,8 +2369,23 @@ export async function updatePrivateBetaWaitlistEntry(input: {
 
 async function getReferralConversionsByReferrer(userId: string) {
   return db
-    .select()
+    .select({
+      id: referralConversion.id,
+      referralProfileId: referralConversion.referralProfileId,
+      referrerUserId: referralConversion.referrerUserId,
+      referredUserId: referralConversion.referredUserId,
+      referralCode: referralConversion.referralCode,
+      source: referralConversion.source,
+      status: referralConversion.status,
+      paidOrderId: referralConversion.paidOrderId,
+      paidSubscriptionId: referralConversion.paidSubscriptionId,
+      paidAt: referralConversion.paidAt,
+      createdAt: referralConversion.createdAt,
+      updatedAt: referralConversion.updatedAt,
+      referredUsername: userTable.username,
+    })
     .from(referralConversion)
+    .leftJoin(userTable, eq(userTable.id, referralConversion.referredUserId))
     .where(eq(referralConversion.referrerUserId, userId))
     .orderBy(desc(referralConversion.createdAt));
 }
@@ -1697,7 +2450,8 @@ export async function buildReferralState(userId: string) {
 
 export async function buildAffiliateState(userId: string) {
   const application = await getLatestAffiliateApplication(userId);
-  const profile = await getApprovedAffiliateProfile(userId);
+  const synced = await syncAffiliateTierState(userId);
+  const profile = synced?.profile ?? (await getApprovedAffiliateProfile(userId));
 
   if (!profile) {
     return {
@@ -1794,10 +2548,12 @@ export async function buildAffiliateState(userId: string) {
       id: profile.id,
       code: profile.code,
       commissionBps: profile.commissionBps,
+      tierKey: synced?.tier.key ?? normalizeAffiliateTierKey(profile.tierKey),
       offerCode: defaultOffer?.code ?? null,
       defaultOfferCode: defaultOffer?.code ?? null,
       shareUrl,
     },
+    tier: synced?.tier ?? null,
     stats: {
       signups: attributions.length,
       paidCustomers: attributions.filter((row) => row.firstPaidAt).length,
@@ -1805,12 +2561,16 @@ export async function buildAffiliateState(userId: string) {
         (sum, row) => sum + (row.commissionAmount ?? 0),
         0
       ),
+      referredRevenueAmount:
+        synced?.tier.referredRevenueAmount ??
+        commissionEvents.reduce((sum, row) => sum + (row.orderAmount ?? 0), 0),
     },
   };
 }
 
 export async function buildAffiliateDashboard(userId: string) {
-  const profile = await getApprovedAffiliateProfile(userId);
+  const synced = await syncAffiliateTierState(userId);
+  const profile = synced?.profile ?? (await getApprovedAffiliateProfile(userId));
   if (!profile) {
     return null;
   }
@@ -1869,12 +2629,34 @@ export async function buildAffiliateDashboard(userId: string) {
       id: profile.id,
       code: profile.code,
       commissionBps: profile.commissionBps,
+      tierKey: synced?.tier.key ?? normalizeAffiliateTierKey(profile.tierKey),
       offerCode: defaultOffer?.code ?? null,
       defaultOfferCode: defaultOffer?.code ?? null,
       shareUrl,
       publicProof: buildAffiliatePublicProofMetadata(
         (profile.metadata as Record<string, unknown> | null | undefined) ?? null
       ),
+    },
+    tier:
+      synced?.tier ??
+      buildAffiliateTierSnapshot({
+        profile,
+        referredRevenueAmount: commissionEvents.reduce(
+          (sum, row) => sum + (row.orderAmount ?? 0),
+          0
+        ),
+        discountBasisPoints:
+          defaultOffer?.discountBasisPoints ??
+          AFFILIATE_TIER_CONFIG[
+            normalizeAffiliateTierKey(profile.tierKey)
+          ].defaultDiscountBasisPoints,
+      }),
+    premiumAccess: {
+      isActive: Boolean(synced?.premiumOverride),
+      planKey: synced?.premiumOverride?.planKey ?? AFFILIATE_PREMIUM_PLAN_KEY,
+      sourceType:
+        synced?.premiumOverride?.sourceType ?? AFFILIATE_TIER_OVERRIDE_SOURCE,
+      endsAt: synced?.premiumOverride?.endsAt ?? null,
     },
     defaultOffer,
     offers,
@@ -1886,6 +2668,9 @@ export async function buildAffiliateDashboard(userId: string) {
         (sum, row) => sum + (row.commissionAmount ?? 0),
         0
       ),
+      referredRevenueAmount:
+        synced?.tier.referredRevenueAmount ??
+        commissionEvents.reduce((sum, row) => sum + (row.orderAmount ?? 0), 0),
       linkClicks: touchEvents.length,
     },
     attributions,
@@ -1895,7 +2680,8 @@ export async function buildAffiliateDashboard(userId: string) {
 }
 
 export async function getAffiliatePayoutSettings(userId: string) {
-  const profile = await getApprovedAffiliateProfile(userId);
+  const synced = await syncAffiliateTierState(userId);
+  const profile = synced?.profile ?? (await getApprovedAffiliateProfile(userId));
   if (!profile) {
     throw new TRPCError({
       code: "FORBIDDEN",
@@ -1915,6 +2701,14 @@ export async function getAffiliatePayoutSettings(userId: string) {
 
   return {
     commissionBps: profile.commissionBps,
+    tier: synced?.tier ?? null,
+    premiumAccess: {
+      isActive: Boolean(synced?.premiumOverride),
+      planKey: synced?.premiumOverride?.planKey ?? AFFILIATE_PREMIUM_PLAN_KEY,
+      sourceType:
+        synced?.premiumOverride?.sourceType ?? AFFILIATE_TIER_OVERRIDE_SOURCE,
+      endsAt: synced?.premiumOverride?.endsAt ?? null,
+    },
     stripeConnect: providerAccount
       ? {
           id: providerAccount.id,
@@ -2229,6 +3023,193 @@ export async function saveAffiliateCommissionSplit(input: {
     .returning();
 
   return updated ?? profile;
+}
+
+export async function saveAffiliateTierSettings(input: {
+  affiliateUserId: string;
+  updatedByUserId: string;
+  tierMode: AffiliateTierMode;
+  tierKey: AffiliateTierKey;
+  offerCode: string;
+  offerLabel: string;
+  offerDescription?: string | null;
+  discountBasisPoints?: number | null;
+  commissionBps?: number | null;
+  badgeLabel?: string | null;
+  effectVariant?: string | null;
+  benefits?: Partial<Record<AffiliateBenefitKey, boolean>> | null;
+}) {
+  const profile = await getApprovedAffiliateProfile(input.affiliateUserId);
+  if (!profile) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Affiliate not found",
+    });
+  }
+
+  const referredRevenueAmount = await getAffiliateReferredRevenueAmount(
+    input.affiliateUserId
+  );
+  const nextTierMode = normalizeAffiliateTierMode(input.tierMode);
+  const automaticTierKey = getAffiliateAutomaticTierKey(referredRevenueAmount);
+  const nextTierKey =
+    nextTierMode === "manual" ? "elite" : automaticTierKey;
+
+  if (nextTierMode === "manual" && input.tierKey !== "elite") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Only the Elite tier can be assigned manually",
+    });
+  }
+
+  const metadata = getAffiliateMetadataObject(
+    (profile.metadata as Record<string, unknown> | null | undefined) ?? null
+  );
+  const program =
+    metadata.program && typeof metadata.program === "object"
+      ? (metadata.program as Record<string, unknown>)
+      : null;
+  const tierDefaults = AFFILIATE_TIER_CONFIG[nextTierKey];
+  const nextCommissionBps =
+    nextTierMode === "manual"
+      ? Math.max(
+          0,
+          Math.min(
+            10000,
+            Math.round(input.commissionBps ?? profile.commissionBps)
+          )
+        )
+      : tierDefaults.defaultCommissionBps;
+  const nextDiscountBasisPoints =
+    nextTierMode === "manual"
+      ? Math.max(
+          100,
+          Math.min(
+            10000,
+            Math.round(
+              input.discountBasisPoints ??
+                (typeof program?.discountBasisPoints === "number"
+                  ? Number(program.discountBasisPoints)
+                  : tierDefaults.defaultDiscountBasisPoints)
+            )
+          )
+        )
+      : tierDefaults.defaultDiscountBasisPoints;
+  const nextBenefitFlags =
+    nextTierMode === "manual"
+      ? buildAffiliateBenefitFlags("elite", input.benefits ?? null)
+      : buildAffiliateBenefitFlags(nextTierKey);
+  const nextBadgeLabel =
+    nextTierMode === "manual"
+      ? input.badgeLabel?.trim() || tierDefaults.publicProof.badgeLabel
+      : tierDefaults.publicProof.badgeLabel;
+  const nextEffectVariant =
+    nextTierMode === "manual" && isAffiliateEffectVariant(input.effectVariant)
+      ? input.effectVariant
+      : tierDefaults.publicProof.effectVariant;
+
+  const offers = await getAffiliateOfferRows(input.affiliateUserId);
+  const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+  const normalizedOfferCode = normalizeGrowthCode(input.offerCode);
+  if (!normalizedOfferCode) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Offer code is required",
+    });
+  }
+
+  const trimmedOfferLabel = input.offerLabel.trim();
+  if (!trimmedOfferLabel) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Offer label is required",
+    });
+  }
+
+  const trimmedOfferDescription = input.offerDescription?.trim() || null;
+  const shouldSaveOffer =
+    !defaultOffer ||
+    defaultOffer.code !== normalizedOfferCode ||
+    defaultOffer.label !== trimmedOfferLabel ||
+    (defaultOffer.description ?? null) !== trimmedOfferDescription ||
+    defaultOffer.discountBasisPoints !== nextDiscountBasisPoints;
+
+  const savedOffer = shouldSaveOffer
+    ? await saveAffiliateOffer({
+        affiliateUserId: input.affiliateUserId,
+        createdByUserId: input.updatedByUserId,
+        affiliateOfferId: defaultOffer?.id ?? null,
+        code: normalizedOfferCode,
+        label: trimmedOfferLabel,
+        description: trimmedOfferDescription,
+        discountBasisPoints: nextDiscountBasisPoints,
+        isDefault: true,
+      })
+    : defaultOffer;
+
+  const nextMetadata =
+    nextTierMode === "manual"
+      ? {
+          ...metadata,
+          publicProof: {
+            ...(metadata.publicProof && typeof metadata.publicProof === "object"
+              ? (metadata.publicProof as Record<string, unknown>)
+              : {}),
+            badgeLabel: nextBadgeLabel,
+            effectVariant: nextEffectVariant,
+          },
+          program: buildAffiliateProgramMetadata({
+            tierKey: nextTierKey,
+            tierMode: nextTierMode,
+            referredRevenueAmount,
+            commissionBps: nextCommissionBps,
+            discountBasisPoints: nextDiscountBasisPoints,
+            benefits: nextBenefitFlags,
+          }),
+        }
+      : {
+          ...metadata,
+          publicProof: {
+            badgeLabel: tierDefaults.publicProof.badgeLabel,
+            effectVariant: tierDefaults.publicProof.effectVariant,
+          },
+          program: buildAffiliateProgramMetadata({
+            tierKey: nextTierKey,
+            tierMode: nextTierMode,
+            referredRevenueAmount,
+            commissionBps: nextCommissionBps,
+            discountBasisPoints: nextDiscountBasisPoints,
+          }),
+        };
+
+  await db
+    .update(affiliateProfile)
+    .set({
+      commissionBps: nextCommissionBps,
+      tierKey: nextTierKey,
+      tierMode: nextTierMode,
+      tierAssignedAt: new Date(),
+      tierAssignedByUserId:
+        nextTierMode === "manual" ? input.updatedByUserId : null,
+      metadata: nextMetadata,
+      updatedAt: new Date(),
+    })
+    .where(eq(affiliateProfile.id, profile.id));
+
+  const synced = await syncAffiliateTierState(input.affiliateUserId);
+  if (!synced) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Unable to save affiliate tier settings",
+    });
+  }
+
+  return {
+    profile: synced.profile,
+    offer: synced.defaultOffer ?? savedOffer,
+    premiumAccess: synced.premiumOverride,
+    tier: synced.tier,
+  };
 }
 
 export async function saveAffiliateTrackingLink(input: {
@@ -3157,6 +4138,8 @@ export async function listAffiliatePayoutQueue() {
     affiliates
       .filter((entry) => Boolean(entry.profile.approvedAt))
       .map(async (entry) => {
+      const synced = await syncAffiliateTierState(entry.user.id);
+      const profile = synced?.profile ?? entry.profile;
       const paymentMethods = await getAffiliatePaymentMethods(entry.user.id);
       const payouts = await getAffiliatePayoutRows(entry.user.id);
       const unpaidEvents = await getUnpaidAffiliateCommissionEvents(entry.user.id);
@@ -3179,8 +4162,29 @@ export async function listAffiliatePayoutQueue() {
           name: entry.user.name,
           email: entry.user.email,
           username: entry.user.username,
-          code: entry.profile.code,
-          commissionBps: entry.profile.commissionBps,
+          code: profile.code,
+          commissionBps: profile.commissionBps,
+          tierKey: normalizeAffiliateTierKey(profile.tierKey),
+        },
+        tier:
+          synced?.tier ??
+          buildAffiliateTierSnapshot({
+            profile,
+            referredRevenueAmount: 0,
+            discountBasisPoints:
+              defaultOffer?.discountBasisPoints ??
+              AFFILIATE_TIER_CONFIG[
+                normalizeAffiliateTierKey(profile.tierKey)
+              ].defaultDiscountBasisPoints,
+          }),
+        premiumAccess: {
+          isActive: Boolean(synced?.premiumOverride),
+          planKey:
+            synced?.premiumOverride?.planKey ?? AFFILIATE_PREMIUM_PLAN_KEY,
+          sourceType:
+            synced?.premiumOverride?.sourceType ??
+            AFFILIATE_TIER_OVERRIDE_SOURCE,
+          endsAt: synced?.premiumOverride?.endsAt ?? null,
         },
         paymentMethods,
         manualPaymentMethods: paymentMethods,
@@ -3203,7 +4207,7 @@ export async function listAffiliatePayoutQueue() {
           ? {
               ...defaultLink,
               shareUrl: buildAffiliateShareUrl({
-                affiliateCode: entry.profile.code,
+                affiliateCode: profile.code,
                 username: entry.user.username,
                 groupSlug: defaultLink.affiliateGroupSlug ?? null,
                 offerCode:
@@ -3219,7 +4223,7 @@ export async function listAffiliatePayoutQueue() {
         links: trackingLinks.map((link) => ({
           ...link,
           shareUrl: buildAffiliateShareUrl({
-            affiliateCode: entry.profile.code,
+            affiliateCode: profile.code,
             username: entry.user.username,
             groupSlug: link.affiliateGroupSlug ?? null,
             offerCode:
@@ -4618,6 +5622,7 @@ export async function recordAffiliateCommissionEvent(input: {
     .limit(1);
 
   if (existingEvent[0]) {
+    await syncAffiliateTierState(attribution.affiliateUserId);
     return existingEvent[0];
   }
 
@@ -4695,6 +5700,8 @@ export async function recordAffiliateCommissionEvent(input: {
       updatedAt: new Date(),
     })
     .where(eq(affiliateAttribution.id, attribution.id));
+
+  await syncAffiliateTierState(attribution.affiliateUserId);
 
   return inserted ?? null;
 }
@@ -4785,6 +5792,16 @@ export async function updateAffiliateProfileEffects(
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Affiliate access required",
+    });
+  }
+
+  if (
+    normalizeAffiliateTierMode(profile.tierMode) !== "manual" ||
+    normalizeAffiliateTierKey(profile.tierKey) !== "elite"
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only Elite affiliates can customize proof effects",
     });
   }
 

@@ -2121,7 +2121,7 @@ function ReportsWorkspaceContent() {
     <Tabs
       value={activeLens}
       onValueChange={(value) => setActiveLens(value as ReportLensId)}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      className="flex min-w-0 flex-col"
     >
       <div className="shrink-0 bg-background dark:bg-sidebar">
         <div className="overflow-x-auto px-4 sm:px-6 lg:px-8">

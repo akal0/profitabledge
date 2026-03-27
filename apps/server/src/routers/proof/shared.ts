@@ -4,6 +4,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { user as userTable } from "../../db/schema/auth";
 import { affiliateProfile } from "../../db/schema/billing";
+import { buildAffiliatePublicProofMetadata } from "../../lib/billing/growth";
 import { publicAccountShare, tradingAccount } from "../../db/schema/trading";
 import {
   buildPublicAccountSlug,
@@ -251,22 +252,11 @@ export async function getPublicProofAffiliateState(userId: string) {
     profile.metadata && typeof profile.metadata === "object"
       ? (profile.metadata as Record<string, unknown>)
       : null;
-  const publicProof =
-    metadata?.publicProof && typeof metadata.publicProof === "object"
-      ? (metadata.publicProof as Record<string, unknown>)
-      : null;
+  const publicProof = buildAffiliatePublicProofMetadata(metadata);
 
   return {
     isAffiliate: true,
-    badgeLabel:
-      typeof publicProof?.badgeLabel === "string" &&
-      publicProof.badgeLabel.trim()
-        ? publicProof.badgeLabel.trim()
-        : "Affiliate",
-    effectVariant:
-      typeof publicProof?.effectVariant === "string" &&
-      publicProof.effectVariant.trim()
-        ? publicProof.effectVariant.trim()
-        : "gold-emerald",
+    badgeLabel: publicProof.badgeLabel,
+    effectVariant: publicProof.effectVariant,
   };
 }

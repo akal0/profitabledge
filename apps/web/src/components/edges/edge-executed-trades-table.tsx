@@ -38,7 +38,9 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
       },
       {
         getNextPageParam: (lastPage) =>
-          lastPage && "nextCursor" in lastPage ? lastPage.nextCursor : undefined,
+          lastPage && "nextCursor" in lastPage
+            ? lastPage.nextCursor
+            : undefined,
       }
     ),
     staleTime: 30_000,
@@ -64,15 +66,20 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
   });
 
   const rows = useMemo<TradeRow[]>(() => {
-    const pages = (tradesQuery.data as { pages?: Array<{ items: TradeRow[] }> } | undefined)
-      ?.pages;
+    const pages = (
+      tradesQuery.data as { pages?: Array<{ items: TradeRow[] }> } | undefined
+    )?.pages;
     return pages?.flatMap((page) => page.items) ?? [];
   }, [tradesQuery.data]);
 
   const totalTradesCount = useMemo(() => {
-    const pages = (tradesQuery.data as {
-      pages?: Array<{ totalTradesCount?: number }>;
-    } | undefined)?.pages;
+    const pages = (
+      tradesQuery.data as
+        | {
+            pages?: Array<{ totalTradesCount?: number }>;
+          }
+        | undefined
+    )?.pages;
     return pages?.[0]?.totalTradesCount ?? 0;
   }, [tradesQuery.data]);
 
@@ -81,7 +88,8 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
       totalTradesCount,
       pnlMode: "usd",
       baselineInitialBalance: null,
-      sessionTags: (sessionTagsQuery.data as TradeTableMeta["sessionTags"]) ?? [],
+      sessionTags:
+        (sessionTagsQuery.data as TradeTableMeta["sessionTags"]) ?? [],
       modelTags: (modelTagsQuery.data as TradeTableMeta["modelTags"]) ?? [],
       customTags: (customTagsQuery.data as string[] | undefined) ?? [],
     }),
@@ -157,7 +165,8 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
         <div>
           <p className="text-sm font-medium text-white/72">Executed trades</p>
           <p className="text-sm text-white/40">
-            All trades currently assigned to this Edge, using the same columns and interactions as the main trades table.
+            All trades currently assigned to this Edge, using the same columns
+            and interactions as the main trades table.
           </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-white/40">
@@ -190,7 +199,7 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
         <p className="text-xs text-white/38">
           Showing {pageStart}-{pageEnd} of {totalTradesCount}
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
           <Button
             size="sm"
             variant="outline"
@@ -198,15 +207,11 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
             disabled={pageIndex === 0}
             onClick={() => table.previousPage()}
           >
-            <ChevronLeft className="mr-1 size-3.5" />
-            Previous
+            <ChevronLeft className="size-3" />
           </Button>
           <div className="text-xs text-white/48">
             Page {Math.max(pageIndex + 1, 1)} of{" "}
-            {Math.max(
-              loadedPageCount + (tradesQuery.hasNextPage ? 1 : 0),
-              1
-            )}
+            {Math.max(loadedPageCount + (tradesQuery.hasNextPage ? 1 : 0), 1)}
           </div>
           <Button
             size="sm"
@@ -220,11 +225,10 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
             onClick={handleNextPage}
           >
             {tradesQuery.isFetchingNextPage ? (
-              <Loader2 className="mr-1 size-3.5 animate-spin" />
+              <Loader2 className="size-3 animate-spin" />
             ) : (
-              <ChevronRight className="mr-1 size-3.5" />
+              <ChevronRight className="size-3" />
             )}
-            Next
           </Button>
         </div>
       </div>

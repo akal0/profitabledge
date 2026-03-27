@@ -46,6 +46,7 @@ type VerificationRecord = RouterOutputs["verification"]["resolve"];
 type ProofVerificationRecord = Extract<VerificationRecord, { kind: "proof" }>;
 type WidgetVerificationRecord = Extract<VerificationRecord, { kind: "widget" }>;
 type CardVerificationRecord = Extract<VerificationRecord, { kind: "card" }>;
+type EdgeVerificationRecord = Extract<VerificationRecord, { kind: "edge" }>;
 const FULL_BLEED_SEPARATOR_CLASS = "-mx-5 my-4 w-[calc(100%+2.5rem)]";
 
 function formatIssuedAt(value: string) {
@@ -940,6 +941,150 @@ function CardVerificationPanel({ record }: { record: CardVerificationRecord }) {
   );
 }
 
+function EdgeVerificationPanel({ record }: { record: EdgeVerificationRecord }) {
+  const status = getStatusMeta(record.status);
+  const resource = record.resource;
+  const fallback = record.fallback;
+  const edgeDetails = resource?.edge;
+  const owner = resource?.owner;
+  const source = resource?.source;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_360px]">
+      <GoalSurface innerClassName="overflow-hidden">
+        <div className="p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-teal-300/80">Public edge</p>
+              <h1 className="mt-2 text-2xl font-semibold text-white md:text-3xl">
+                {edgeDetails?.name ?? fallback.edgeName ?? "Edge verification"}
+              </h1>
+              <p className="mt-2 text-sm text-white/48">
+                {edgeDetails?.description ??
+                  fallback.ownerName ??
+                  "Signed public edge record"}
+              </p>
+            </div>
+            <Badge
+              className={cn("rounded-md ring-1 text-[11px]", status.className)}
+            >
+              {status.label}
+            </Badge>
+          </div>
+
+          <FullBleedSeparator />
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <VerificationOverview
+              label="Owner"
+              value={
+                owner?.displayName ??
+                owner?.name ??
+                owner?.username ??
+                fallback.ownerName ??
+                "Unavailable"
+              }
+            />
+            <VerificationOverview
+              label="Visibility"
+              value={
+                edgeDetails?.publicationMode === "library"
+                  ? "Library edge"
+                  : edgeDetails?.publicationMode === "private"
+                  ? "Private edge"
+                  : "Public edge"
+              }
+            />
+            <VerificationOverview
+              label="Stats"
+              value={
+                edgeDetails?.publicStatsVisible === false
+                  ? "Hidden"
+                  : "Visible"
+              }
+            />
+            <VerificationOverview
+              label="Updated"
+              value={
+                edgeDetails?.updatedAt
+                  ? formatIssuedAt(edgeDetails.updatedAt)
+                  : formatIssuedAt(record.issuedAt)
+              }
+            />
+          </div>
+
+          {source ? (
+            <>
+              <FullBleedSeparator />
+              <div className="rounded-sm border border-white/10 bg-white/[0.03] p-4">
+                <p className="text-xs text-white/34">Source edge</p>
+                <p className="mt-2 text-sm font-medium text-white">
+                  {source.name}
+                </p>
+                <p className="mt-1 text-xs text-white/48">
+                  {source.ownerName ??
+                    source.ownerUsername ??
+                    "Public source edge"}
+                </p>
+              </div>
+            </>
+          ) : null}
+        </div>
+      </GoalSurface>
+
+      <GoalSurface innerClassName="overflow-hidden">
+        <div className="p-5">
+          <p className="text-sm text-white/34">Verification facts</p>
+          <p className="mt-2 text-lg font-semibold text-white">
+            Signed by Profitabledge
+          </p>
+          <p className="mt-2 text-xs leading-5 text-white/46">
+            This public edge page was opened from a signed Profitabledge token.
+            If the edge is still available, you can reopen the live page from
+            here.
+          </p>
+
+          <FullBleedSeparator />
+
+          <div className="space-y-3 text-sm text-white/70">
+            <div>
+              <p className="text-[11px] text-white/34">Verification code</p>
+              <p className="mt-1 font-mono text-xs text-white/80">
+                {record.verificationCode}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-white/34">Issued</p>
+              <p className="mt-1 text-xs text-white/80">
+                {formatIssuedAt(record.issuedAt)}
+              </p>
+            </div>
+            {fallback.username ? (
+              <div>
+                <p className="text-[11px] text-white/34">Username</p>
+                <p className="mt-1 text-xs text-white/80">@{fallback.username}</p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Link
+              href={resource?.path ?? fallback.path}
+              className={getPropAssignActionButtonClassName({
+                tone: "teal",
+                className: "inline-flex items-center gap-2",
+              })}
+            >
+              Open public edge
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      </GoalSurface>
+    </div>
+  );
+}
+
 export default function VerificationPage({
   params,
 }: {
@@ -988,6 +1133,8 @@ export default function VerificationPage({
           <ProofVerificationPanel record={data} />
         ) : data.kind === "widget" ? (
           <WidgetVerificationPanel record={data} />
+        ) : data.kind === "edge" ? (
+          <EdgeVerificationPanel record={data} />
         ) : (
           <CardVerificationPanel record={data} />
         )}

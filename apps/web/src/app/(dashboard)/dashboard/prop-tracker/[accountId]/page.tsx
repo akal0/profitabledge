@@ -11,7 +11,6 @@ import {
   PropTrackerChartSection,
   PropTrackerCommandCenterSection,
   PropTrackerCurrentPhaseRulesPanel,
-  PropTrackerFundedBanner,
   PropTrackerHeaderCard,
   PropTrackerNotFoundState,
   PropTrackerProbabilityPanel,
@@ -401,8 +400,6 @@ export default function PropTrackerPage({
 
   return (
     <main className="space-y-6 p-6 py-4">
-      {isFunded ? <PropTrackerFundedBanner /> : null}
-
       <PropTrackerHeaderCard
         accountId={accountId}
         account={{
@@ -421,6 +418,7 @@ export default function PropTrackerPage({
         dailyDrawdown={dailyDrawdown}
         maxDrawdown={maxDrawdown}
         targetValue={targetValue}
+        dashboard={dashboard}
         onRemoved={() => router.push("/dashboard/accounts")}
       />
 

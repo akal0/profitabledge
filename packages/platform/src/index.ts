@@ -30,3 +30,14 @@ export type {
   FeatureRequestSelection,
   FeatureRequestSubfeature,
 } from "./feature-request-catalog";
+export {
+  buildNotificationPresentation,
+} from "./notification-presentation";
+export type {
+  NotificationPresentation,
+  NotificationPresentationBadge,
+  NotificationPresentationBrandKey,
+  NotificationPresentationIcon,
+  NotificationPresentationInput,
+  NotificationPresentationTone,
+} from "./notification-presentation";

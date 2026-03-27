@@ -5,7 +5,6 @@ import type { RefObject } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import DashboardActionButtons from "@/components/dashboard/dashboard-action-buttons";
 import { InsightPanel } from "@/components/dashboard/insight-panel";
-import { InsightToastTestButton } from "@/components/ai-insight-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Me } from "@/types/user";
 import type { WidgetType } from "@/components/dashboard/widgets";
@@ -77,7 +76,6 @@ export function DashboardOverviewHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        {/*<InsightToastTestButton />*/}
         <InsightPanel />
         <DashboardActionButtons
           isEditing={isEditing}

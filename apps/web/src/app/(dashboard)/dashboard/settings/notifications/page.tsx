@@ -118,7 +118,7 @@ export default function NotificationsSettingsPage() {
         <div>
           <Label className="text-sm text-white/80 font-medium">Push</Label>
           <p className="mt-0.5 w-max text-xs text-white/40">
-            Browser push notifications when available.
+            Background browser and desktop notifications when available.
           </p>
         </div>
         <div className="flex justify-end">

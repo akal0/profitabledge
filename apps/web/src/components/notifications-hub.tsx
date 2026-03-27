@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { buildNotificationPresentation } from "@profitabledge/platform";
 import { Bell, Check, Dot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,10 +22,41 @@ import {
   TabsTriggerUnderlined,
 } from "@/components/ui/tabs";
 import { queryClient, trpcOptions, useTRPC } from "@/utils/trpc";
+import {
+  ensureWebPushSubscription,
+  showDesktopNotification,
+} from "@/lib/push-notifications";
+import { getNotificationBrandAsset } from "@/components/notifications/notification-branding";
+import {
+  buildNotificationToastId,
+  showAppNotificationToast,
+} from "@/components/notifications/notification-toast";
 
 type NotificationPriority = "urgent" | "high" | "normal" | "low";
 
 type ImpactLevel = "High" | "Medium" | "Low" | "Holiday";
+
+const priorityConfig: Record<
+  NotificationPriority,
+  { color: string; label: string }
+> = {
+  urgent: {
+    color: "text-red-400 bg-red-500/10 border-red-500/20",
+    label: "Urgent",
+  },
+  high: {
+    color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+    label: "High",
+  },
+  normal: {
+    color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
+    label: "Normal",
+  },
+  low: {
+    color: "text-white/40 bg-white/5 border-white/10",
+    label: "Low",
+  },
+};
 
 type KnownNotificationType =
   | "trade_closed"
@@ -62,28 +94,6 @@ type NotificationTab =
 
 type FilterableNotificationTab = Exclude<NotificationTab, "all">;
 
-const priorityConfig: Record<
-  NotificationPriority,
-  { color: string; label: string }
-> = {
-  urgent: {
-    color: "text-red-400 bg-red-500/10 border-red-500/20",
-    label: "Urgent",
-  },
-  high: {
-    color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
-    label: "High",
-  },
-  normal: {
-    color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
-    label: "Normal",
-  },
-  low: {
-    color: "text-white/40 bg-white/5 border-white/10",
-    label: "Low",
-  },
-};
-
 function getNotificationPriority(type?: string | null): NotificationPriority {
   switch (type) {
     case "alert_triggered":
@@ -111,6 +121,7 @@ function getNotificationPriority(type?: string | null): NotificationPriority {
 }
 
 type NotificationMetadata = {
+  kind?: string | null;
   source?: string;
   impact?: string | null;
   country?: string | null;
@@ -153,6 +164,23 @@ type NotificationMetadata = {
   phaseOrder?: number;
   nextPhase?: number;
   theme?: string | null;
+  status?: string | null;
+  provider?: string | null;
+  displayName?: string | null;
+  tradesInserted?: number;
+  tradesDuplicated?: number;
+  accountName?: string | null;
+  initialBalance?: number;
+  currencyCode?: string | null;
+  pnl?: number;
+  returnPct?: number;
+  reviewedLabel?: string | null;
+  tradeCount?: number;
+  winRate?: number;
+  weeklyPnL?: number;
+  focusTitle?: string | null;
+  data?: Record<string, unknown> | null;
+  [key: string]: unknown;
 };
 
 function isFundedPropNotification(item: NotificationItem) {
@@ -470,6 +498,22 @@ function getNotificationTargetUrl(item: NotificationItem) {
     : buildNotificationUrl(item);
 }
 
+function getNotificationToastTargetUrl(item: NotificationItem) {
+  const targetUrl = getNotificationTargetUrl(item);
+  if (!targetUrl) {
+    return null;
+  }
+
+  if (
+    (item.type === "system_update" || item.type === "system_maintenance") &&
+    !item.metadata?.url
+  ) {
+    return null;
+  }
+
+  return targetUrl;
+}
+
 function isJournalShareInviteActionable(item: NotificationItem) {
   return (
     item.type === "journal_share_invite" &&
@@ -479,18 +523,51 @@ function isJournalShareInviteActionable(item: NotificationItem) {
   );
 }
 
-function showNotificationToast(item: NotificationItem) {
-  toast(item.title || "Notification", {
-    id: `notification-toast:${item.id}`,
-    description: item.body || undefined,
-    duration: getNotificationPriority(item.type) === "urgent" ? 12000 : 8000,
-    classNames: {
-      toast:
-        "bg-sidebar ring-white/10 text-white !min-w-[300px] !max-w-[500px]",
-      title: "text-white font-medium",
-      description: "text-white/70",
-    },
+function showNotificationToast(
+  item: NotificationItem,
+  options: {
+    onNavigate: (url: string) => void;
+    onMarkRead: (id: string) => void;
+  }
+) {
+  const targetUrl = getNotificationToastTargetUrl(item);
+  const metadata = (item.metadata as Record<string, unknown> | null) ?? null;
+  const resolvedToastId = buildNotificationToastId({
+    title: item.title,
+    type: item.type,
+    metadata,
+    fallbackId: item.id,
   });
+
+  showAppNotificationToast({
+    title: item.title,
+    body: item.body,
+    type: item.type,
+    metadata,
+    createdAt: item.createdAt,
+    readAt: item.readAt,
+    toastId: resolvedToastId,
+    duration: getNotificationPriority(item.type) === "urgent" ? 12000 : 8000,
+    action: targetUrl
+      ? {
+          kind: "navigate",
+          label: "Open notification destination",
+          onClick: () => {
+            if (!item.readAt) {
+              options.onMarkRead(item.id);
+            }
+            if (resolvedToastId) {
+              toast.dismiss(resolvedToastId);
+            }
+            options.onNavigate(targetUrl);
+          },
+        }
+      : undefined,
+  });
+}
+
+function shouldRequireDesktopInteraction(type?: string | null) {
+  return type === "alert_triggered" || type === "prop_violation";
 }
 
 type InviteActionState = {
@@ -593,10 +670,10 @@ function NotificationsList({
                             isUrgent
                               ? "text-red-400"
                               : isFundedMilestone
-                              ? "text-amber-300"
-                              : isHigh
-                              ? "text-orange-400"
-                              : "text-teal-400"
+                                ? "text-amber-300"
+                                : isHigh
+                                  ? "text-orange-400"
+                                  : "text-teal-400"
                           )}
                         />
                       ) : (
@@ -608,10 +685,10 @@ function NotificationsList({
                           item.readAt
                             ? "text-white/50"
                             : isUrgent
-                            ? "text-red-100"
-                            : isFundedMilestone
-                            ? "text-amber-100"
-                            : "text-white"
+                              ? "text-red-100"
+                              : isFundedMilestone
+                                ? "text-amber-100"
+                                : "text-white"
                         )}
                       >
                         {item.title}
@@ -830,6 +907,7 @@ export default function NotificationsHub() {
   const canUsePushChannel = preferences?.push === true;
   const {
     visibleItems,
+    allUnreadItems,
     unreadItems,
     notificationsByTab,
     unreadCounts,
@@ -851,6 +929,7 @@ export default function NotificationsHub() {
     }
 
     const unreadItems = visibleItems.filter((item) => !item.readAt);
+    const allUnreadItems = items.filter((item) => !item.readAt);
     const unreadCounts: Record<NotificationTab, number> = {
       all: unreadItems.length,
       trades: grouped.trades.filter((item) => !item.readAt).length,
@@ -863,6 +942,7 @@ export default function NotificationsHub() {
 
     return {
       visibleItems,
+      allUnreadItems,
       unreadItems,
       notificationsByTab: grouped,
       unreadCounts,
@@ -939,6 +1019,11 @@ export default function NotificationsHub() {
 
   useEffect(() => {
     if (!canUsePushChannel) return;
+
+    void ensureWebPushSubscription({ requestPermission: false }).catch(() => {
+      // Silent keepalive. The settings page remains the explicit place for prompts.
+    });
+
     if (typeof Notification === "undefined") return;
     if (!open) return;
     if (Notification.permission === "default") {
@@ -950,26 +1035,60 @@ export default function NotificationsHub() {
     if (!hasFetchedNotifications) return;
 
     if (!initializedDeliveryRef.current) {
-      unreadItems.forEach((item) => {
+      allUnreadItems.forEach((item) => {
         deliveredRef.current.add(item.id);
       });
       initializedDeliveryRef.current = true;
       return;
     }
 
-    unreadItems.forEach((item) => {
+    allUnreadItems.forEach((item) => {
       if (item.readAt) return;
       if (deliveredRef.current.has(item.id)) return;
       deliveredRef.current.add(item.id);
 
+      const notificationTargetUrl = getNotificationTargetUrl(item);
+      const isDocumentHidden =
+        typeof document !== "undefined" &&
+        document.visibilityState !== "visible";
+
+      if (isDocumentHidden && canUsePushChannel) {
+        const presentation = buildNotificationPresentation({
+          title: item.title,
+          body: item.body,
+          type: item.type,
+          metadata: (item.metadata as Record<string, unknown> | null) ?? null,
+        });
+        const brandAsset = getNotificationBrandAsset(presentation.brandKey);
+
+        void showDesktopNotification({
+          title: presentation.pushTitle,
+          body: presentation.pushBody,
+          url: notificationTargetUrl || "/dashboard/settings/notifications",
+          tag: `profitabledge-notification-${item.id}`,
+          requireInteraction:
+            presentation.requireInteraction ||
+            shouldRequireDesktopInteraction(item.type),
+          icon: brandAsset.src,
+          badge: brandAsset.src,
+        });
+        return;
+      }
+
       if (!canUseInAppChannel) return;
 
-      showNotificationToast(item);
+      showNotificationToast(item, {
+        onNavigate: handleNavigate,
+        onMarkRead: (id) => markRead.mutate({ ids: [id] }),
+      });
     });
   }, [
+    allUnreadItems,
     canUseInAppChannel,
+    canUsePushChannel,
     hasFetchedNotifications,
-    unreadItems,
+    handleNavigate,
+    markRead,
   ]);
 
   return (

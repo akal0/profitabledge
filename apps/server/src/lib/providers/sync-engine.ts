@@ -9,8 +9,8 @@ import {
   equitySnapshot,
   syncLog,
 } from "../../db/schema/connections";
-import { trade, tradingAccount } from "../../db/schema/trading";
-import { eq, and } from "drizzle-orm";
+import { openTrade, trade, tradingAccount } from "../../db/schema/trading";
+import { eq, and, notInArray } from "drizzle-orm";
 import { decryptCredentials, encryptCredentials } from "./credential-cipher";
 import { getProvider } from "./registry";
 import { normalizeToTradeInsert } from "./trade-normalizer";
@@ -18,6 +18,8 @@ import { notifyEarnedAchievements } from "../achievements";
 import { createNotification } from "../notifications";
 import { syncPropAccountState } from "../prop-rule-monitor";
 import { isMtTerminalProvider } from "../mt5/constants";
+import { nanoid } from "nanoid";
+import { cache, cacheKeys } from "../cache";
 
 export interface SyncResult {
   connectionId: string;
@@ -167,8 +169,92 @@ export async function syncConnection(
     result.tradesInserted = inserted;
     result.tradesDuplicated = duplicated;
 
+    const [accountInfo, openPositions] = await Promise.all([
+      provider.fetchAccountInfo(config, config.meta),
+      provider.fetchOpenPositions(config, config.meta),
+    ]);
+
+    await db.transaction(async (tx) => {
+      if (openPositions.length > 0) {
+        const tickets = openPositions.map((position) => position.ticket);
+
+        for (const position of openPositions) {
+          await tx
+            .insert(openTrade)
+            .values({
+              id: nanoid(),
+              accountId,
+              ticket: position.ticket,
+              symbol: position.symbol.toUpperCase(),
+              tradeType: position.tradeType,
+              volume: position.volume.toString(),
+              openPrice: position.openPrice.toString(),
+              openTime: position.openTime,
+              sl:
+                position.sl != null && position.sl > 0
+                  ? position.sl.toString()
+                  : null,
+              tp:
+                position.tp != null && position.tp > 0
+                  ? position.tp.toString()
+                  : null,
+              currentPrice:
+                position.currentPrice != null
+                  ? position.currentPrice.toString()
+                  : null,
+              swap:
+                position.swap != null ? position.swap.toString() : "0",
+              commission: "0",
+              profit:
+                position.profit != null ? position.profit.toString() : "0",
+              comment: null,
+              magicNumber: null,
+              brokerMeta: position._raw,
+              lastUpdatedAt: new Date(),
+              createdAt: new Date(),
+            })
+            .onConflictDoUpdate({
+              target: [openTrade.accountId, openTrade.ticket],
+              set: {
+                symbol: position.symbol.toUpperCase(),
+                tradeType: position.tradeType,
+                volume: position.volume.toString(),
+                openPrice: position.openPrice.toString(),
+                openTime: position.openTime,
+                sl:
+                  position.sl != null && position.sl > 0
+                    ? position.sl.toString()
+                    : null,
+                tp:
+                  position.tp != null && position.tp > 0
+                    ? position.tp.toString()
+                    : null,
+                currentPrice:
+                  position.currentPrice != null
+                    ? position.currentPrice.toString()
+                    : null,
+                swap:
+                  position.swap != null ? position.swap.toString() : "0",
+                commission: "0",
+                profit:
+                  position.profit != null ? position.profit.toString() : "0",
+                brokerMeta: position._raw,
+                lastUpdatedAt: new Date(),
+              },
+            });
+        }
+
+        await tx
+          .delete(openTrade)
+          .where(
+            and(eq(openTrade.accountId, accountId), notInArray(openTrade.ticket, tickets))
+          );
+      } else {
+        await tx.delete(openTrade).where(eq(openTrade.accountId, accountId));
+      }
+    });
+
     // Update account info (balance, equity, etc.)
-    const accountInfo = await provider.fetchAccountInfo(config, config.meta);
     await db
       .update(tradingAccount)
       .set({
@@ -225,6 +311,7 @@ export async function syncConnection(
       })
       .where(eq(platformConnection.id, connectionId));
 
+    cache.invalidate(cacheKeys.liveMetrics(accountId));
     result.status = "success";
 
     if (result.tradesInserted > 0) {
@@ -260,6 +347,7 @@ export async function syncConnection(
         title: "Connection sync failed",
         body: `${conn.displayName}: ${message}`,
         metadata: {
+          kind: "sync_error",
           connectionId,
           provider: conn.provider,
           displayName: conn.displayName,
@@ -307,6 +395,7 @@ export async function syncConnection(
         title: "Connection synced",
         body,
         metadata: {
+          kind: "sync_success",
           connectionId,
           provider: conn.provider,
           displayName: conn.displayName,

@@ -201,7 +201,7 @@ export function DailyBriefingCard({
             <Button
               size="sm"
               variant="outline"
-              className="text-xs border-white/10 h-7"
+              className="text-xs ring-white/10 h-7"
               onClick={(e) => {
                 e.stopPropagation();
                 if (effectiveAccountId) {
@@ -212,7 +212,7 @@ export function DailyBriefingCard({
             >
               <RefreshCw
                 className={cn(
-                  "h-3 w-3 mr-1.5",
+                  "size-3",
                   generateMutation.isPending && "animate-spin"
                 )}
               />
@@ -241,9 +241,7 @@ export function DailyBriefingCard({
                   <p
                     className={cn(
                       "text-lg font-bold",
-                      reviewPnl >= 0
-                        ? "text-teal-400"
-                        : "text-rose-400"
+                      reviewPnl >= 0 ? "text-teal-400" : "text-rose-400"
                     )}
                   >
                     {reviewTradeCount > 0
@@ -419,16 +417,18 @@ export function DailyBriefingCard({
                         <p
                           className={cn(
                             "text-xl font-bold",
-                            reviewPnl >= 0
-                              ? "text-teal-400"
-                              : "text-rose-400"
+                            reviewPnl >= 0 ? "text-teal-400" : "text-rose-400"
                           )}
                         >
                           {reviewTradeCount > 0
-                            ? formatSignedCurrencyValue(reviewPnl, currencyCode, {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })
+                            ? formatSignedCurrencyValue(
+                                reviewPnl,
+                                currencyCode,
+                                {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                }
+                              )
                             : "—"}
                         </p>
                       </div>

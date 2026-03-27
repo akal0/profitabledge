@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { getErrorMessage } from "@/lib/error-message";
 import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import {
   storeAffiliateIntent,
@@ -39,7 +40,6 @@ import {
 import { waitForConfirmedSession } from "@/lib/session-confirmation";
 import { trpcClient } from "@/utils/trpc";
 import Google from "@/public/icons/social-media/google.svg";
-import X from "@/public/icons/social-media/x.svg";
 
 import PasswordInput from "./components/password-input";
 
@@ -111,7 +111,7 @@ const SignupPage = () => {
   const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
   const loginPath = buildLoginPath(requestedReturnTo);
   const [socialProviderLoading, setSocialProviderLoading] = useState<
-    "google" | "twitter" | null
+    "google" | null
   >(null);
   const [affiliate, setAffiliate] = useState<AffiliateInfo | null>(null);
   const [cameFromLink, setCameFromLink] = useState(false);
@@ -251,9 +251,11 @@ const SignupPage = () => {
           await waitForConfirmedSession();
           router.push(postAuthContinuePath);
         },
-        onError: (error) => {
-          const message =
-            error.error.message || "There was a problem creating your account.";
+        onError: (error: any) => {
+          const message = getErrorMessage(
+            error,
+            "There was a problem creating your account."
+          );
 
           toast.error("Unable to create account", {
             description: message,
@@ -263,9 +265,7 @@ const SignupPage = () => {
     );
   }
 
-  async function handleSocialSignUp(provider: "google" | "twitter") {
-    const providerLabel =
-      provider === "google" ? "Google sign up" : "X sign up";
+  async function handleSocialSignUp(provider: "google") {
     setSocialProviderLoading(provider);
 
     try {
@@ -275,23 +275,25 @@ const SignupPage = () => {
       });
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : `Unable to continue with ${providerLabel}`
+        getErrorMessage(error, "Unable to continue with Google sign up")
       );
       setSocialProviderLoading(null);
     }
   }
 
   return (
-    <AuthSplitShell heroSlides={SIGN_UP_HERO_SLIDES} affiliate={affiliate}>
+    <AuthSplitShell
+      heroSlides={SIGN_UP_HERO_SLIDES}
+      affiliate={affiliate}
+      showFormGlow
+    >
       <div className="space-y-8">
         <div className="space-y-3 text-center">
-          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
+          <p className="text-3xl font-medium tracking-[-0.05em] text-white sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
             First time here?
           </p>
           <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
-            You've come to the right place. All roads lead back to{" "}
+            You've come to the right place. <br /> All roads lead back to{" "}
             <span className="text-white font-semibold">profitabledge...</span>
           </p>
         </div>
@@ -309,21 +311,6 @@ const SignupPage = () => {
               {socialProviderLoading === "google"
                 ? "Redirecting..."
                 : "Sign up with Google"}
-            </span>
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={socialProviderLoading !== null}
-            onClick={() => void handleSocialSignUp("twitter")}
-            className={SOCIAL_BUTTON_CLASS}
-          >
-            <X className="size-4 stroke-none fill-white/68 transition-colors group-hover:fill-white" />
-            <span>
-              {socialProviderLoading === "twitter"
-                ? "Redirecting..."
-                : "Sign up with X"}
             </span>
           </Button>
         </div>

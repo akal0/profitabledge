@@ -21,7 +21,7 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
       "Connect with your broker login, password, and server name. MT4 terminal-farm support follows the same model as MT5.",
     authType: "credentials",
     fields: ["login", "password", "server"],
-    status: "coming_soon",
+    status: "active",
     firms: ["Any MT4 Broker", "FundingPips", "Alpha Capital"],
     color: "#1D4ED8",
   },

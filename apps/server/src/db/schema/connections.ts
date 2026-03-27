@@ -40,10 +40,10 @@ export const platformConnection = pgTable(
 
     displayName: text("display_name").notNull(),
 
-    // Non-sensitive provider metadata (plain JSON)
+    // Non-sensitive provider metadata only (plain JSON)
+    // Provider credentials, logins, and OAuth tokens must stay out of this
+    // column and live in encrypted storage instead.
     // cTrader: { ctraderAccountId, brokerName, currency }
-    // Match-Trader: { serverUrl, login }
-    // TradeLocker: { serverUrl, login }
     meta: jsonb("meta"),
 
     // AES-256-GCM encrypted credentials blob (base64)

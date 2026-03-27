@@ -156,10 +156,43 @@ export type TerminalSupervisorStatus = {
   pendingConnections: PendingTerminalConnection[];
 };
 
+export type SyncRuntimeStatus = {
+  scheduler: {
+    checkIntervalMs: number;
+    started: boolean;
+    startedAt: string | null;
+    isRunning: boolean;
+    lastRunStartedAt: string | null;
+    lastRunCompletedAt: string | null;
+    lastRunDueCount: number;
+    lastRunSucceededCount: number;
+    lastRunFailedCount: number;
+    lastRunConnectionIds: string[];
+    lastError: string | null;
+  };
+  summary: {
+    scheduledCount: number;
+    activeCount: number;
+    pausedCount: number;
+    errorCount: number;
+    dueNowCount: number;
+  };
+  recentRuns: Array<{
+    id: string;
+    connectionId: string;
+    status: string;
+    tradesInserted: number | null;
+    errorMessage: string | null;
+    durationMs: number | null;
+    createdAt: string | Date | null;
+  }>;
+};
+
 export type AccountRow = {
   id: string;
   name: string;
   broker: string | null;
+  accountNumber?: string | null;
 };
 
 export type SyncNowInput = {

@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 import { neon } from "@neondatabase/serverless";
+import { config } from "dotenv";
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
+
+config();
 
 const DATABASE_URL = process.env.DATABASE_URL;
 

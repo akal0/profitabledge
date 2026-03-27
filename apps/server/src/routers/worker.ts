@@ -1,26 +1,7 @@
-import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { mt5SyncFrameSchema, ingestMt5SyncFrame } from "../lib/mt5/ingestion";
-import { getServerEnv } from "../lib/env";
+import { assertWorkerSecret } from "../lib/mt5/worker-control";
 import { publicProcedure, router } from "../lib/trpc";
-
-function assertWorkerSecret(workerSecret: string) {
-  const expected = getServerEnv().BROKER_WORKER_SECRET;
-
-  if (!expected) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "BROKER_WORKER_SECRET is not configured",
-    });
-  }
-
-  if (workerSecret !== expected) {
-    throw new TRPCError({
-      code: "UNAUTHORIZED",
-      message: "Invalid worker secret",
-    });
-  }
-}
 
 export const workerRouter = router({
   ping: publicProcedure

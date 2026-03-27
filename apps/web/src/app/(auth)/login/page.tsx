@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { Fingerprint } from "lucide-react";
 
 import {
   AuthSplitShell,
@@ -23,15 +24,17 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { getErrorMessage } from "@/lib/error-message";
 import { markLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
+import { signInWithPasskey } from "@/lib/passkey-sign-in";
 import {
   buildPostLoginPath,
   buildSignUpPath,
+  buildTwoFactorPath,
   resolvePostAuthPath,
 } from "@/lib/post-auth-paths";
 import { waitForConfirmedSession } from "@/lib/session-confirmation";
 import Google from "@/public/icons/social-media/google.svg";
-import X from "@/public/icons/social-media/x.svg";
 
 const SOCIAL_BUTTON_CLASS =
   "group h-max w-full justify-center rounded-sm ring ring-white/10 bg-sidebar px-4 text-sm font-medium text-white shadow-none transition-colors hover:bg-sidebar-accent hover:brightness-120 hover:text-white gap-1";
@@ -64,8 +67,8 @@ const LOGIN_HERO_SLIDES: AuthHeroSlide[] = [
 ];
 
 const FormSchema = z.object({
-  email: z.string().email({
-    message: "Invalid email address.",
+  identifier: z.string().trim().min(2, {
+    message: "Enter your email address or username.",
   }),
   password: z.string().min(8, {
     message: "Password must be at least 8 characters.",
@@ -77,44 +80,56 @@ const LoginPage = () => {
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
   const postLoginPath = buildPostLoginPath(requestedReturnTo);
+  const twoFactorPath = buildTwoFactorPath(requestedReturnTo);
   const signUpPath = buildSignUpPath(requestedReturnTo);
   const [socialProviderLoading, setSocialProviderLoading] = useState<
-    "google" | "twitter" | null
+    "google" | null
   >(null);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
-      email: "",
+      identifier: "",
       password: "",
     },
   });
   const isSubmitting = form.formState.isSubmitting;
+  const isBusy =
+    isSubmitting || socialProviderLoading !== null || passkeyLoading;
 
   async function onSubmit(data: z.infer<typeof FormSchema>) {
-    await authClient.signIn.email(
-      {
-        email: data.email,
-        password: data.password,
-      },
-      {
-        onSuccess: async () => {
-          toast.success("Login successful", { id: "auth-login-status" });
-          await waitForConfirmedSession();
-          markLoginOnboardingBypass();
-          router.replace(postLoginPath);
-        },
-        onError: (error) => {
-          toast.error(error.error.message || "Unable to sign in", {
-            id: "auth-login-status",
-          });
-        },
-      }
-    );
+    const identifier = data.identifier.trim();
+    const result = identifier.includes("@")
+      ? await authClient.signIn.email({
+          email: identifier,
+          password: data.password,
+        })
+      : await authClient.signIn.username({
+          username: identifier,
+          password: data.password,
+        });
+
+    if (result.error) {
+      toast.error(getErrorMessage(result.error, "Unable to sign in"), {
+        id: "auth-login-status",
+      });
+      return;
+    }
+
+    if (result.data?.twoFactorRedirect) {
+      markLoginOnboardingBypass();
+      router.replace(twoFactorPath);
+      return;
+    }
+
+    toast.success("Login successful", { id: "auth-login-status" });
+    await waitForConfirmedSession();
+    markLoginOnboardingBypass();
+    router.replace(postLoginPath);
   }
 
-  async function handleSocialLogin(provider: "google" | "twitter") {
-    const providerLabel = provider === "google" ? "Google login" : "X login";
+  async function handleSocialLogin(provider: "google") {
     setSocialProviderLoading(provider);
 
     try {
@@ -125,19 +140,36 @@ const LoginPage = () => {
       });
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : `Unable to continue with ${providerLabel}`
+        getErrorMessage(error, "Unable to continue with Google login")
       );
       setSocialProviderLoading(null);
     }
   }
 
+  async function handlePasskeyLogin() {
+    setPasskeyLoading(true);
+
+    try {
+      const result = await signInWithPasskey();
+      if (result.error) {
+        toast.error(result.error.message);
+        return;
+      }
+
+      toast.success("Login successful", { id: "auth-login-status" });
+      await waitForConfirmedSession();
+      markLoginOnboardingBypass();
+      router.replace(postLoginPath);
+    } finally {
+      setPasskeyLoading(false);
+    }
+  }
+
   return (
-    <AuthSplitShell heroSlides={LOGIN_HERO_SLIDES}>
+    <AuthSplitShell heroSlides={LOGIN_HERO_SLIDES} showFormGlow>
       <div className="space-y-8">
         <div className="space-y-3 text-center">
-          <p className="text-3xl font-medium tracking-[-0.05em] text-white/50 sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
+          <p className="text-3xl font-medium tracking-[-0.05em] text-white sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
             Welcome back to profitabledge
           </p>
           <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
@@ -149,7 +181,7 @@ const LoginPage = () => {
           <Button
             type="button"
             variant="ghost"
-            disabled={socialProviderLoading !== null}
+            disabled={isBusy}
             onClick={() => void handleSocialLogin("google")}
             className={SOCIAL_BUTTON_CLASS}
           >
@@ -164,22 +196,20 @@ const LoginPage = () => {
           <Button
             type="button"
             variant="ghost"
-            disabled={socialProviderLoading !== null}
-            onClick={() => void handleSocialLogin("twitter")}
+            disabled={isBusy}
+            onClick={() => void handlePasskeyLogin()}
             className={SOCIAL_BUTTON_CLASS}
           >
-            <X className="size-4 stroke-none fill-white/68 transition-colors group-hover:fill-white" />
+            <Fingerprint className="size-4 text-white/68 transition-colors group-hover:text-white" />
             <span>
-              {socialProviderLoading === "twitter"
-                ? "Redirecting..."
-                : "Login with X"}
+              {passkeyLoading ? "Checking..." : "Sign in with passkey"}
             </span>
           </Button>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs font-medium tracking-[-0.04em] text-white/32">
+          <span className="text-xs font-semibold tracking-[-0.04em] text-white/75">
             Or sign in with your credentials
           </span>
           <div className="h-px flex-1 bg-white/10" />
@@ -190,16 +220,16 @@ const LoginPage = () => {
             <div className="space-y-5">
               <FormField
                 control={form.control}
-                name="email"
+                name="identifier"
                 render={({ field }) => (
                   <FormItem className="space-y-1">
                     <FormLabel className={FIELD_LABEL_CLASS}>
-                      Email address
+                      Email address or username
                     </FormLabel>
                     <FormControl>
                       <Input
-                        type="email"
-                        placeholder="you@profitabledge.com"
+                        type="text"
+                        placeholder="you@profitabledge.com or @kalcryptev"
                         className={INPUT_CLASS}
                         {...field}
                       />
@@ -234,7 +264,7 @@ const LoginPage = () => {
             <Button
               type="submit"
               variant="ghost"
-              disabled={isSubmitting || socialProviderLoading !== null}
+              disabled={isBusy}
               className={PRIMARY_BUTTON_CLASS}
             >
               {isSubmitting ? "Logging in..." : "Log in"}

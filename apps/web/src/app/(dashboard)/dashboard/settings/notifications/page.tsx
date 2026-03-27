@@ -26,7 +26,17 @@ export default function NotificationsSettingsPage() {
   const { data: preferences } = useQuery(
     trpcOptions.notifications.getPreferences.queryOptions()
   );
+  const { data: deliveryHealth } = useQuery(
+    trpcOptions.notifications.getDeliveryHealth.queryOptions()
+  );
   const showSocialNotifications = publicAlphaFlags.community;
+
+  const formatHealthTimestamp = (value?: string | Date | null) => {
+    if (!value) return null;
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString();
+  };
 
   const updatePreferences = useMutation({
     ...trpcOptions.notifications.updatePreferences.mutationOptions(),
@@ -151,8 +161,12 @@ export default function NotificationsSettingsPage() {
       {/* Trade Closed */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Trade closed</Label>
-          <p className="mt-0.5 w-max text-xs text-white/40">When trades close via EA sync.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Trade closed
+          </Label>
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            When trades close via EA sync.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -169,8 +183,12 @@ export default function NotificationsSettingsPage() {
       {/* Post-exit metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Post-exit metrics</Label>
-          <p className="mt-0.5 w-max text-xs text-white/40">Money left on table analysis.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Post-exit metrics
+          </Label>
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            Money left on table analysis.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -187,8 +205,12 @@ export default function NotificationsSettingsPage() {
       {/* Trade Opened */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Trade opened</Label>
-          <p className="mt-0.5 w-max text-xs text-white/40">When new trades are opened.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Trade opened
+          </Label>
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            When new trades are opened.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -220,8 +242,12 @@ export default function NotificationsSettingsPage() {
       {/* Goal Achieved */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Goal achieved</Label>
-          <p className="mt-0.5 w-max text-xs text-white/40">When you hit a trading goal.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Goal achieved
+          </Label>
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            When you hit a trading goal.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -253,8 +279,12 @@ export default function NotificationsSettingsPage() {
       {/* Alert Triggered */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">Alert triggered</Label>
-          <p className="mt-0.5 w-max text-xs text-white/40">When your custom alerts fire.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            Alert triggered
+          </Label>
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            When your custom alerts fire.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch
@@ -287,7 +317,9 @@ export default function NotificationsSettingsPage() {
         <div>
           <div className="flex items-center gap-2">
             <Newspaper className="size-4 text-blue-400" />
-            <Label className="text-sm text-white/80 font-medium">Economic events</Label>
+            <Label className="text-sm text-white/80 font-medium">
+              Economic events
+            </Label>
           </div>
           <p className="mt-0.5 w-max text-xs text-white/40">
             Upcoming economic-calendar alerts.
@@ -312,9 +344,13 @@ export default function NotificationsSettingsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <Users className="size-4 text-purple-400" />
-                <Label className="text-sm text-white/80 font-medium">Leaderboard & copy</Label>
+                <Label className="text-sm text-white/80 font-medium">
+                  Leaderboard & copy
+                </Label>
               </div>
-              <p className="mt-0.5 w-max text-xs text-white/40">Social updates.</p>
+              <p className="mt-0.5 w-max text-xs text-white/40">
+                Social updates.
+              </p>
             </div>
             <div className="flex justify-end">
               <Switch
@@ -348,8 +384,12 @@ export default function NotificationsSettingsPage() {
       {/* System Updates */}
       <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
         <div>
-          <Label className="text-sm text-white/80 font-medium">System updates</Label>
-          <p className="mt-0.5 w-max text-xs text-white/40">Imports, API keys, settings.</p>
+          <Label className="text-sm text-white/80 font-medium">
+            System updates
+          </Label>
+          <p className="mt-0.5 w-max text-xs text-white/40">
+            Imports, API keys, settings.
+          </p>
         </div>
         <div className="flex justify-end">
           <Switch

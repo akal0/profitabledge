@@ -113,7 +113,8 @@ const DashboardActionButtons: React.FC<Props> = ({
       label: "Widget only",
       title: "dashboard-widgets",
       minimumNodes: 1,
-      getNodes: () => [widgetsExportTargetRef?.current].filter(Boolean) as HTMLElement[],
+      getNodes: () =>
+        [widgetsExportTargetRef?.current].filter(Boolean) as HTMLElement[],
     },
     {
       key: "widgets-calendar",
@@ -121,9 +122,10 @@ const DashboardActionButtons: React.FC<Props> = ({
       title: "dashboard-widgets-calendar",
       minimumNodes: 2,
       getNodes: () =>
-        [widgetsExportTargetRef?.current, calendarExportTargetRef?.current].filter(
-          Boolean
-        ) as HTMLElement[],
+        [
+          widgetsExportTargetRef?.current,
+          calendarExportTargetRef?.current,
+        ].filter(Boolean) as HTMLElement[],
     },
     {
       key: "widgets-chart-widgets",
@@ -142,9 +144,10 @@ const DashboardActionButtons: React.FC<Props> = ({
       title: "dashboard-calendar-chart-widgets",
       minimumNodes: 2,
       getNodes: () =>
-        [calendarExportTargetRef?.current, chartWidgetsExportTargetRef?.current].filter(
-          Boolean
-        ) as HTMLElement[],
+        [
+          calendarExportTargetRef?.current,
+          chartWidgetsExportTargetRef?.current,
+        ].filter(Boolean) as HTMLElement[],
     },
   ] as const;
   const modeButtonClassName = (isActive: boolean) =>
@@ -258,9 +261,11 @@ const DashboardActionButtons: React.FC<Props> = ({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button className={controlButtonClassName}>
-              <Download className="size-3.5 text-white/75" />
-              <span>Share</span>
-              <ChevronDown className="size-3.5 text-white/60" />
+              <div className="flex gap-1.5 items-center">
+                <Download className="size-3 text-white/75" />
+                <span>Share</span>
+              </div>
+              <ChevronDown className="size-3 text-white/60" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent

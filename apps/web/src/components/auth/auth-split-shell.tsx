@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 
 import { AuthHeroArtwork } from "@/components/auth/auth-hero-artwork";
+import { DottedGlowBackground } from "@/components/ui/dotted-glow-background";
 import { cn } from "@/lib/utils";
 
 export interface AffiliateInfo {
@@ -30,6 +31,7 @@ interface AuthSplitShellProps {
   hideAffiliateDescription?: boolean;
   heroArtwork?: ReactNode;
   heroContent?: ReactNode;
+  showFormGlow?: boolean;
 }
 
 const DEFAULT_HERO_TITLE = "See the edge before the same mistake repeats.";
@@ -248,6 +250,7 @@ export function AuthSplitShell({
   hideAffiliateDescription = false,
   heroArtwork,
   heroContent,
+  showFormGlow = false,
 }: AuthSplitShellProps) {
   const resolvedHeroSlides = useMemo(
     () =>
@@ -280,8 +283,43 @@ export function AuthSplitShell({
 
       <div className="grid min-h-screen w-screen max-w-none lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
         <main className="relative z-10 flex min-h-screen min-w-0 items-center justify-center px-6 pb-12 pt-28 sm:px-10 lg:px-14 xl:px-16">
-          <div className={cn("mx-auto w-full max-w-[31rem]", className)}>
-            {children}
+          <div
+            className={cn("relative mx-auto w-full max-w-[31rem]", className)}
+          >
+            {showFormGlow ? (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 -z-10 overflow-visible"
+              >
+                <div
+                  className="absolute left-1/2 top-1/2 h-[72rem] w-[72rem] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full opacity-95"
+                  style={{
+                    clipPath: "circle(50% at 50% 50%)",
+                    WebkitClipPath: "circle(50% at 50% 50%)",
+                    maskImage:
+                      "radial-gradient(circle closest-side, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 18%, rgba(0,0,0,0.88) 38%, rgba(0,0,0,0.62) 54%, rgba(0,0,0,0.34) 66%, rgba(0,0,0,0.16) 76%, rgba(0,0,0,0.07) 84%, rgba(0,0,0,0.02) 91%, transparent 100%)",
+                    WebkitMaskImage:
+                      "radial-gradient(circle closest-side, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 18%, rgba(0,0,0,0.88) 38%, rgba(0,0,0,0.62) 54%, rgba(0,0,0,0.34) 66%, rgba(0,0,0,0.16) 76%, rgba(0,0,0,0.07) 84%, rgba(0,0,0,0.02) 91%, transparent 100%)",
+                  }}
+                >
+                  <DottedGlowBackground
+                    gap={11}
+                    radius={1.95}
+                    opacity={0.48}
+                    backgroundOpacity={0}
+                    speedMin={0.34}
+                    speedMax={1.18}
+                    speedScale={0.95}
+                    color="rgba(255,255,255,0.13)"
+                    darkColor="rgba(255,255,255,0.13)"
+                    glowColor="rgba(39,214,201,0.34)"
+                    darkGlowColor="rgba(39,214,201,0.34)"
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <div className="relative z-10">{children}</div>
           </div>
         </main>
 

@@ -136,6 +136,28 @@ export function formatShortDate(date: Date) {
   });
 }
 
+function getOrdinalSuffix(value: number) {
+  const remainderTen = value % 10;
+  const remainderHundred = value % 100;
+
+  if (remainderTen === 1 && remainderHundred !== 11) return "st";
+  if (remainderTen === 2 && remainderHundred !== 12) return "nd";
+  if (remainderTen === 3 && remainderHundred !== 13) return "rd";
+  return "th";
+}
+
+export function formatTooltipDate(date: Date) {
+  const weekday = date.toLocaleDateString("en-US", {
+    weekday: "long",
+  });
+  const month = date.toLocaleDateString("en-US", {
+    month: "short",
+  });
+  const day = date.getDate();
+
+  return `${weekday}, ${month} ${day}${getOrdinalSuffix(day)}`;
+}
+
 export function formatAccessibleDate(date: Date) {
   return date.toLocaleDateString("en-US", {
     weekday: "long",

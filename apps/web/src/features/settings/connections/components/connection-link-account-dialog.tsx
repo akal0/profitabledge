@@ -64,6 +64,11 @@ export function ConnectionLinkAccountDialog({
                   <span className="ml-2 text-xs text-white/40">
                     {account.broker}
                   </span>
+                  {account.accountNumber ? (
+                    <div className="mt-1 text-[11px] text-white/35">
+                      #{account.accountNumber}
+                    </div>
+                  ) : null}
                 </div>
                 <Link2 className="size-4 text-white/30" />
               </button>

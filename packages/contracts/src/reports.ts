@@ -16,12 +16,14 @@ export const REPORT_METRIC_IDS = [
   "netPnl",
   "winRate",
   "tradeCount",
+  "avgPlannedRR",
   "avgRR",
   "profitFactor",
   "expectancy",
   "avgHold",
   "avgMfe",
   "avgMae",
+  "protocolRate",
   "rrCaptureEfficiency",
 ] as const;
 
@@ -75,6 +77,23 @@ export const REPORT_PANEL_IDS = [
 ] as const;
 
 export type ReportPanelId = (typeof REPORT_PANEL_IDS)[number];
+
+export type ReportLensPreferences = {
+  activePanels?: ReportPanelId[];
+  panelSpans?: Partial<Record<ReportPanelId, number>>;
+  heroDimension?: ReportDimensionId;
+  heroMetrics?: ReportMetricId[];
+  heroChartType?: ReportChartType;
+};
+
+export type ReportSavedTemplate = {
+  id: string;
+  name: string;
+  lens: ReportLensId;
+  prefs: ReportLensPreferences;
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type ReportLensConfig = {
   label: string;
@@ -229,9 +248,11 @@ export const REPORT_LENS_CONFIG = {
     allowedMetrics: [
       "tradeCount",
       "winRate",
+      "avgPlannedRR",
       "avgRR",
       "avgMfe",
       "avgMae",
+      "protocolRate",
       "rrCaptureEfficiency",
     ],
     defaultPanels: [
@@ -276,12 +297,14 @@ export const REPORT_METRIC_LABELS = {
   netPnl: "Net P&L",
   winRate: "Win rate",
   tradeCount: "Trades",
+  avgPlannedRR: "Planned R",
   avgRR: "Average R",
   profitFactor: "Profit factor",
   expectancy: "Expectancy",
   avgHold: "Average hold",
   avgMfe: "Average MFE",
   avgMae: "Average MAE",
+  protocolRate: "Protocol rate",
   rrCaptureEfficiency: "RR capture",
 } as const satisfies Record<ReportMetricId, string>;
 

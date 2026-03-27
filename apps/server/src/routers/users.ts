@@ -13,6 +13,10 @@ import {
   REPORT_PANEL_IDS,
 } from "@profitabledge/contracts/reports";
 import { createNotification } from "../lib/notifications";
+import {
+  isValidNormalizedAuthUsername,
+  normalizeAuthUsername,
+} from "../lib/auth-usernames";
 
 const DASHBOARD_WIDGET_IDS = [
   "account-balance",
@@ -79,6 +83,16 @@ const CHART_WIDGET_IDS = [
   "risk-adjusted",
   "bell-curve",
 ] as const;
+
+const reportLensPreferencesSchema = z.object({
+  activePanels: z.array(z.enum(REPORT_PANEL_IDS)).max(8).optional(),
+  panelSpans: z
+    .record(z.enum(REPORT_PANEL_IDS), z.number().int().min(1).max(2).optional())
+    .optional(),
+  heroDimension: z.enum(REPORT_DIMENSION_IDS).optional(),
+  heroMetrics: z.array(z.enum(REPORT_METRIC_IDS)).max(3).optional(),
+  heroChartType: z.enum(REPORT_CHART_TYPES).optional(),
+});
 
 type DashboardWidgetId = (typeof DASHBOARD_WIDGET_IDS)[number];
 type CalendarWidgetId = (typeof CALENDAR_WIDGET_IDS)[number];
@@ -588,17 +602,7 @@ export const usersRouter = router({
     .input(
       z.object({
         lens: z.enum(REPORT_LENS_IDS),
-        activePanels: z.array(z.enum(REPORT_PANEL_IDS)).max(8).optional(),
-        panelSpans: z
-          .record(
-            z.enum(REPORT_PANEL_IDS),
-            z.number().int().min(1).max(2).optional()
-          )
-          .optional(),
-        heroDimension: z.enum(REPORT_DIMENSION_IDS).optional(),
-        heroMetrics: z.array(z.enum(REPORT_METRIC_IDS)).max(3).optional(),
-        heroChartType: z.enum(REPORT_CHART_TYPES).optional(),
-      })
+      }).extend(reportLensPreferencesSchema.shape)
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
@@ -665,11 +669,152 @@ export const usersRouter = router({
       return { ok: true } as const;
     }),
 
+  upsertReportsTemplate: protectedProcedure
+    .input(
+      z.object({
+        templateId: z.string().optional(),
+        name: z.string().trim().min(1).max(48),
+        lens: z.enum(REPORT_LENS_IDS),
+        prefs: reportLensPreferencesSchema,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({ widgetPreferences: userTable.widgetPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const current = (rows[0]?.widgetPreferences as any) || {};
+      const currentReports =
+        current.reportsV1 && typeof current.reportsV1 === "object"
+          ? current.reportsV1
+          : {};
+      const currentTemplates = Array.isArray(currentReports.savedTemplates)
+        ? currentReports.savedTemplates
+        : [];
+      const now = new Date().toISOString();
+      const cleanPrefs = {
+        ...(input.prefs.activePanels !== undefined
+          ? {
+              activePanels: Array.from(new Set(input.prefs.activePanels)),
+            }
+          : {}),
+        ...(input.prefs.panelSpans !== undefined
+          ? {
+              panelSpans: Object.fromEntries(
+                Object.entries(input.prefs.panelSpans).filter(
+                  ([, value]) =>
+                    typeof value === "number" && Number.isFinite(value)
+                )
+              ),
+            }
+          : {}),
+        ...(input.prefs.heroDimension !== undefined
+          ? { heroDimension: input.prefs.heroDimension }
+          : {}),
+        ...(input.prefs.heroMetrics !== undefined
+          ? {
+              heroMetrics: Array.from(new Set(input.prefs.heroMetrics)).slice(
+                0,
+                3
+              ),
+            }
+          : {}),
+        ...(input.prefs.heroChartType !== undefined
+          ? { heroChartType: input.prefs.heroChartType }
+          : {}),
+      };
+      const templateId = input.templateId || crypto.randomUUID();
+      const existingTemplate = currentTemplates.find(
+        (template: any) => template?.id === templateId
+      );
+      const nextTemplate = {
+        id: templateId,
+        name: input.name,
+        lens: input.lens,
+        prefs: cleanPrefs,
+        createdAt:
+          typeof existingTemplate?.createdAt === "string"
+            ? existingTemplate.createdAt
+            : now,
+        updatedAt: now,
+      };
+      const nextTemplates = [
+        nextTemplate,
+        ...currentTemplates.filter((template: any) => template?.id !== templateId),
+      ].slice(0, 24);
+      const next = {
+        ...current,
+        reportsV1: {
+          ...currentReports,
+          savedTemplates: nextTemplates,
+        },
+      };
+
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: next,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      return {
+        ok: true,
+        template: nextTemplate,
+      } as const;
+    }),
+
+  deleteReportsTemplate: protectedProcedure
+    .input(
+      z.object({
+        templateId: z.string().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({ widgetPreferences: userTable.widgetPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+
+      const current = (rows[0]?.widgetPreferences as any) || {};
+      const currentReports =
+        current.reportsV1 && typeof current.reportsV1 === "object"
+          ? current.reportsV1
+          : {};
+      const currentTemplates = Array.isArray(currentReports.savedTemplates)
+        ? currentReports.savedTemplates
+        : [];
+      const next = {
+        ...current,
+        reportsV1: {
+          ...currentReports,
+          savedTemplates: currentTemplates.filter(
+            (template: any) => template?.id !== input.templateId
+          ),
+        },
+      };
+
+      await db
+        .update(userTable)
+        .set({
+          widgetPreferences: next,
+          updatedAt: new Date(),
+        })
+        .where(eq(userTable.id, userId));
+
+      return { ok: true } as const;
+    }),
+
   updateProfile: protectedProcedure
     .input(
       z.object({
         fullName: z.string().min(2),
-        username: z.string().min(2),
+        username: z.string().trim().min(2).max(30),
         email: z.email().optional(),
         image: z.url().optional(),
         twitter: z.string().optional().nullable(),
@@ -684,25 +829,32 @@ export const usersRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const normalizedUsername = normalizeAuthUsername(input.username);
 
-      // Ensure username uniqueness (if provided)
-      if (input.username) {
-        const existing = await db
-          .select({ id: userTable.id })
-          .from(userTable)
-          .where(
-            and(
-              eq(userTable.username, input.username),
-              ne(userTable.id, userId)
-            )
-          )
-          .limit(1);
-        if (existing[0]) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Username is taken",
-          });
-        }
+      if (
+        normalizedUsername.length < 2 ||
+        normalizedUsername.length > 30 ||
+        !isValidNormalizedAuthUsername(normalizedUsername)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Username must use letters, numbers, dots, underscores, or hyphens",
+        });
+      }
+
+      const existing = await db
+        .select({ id: userTable.id })
+        .from(userTable)
+        .where(
+          and(eq(userTable.username, normalizedUsername), ne(userTable.id, userId))
+        )
+        .limit(1);
+      if (existing[0]) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Username is taken",
+        });
       }
 
       // Ensure email uniqueness (if updating email)
@@ -722,6 +874,7 @@ export const usersRouter = router({
       const updates: Partial<{
         name: string;
         username: string | null;
+        displayUsername: string | null;
         email: string;
         image: string | null;
         twitter: string | null;
@@ -735,7 +888,8 @@ export const usersRouter = router({
         updatedAt: Date;
       }> = {
         name: input.fullName,
-        username: input.username,
+        username: normalizedUsername,
+        displayUsername: input.username.trim(),
         updatedAt: new Date(),
       };
 

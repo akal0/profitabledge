@@ -393,6 +393,13 @@
       "when": 1774630351275,
       "tag": "0048_edge_missed_trade_manual_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1774644775303,
+      "tag": "0049_auth_plugin_upgrades",
+      "breakpoints": true
     }
   ]
 }

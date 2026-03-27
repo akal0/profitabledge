@@ -35,7 +35,7 @@ async function checkStatus() {
     if (missing.length > 0) {
       console.log(`\n⚠️  Missing tables:`);
       missing.forEach(t => console.log(`  - ${t}`));
-      console.log(`\nRun: bun run manual-migration.ts`);
+      console.log(`\nRun: bun run migrate.ts`);
     } else {
       console.log(`\n✅ All trade copying tables exist!`);
     }
@@ -67,8 +67,8 @@ async function checkStatus() {
 
     console.log("\n" + "=".repeat(60));
     console.log("\n✅ Database is ready!");
-    console.log("\n💡 Note: You don't need to run 'bun db:push'.");
-    console.log("   All tables are already created and working.\n");
+    console.log("\n💡 Note: Only run migrations when you have pending schema changes.");
+    console.log("   This status check is enough when the database is already in sync.\n");
 
   } catch (error) {
     console.error("\n❌ Error checking database:", error);

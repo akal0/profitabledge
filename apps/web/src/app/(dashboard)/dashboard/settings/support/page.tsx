@@ -106,7 +106,7 @@ export default function SupportSettingsPage() {
           <div className="p-6">
             <p className="text-sm font-medium text-white">Admin access required</p>
             <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
-              This route is only available to allowlisted admin accounts.
+              This route is only available to staff accounts.
             </p>
           </div>
         </GoalSurface>

@@ -25,7 +25,7 @@ const ACTION_BUTTON_CLASS =
   "flex h-[38px] w-max items-center justify-center gap-1.5 rounded-md ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
 
 const ACTION_GROUP_CLASS =
-  "flex items-center overflow-visible rounded-md ring ring-white/5 bg-sidebar";
+  "shrink-0 flex items-center overflow-hidden rounded-md ring ring-white/5 bg-sidebar";
 
 const ACTION_GROUP_BUTTON_CLASS =
   "h-[38px] rounded-none ring-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
@@ -190,21 +190,28 @@ export function CalendarControls({
             <div className={ACTION_GROUP_CLASS}>
               <Button
                 aria-label={`Show previous ${viewMode}`}
-                className={ACTION_GROUP_BUTTON_CLASS}
+                className={cn(
+                  ACTION_GROUP_BUTTON_CLASS,
+                  "rounded-l-md rounded-r-none"
+                )}
                 disabled={!canNavigatePrevious}
                 onClick={() => onPeriodStep(-1)}
               >
                 <ChevronLeft className="size-3.5" />
               </Button>
               <Button
-                className="h-[38px] cursor-default rounded-none ring-x ring-white/5 bg-sidebar px-3 py-2 text-xs text-white/70 hover:bg-sidebar"
+                className="h-[38px] w-auto max-w-[12rem] shrink cursor-default truncate whitespace-nowrap rounded-none ring-x ring-white/5 bg-sidebar px-4 py-2 text-xs text-white/70 hover:bg-sidebar"
                 disabled
+                title={activePeriodLabel}
               >
                 {activePeriodLabel}
               </Button>
               <Button
                 aria-label={`Show next ${viewMode}`}
-                className={ACTION_GROUP_BUTTON_CLASS}
+                className={cn(
+                  ACTION_GROUP_BUTTON_CLASS,
+                  "rounded-l-none rounded-r-md"
+                )}
                 disabled={!canNavigateNext}
                 onClick={() => onPeriodStep(1)}
               >

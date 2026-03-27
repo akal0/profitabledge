@@ -23,6 +23,7 @@ import {
 } from "@/components/prop-account-status-badges";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { PropAccountPhaseActionsMenu } from "@/features/accounts/prop-tracker/components/prop-account-phase-actions-menu";
+import { getOverallPropProgress } from "@/features/accounts/prop-tracker/lib/prop-tracker-detail";
 import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -359,9 +360,12 @@ function PropAccountCard({
     displayName:
       dashboard?.propFirm?.displayName || account.broker || "Prop firm",
   };
-  const currentProfitPercent =
-    dashboard?.ruleCheck?.metrics?.currentProfitPercent ??
-    parseFloat(account.propPhaseCurrentProfitPercent || "0");
+  const overallProgress = getOverallPropProgress({
+    initialBalance: account.initialBalance,
+    currentBalance: dashboard?.ruleCheck?.metrics?.currentBalance,
+    fallbackBalance: account.liveBalance,
+  });
+  const currentProfitPercent = overallProgress.profitPercent;
   const tradingDays =
     dashboard?.ruleCheck?.metrics?.tradingDays ??
     account.propPhaseTradingDays ??

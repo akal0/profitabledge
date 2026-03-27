@@ -1,4 +1,11 @@
 import { createAuthClient } from "better-auth/react";
+import {
+  adminClient,
+  organizationClient,
+  twoFactorClient,
+  usernameClient,
+} from "better-auth/client/plugins";
+import { passkeyClient } from "@better-auth/passkey/client";
 import { getOriginCandidates, rewriteRequestToBase } from "@profitabledge/platform";
 
 function inferAuthBases(): string[] {
@@ -22,8 +29,18 @@ function inferAuthBases(): string[] {
 
 const bases = inferAuthBases();
 
+// Better Auth plugin inference is stricter than this app's current client setup,
+// so we keep the runtime plugin wiring and relax the exported surface.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const authClient = createAuthClient({
   baseURL: bases[0],
+  plugins: [
+    usernameClient(),
+    twoFactorClient(),
+    adminClient(),
+    organizationClient(),
+    passkeyClient(),
+  ] as any,
   async fetch(input: RequestInfo | URL, init?: RequestInit) {
     for (let i = 0; i < bases.length; i++) {
       const target = rewriteRequestToBase(input, bases[i], bases[0]);
@@ -39,4 +56,4 @@ export const authClient = createAuthClient({
     }
     return fetch(input as any, init);
   },
-});
+}) as any;

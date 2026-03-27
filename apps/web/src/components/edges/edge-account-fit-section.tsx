@@ -159,7 +159,7 @@ export function EdgeAccountFitSection({
               {/*<GoalContentSeparator className="mb-3 mt-3" />*/}
               <div className="space-y-2 text-xs text-amber-50/80">
                 {accountFit.cautions.map((item) => (
-                  <p key={item}>{item} l</p>
+                  <p key={item}>{item}</p>
                 ))}
               </div>
             </div>

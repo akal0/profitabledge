@@ -41,3 +41,4 @@ export type {
   NotificationPresentationInput,
   NotificationPresentationTone,
 } from "./notification-presentation";
+export { resolveNotificationTargetUrl } from "./notification-targets";

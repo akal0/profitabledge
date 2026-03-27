@@ -24,6 +24,7 @@ import {
   formatAccessibleDate,
   formatDuration,
   formatMoney,
+  formatTooltipDate,
   formatTradeCount,
   formatTradePillMoney,
   fromDateISO,
@@ -344,6 +345,9 @@ export function CalendarWeekView({
             <TooltipTrigger asChild>{cell}</TooltipTrigger>
             <TooltipContent className="w-max max-w-none px-0 py-3">
               <div className="flex flex-col gap-1.5 px-3">
+                <span className="text-[11px] text-white/60">
+                  {formatTooltipDate(dayDate)}
+                </span>
                 <span className="text-[10px] uppercase tracking-wide text-white/40">
                   Goals
                 </span>

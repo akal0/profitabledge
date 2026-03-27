@@ -32,8 +32,11 @@ import {
   PROVIDER_INFO,
 } from "../lib/providers/registry";
 import { resolveUniqueConnectionDisplayName } from "../lib/connections/display-name";
+import { sanitizeConnectionMeta } from "../lib/connections/sanitize-meta";
 import { syncConnection } from "../lib/providers/sync-engine";
+import { getSyncSchedulerStatus } from "../lib/providers/sync-scheduler";
 import { getCTraderAuthUrl } from "../lib/providers/ctrader";
+import { getTradovateAuthUrl } from "../lib/providers/tradovate";
 import { createMtTerminalConnection } from "../lib/mt5/worker-control";
 import { isMtTerminalProvider } from "../lib/mt5/constants";
 import { buildMtConnectionCompleteness } from "../lib/mt5/completeness";
@@ -55,6 +58,8 @@ import {
   recordAppEvent,
   recordOperationalError,
 } from "../lib/ops/event-log";
+import { createOAuthConnection } from "../lib/connections/oauth";
+import type { ProviderAuthorizedAccount } from "../lib/providers/types";
 
 const credentialsSchema = z.record(z.string(), z.string());
 const connectionMetaSchema = z
@@ -95,6 +100,150 @@ async function createConnectionSettingsNotification(input: {
   }
 }
 
+function getDiscoveredProviderAccounts(
+  meta: unknown
+): ProviderAuthorizedAccount[] {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) {
+    return [];
+  }
+
+  const rows = (meta as Record<string, unknown>).discoveredAccounts;
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+
+  return rows
+    .filter(
+      (row): row is Record<string, unknown> =>
+        Boolean(row) && typeof row === "object" && !Array.isArray(row)
+    )
+    .map((row) => {
+      const environment: ProviderAuthorizedAccount["environment"] =
+        row.environment === "live" || row.environment === "demo"
+          ? row.environment
+          : "unknown";
+
+      return {
+        providerAccountId: String(row.providerAccountId ?? ""),
+        accountNumber:
+          row.accountNumber != null ? String(row.accountNumber) : null,
+        label: row.label != null ? String(row.label) : null,
+        brokerName: row.brokerName != null ? String(row.brokerName) : null,
+        currency: row.currency != null ? String(row.currency) : null,
+        environment,
+        metadata:
+          row.metadata &&
+          typeof row.metadata === "object" &&
+          !Array.isArray(row.metadata)
+            ? (row.metadata as Record<string, unknown>)
+            : undefined,
+      };
+    })
+    .filter((row) => row.providerAccountId.length > 0);
+}
+
+function normalizeAccountIdentifier(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.toLowerCase();
+}
+
+function chooseDiscoveredProviderAccount(input: {
+  provider: string;
+  discoveredAccounts: ProviderAuthorizedAccount[];
+  accountNumber: string | null;
+}) {
+  if (input.discoveredAccounts.length === 0) {
+    return null;
+  }
+
+  if (input.discoveredAccounts.length === 1) {
+    return input.discoveredAccounts[0] ?? null;
+  }
+
+  const normalizedAccountNumber = normalizeAccountIdentifier(input.accountNumber);
+  if (!normalizedAccountNumber) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `This ${input.provider} connection has multiple broker accounts. Add an account number to the selected trading account before linking it.`,
+    });
+  }
+
+  const exactMatch =
+    input.discoveredAccounts.find((candidate) => {
+      return (
+        normalizeAccountIdentifier(candidate.accountNumber) ===
+        normalizedAccountNumber
+      );
+    }) ?? null;
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  throw new TRPCError({
+    code: "BAD_REQUEST",
+    message: `Could not match trading account ${input.accountNumber} to any ${input.provider} broker account on this connection.`,
+  });
+}
+
+function resolveConnectionLinkMeta(input: {
+  provider: string;
+  currentMeta: unknown;
+  accountNumber: string | null;
+}) {
+  const currentMeta =
+    input.currentMeta &&
+    typeof input.currentMeta === "object" &&
+    !Array.isArray(input.currentMeta)
+      ? { ...(input.currentMeta as Record<string, unknown>) }
+      : {};
+  const discoveredAccounts = getDiscoveredProviderAccounts(currentMeta);
+
+  if (input.provider !== "ctrader" && input.provider !== "tradovate") {
+    return currentMeta;
+  }
+
+  const selectedAccount = chooseDiscoveredProviderAccount({
+    provider: input.provider,
+    discoveredAccounts,
+    accountNumber: input.accountNumber,
+  });
+
+  if (!selectedAccount) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `No broker accounts were discovered for this ${input.provider} connection. Reconnect it and try again.`,
+    });
+  }
+
+  if (input.provider === "ctrader") {
+    currentMeta.ctraderAccountId = selectedAccount.providerAccountId;
+  }
+
+  if (input.provider === "tradovate") {
+    currentMeta.tradovateAccountId = selectedAccount.providerAccountId;
+  }
+
+  currentMeta.brokerName = selectedAccount.brokerName ?? currentMeta.brokerName;
+  currentMeta.currency = selectedAccount.currency ?? currentMeta.currency;
+  currentMeta.selectedProviderAccount = {
+    providerAccountId: selectedAccount.providerAccountId,
+    accountNumber: selectedAccount.accountNumber,
+    label: selectedAccount.label,
+    environment: selectedAccount.environment,
+  };
+
+  return sanitizeConnectionMeta(currentMeta);
+}
+
 export const connectionsRouter = router({
   /** List all connections for the current user. */
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -103,7 +252,76 @@ export const connectionsRouter = router({
       orderBy: desc(platformConnection.createdAt),
     });
     // Strip encrypted credentials from response
-    return rows.map(({ encryptedCredentials: _, credentialIv: __, ...safe }) => safe);
+    return rows.map(({ encryptedCredentials: _, credentialIv: __, ...safe }) => ({
+      ...safe,
+      meta: sanitizeConnectionMeta(
+        safe.meta && typeof safe.meta === "object"
+          ? (safe.meta as Record<string, unknown>)
+          : null
+      ),
+    }));
+  }),
+
+  getSyncRuntimeStatus: protectedProcedure.query(async ({ ctx }) => {
+    const rows = await db.query.platformConnection.findMany({
+      where: eq(platformConnection.userId, ctx.session.user.id),
+      orderBy: desc(platformConnection.updatedAt),
+    });
+    const scheduledConnections = rows.filter(
+      (connection) =>
+        !isMtTerminalProvider(connection.provider) &&
+        (connection.syncIntervalMinutes ?? 0) > 0
+    );
+    const now = Date.now();
+    const dueNowCount = scheduledConnections.filter((connection) => {
+      if (connection.isPaused) {
+        return false;
+      }
+
+      if (!connection.lastSyncSuccessAt) {
+        return true;
+      }
+
+      return (
+        connection.lastSyncSuccessAt.getTime() <
+        now - (connection.syncIntervalMinutes ?? 0) * 60_000
+      );
+    }).length;
+    const connectionIds = scheduledConnections.map((connection) => connection.id);
+    const recentLogs =
+      connectionIds.length > 0
+        ? await db.query.syncLog.findMany({
+            where: inArray(syncLog.connectionId, connectionIds),
+            orderBy: desc(syncLog.createdAt),
+            limit: 5,
+          })
+        : [];
+
+    return {
+      scheduler: getSyncSchedulerStatus(),
+      summary: {
+        scheduledCount: scheduledConnections.length,
+        activeCount: scheduledConnections.filter(
+          (connection) => !connection.isPaused
+        ).length,
+        pausedCount: scheduledConnections.filter(
+          (connection) => connection.isPaused
+        ).length,
+        errorCount: scheduledConnections.filter(
+          (connection) => connection.status === "error"
+        ).length,
+        dueNowCount,
+      },
+      recentRuns: recentLogs.map((row) => ({
+        id: row.id,
+        connectionId: row.connectionId,
+        status: row.status,
+        tradesInserted: row.tradesInserted,
+        errorMessage: row.errorMessage,
+        durationMs: row.durationMs,
+        createdAt: row.createdAt,
+      })),
+    };
   }),
 
   /** Read-only MT terminal supervisor status for the current user's terminal connections. */
@@ -637,7 +855,14 @@ export const connectionsRouter = router({
       });
       if (!conn) throw new TRPCError({ code: "NOT_FOUND" });
       const { encryptedCredentials: _, credentialIv: __, ...safe } = conn;
-      return safe;
+      return {
+        ...safe,
+        meta: sanitizeConnectionMeta(
+          safe.meta && typeof safe.meta === "object"
+            ? (safe.meta as Record<string, unknown>)
+            : null
+        ),
+      };
     }),
 
   /** Get supported providers and their info. */
@@ -648,7 +873,7 @@ export const connectionsRouter = router({
     };
   }),
 
-  /** Generate OAuth authorization URL (for cTrader). */
+  /** Generate OAuth authorization URL. */
   getOAuthUrl: protectedProcedure
     .input(
       z.object({
@@ -665,6 +890,10 @@ export const connectionsRouter = router({
 
       if (input.provider === "ctrader") {
         return { url: getCTraderAuthUrl(state) };
+      }
+
+      if (input.provider === "tradovate") {
+        return { url: getTradovateAuthUrl(state) };
       }
 
       throw new TRPCError({
@@ -685,50 +914,20 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
-      const provider = await getProvider(input.provider);
-
-      if (!provider.exchangeCode) {
+      if (input.provider !== "ctrader" && input.provider !== "tradovate") {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: `Provider ${input.provider} does not support OAuth`,
         });
       }
 
-      const redirectUri =
-        input.provider === "ctrader"
-          ? process.env.CTRADER_REDIRECT_URI!
-          : "";
-
-      const credentials = await provider.exchangeCode(
-        input.code,
-        redirectUri
-      );
-
-      const { encrypted, iv } = encryptCredentials(
-        JSON.stringify(credentials)
-      );
-      const expiresAt = credentials.expiresAt
-        ? new Date(credentials.expiresAt)
-        : null;
-      const displayName = await resolveUniqueConnectionDisplayName({
+      const { connection: conn } = await createOAuthConnection({
         userId: ctx.session.user.id,
         provider: input.provider,
+        code: input.code,
         displayName: input.displayName,
+        meta: input.meta,
       });
-
-      const [conn] = await db
-        .insert(platformConnection)
-        .values({
-          userId: ctx.session.user.id,
-          provider: input.provider,
-          displayName,
-          meta: input.meta,
-          encryptedCredentials: encrypted,
-          credentialIv: iv,
-          tokenExpiresAt: expiresAt,
-          status: "active",
-        })
-        .returning();
 
       await Promise.all([
         ensureActivationMilestone({
@@ -746,7 +945,7 @@ export const connectionsRouter = router({
           category: "connections",
           name: "connection.oauth.completed",
           source: "server",
-          summary: `${displayName} connected`,
+          summary: `${conn.displayName} connected`,
           metadata: {
             provider: conn.provider,
             connectionId: conn.id,
@@ -758,7 +957,7 @@ export const connectionsRouter = router({
       await createConnectionSettingsNotification({
         userId: ctx.session.user.id,
         title: "Connection added",
-        body: `${displayName} is connected and ready to link to a trading account.`,
+        body: `${conn.displayName} is connected and ready to link to a trading account.`,
         connectionId: conn.id,
         provider: conn.provider,
         displayName: conn.displayName,
@@ -873,6 +1072,7 @@ export const connectionsRouter = router({
         provider: input.provider,
         displayName: input.displayName,
       });
+      const safeMeta = sanitizeConnectionMeta(input.meta);
 
       const [conn] = await db
         .insert(platformConnection)
@@ -881,7 +1081,7 @@ export const connectionsRouter = router({
           provider: input.provider,
           displayName,
           meta: {
-            ...input.meta,
+            ...safeMeta,
             accountInfoSnapshot: {
               balance: accountInfo.balance,
               currency: accountInfo.currency,
@@ -962,9 +1162,15 @@ export const connectionsRouter = router({
         throw new TRPCError({ code: "NOT_FOUND" });
       }
 
+      const nextMeta = resolveConnectionLinkMeta({
+        provider: conn.provider,
+        currentMeta: conn.meta,
+        accountNumber: acct.accountNumber ?? null,
+      });
+
       await db
         .update(platformConnection)
-        .set({ accountId: input.accountId, updatedAt: new Date() })
+        .set({ accountId: input.accountId, meta: nextMeta, updatedAt: new Date() })
         .where(eq(platformConnection.id, input.connectionId));
 
       await createConnectionSettingsNotification({

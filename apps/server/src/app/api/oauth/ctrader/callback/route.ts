@@ -4,11 +4,7 @@
  * Exchanges code for tokens, stores encrypted, redirects to settings.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
-import { platformConnection } from "@/db/schema/connections";
-import { resolveUniqueConnectionDisplayName } from "@/lib/connections/display-name";
-import { encryptCredentials } from "@/lib/providers/credential-cipher";
-import { CTraderProvider } from "@/lib/providers/ctrader";
+import { createOAuthConnection } from "@/lib/connections/oauth";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -33,41 +29,15 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${settingsUrl}?error=invalid_state`);
     }
 
-    // Exchange authorization code for tokens
-    const ctrader = new CTraderProvider();
-    const credentials = await ctrader.exchangeCode(
-      code,
-      process.env.CTRADER_REDIRECT_URI!
-    );
-
-    // Encrypt and store
-    const { encrypted, iv } = encryptCredentials(
-      JSON.stringify(credentials)
-    );
-    const expiresAt = credentials.expiresAt
-      ? new Date(credentials.expiresAt)
-      : null;
-    const displayName = await resolveUniqueConnectionDisplayName({
+    const { connection } = await createOAuthConnection({
       userId,
       provider: "ctrader",
+      code,
       displayName: "cTrader Account",
     });
 
-    const [conn] = await db
-      .insert(platformConnection)
-      .values({
-        userId,
-        provider: "ctrader",
-        displayName,
-        encryptedCredentials: encrypted,
-        credentialIv: iv,
-        tokenExpiresAt: expiresAt,
-        status: "active",
-      })
-      .returning();
-
     return NextResponse.redirect(
-      `${settingsUrl}?success=connected&connectionId=${conn.id}`
+      `${settingsUrl}?success=connected&connectionId=${connection.id}&provider=ctrader`
     );
   } catch (err: unknown) {
     console.error("[cTrader OAuth Callback]", err);

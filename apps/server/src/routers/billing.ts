@@ -23,7 +23,6 @@ import {
   getHigherBillingPlanKey,
   BILLING_PLAN_TIER,
   getWebAppUrl,
-  isPrivateBetaAdminEmail,
   isPrivateBetaRequired,
   REFERRAL_EDGE_CREDIT_AMOUNT,
   REFERRAL_EDGE_CREDIT_THRESHOLD,
@@ -109,6 +108,7 @@ import {
   ensureActivationMilestone,
   recordAppEvent,
 } from "../lib/ops/event-log";
+import { hasStaffAccess } from "../lib/staff-access";
 import { protectedProcedure, publicProcedure, router } from "../lib/trpc";
 
 const ONBOARDING_COMPLETION_KEY = "onboarding_completed";
@@ -133,8 +133,11 @@ function buildPrivateBetaCode() {
   return `BETA${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
-function isGrowthAdminEmail(email?: string | null) {
-  return isPrivateBetaAdminEmail(email);
+function isGrowthAdmin(input: {
+  role?: string | null;
+  email?: string | null;
+}) {
+  return hasStaffAccess(input);
 }
 
 function isActiveSubscriptionStatus(status?: string | null) {
@@ -249,6 +252,7 @@ async function getUserRow(userId: string) {
       id: userTable.id,
       email: userTable.email,
       name: userTable.name,
+      role: userTable.role,
       isPremium: userTable.isPremium,
     })
     .from(userTable)
@@ -262,9 +266,13 @@ async function getUserRow(userId: string) {
   return row[0];
 }
 
-async function getAccessStatus(userId: string, email?: string | null) {
+async function getAccessStatus(input: {
+  userId: string;
+  role?: string | null;
+  email?: string | null;
+}) {
   const required = isPrivateBetaRequired();
-  const isAdmin = isGrowthAdminEmail(email);
+  const isAdmin = isGrowthAdmin(input);
 
   const redemptionRows = await db
     .select({
@@ -279,7 +287,7 @@ async function getAccessStatus(userId: string, email?: string | null) {
       privateBetaCode,
       eq(privateBetaRedemption.codeId, privateBetaCode.id)
     )
-    .where(eq(privateBetaRedemption.userId, userId))
+    .where(eq(privateBetaRedemption.userId, input.userId))
     .limit(1);
 
   const redemption = redemptionRows[0] ?? null;
@@ -397,7 +405,10 @@ async function redeemPrivateBetaCode(input: {
     });
   }
 
-  const access = await getAccessStatus(input.userId, input.email);
+  const access = await getAccessStatus({
+    userId: input.userId,
+    email: input.email,
+  });
   if (access.redemption) {
     return access.redemption;
   }
@@ -427,7 +438,10 @@ async function redeemPrivateBetaCode(input: {
     .returning({ id: privateBetaCode.id });
 
   if (!reservation[0]) {
-    const latestAccess = await getAccessStatus(input.userId, input.email);
+    const latestAccess = await getAccessStatus({
+      userId: input.userId,
+      email: input.email,
+    });
     if (latestAccess.redemption) {
       return latestAccess.redemption;
     }
@@ -464,7 +478,10 @@ async function redeemPrivateBetaCode(input: {
       })
       .where(eq(privateBetaCode.id, validation.row.id));
 
-    const latestAccess = await getAccessStatus(input.userId, input.email);
+    const latestAccess = await getAccessStatus({
+      userId: input.userId,
+      email: input.email,
+    });
     if (latestAccess.redemption) {
       return latestAccess.redemption;
     }
@@ -475,7 +492,10 @@ async function redeemPrivateBetaCode(input: {
     });
   }
 
-  const redeemedAccess = await getAccessStatus(input.userId, input.email);
+  const redeemedAccess = await getAccessStatus({
+    userId: input.userId,
+    email: input.email,
+  });
   if (redeemedAccess.redemption) {
     return redeemedAccess.redemption;
   }
@@ -2067,8 +2087,11 @@ async function disconnectAllLegacyBillingCustomers(input: {
   };
 }
 
-function assertGrowthAdmin(email?: string | null) {
-  if (!isGrowthAdminEmail(email)) {
+function assertGrowthAdmin(input: {
+  role?: string | null;
+  email?: string | null;
+}) {
+  if (!isGrowthAdmin(input)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Admin access required",
@@ -2140,7 +2163,11 @@ async function completeGrowthAccessForUser(
     });
   }
 
-  const access = await getAccessStatus(user.id, user.email);
+  const access = await getAccessStatus({
+    userId: user.id,
+    role: user.role,
+    email: user.email,
+  });
   if (access.privateBetaRequired && !access.hasPrivateBetaAccess) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -2330,7 +2357,11 @@ export const billingRouter = router({
     const user = await getUserRow(ctx.session.user.id);
     const [access, referral, affiliate, billing, onboarding, credits, legacyMigration] =
       await Promise.all([
-        getAccessStatus(user.id, user.email),
+        getAccessStatus({
+          userId: user.id,
+          role: user.role,
+          email: user.email,
+        }),
         buildReferralState(user.id),
         buildAffiliateState(user.id),
         getActiveBillingState(user.id),
@@ -2338,7 +2369,10 @@ export const billingRouter = router({
         getUserEdgeCreditSnapshot(user.id),
         getStripeBetaMigrationState(user.id),
       ]);
-    const isAdmin = isGrowthAdminEmail(user.email);
+    const isAdmin = isGrowthAdmin({
+      role: user.role,
+      email: user.email,
+    });
 
     return {
       access,
@@ -2422,7 +2456,10 @@ export const billingRouter = router({
 
   getAffiliateDashboard: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    const isAdmin = isGrowthAdminEmail(user.email);
+    const isAdmin = isGrowthAdmin({
+      role: user.role,
+      email: user.email,
+    });
     const dashboard = await buildAffiliateDashboardState(user.id);
 
     if (!dashboard && !isAdmin) {
@@ -2456,7 +2493,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return saveAffiliateOffer({
         affiliateUserId: input.affiliateUserId,
@@ -2479,7 +2516,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return saveAffiliateCommissionSplit({
         affiliateUserId: input.affiliateUserId,
@@ -2521,7 +2558,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return saveAffiliateTierSettings({
         affiliateUserId: input.affiliateUserId,
@@ -2742,7 +2779,11 @@ export const billingRouter = router({
           null,
         source: "checkout",
       });
-      const access = await getAccessStatus(user.id, user.email);
+      const access = await getAccessStatus({
+        userId: user.id,
+        role: user.role,
+        email: user.email,
+      });
       if (access.privateBetaRequired && !access.hasPrivateBetaAccess) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
@@ -2939,7 +2980,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       const code = normalizePrivateBetaCode(
         input.code ?? buildPrivateBetaCode()
@@ -2962,7 +3003,7 @@ export const billingRouter = router({
 
   listPrivateBetaCodes: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin(user.email);
+    assertGrowthAdmin({ role: user.role, email: user.email });
 
     return db
       .select()
@@ -2972,21 +3013,21 @@ export const billingRouter = router({
 
   listAffiliateApplications: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin(user.email);
+    assertGrowthAdmin({ role: user.role, email: user.email });
 
     return listAffiliateApplications();
   }),
 
   listAffiliatePayoutQueue: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin(user.email);
+    assertGrowthAdmin({ role: user.role, email: user.email });
 
     return listAffiliatePayoutQueue();
   }),
 
   listLegacyBillingCustomers: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin(user.email);
+    assertGrowthAdmin({ role: user.role, email: user.email });
 
     return listLegacyBillingCustomers();
   }),
@@ -3000,7 +3041,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return disconnectLegacyBillingCustomerByUserId({
         userId: input.userId,
@@ -3017,7 +3058,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return disconnectAllLegacyBillingCustomers({
         disconnectedByUserId: user.id,
@@ -3034,7 +3075,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return approveAffiliateWithdrawal({
         withdrawalRequestId: input.withdrawalRequestId,
@@ -3052,7 +3093,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return rejectAffiliateWithdrawal({
         withdrawalRequestId: input.withdrawalRequestId,
@@ -3070,7 +3111,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return sendAffiliateStripeWithdrawal({
         withdrawalRequestId: input.withdrawalRequestId,
@@ -3090,7 +3131,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return markAffiliateManualWithdrawalPaid({
         withdrawalRequestId: input.withdrawalRequestId,
@@ -3112,7 +3153,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return recordAffiliatePayout({
         affiliateUserId: input.affiliateUserId,
@@ -3132,7 +3173,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return approveAffiliateApplication({
         applicationId: input.applicationId,
@@ -3150,7 +3191,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return rejectAffiliateApplication({
         applicationId: input.applicationId,
@@ -3161,7 +3202,7 @@ export const billingRouter = router({
 
   listPrivateBetaWaitlistEntries: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin(user.email);
+    assertGrowthAdmin({ role: user.role, email: user.email });
 
     return listPrivateBetaWaitlistEntries();
   }),
@@ -3177,7 +3218,7 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin(user.email);
+      assertGrowthAdmin({ role: user.role, email: user.email });
 
       return updatePrivateBetaWaitlistEntry({
         entryId: input.entryId,

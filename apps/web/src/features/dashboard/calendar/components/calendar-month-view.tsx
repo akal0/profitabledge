@@ -24,7 +24,7 @@ import type {
 import {
   formatAccessibleDate,
   formatMoney,
-  formatShortDate,
+  formatTooltipDate,
   formatTradeCount,
   formatTradePillMoney,
   getGoalLegendChipClass,
@@ -258,7 +258,7 @@ export function CalendarMonthView({
               <TooltipContent className="px-0 py-3">
                 <div className="flex max-h-72 min-w-[280px] max-w-[360px] flex-col overflow-auto">
                   <div className="flex items-center justify-between px-3 text-[11px] text-white/60">
-                    <span>{formatShortDate(day)}</span>
+                    <span>{formatTooltipDate(day)}</span>
                     <span>
                       {count > 0 && liveCount > 0
                         ? `${formatTradeCount(count)} closed · ${formatTradeCount(liveCount)} live`

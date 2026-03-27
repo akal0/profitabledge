@@ -12,7 +12,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueries } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { inferRouterInputs, inferRouterOutputs } from "@trpc/server";
 import {
@@ -35,6 +35,8 @@ import {
 } from "recharts";
 import {
   BarChart3,
+  Bookmark,
+  Check,
   LayoutGrid,
   ListFilter,
   Maximize2,
@@ -42,6 +44,8 @@ import {
   Move,
   Plus,
   RefreshCw,
+  Save,
+  Trash2,
   X,
 } from "lucide-react";
 import {
@@ -61,13 +65,16 @@ import {
   REPORT_LENS_IDS,
   REPORT_METRIC_LABELS,
   REPORT_PANEL_LABELS,
+  type ReportLensPreferences,
   type ReportChartType,
   type ReportDimensionId,
   type ReportLensId,
   type ReportMetricId,
   type ReportPanelId,
+  type ReportSavedTemplate,
 } from "@profitabledge/contracts/reports";
 import type { AppRouter } from "@profitabledge/contracts/trpc";
+import { toast } from "sonner";
 
 import {
   DashboardChartTooltipFrame,
@@ -96,12 +103,16 @@ import {
   ChartTooltip,
   type ChartConfig,
 } from "@/components/ui/chart";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
   Tabs,
@@ -110,7 +121,7 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { isAllAccountsScope, useAccountStore } from "@/stores/account";
-import { trpcClient, trpcOptions } from "@/utils/trpc";
+import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type RouterInputs = inferRouterInputs<AppRouter>;
@@ -132,6 +143,9 @@ type LensLayoutState = {
   panelSpans: Partial<Record<ReportPanelId, number>>;
 };
 
+type SavedReportTemplateMutationInput =
+  RouterInputs["users"]["upsertReportsTemplate"];
+
 type ReportsWorkspaceContextValue = {
   activeLens: ReportLensId;
   activeDimension: ReportDimensionId;
@@ -140,6 +154,7 @@ type ReportsWorkspaceContextValue = {
   drilldown: { dimension: ReportDimensionId; value: string } | null;
   activePanels: ReportPanelId[];
   panelSpans: Partial<Record<ReportPanelId, number>>;
+  savedTemplates: ReportSavedTemplate[];
   isEditingPanels: boolean;
   currencyCode?: string | null;
   filtersInput: {
@@ -166,6 +181,8 @@ type ReportsWorkspaceContextValue = {
   reorderPanels: (fromIndex: number, toIndex: number) => void;
   togglePanel: (panelId: ReportPanelId) => void;
   resizePanel: (panelId: ReportPanelId, nextSpan: number) => void;
+  getActiveLensPreferenceSnapshot: () => ReportLensPreferences;
+  applyActiveLensPreferences: (prefs: ReportLensPreferences) => void;
 };
 
 const ReportsWorkspaceContext =
@@ -175,12 +192,14 @@ const HERO_METRIC_COLORS: Record<ReportMetricId, string> = {
   netPnl: "#14b8a6",
   winRate: "#60a5fa",
   tradeCount: "#f59e0b",
+  avgPlannedRR: "#c084fc",
   avgRR: "#f97316",
   profitFactor: "#22c55e",
   expectancy: "#38bdf8",
   avgHold: "#a78bfa",
   avgMfe: "#0ea5e9",
   avgMae: "#f43f5e",
+  protocolRate: "#34d399",
   rrCaptureEfficiency: "#facc15",
 };
 
@@ -211,7 +230,7 @@ const LENS_STAT_CARD_METRICS: Record<ReportLensId, ReportMetricId[]> = {
   time: ["tradeCount", "netPnl", "winRate", "avgHold"],
   setup: ["tradeCount", "netPnl", "avgRR", "rrCaptureEfficiency"],
   risk: ["tradeCount", "netPnl", "profitFactor", "avgMae"],
-  execution: ["tradeCount", "winRate", "avgRR", "rrCaptureEfficiency"],
+  execution: ["avgPlannedRR", "avgRR", "protocolRate", "rrCaptureEfficiency"],
 };
 
 function useReportsWorkspace() {
@@ -256,10 +275,12 @@ function formatMetricValue(
             showPositiveSign: true,
           });
     case "winRate":
+    case "protocolRate":
     case "rrCaptureEfficiency":
       return `${value.toFixed(1)}%`;
     case "tradeCount":
       return value.toLocaleString();
+    case "avgPlannedRR":
     case "avgRR":
       return `${value.toFixed(2)}R`;
     case "profitFactor":
@@ -372,6 +393,93 @@ function isLensMetricAllowed(
     typeof value === "string" &&
     REPORT_LENS_CONFIG[lens].allowedMetrics.some((item) => item === value)
   );
+}
+
+function sanitizeLensPreferences(
+  rawPreferences: unknown,
+  lens: ReportLensId
+): ReportLensPreferences {
+  const raw =
+    rawPreferences && typeof rawPreferences === "object"
+      ? (rawPreferences as Record<string, unknown>)
+      : {};
+  const activePanels = Array.isArray(raw.activePanels)
+    ? raw.activePanels.filter((panelId): panelId is ReportPanelId =>
+        REPORT_LENS_CONFIG[lens].optionalPanels.some(
+          (optionalPanelId) => optionalPanelId === panelId
+        )
+      )
+    : undefined;
+  const panelSpans =
+    raw.panelSpans && typeof raw.panelSpans === "object"
+      ? (Object.fromEntries(
+          Object.entries(raw.panelSpans).filter(
+            ([, value]) => typeof value === "number" && Number.isFinite(value)
+          )
+        ) as Partial<Record<ReportPanelId, number>>)
+      : undefined;
+  const heroDimension =
+    typeof raw.heroDimension === "string" &&
+    isLensDimensionAllowed(lens, raw.heroDimension)
+      ? raw.heroDimension
+      : undefined;
+  const heroMetrics = Array.isArray(raw.heroMetrics)
+    ? raw.heroMetrics.filter((metric): metric is ReportMetricId =>
+        isLensMetricAllowed(lens, metric as string | null | undefined)
+      )
+    : undefined;
+  const heroChartType =
+    typeof raw.heroChartType === "string" &&
+    isReportChartType(raw.heroChartType)
+      ? raw.heroChartType
+      : undefined;
+
+  return {
+    ...(activePanels && activePanels.length > 0 ? { activePanels } : {}),
+    ...(panelSpans ? { panelSpans } : {}),
+    ...(heroDimension ? { heroDimension } : {}),
+    ...(heroMetrics && heroMetrics.length > 0 ? { heroMetrics } : {}),
+    ...(heroChartType ? { heroChartType } : {}),
+  };
+}
+
+function parseSavedReportTemplates(
+  rawPreferences: unknown
+): ReportSavedTemplate[] {
+  const raw =
+    rawPreferences && typeof rawPreferences === "object"
+      ? (rawPreferences as Record<string, unknown>)
+      : {};
+  const savedTemplates = Array.isArray(raw.savedTemplates)
+    ? raw.savedTemplates
+    : [];
+
+  return savedTemplates
+    .map((template) => {
+      const lens = isReportLensId((template as any)?.lens)
+        ? ((template as any).lens as ReportLensId)
+        : null;
+      const name = String((template as any)?.name ?? "").trim();
+      const id = String((template as any)?.id ?? "").trim();
+
+      if (!lens || !name || !id) {
+        return null;
+      }
+
+      return {
+        id,
+        name,
+        lens,
+        prefs: sanitizeLensPreferences((template as any)?.prefs, lens),
+        createdAt: String(
+          (template as any)?.createdAt ?? new Date().toISOString()
+        ),
+        updatedAt: String(
+          (template as any)?.updatedAt ?? new Date().toISOString()
+        ),
+      } satisfies ReportSavedTemplate;
+    })
+    .filter((template): template is ReportSavedTemplate => Boolean(template));
 }
 
 function buildInitialLensLayouts(rawPreferences: unknown) {
@@ -508,9 +616,7 @@ function StatCard({
         <div className="mt-2 text-xs text-white/35">{label}</div>
       ) : null}
       {caption ? (
-        <div className="mt-3 text-xs leading-5 text-white/45">
-          {caption}
-        </div>
+        <div className="mt-3 text-xs leading-5 text-white/45">{caption}</div>
       ) : null}
     </WidgetWrapper>
   );
@@ -1582,6 +1688,10 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
   const rawReportPreferences =
     (me as any)?.widgetPreferences?.reportsV1 ??
     ({} as Record<string, unknown>);
+  const savedTemplates = useMemo(
+    () => parseSavedReportTemplates(rawReportPreferences),
+    [rawReportPreferences]
+  );
   const userId = (me as any)?.id as string | undefined;
   const activeTimezone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -1701,6 +1811,25 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
     },
     []
   );
+  const getActiveLensPreferenceSnapshot = useCallback(
+    (): ReportLensPreferences => ({
+      heroDimension: activeDimension,
+      heroMetrics: [...selectedMetrics],
+      heroChartType: activeChartType,
+      activePanels: [...activePanels],
+      panelSpans: {
+        ...REPORT_PANEL_DEFAULT_SPANS,
+        ...panelSpans,
+      },
+    }),
+    [
+      activeChartType,
+      activeDimension,
+      activePanels,
+      panelSpans,
+      selectedMetrics,
+    ]
+  );
 
   const setActiveLens = useCallback(
     (lens: ReportLensId) => {
@@ -1793,6 +1922,53 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
     setDrilldownParam,
     setMetricsParam,
   ]);
+
+  const applyActiveLensPreferences = useCallback(
+    (prefs: ReportLensPreferences) => {
+      const nextPrefs = sanitizeLensPreferences(prefs, activeLens);
+      const nextPanels =
+        nextPrefs.activePanels && nextPrefs.activePanels.length > 0
+          ? [...nextPrefs.activePanels]
+          : [...REPORT_LENS_CONFIG[activeLens].defaultPanels];
+      const nextPanelSpans = {
+        ...REPORT_PANEL_DEFAULT_SPANS,
+        ...(nextPrefs.panelSpans ?? {}),
+      };
+
+      setIsEditingPanels(false);
+      setLensLayouts((current) => ({
+        ...current,
+        [activeLens]: {
+          activePanels: nextPanels,
+          panelSpans: nextPanelSpans,
+        },
+      }));
+
+      startTransition(() => {
+        void setDimensionParam(nextPrefs.heroDimension ?? "");
+        void setMetricsParam((nextPrefs.heroMetrics ?? []).join(","));
+        void setChartTypeParam(nextPrefs.heroChartType ?? "");
+        void setDrilldownParam("");
+      });
+
+      void persistLensPreferences(activeLens, {
+        heroDimension: nextPrefs.heroDimension,
+        heroMetrics: nextPrefs.heroMetrics,
+        heroChartType: nextPrefs.heroChartType,
+        activePanels: nextPanels,
+        panelSpans:
+          nextPanelSpans as UpdateReportsPreferencesInput["panelSpans"],
+      });
+    },
+    [
+      activeLens,
+      persistLensPreferences,
+      setChartTypeParam,
+      setDimensionParam,
+      setDrilldownParam,
+      setMetricsParam,
+    ]
+  );
 
   const togglePanelsEdit = useCallback(() => {
     setIsEditingPanels((current) => !current);
@@ -1887,6 +2063,7 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
       drilldown,
       activePanels,
       panelSpans,
+      savedTemplates,
       isEditingPanels,
       currencyCode,
       filtersInput,
@@ -1900,19 +2077,24 @@ function ReportsWorkspaceProvider({ children }: { children: ReactNode }) {
       reorderPanels,
       togglePanel,
       resizePanel,
+      getActiveLensPreferenceSnapshot,
+      applyActiveLensPreferences,
     }),
     [
       activeChartType,
       activeDimension,
       activeLens,
       activePanels,
+      applyActiveLensPreferences,
       currencyCode,
       drilldown,
       filtersInput,
+      getActiveLensPreferenceSnapshot,
       isEditingPanels,
       panelSpans,
       resetLensState,
       reorderPanels,
+      savedTemplates,
       selectedMetrics,
       setActiveDimension,
       setActiveLens,
@@ -1941,6 +2123,7 @@ function ReportsWorkspaceContent() {
     drilldown,
     activePanels,
     panelSpans,
+    savedTemplates,
     isEditingPanels,
     currencyCode,
     filtersInput,
@@ -1954,8 +2137,19 @@ function ReportsWorkspaceContent() {
     reorderPanels,
     togglePanel,
     resizePanel,
+    getActiveLensPreferenceSnapshot,
+    applyActiveLensPreferences,
   } = useReportsWorkspace();
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateTargetId, setTemplateTargetId] = useState<string | null>(null);
+  const [templateName, setTemplateName] = useState("");
   const lensConfig = REPORT_LENS_CONFIG[activeLens];
+  const activeLensTemplates = savedTemplates.filter(
+    (template) => template.lens === activeLens
+  );
+  const activeTemplate =
+    savedTemplates.find((template) => template.id === activeTemplateId) ?? null;
   const hiddenPanels = lensConfig.optionalPanels.filter(
     (panelId) =>
       !activePanels.some((activePanelId) => activePanelId === panelId)
@@ -2019,6 +2213,38 @@ function ReportsWorkspaceContent() {
       ) as Partial<Record<ReportPanelId, PanelData>>,
     [activePanels, panelQueries]
   );
+  const upsertTemplateMutation = useMutation({
+    mutationFn: (input: SavedReportTemplateMutationInput) =>
+      trpcClient.users.upsertReportsTemplate.mutate(input),
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({
+        queryKey: trpcOptions.users.me.queryOptions().queryKey,
+      });
+      setActiveTemplateId(result.template.id);
+      setTemplateTargetId(null);
+      setTemplateDialogOpen(false);
+      toast.success(`Saved template "${result.template.name}".`);
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to save report template.");
+    },
+  });
+  const deleteTemplateMutation = useMutation({
+    mutationFn: (templateId: string) =>
+      trpcClient.users.deleteReportsTemplate.mutate({ templateId }),
+    onSuccess: (_, templateId) => {
+      void queryClient.invalidateQueries({
+        queryKey: trpcOptions.users.me.queryOptions().queryKey,
+      });
+      setActiveTemplateId((current) =>
+        current === templateId ? null : current
+      );
+      toast.success("Deleted report template.");
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || "Failed to delete report template.");
+    },
+  });
   const breakdownRows = breakdownQuery.data?.rows ?? [];
   const { table, setRowSelection } = useDataTable<
     BreakdownTableData["rows"][number]
@@ -2084,6 +2310,17 @@ function ReportsWorkspaceContent() {
   });
 
   useEffect(() => {
+    if (!activeTemplateId) return;
+    const matchingTemplate = savedTemplates.find(
+      (template) => template.id === activeTemplateId
+    );
+
+    if (!matchingTemplate || matchingTemplate.lens !== activeLens) {
+      setActiveTemplateId(null);
+    }
+  }, [activeLens, activeTemplateId, savedTemplates]);
+
+  useEffect(() => {
     if (!drilldown || drilldown.dimension !== activeDimension) {
       setRowSelection({});
       return;
@@ -2099,6 +2336,80 @@ function ReportsWorkspaceContent() {
       table.setPageIndex(0);
     }
   }, [activeDimension, activeLens, breakdownQuery.dataUpdatedAt]);
+
+  const applyTemplate = useCallback(
+    (template: ReportSavedTemplate) => {
+      setActiveTemplateId(template.id);
+      applyActiveLensPreferences(template.prefs);
+      toast.success(`Applied template "${template.name}".`);
+    },
+    [applyActiveLensPreferences]
+  );
+
+  const openSaveTemplateDialog = useCallback(() => {
+    setTemplateTargetId(null);
+    setTemplateName(
+      activeTemplate?.lens === activeLens
+        ? activeTemplate.name
+        : `${REPORT_LENS_CONFIG[activeLens].label} template`
+    );
+    setTemplateDialogOpen(true);
+  }, [activeLens, activeTemplate]);
+
+  const saveCurrentTemplate = useCallback(() => {
+    const name = templateName.trim();
+    if (!name) {
+      toast.error("Template name is required.");
+      return;
+    }
+
+    upsertTemplateMutation.mutate({
+      templateId: templateTargetId ?? undefined,
+      name,
+      lens: activeLens,
+      prefs:
+        getActiveLensPreferenceSnapshot() as SavedReportTemplateMutationInput["prefs"],
+    });
+  }, [
+    activeLens,
+    getActiveLensPreferenceSnapshot,
+    templateName,
+    templateTargetId,
+    upsertTemplateMutation,
+  ]);
+
+  const saveAsNewTemplate = useCallback(() => {
+    openSaveTemplateDialog();
+  }, [openSaveTemplateDialog]);
+
+  const updateActiveTemplate = useCallback(() => {
+    if (!activeTemplate || activeTemplate.lens !== activeLens) {
+      openSaveTemplateDialog();
+      return;
+    }
+
+    upsertTemplateMutation.mutate({
+      templateId: activeTemplate.id,
+      name: activeTemplate.name,
+      lens: activeLens,
+      prefs:
+        getActiveLensPreferenceSnapshot() as SavedReportTemplateMutationInput["prefs"],
+    });
+  }, [
+    activeLens,
+    activeTemplate,
+    getActiveLensPreferenceSnapshot,
+    openSaveTemplateDialog,
+    upsertTemplateMutation,
+  ]);
+
+  const deleteActiveTemplate = useCallback(() => {
+    if (!activeTemplate || activeTemplate.lens !== activeLens) {
+      return;
+    }
+
+    deleteTemplateMutation.mutate(activeTemplate.id);
+  }, [activeLens, activeTemplate, deleteTemplateMutation]);
 
   const paginationState = table.getState().pagination;
   const pageIndex = paginationState.pageIndex;
@@ -2163,6 +2474,80 @@ function ReportsWorkspaceContent() {
         <div className="">
           <div className="flex min-w-max items-center justify-between gap-3">
             <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    className="h-9! rounded-sm bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+                  >
+                    <Bookmark className="size-3" />
+                    {activeTemplate?.lens === activeLens
+                      ? activeTemplate.name
+                      : "Templates"}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  className="w-64 rounded-sm bg-sidebar p-1 text-white"
+                >
+                  <DropdownMenuLabel className="px-2 py-1.5 text-[10px] text-white/35">
+                    Saved templates
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator className="-mx-1 my-1 bg-white/5" />
+                  {activeLensTemplates.length > 0 ? (
+                    activeLensTemplates.map((template) => (
+                      <DropdownMenuItem
+                        key={template.id}
+                        className="cursor-pointer rounded-sm px-2 py-2 text-xs text-white/75 focus:bg-sidebar-accent focus:text-white"
+                        onClick={() => applyTemplate(template)}
+                      >
+                        <div className="flex w-full items-center justify-between gap-3">
+                          <span className="truncate">{template.name}</span>
+                          {activeTemplateId === template.id ? (
+                            <Check className="size-3.5 text-teal-300" />
+                          ) : null}
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  ) : (
+                    <DropdownMenuItem
+                      className="rounded-sm px-2 py-2 text-xs text-white/40 focus:bg-sidebar-accent focus:text-white"
+                      disabled
+                    >
+                      No saved templates yet
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator className="-mx-1 my-1 bg-white/5" />
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-sm px-2 py-2 text-xs text-white/75 focus:bg-sidebar-accent focus:text-white"
+                    onClick={saveAsNewTemplate}
+                  >
+                    <Save className="size-3" />
+                    Save current as template
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-sm px-2 py-2 text-xs text-white/75 focus:bg-sidebar-accent focus:text-white"
+                    onClick={updateActiveTemplate}
+                    disabled={
+                      !activeTemplate || activeTemplate.lens !== activeLens
+                    }
+                  >
+                    <RefreshCw className="size-3" />
+                    Update active template
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer rounded-sm px-2 py-2 text-xs text-rose-300 focus:bg-rose-500/15 focus:text-rose-200"
+                    onClick={deleteActiveTemplate}
+                    disabled={
+                      !activeTemplate || activeTemplate.lens !== activeLens
+                    }
+                  >
+                    <Trash2 className="size-3" />
+                    Delete active template
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -2235,8 +2620,8 @@ function ReportsWorkspaceContent() {
                       {nextChartType === "bar"
                         ? "Bar"
                         : nextChartType === "line"
-                          ? "Line"
-                          : "Composed"}
+                        ? "Line"
+                        : "Composed"}
                     </span>
                   </Button>
                 ))}
@@ -2535,6 +2920,62 @@ function ReportsWorkspaceContent() {
           </SortableContext>
         </DndContext>
       </main>
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="border-white/10 bg-sidebar text-white shadow-2xl sm:max-w-md">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">
+                Save report template
+              </h3>
+              <p className="mt-1 text-sm text-white/45">
+                Save the current{" "}
+                {REPORT_LENS_CONFIG[activeLens].label.toLowerCase()} setup as a
+                reusable template.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="report-template-name"
+                className="text-xs font-medium text-white/60"
+              >
+                Template name
+              </label>
+              <Input
+                id="report-template-name"
+                value={templateName}
+                onChange={(event) => setTemplateName(event.target.value)}
+                placeholder={`${REPORT_LENS_CONFIG[activeLens].label} template`}
+                className="border-white/10 bg-sidebar-accent text-white placeholder:text-white/25"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    saveCurrentTemplate();
+                  }
+                }}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                className="h-9 rounded-sm bg-sidebar px-3 text-xs text-white/70 hover:bg-sidebar-accent"
+                onClick={() => setTemplateDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="h-9 rounded-sm bg-teal-500 px-3 text-xs text-black hover:bg-teal-400"
+                disabled={upsertTemplateMutation.isPending}
+                onClick={saveCurrentTemplate}
+              >
+                Save template
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Tabs>
   );
 }

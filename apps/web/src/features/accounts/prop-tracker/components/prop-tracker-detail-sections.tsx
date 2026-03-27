@@ -298,7 +298,7 @@ export function PropTrackerHeaderCard({
               </div>
             ) : (
               <>
-                <p className="text-xs text-white/35">Current result</p>
+                <p className="text-xs text-white/35">Account progress</p>
                 <p
                   className={cn(
                     "mt-1 text-lg font-semibold",

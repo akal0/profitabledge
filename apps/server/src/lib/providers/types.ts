@@ -52,6 +52,16 @@ export interface NormalizedAccountInfo {
 
 export type ProviderCredentials = Record<string, string>;
 
+export interface ProviderAuthorizedAccount {
+  providerAccountId: string;
+  accountNumber: string | null;
+  label: string | null;
+  brokerName: string | null;
+  currency: string | null;
+  environment: "live" | "demo" | "unknown";
+  metadata?: Record<string, unknown>;
+}
+
 export type ProviderMethodName =
   | "connect"
   | "disconnect"
@@ -126,4 +136,9 @@ export interface TradingProvider {
   refreshToken?(
     credentials: ProviderCredentials
   ): Promise<ProviderCredentials>;
+
+  /** OAuth providers can enumerate broker accounts available to the token. */
+  listAuthorizedAccounts?(
+    credentials: ProviderCredentials
+  ): Promise<ProviderAuthorizedAccount[]>;
 }

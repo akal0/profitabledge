@@ -70,6 +70,16 @@ export function buildLoginPath(returnTo?: string | null) {
   return `/login?${params.toString()}`;
 }
 
+export function buildTwoFactorPath(returnTo?: string | null) {
+  const safeReturnTo = resolvePostAuthPath(returnTo);
+  if (safeReturnTo === DEFAULT_POST_AUTH_PATH) {
+    return "/login/two-factor";
+  }
+
+  const params = new URLSearchParams({ returnTo: safeReturnTo });
+  return `/login/two-factor?${params.toString()}`;
+}
+
 export function buildSignUpPath(returnTo?: string | null) {
   const safeReturnTo = resolvePostAuthPath(returnTo);
   if (safeReturnTo === DEFAULT_POST_AUTH_PATH) {

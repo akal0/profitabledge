@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test";
 import {
   buildPostAuthContinuePath,
   buildPostLoginPath,
+  buildTwoFactorPath,
 } from "./post-auth-paths";
 
 describe("post-auth paths", () => {
@@ -20,6 +21,12 @@ describe("post-auth paths", () => {
   it("keeps sign-up redirects on continue", () => {
     expect(buildPostAuthContinuePath("/dashboard/journal")).toBe(
       "/continue?returnTo=%2Fdashboard%2Fjournal"
+    );
+  });
+
+  it("preserves the target while routing through two-factor verification", () => {
+    expect(buildTwoFactorPath("/dashboard/journal")).toBe(
+      "/login/two-factor?returnTo=%2Fdashboard%2Fjournal"
     );
   });
 });

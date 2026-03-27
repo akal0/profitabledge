@@ -59,6 +59,11 @@ export function getSettingsNavSections({
           icon: UserPen,
         },
         {
+          title: "Security",
+          href: "/dashboard/settings/security",
+          icon: Shield,
+        },
+        {
           title: "Billing",
           href: "/dashboard/settings/billing",
           icon: CreditCard,

@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
 import { countRangeDays } from "@/components/dashboard/chart-comparison-utils";
+import { cn } from "@/lib/utils";
 import { useDashboardAssistantContextStore } from "@/stores/dashboard-assistant-context";
 import { useDateRangeStore } from "@/stores/date-range";
 import {
@@ -106,7 +107,7 @@ const ACTION_BUTTON_CLASS =
   "flex h-[38px] w-max items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110";
 
 const ACTION_GROUP_CLASS =
-  "flex items-center overflow-visible rounded-sm ring ring-white/5 bg-sidebar";
+  "shrink-0 flex items-center overflow-hidden rounded-sm ring ring-white/5 bg-sidebar";
 
 const ACTION_GROUP_BUTTON_CLASS =
   "h-[38px] rounded-none ring-0 bg-sidebar px-3 py-2 text-xs text-white transition-colors hover:bg-sidebar-accent disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-sidebar";
@@ -366,21 +367,28 @@ export function ChartWidgets({
           <div className={ACTION_GROUP_CLASS}>
             <Button
               aria-label="Show previous month"
-              className={ACTION_GROUP_BUTTON_CLASS}
+              className={cn(
+                ACTION_GROUP_BUTTON_CLASS,
+                "rounded-l-sm rounded-r-none"
+              )}
               disabled={!canNavigatePrevious}
               onClick={() => handleMonthStep(-1)}
             >
               <ChevronLeft className="size-3.5" />
             </Button>
             <Button
-              className="h-[38px] min-w-[10rem] cursor-default rounded-none ring-x ring-white/5 bg-sidebar px-4 py-2 text-xs text-white/70 hover:bg-sidebar"
+              className="h-[38px] w-auto max-w-[12rem] shrink cursor-default truncate whitespace-nowrap rounded-none ring-x ring-white/5 bg-sidebar px-4 py-2 text-xs text-white/70 hover:bg-sidebar"
               disabled
+              title={activeMonthLabel || "Select month"}
             >
               {activeMonthLabel || "Select month"}
             </Button>
             <Button
               aria-label="Show next month"
-              className={ACTION_GROUP_BUTTON_CLASS}
+              className={cn(
+                ACTION_GROUP_BUTTON_CLASS,
+                "rounded-l-none rounded-r-sm"
+              )}
               disabled={!canNavigateNext}
               onClick={() => handleMonthStep(1)}
             >

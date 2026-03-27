@@ -115,7 +115,7 @@ export function GrowthOverview() {
       cta: "Open growth admin",
       icon: Shield,
       available: isAdmin,
-      unavailableMessage: "This route is restricted to allowlisted admin accounts.",
+      unavailableMessage: "This route is restricted to staff accounts.",
     },
   ];
 

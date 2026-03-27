@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { normalizeOriginUrl } from "@profitabledge/platform";
 import { toast } from "sonner";
 import {
@@ -48,6 +49,7 @@ import type {
   LinkAccountInput,
   SyncNowInput,
   SyncNowOutput,
+  SyncRuntimeStatus,
   TerminalSupervisorStatus,
   UpdateSettingsInput,
 } from "@/features/settings/connections/lib/connection-types";
@@ -57,6 +59,10 @@ import { trpcOptions } from "@/utils/trpc";
 type ConnectionsSettingsTab = "connections" | "admin";
 
 export default function ConnectionsSettingsPage() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const handledOAuthResultRef = useRef<string | null>(null);
   const connectionsEnabled = isPublicAlphaFeatureEnabled("connections");
   const mt5IngestionEnabled = isPublicAlphaFeatureEnabled("mt5Ingestion");
   const scheduledSyncEnabled = isPublicAlphaFeatureEnabled("scheduledSync");
@@ -126,6 +132,47 @@ export default function ConnectionsSettingsPage() {
     }
   }, [activeTab, canViewTerminalWorkerStatus]);
 
+  useEffect(() => {
+    if (!searchParams || !pathname) {
+      return;
+    }
+
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    const connectionId = searchParams.get("connectionId");
+    const provider = searchParams.get("provider");
+    const signature = [success ?? "", error ?? "", connectionId ?? "", provider ?? ""]
+      .join(":");
+
+    if (!success && !error) {
+      handledOAuthResultRef.current = null;
+      return;
+    }
+
+    if (handledOAuthResultRef.current === signature) {
+      return;
+    }
+
+    handledOAuthResultRef.current = signature;
+
+    if (success === "connected" && connectionId) {
+      toast.success(
+        provider === "tradovate"
+          ? "Tradovate connected. Link a trading account next."
+          : "Connection added. Link a trading account next."
+      );
+      setShowLinkDialog(connectionId);
+    } else if (error === "oauth_denied") {
+      toast.error("OAuth connection was cancelled.");
+    } else if (error === "invalid_state") {
+      toast.error("OAuth callback state was invalid. Try connecting again.");
+    } else if (error === "token_exchange_failed") {
+      toast.error("OAuth token exchange failed. Try connecting again.");
+    }
+
+    router.replace(pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
+
   const { data: accounts } = useQuery({
     ...trpcOptions.accounts.list.queryOptions(),
     enabled: connectionsEnabled,
@@ -150,6 +197,15 @@ export default function ConnectionsSettingsPage() {
     data: TerminalSupervisorStatus | undefined;
     refetch: () => Promise<unknown>;
     isFetching: boolean;
+  };
+  const { data: syncRuntimeStatus } = useQuery({
+    ...trpcOptions.connections.getSyncRuntimeStatus.queryOptions(),
+    enabled: connectionsEnabled && scheduledSyncEnabled,
+    refetchInterval:
+      connectionsEnabled && scheduledSyncEnabled ? 30_000 : false,
+    refetchIntervalInBackground: false,
+  }) as {
+    data: SyncRuntimeStatus | undefined;
   };
 
   const syncNow = useMutation(
@@ -405,8 +461,10 @@ export default function ConnectionsSettingsPage() {
       toast.success("Account linked! You can now sync trades.");
       setShowLinkDialog(null);
       await refetchConnectionViews();
-    } catch {
-      toast.error("Failed to link account");
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to link account"
+      );
     }
   };
 
@@ -481,6 +539,7 @@ export default function ConnectionsSettingsPage() {
                 liveSyncSlotsIncluded={liveSyncSlotsIncluded}
                 liveSyncSlotsUsed={liveSyncSlotsUsed}
                 liveSyncSlotsRemaining={liveSyncSlotsRemaining}
+                syncRuntimeStatus={syncRuntimeStatus}
                 onSync={(connectionId) => {
                   void handleSync(connectionId);
                 }}

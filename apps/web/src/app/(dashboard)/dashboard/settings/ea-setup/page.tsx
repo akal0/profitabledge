@@ -212,8 +212,8 @@ export default function EASetupPage() {
             Download profitabledge_data_bridge.mq5
           </Button>
           <p className="text-xs text-white/30">
-            MT4 support coming soon. For now, use MT5 or stick with Dukascopy
-            data.
+            MT4 terminal sync is available in Connections. This EA download is
+            still MT5-only for now.
           </p>
         </div>
       </div>

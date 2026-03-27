@@ -30,9 +30,96 @@ import {
   syncPropChallengeOutcomeForAccount,
 } from "../lib/prop-challenge-lineage";
 
-function toNumber(value: unknown): number {
+type ChallengePhaseLike = {
+  order: number;
+  name?: string | null;
+  profitTarget?: number | null;
+  profitTargetType?: "percentage" | "absolute" | null;
+  minTradingDays?: number | null;
+};
+
+function toNumber(value: unknown, fallback = 0): number {
   const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeChallengePhases(phases: unknown): ChallengePhaseLike[] {
+  if (!Array.isArray(phases)) return [];
+
+  return phases
+    .map((phase) => {
+      const normalizedPhase: ChallengePhaseLike = {
+        order: toNumber((phase as any)?.order),
+        name:
+          typeof (phase as any)?.name === "string"
+            ? (phase as any).name.trim()
+            : null,
+        profitTarget:
+          (phase as any)?.profitTarget == null
+            ? null
+            : toNumber((phase as any)?.profitTarget),
+        profitTargetType:
+          (phase as any)?.profitTargetType === "absolute"
+            ? "absolute"
+            : "percentage",
+        minTradingDays:
+          (phase as any)?.minTradingDays == null
+            ? 0
+            : toNumber((phase as any)?.minTradingDays),
+      };
+
+      return normalizedPhase;
+    })
+    .filter((phase) => phase.order > 0)
+    .sort((left, right) => left.order - right.order);
+}
+
+function getOverallAccountProgress(input: {
+  initialBalance: unknown;
+  currentBalance: unknown;
+}) {
+  const initialBalance = toNumber(input.initialBalance);
+  const currentBalance = toNumber(input.currentBalance, initialBalance);
+  const currentProfit = currentBalance - initialBalance;
+  const currentProfitPercent =
+    initialBalance > 0 ? (currentProfit / initialBalance) * 100 : 0;
+
+  return {
+    currentProfit,
+    currentProfitPercent,
+  };
+}
+
+function inferImportedCurrentPhase(input: {
+  phases: ChallengePhaseLike[];
+  currentProfit: number;
+  currentProfitPercent: number;
+  tradingDays: number;
+}) {
+  const phases = input.phases;
+  if (phases.length === 0) return 1;
+
+  let passedPhaseCount = 0;
+
+  for (const phase of phases) {
+    const targetMet =
+      phase.profitTarget == null
+        ? true
+        : phase.profitTargetType === "absolute"
+        ? input.currentProfit >= phase.profitTarget
+        : input.currentProfitPercent >= phase.profitTarget;
+    const minTradingDaysMet = input.tradingDays >= toNumber(phase.minTradingDays);
+
+    if (!targetMet || !minTradingDaysMet) {
+      break;
+    }
+
+    passedPhaseCount += 1;
+  }
+
+  return passedPhaseCount >= phases.length
+    ? 0
+    : phases[passedPhaseCount]?.order ?? 1;
 }
 
 function average(values: number[]) {
@@ -382,6 +469,49 @@ export const propFirmsRouter = router({
         throw new Error("Challenge configuration is incomplete");
       }
 
+      const challengeRule = await getChallengeRuleById(
+        resolvedChallengeRuleId,
+        ctx.session.user.id
+      );
+      const resolvedPropFirm = await getPropFirmById(
+        resolvedPropFirmId,
+        ctx.session.user.id
+      );
+
+      if (!resolvedPropFirm || !challengeRule) {
+        throw new Error("Challenge configuration not found");
+      }
+
+      if (!input.challengeInstanceId && resolvedCurrentPhase === 1) {
+        const tradeRows = await db.query.trade.findMany({
+          where: eq(trade.accountId, account.id),
+          columns: {
+            openTime: true,
+            closeTime: true,
+          },
+        });
+
+        const tradingDayKeys = new Set<string>();
+
+        for (const row of tradeRows) {
+          const sourceDate = row.closeTime || row.openTime;
+          if (!sourceDate) continue;
+          tradingDayKeys.add(sourceDate.toISOString().split("T")[0]!);
+        }
+
+        const progress = getOverallAccountProgress({
+          initialBalance: account.initialBalance,
+          currentBalance: account.liveBalance ?? account.initialBalance,
+        });
+
+        resolvedCurrentPhase = inferImportedCurrentPhase({
+          phases: normalizeChallengePhases(challengeRule.phases),
+          currentProfit: progress.currentProfit,
+          currentProfitPercent: progress.currentProfitPercent,
+          tradingDays: tradingDayKeys.size,
+        });
+      }
+
       const { phaseStartDate, startBalance, startEquity } =
         await resolvePropTrackingSeed(
           {
@@ -396,19 +526,22 @@ export const propFirmsRouter = router({
             phaseStartDate: input.phaseStartDate,
           }
         );
-
-      const challengeRule = await getChallengeRuleById(
-        resolvedChallengeRuleId,
-        ctx.session.user.id
+      const currentBalance = toNumber(account.liveBalance, startBalance);
+      const currentEquity = toNumber(
+        account.liveEquity,
+        currentBalance || startEquity
       );
-      const resolvedPropFirm = await getPropFirmById(
-        resolvedPropFirmId,
-        ctx.session.user.id
-      );
-
-      if (!resolvedPropFirm || !challengeRule) {
-        throw new Error("Challenge configuration not found");
-      }
+      const shouldSeedFromCurrentState =
+        Boolean(input.challengeInstanceId) || resolvedCurrentPhase !== 1;
+      const attachPhaseStartDate = shouldSeedFromCurrentState
+        ? input.phaseStartDate || new Date().toISOString().slice(0, 10)
+        : phaseStartDate;
+      const attachStartBalance = shouldSeedFromCurrentState
+        ? currentBalance || startBalance
+        : startBalance;
+      const attachStartEquity = shouldSeedFromCurrentState
+        ? currentEquity || attachStartBalance
+        : startEquity;
       const phaseLabel =
         ((challengeRule?.phases as any[]) || []).find(
           (phase: any) => phase.order === resolvedCurrentPhase
@@ -420,9 +553,9 @@ export const propFirmsRouter = router({
         propFirmId: resolvedPropFirmId,
         challengeRuleId: resolvedChallengeRuleId,
         currentPhase: resolvedCurrentPhase,
-        phaseStartDate,
-        startBalance,
-        startEquity,
+        phaseStartDate: attachPhaseStartDate,
+        startBalance: attachStartBalance,
+        startEquity: attachStartEquity,
         manualOverride: input.manualOverride,
         challengeInstanceId: input.challengeInstanceId ?? null,
         phaseLabel,

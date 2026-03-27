@@ -1,4 +1,5 @@
 import { authClient } from "@/lib/auth-client";
+import { getErrorMessage } from "@/lib/error-message";
 import { useForm } from "@tanstack/react-form";
 import { toast } from "sonner";
 import z from "zod";
@@ -32,8 +33,8 @@ export default function SignInForm({
             router.push("/dashboard")
             toast.success("Sign in successful");
           },
-          onError: (error) => {
-            toast.error(error.error.message);
+          onError: (error: any) => {
+            toast.error(getErrorMessage(error, "Sign in failed"));
           },
         },
       );

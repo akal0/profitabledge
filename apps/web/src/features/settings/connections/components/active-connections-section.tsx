@@ -29,7 +29,10 @@ import {
   isTerminalProvider,
   STATUS_STYLES,
 } from "@/features/settings/connections/lib/connection-status";
-import type { ConnectionRow } from "@/features/settings/connections/lib/connection-types";
+import type {
+  ConnectionRow,
+  SyncRuntimeStatus,
+} from "@/features/settings/connections/lib/connection-types";
 import { cn } from "@/lib/utils";
 
 function formatSyncIntervalLabel(minutes: number) {
@@ -80,6 +83,13 @@ function getResolvedSyncIntervalOption(syncIntervalMinutes: number | null) {
   };
 }
 
+function formatRuntimeTimestamp(value: string | Date | null | undefined) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString();
+}
+
 export function ActiveConnectionsSection({
   connections,
   isSyncing,
@@ -94,6 +104,7 @@ export function ActiveConnectionsSection({
   liveSyncSlotsIncluded,
   liveSyncSlotsUsed,
   liveSyncSlotsRemaining,
+  syncRuntimeStatus,
 }: {
   connections: ConnectionRow[] | undefined;
   isSyncing: boolean;
@@ -108,6 +119,7 @@ export function ActiveConnectionsSection({
   liveSyncSlotsIncluded: number;
   liveSyncSlotsUsed: number;
   liveSyncSlotsRemaining: number;
+  syncRuntimeStatus?: SyncRuntimeStatus;
 }) {
   const liveSyncSummaryLabel =
     liveSyncSlotsIncluded > 0
@@ -120,6 +132,14 @@ export function ActiveConnectionsSection({
       : liveSyncSlotsRemaining > 0
       ? "ring-teal-400/20 bg-teal-500/10 text-teal-300"
       : "ring-amber-400/20 bg-amber-500/10 text-amber-200";
+  const schedulerLabel = syncRuntimeStatus?.scheduler.started
+    ? syncRuntimeStatus.scheduler.isRunning
+      ? "Scheduler running"
+      : "Scheduler polling"
+    : "Scheduler idle";
+  const lastSweepLabel = formatRuntimeTimestamp(
+    syncRuntimeStatus?.scheduler.lastRunCompletedAt
+  );
 
   return (
     <>
@@ -150,6 +170,18 @@ export function ActiveConnectionsSection({
             ? `${liveSyncSlotsUsed} connection${liveSyncSlotsUsed === 1 ? "" : "s"} linked. ${liveSyncSlotsRemaining} live sync slot${liveSyncSlotsRemaining === 1 ? "" : "s"} remaining on ${activePlanTitle}.`
             : `${activePlanTitle} does not include live sync slots.`}
         </p>
+        {syncRuntimeStatus ? (
+          <p className="mt-1 text-xs text-white/35">
+            {schedulerLabel}. {syncRuntimeStatus.summary.scheduledCount} scheduled
+            connection
+            {syncRuntimeStatus.summary.scheduledCount === 1 ? "" : "s"},{" "}
+            {syncRuntimeStatus.summary.dueNowCount} due now
+            {lastSweepLabel ? `, last sweep ${lastSweepLabel}` : ""}.
+            {syncRuntimeStatus.scheduler.lastError
+              ? ` Last scheduler error: ${syncRuntimeStatus.scheduler.lastError}`
+              : ""}
+          </p>
+        ) : null}
       </div>
 
       <Separator />

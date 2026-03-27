@@ -1,7 +1,10 @@
 import { createPrivateKey, createSign } from "node:crypto";
 import { nanoid } from "nanoid";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
-import { buildNotificationPresentation } from "@profitabledge/platform";
+import {
+  buildNotificationPresentation,
+  resolveNotificationTargetUrl,
+} from "@profitabledge/platform";
 
 import { db } from "../db";
 import { notification, pushSubscription } from "../db/schema/notifications";
@@ -135,28 +138,12 @@ function buildNotificationUrl(item: {
   type: string;
   metadata?: Record<string, unknown> | null;
 }) {
-  const metadata = item.metadata ?? {};
-
-  if (typeof metadata.url === "string" && metadata.url.length > 0) {
-    return metadata.url;
-  }
-
-  switch (item.type) {
-    case "api_key":
-      return "/dashboard/settings/api";
-    case "webhook_sync":
-      return "/dashboard/settings/connections";
-    case "alert_triggered":
-      return "/dashboard/settings/alerts";
-    case "prop_phase_advanced":
-      return typeof metadata.accountId === "string" && metadata.accountId
-        ? `/dashboard/prop-tracker/${metadata.accountId}`
-        : "/dashboard/prop-tracker";
-    case "news_upcoming":
-      return "/dashboard/economic-calendar";
-    default:
-      return "/dashboard/settings/notifications";
-  }
+  return (
+    resolveNotificationTargetUrl({
+      type: item.type,
+      metadata: item.metadata ?? null,
+    }) || "/dashboard/settings/notifications"
+  );
 }
 
 export function getWebPushPublicConfig() {

@@ -2,7 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { buildNotificationPresentation } from "@profitabledge/platform";
+import {
+  buildNotificationPresentation,
+  resolveNotificationTargetUrl,
+} from "@profitabledge/platform";
 import { Bell, Check, Dot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -410,92 +413,15 @@ function getNotificationPrimaryTab(
   return notificationTypePrimaryTab[type];
 }
 
-function buildJournalEntryUrl(item: NotificationItem) {
-  if (item.metadata?.url?.startsWith("/dashboard/journal")) {
-    return item.metadata.url;
-  }
-
-  return item.metadata?.journalEntryId
-    ? `/dashboard/journal?entryId=${item.metadata.journalEntryId}&entryType=trade_review`
-    : "/dashboard/journal?entryType=trade_review";
-}
-
-function buildSettingsUpdatedUrl(metadata?: NotificationMetadata | null) {
-  if (metadata?.alertType || metadata?.severity) {
-    return "/dashboard/settings/alerts";
-  }
-
-  if (typeof metadata?.ruleCount === "number") {
-    return "/dashboard/settings/compliance";
-  }
-
-  if (Array.isArray(metadata?.updatedFields) && metadata.updatedFields.length) {
-    return "/dashboard/settings/metrics";
-  }
-
-  if (metadata?.broker || metadata?.accountNumber) {
-    return "/dashboard/settings/connections";
-  }
-
-  return "/dashboard/settings";
-}
-
-function buildCalendarUrl(_metadata?: NotificationMetadata | null) {
-  return "/dashboard/calendar";
-}
-
 function buildNotificationUrl(item: NotificationItem) {
-  if (item.type === "post_exit_ready") {
-    return buildJournalEntryUrl(item);
-  }
-
-  if (item.metadata?.url) {
-    return item.metadata.url;
-  }
-
-  switch (item.type) {
-    case "trade_closed":
-    case "trade_opened":
-    case "trade_imported":
-      return "/dashboard/trades";
-    case "goal_achieved":
-    case "goal_progress":
-      return "/dashboard/goals";
-    case "achievement_earned":
-      return "/dashboard";
-    case "prop_violation":
-    case "prop_journey":
-    case "prop_phase_advanced":
-      return item.metadata?.accountId
-        ? `/dashboard/prop-tracker/${item.metadata.accountId}`
-        : "/dashboard/prop-tracker";
-    case "alert_triggered":
-      return "/dashboard/settings/alerts";
-    case "leaderboard_update":
-      return "/dashboard";
-    case "journal_share_request":
-    case "journal_share_invite":
-    case "journal_share_accepted":
-    case "journal_share_declined":
-      return "/dashboard/journal?tab=shares";
-    case "api_key":
-      return "/dashboard/settings/api";
-    case "webhook_sync":
-      return "/dashboard/settings/connections";
-    case "settings_updated":
-      return buildSettingsUpdatedUrl(item.metadata);
-    case "system_maintenance":
-    case "system_update":
-      return "/dashboard/settings/notifications";
-    default:
-      return null;
-  }
+  return resolveNotificationTargetUrl({
+    type: item.type,
+    metadata: item.metadata ?? null,
+  });
 }
 
 function getNotificationTargetUrl(item: NotificationItem) {
-  return item.type === "news_upcoming"
-    ? buildCalendarUrl(item.metadata)
-    : buildNotificationUrl(item);
+  return buildNotificationUrl(item);
 }
 
 function getNotificationToastTargetUrl(item: NotificationItem) {

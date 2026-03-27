@@ -90,6 +90,37 @@ export function toNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+export function getOverallPropProgress(input: {
+  initialBalance: unknown;
+  currentBalance?: unknown;
+  fallbackBalance?: unknown;
+}) {
+  const initialBalance = toNumber(input.initialBalance);
+  const currentBalance = toNumber(
+    input.currentBalance,
+    toNumber(input.fallbackBalance, initialBalance)
+  );
+
+  if (initialBalance <= 0) {
+    return {
+      initialBalance,
+      currentBalance,
+      profit: 0,
+      profitPercent: 0,
+    };
+  }
+
+  const profit = currentBalance - initialBalance;
+  const profitPercent = (profit / initialBalance) * 100;
+
+  return {
+    initialBalance,
+    currentBalance,
+    profit,
+    profitPercent,
+  };
+}
+
 export function formatUsd(value: number) {
   return value.toLocaleString("en-US", {
     style: "currency",

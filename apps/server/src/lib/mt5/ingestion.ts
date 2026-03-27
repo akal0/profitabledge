@@ -39,6 +39,7 @@ import {
   type RemovedOpenTradeSeed,
 } from "./ingestion-types";
 import { syncPropAccountState } from "../prop-rule-monitor";
+import { sanitizeConnectionMeta } from "../connections/sanitize-meta";
 import {
   sanitizeMt5RuntimeState,
   withMt5RuntimeState,
@@ -72,16 +73,27 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
     sessionMeta.postExitTrackingSeconds > 0
       ? Math.trunc(sessionMeta.postExitTrackingSeconds)
       : undefined);
-  const { connection, accountId } = await ensureMt5TradingAccount(
+  const { connection, accountId, platform } = await ensureMt5TradingAccount(
     input.connectionId,
     input.account
   );
 
-  await upsertBrokerSession(input.connectionId, accountId, input.session);
-  await projectAccountSnapshot(input.connectionId, accountId, input.account);
+  await upsertBrokerSession(
+    input.connectionId,
+    accountId,
+    platform,
+    input.session
+  );
+  await projectAccountSnapshot(
+    input.connectionId,
+    accountId,
+    platform,
+    input.account
+  );
   const { symbolSpecsInserted, symbolSpecsBySymbol } = await projectSymbolSpecs(
     input.connectionId,
     accountId,
+    platform,
     input.symbolSpecs
   );
   const executionContextsByTradeKey = new Map(
@@ -94,6 +106,7 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
   const { dealEventsInserted, affectedTradeKeys } = await insertDealEvents(
     input.connectionId,
     accountId,
+    platform,
     input.deals,
     reconcileMode
   );
@@ -101,12 +114,14 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
     await insertOrderEvents(
       input.connectionId,
       accountId,
+      platform,
       input.orders,
       reconcileMode
     );
   const { ledgerEventsInserted } = await insertLedgerEvents(
     input.connectionId,
     accountId,
+    platform,
     input.ledgerEvents,
     reconcileMode
   );
@@ -124,6 +139,7 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
   } = await projectOpenPositions(
     input.connectionId,
     accountId,
+    platform,
     input.positions,
     snapshotTime,
     executionContextsByTradeKey
@@ -198,7 +214,7 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
 
   const currentMeta =
     connection.meta && typeof connection.meta === "object"
-      ? (connection.meta as Record<string, unknown>)
+      ? sanitizeConnectionMeta(connection.meta as Record<string, unknown>)
       : {};
   const currentMt5Meta =
     currentMeta.mt5 && typeof currentMeta.mt5 === "object"
@@ -208,11 +224,8 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
     ...currentMeta,
     mt5: {
       ...currentMt5Meta,
-      login: input.account.login,
-      serverName: input.account.serverName,
       brokerName: input.account.brokerName,
       workerHostId: input.session?.workerHostId ?? null,
-      sessionKey: input.session?.sessionKey ?? null,
       lastSnapshotAt: input.account.snapshotTime,
     },
   };
@@ -232,9 +245,7 @@ export async function ingestMt5SyncFrame(rawInput: Mt5SyncFrameInput) {
       lastSyncAttemptAt: new Date(),
       lastSyncSuccessAt: new Date(),
       lastSyncedTradeCount: tradesProjected,
-      meta: {
-        ...nextMeta,
-      },
+      meta: sanitizeConnectionMeta(nextMeta),
       updatedAt: new Date(),
     })
     .where(eq(platformConnection.id, input.connectionId));

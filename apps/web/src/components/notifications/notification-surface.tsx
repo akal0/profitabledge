@@ -213,7 +213,7 @@ export function NotificationSurface({
                 : "Dismiss notification")
             }
             onClick={resolvedAction.onClick}
-            className="relative z-[1] ml-2 flex size-5 shrink-0 items-center justify-center rounded-full bg-white/[0.025] text-white/76 ring-1 ring-white/8 transition-colors hover:bg-white/[0.07]"
+            className="relative z-[1] ml-2 flex size-5 shrink-0 items-center justify-center rounded-full bg-white/[0.025] text-white/76 ring-1 ring-white/8 transition-colors hover:bg-white/[0.07] cursor-pointer"
           >
             {resolvedAction.kind === "navigate" ? (
               <ChevronRight className="size-[11px]" strokeWidth={2} />

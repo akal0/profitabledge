@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { getErrorMessage } from "@/lib/error-message";
 import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import { storeAffiliateIntent } from "@/features/growth/lib/access-intent";
 import {
@@ -34,7 +35,6 @@ import {
 import { waitForConfirmedSession } from "@/lib/session-confirmation";
 import { trpcClient } from "@/utils/trpc";
 import Google from "@/public/icons/social-media/google.svg";
-import X from "@/public/icons/social-media/x.svg";
 import PasswordInput from "../../sign-up/components/password-input";
 
 const SOCIAL_BUTTON_CLASS =
@@ -95,7 +95,7 @@ export default function InvitePage() {
   const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
   const loginPath = buildLoginPath(requestedReturnTo);
   const [socialProviderLoading, setSocialProviderLoading] = useState<
-    "google" | "twitter" | null
+    "google" | null
   >(null);
   const [affiliate, setAffiliate] = useState<AffiliateInfo | null>(
     initialAffiliate
@@ -148,9 +148,11 @@ export default function InvitePage() {
           await waitForConfirmedSession();
           router.push(postAuthContinuePath);
         },
-        onError: (error) => {
-          const message =
-            error.error.message || "There was a problem creating your account.";
+        onError: (error: any) => {
+          const message = getErrorMessage(
+            error,
+            "There was a problem creating your account."
+          );
 
           toast.error("Unable to create account", {
             description: message,
@@ -160,9 +162,7 @@ export default function InvitePage() {
     );
   }
 
-  async function handleSocialSignUp(provider: "google" | "twitter") {
-    const providerLabel =
-      provider === "google" ? "Google sign up" : "X sign up";
+  async function handleSocialSignUp(provider: "google") {
     setSocialProviderLoading(provider);
 
     try {
@@ -172,9 +172,7 @@ export default function InvitePage() {
       });
     } catch (error) {
       toast.error(
-        error instanceof Error
-          ? error.message
-          : `Unable to continue with ${providerLabel}`
+        getErrorMessage(error, "Unable to continue with Google sign up")
       );
       setSocialProviderLoading(null);
     }
@@ -213,26 +211,11 @@ export default function InvitePage() {
                 : "Sign up with Google"}
             </span>
           </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={socialProviderLoading !== null}
-            onClick={() => void handleSocialSignUp("twitter")}
-            className={SOCIAL_BUTTON_CLASS}
-          >
-            <X className="size-4 stroke-none fill-white/68 transition-colors group-hover:fill-white" />
-            <span>
-              {socialProviderLoading === "twitter"
-                ? "Redirecting..."
-                : "Sign up with X"}
-            </span>
-          </Button>
         </div>
 
         <div className="flex items-center gap-4">
           <div className="h-px flex-1 bg-white/10" />
-          <span className="text-xs font-medium tracking-[-0.04em] text-white/32">
+          <span className="text-xs font-semibold tracking-[-0.04em] text-white/75">
             Or sign in with your credentials
           </span>
           <div className="h-px flex-1 bg-white/10" />

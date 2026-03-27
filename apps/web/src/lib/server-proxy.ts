@@ -92,7 +92,13 @@ function buildResponseHeaders(
 export async function proxyToServer(
   request: NextRequest,
   path: string,
-  { preserveSetCookie = false }: { preserveSetCookie?: boolean } = {}
+  {
+    preserveSetCookie = false,
+    forwardAbortSignal = true,
+  }: {
+    preserveSetCookie?: boolean;
+    forwardAbortSignal?: boolean;
+  } = {}
 ) {
   const response = await fetch(buildTargetUrl(request, path), {
     method: request.method,
@@ -100,7 +106,7 @@ export async function proxyToServer(
     body: await buildRequestBody(request),
     redirect: "manual",
     cache: "no-store",
-    signal: request.signal,
+    signal: forwardAbortSignal ? request.signal : undefined,
   });
 
   return new Response(response.body, {

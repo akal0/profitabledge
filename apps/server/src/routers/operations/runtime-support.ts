@@ -17,7 +17,6 @@ import {
 import { user } from "../../db/schema/auth";
 import { platformConnection, syncLog } from "../../db/schema/connections";
 import { tradingAccount } from "../../db/schema/trading";
-import { isPrivateBetaAdminEmail } from "../../lib/billing/config";
 import { getServerEnv } from "../../lib/env";
 import {
   assertAlphaFeatureEnabled,
@@ -35,6 +34,7 @@ import {
   createGithubIssue,
 } from "../../lib/ops/github-feature-requests";
 import { buildServerHealthSnapshot } from "../../lib/ops/health";
+import { hasStaffAccess } from "../../lib/staff-access";
 import { protectedProcedure } from "../../lib/trpc";
 import {
   alphaMilestoneSchema,
@@ -196,11 +196,17 @@ export const operationsRuntimeSupportProcedures = {
         id: true,
         name: true,
         email: true,
+        role: true,
         username: true,
       },
     });
 
-    if (!isPrivateBetaAdminEmail(profileRow?.email ?? null)) {
+    if (
+      !hasStaffAccess({
+        role: profileRow?.role ?? null,
+        email: profileRow?.email ?? null,
+      })
+    ) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Admin access required",

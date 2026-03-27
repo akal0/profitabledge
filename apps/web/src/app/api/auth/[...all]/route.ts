@@ -14,6 +14,7 @@ async function proxyAuthRequest(request: NextRequest, params: Params["params"]) 
   const { all } = await params;
   return proxyToServer(request, `/api/auth/${all.join("/")}`, {
     preserveSetCookie: true,
+    forwardAbortSignal: false,
   });
 }
 

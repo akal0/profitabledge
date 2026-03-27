@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import {
   and,
   desc,
@@ -35,6 +36,7 @@ import {
   encryptCredentials,
 } from "../providers/credential-cipher";
 import { resolveUniqueConnectionDisplayName } from "../connections/display-name";
+import { sanitizeConnectionMeta } from "../connections/sanitize-meta";
 import { isMtTerminalProvider } from "./constants";
 import { buildMtConnectionCompleteness } from "./completeness";
 import { getServerEnv } from "../env";
@@ -450,7 +452,13 @@ export function assertWorkerSecret(workerSecret: string | null | undefined) {
     });
   }
 
-  if (!workerSecret || workerSecret !== expected) {
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const providedBuffer = Buffer.from(workerSecret || "", "utf8");
+  const isMatch =
+    expectedBuffer.length === providedBuffer.length &&
+    timingSafeEqual(expectedBuffer, providedBuffer);
+
+  if (!workerSecret || !isMatch) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
       message: "Invalid worker secret",
@@ -472,16 +480,10 @@ export async function createMtTerminalConnection(input: {
     });
   }
 
-  if (input.provider !== "mt5-terminal") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: `${input.provider} terminal sync is not implemented yet`,
-    });
-  }
-
   const login = input.credentials.login?.trim();
   const password = input.credentials.password?.trim();
   const server = input.credentials.server?.trim();
+  const platform = input.provider === "mt4-terminal" ? "mt4" : "mt5";
 
   if (!login || !password || !server) {
     throw new TRPCError({
@@ -522,6 +524,7 @@ export async function createMtTerminalConnection(input: {
   const queuedMeta = withMt5ForceSyncRequest(mergedMeta, {
     reason: "connection-created",
   });
+  const safeQueuedMeta = sanitizeConnectionMeta(queuedMeta);
 
   const [conn] = await db
     .insert(platformConnection)
@@ -530,10 +533,8 @@ export async function createMtTerminalConnection(input: {
       provider: input.provider,
       displayName,
       meta: {
-        ...queuedMeta,
-        login,
-        platform: "mt5",
-        serverName: server,
+        ...safeQueuedMeta,
+        platform,
         passwordType:
           typeof input.meta?.passwordType === "string"
             ? input.meta.passwordType
@@ -1081,15 +1082,14 @@ export async function reportMtConnectionStatus(input: {
       status: toPlatformConnectionStatus(input.status, input.lastError),
       lastError: input.lastError ?? null,
       updatedAt: new Date(),
-      meta: {
+      meta: sanitizeConnectionMeta({
         ...currentMeta,
         mt5Worker: {
           workerHostId: workerId,
-          sessionKey: input.sessionKey ?? null,
           reportedAt: new Date().toISOString(),
           ...sessionMeta,
         },
-      },
+      }),
     })
     .where(eq(platformConnection.id, input.connectionId));
 

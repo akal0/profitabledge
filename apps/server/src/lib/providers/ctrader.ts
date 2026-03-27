@@ -24,10 +24,23 @@ import type {
   NormalizedPosition,
   NormalizedAccountInfo,
   ProviderCredentials,
+  ProviderAuthorizedAccount,
 } from "./types";
+import WebSocket from "ws";
+import { getServerEnv } from "../env";
 
 const CTRADER_TOKEN_URL = "https://connect.spotware.com/apps/token";
 const CTRADER_API_BASE = "https://api.spotware.com/connect";
+const CTRADER_JSON_PORT = 5036;
+const CTRADER_OPEN_API_TIMEOUT_MS = 12_000;
+
+const CTRADER_PAYLOAD_TYPE = {
+  APPLICATION_AUTH_REQ: 2100,
+  APPLICATION_AUTH_RES: 2101,
+  ERROR_RES: 2142,
+  GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ: 2149,
+  GET_ACCOUNTS_BY_ACCESS_TOKEN_RES: 2150,
+} as const;
 
 // cTrader API response types
 interface CTraderDeal {
@@ -74,6 +87,21 @@ interface CTraderAccount {
   brokerName?: string;
 }
 
+interface CTraderAuthorizedAccountEntity {
+  ctidTraderAccountId: string | number;
+  traderLogin?: string | number | null;
+  brokerTitleShort?: string | null;
+  isLive?: boolean | null;
+}
+
+type CTraderJsonMessage = {
+  clientMsgId?: string;
+  payloadType?: number;
+  payload?: Record<string, unknown>;
+  errorCode?: string | number;
+  description?: string;
+};
+
 export class CTraderProvider implements TradingProvider {
   async connect(config: ProviderConfig): Promise<NormalizedAccountInfo> {
     return this.fetchAccountInfo(config, config.meta);
@@ -87,6 +115,7 @@ export class CTraderProvider implements TradingProvider {
     code: string,
     redirectUri: string
   ): Promise<ProviderCredentials> {
+    const env = getServerEnv();
     const res = await fetch(CTRADER_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -94,8 +123,8 @@ export class CTraderProvider implements TradingProvider {
         grant_type: "authorization_code",
         code,
         redirect_uri: redirectUri,
-        client_id: process.env.CTRADER_CLIENT_ID!,
-        client_secret: process.env.CTRADER_CLIENT_SECRET!,
+        client_id: env.CTRADER_CLIENT_ID!,
+        client_secret: env.CTRADER_CLIENT_SECRET!,
       }),
     });
 
@@ -120,14 +149,15 @@ export class CTraderProvider implements TradingProvider {
   async refreshToken(
     credentials: ProviderCredentials
   ): Promise<ProviderCredentials> {
+    const env = getServerEnv();
     const res = await fetch(CTRADER_TOKEN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: credentials.refreshToken,
-        client_id: process.env.CTRADER_CLIENT_ID!,
-        client_secret: process.env.CTRADER_CLIENT_SECRET!,
+        client_id: env.CTRADER_CLIENT_ID!,
+        client_secret: env.CTRADER_CLIENT_SECRET!,
       }),
     });
 
@@ -146,6 +176,44 @@ export class CTraderProvider implements TradingProvider {
       refreshToken: data.refresh_token,
       expiresAt: new Date(Date.now() + data.expires_in * 1000).toISOString(),
     };
+  }
+
+  async listAuthorizedAccounts(
+    credentials: ProviderCredentials
+  ): Promise<ProviderAuthorizedAccount[]> {
+    const accessToken = credentials.accessToken;
+    if (!accessToken) {
+      throw new Error("cTrader access token is missing");
+    }
+
+    const [liveAccounts, demoAccounts] = await Promise.allSettled([
+      this.fetchAuthorizedAccountsFromOpenApi(accessToken, "live"),
+      this.fetchAuthorizedAccountsFromOpenApi(accessToken, "demo"),
+    ]);
+
+    const accounts = [
+      ...(liveAccounts.status === "fulfilled" ? liveAccounts.value : []),
+      ...(demoAccounts.status === "fulfilled" ? demoAccounts.value : []),
+    ];
+
+    if (accounts.length > 0) {
+      return dedupeAuthorizedAccounts(accounts);
+    }
+
+    const liveMessage =
+      liveAccounts.status === "rejected"
+        ? normalizeErrorMessage(liveAccounts.reason)
+        : null;
+    const demoMessage =
+      demoAccounts.status === "rejected"
+        ? normalizeErrorMessage(demoAccounts.reason)
+        : null;
+
+    throw new Error(
+      [liveMessage, demoMessage]
+        .filter(Boolean)
+        .join(" / ") || "Unable to discover cTrader accounts for this token."
+    );
   }
 
   async fetchHistory(
@@ -315,6 +383,131 @@ export class CTraderProvider implements TradingProvider {
 
     return trades;
   }
+
+  private async fetchAuthorizedAccountsFromOpenApi(
+    accessToken: string,
+    environment: "live" | "demo"
+  ): Promise<ProviderAuthorizedAccount[]> {
+    const env = getServerEnv();
+    const endpoint = `wss://${environment}.ctraderapi.com:${CTRADER_JSON_PORT}`;
+
+    const accounts = await new Promise<CTraderAuthorizedAccountEntity[]>(
+      (resolve, reject) => {
+        const ws = new WebSocket(endpoint);
+        const timeout = setTimeout(() => {
+          ws.terminate();
+          reject(
+            new Error(`Timed out while discovering ${environment} cTrader accounts`)
+          );
+        }, CTRADER_OPEN_API_TIMEOUT_MS);
+
+        const cleanup = () => clearTimeout(timeout);
+
+        ws.on("open", () => {
+          ws.send(
+            JSON.stringify({
+                clientMsgId: `app-auth-${environment}-${crypto.randomUUID()}`,
+                payloadType: CTRADER_PAYLOAD_TYPE.APPLICATION_AUTH_REQ,
+                payload: {
+                  clientId: env.CTRADER_CLIENT_ID!,
+                  clientSecret: env.CTRADER_CLIENT_SECRET!,
+                },
+              })
+            );
+        });
+
+        ws.on("message", (data) => {
+          let parsed: CTraderJsonMessage | null = null;
+          try {
+            parsed = JSON.parse(String(data)) as CTraderJsonMessage;
+          } catch (error) {
+            cleanup();
+            ws.close();
+            reject(error);
+            return;
+          }
+
+          if (!parsed) {
+            return;
+          }
+
+          if (
+            parsed.payloadType === CTRADER_PAYLOAD_TYPE.APPLICATION_AUTH_RES
+          ) {
+            ws.send(
+              JSON.stringify({
+                clientMsgId: `acct-list-${environment}-${crypto.randomUUID()}`,
+                payloadType:
+                  CTRADER_PAYLOAD_TYPE.GET_ACCOUNTS_BY_ACCESS_TOKEN_REQ,
+                payload: {
+                  accessToken,
+                },
+              })
+            );
+            return;
+          }
+
+          if (
+            parsed.payloadType ===
+            CTRADER_PAYLOAD_TYPE.GET_ACCOUNTS_BY_ACCESS_TOKEN_RES
+          ) {
+            cleanup();
+            ws.close();
+            resolve(
+              ((parsed.payload?.ctidTraderAccount as unknown[]) ?? []) as
+                | CTraderAuthorizedAccountEntity[]
+                | []
+            );
+            return;
+          }
+
+          if (parsed.payloadType === CTRADER_PAYLOAD_TYPE.ERROR_RES) {
+            cleanup();
+            ws.close();
+            reject(
+              new Error(
+                String(
+                  parsed.payload?.description ??
+                    parsed.description ??
+                    "cTrader Open API returned an error."
+                )
+              )
+            );
+          }
+        });
+
+        ws.on("error", (error) => {
+          cleanup();
+          reject(error);
+        });
+
+        ws.on("close", () => {
+          cleanup();
+        });
+      }
+    );
+
+    return accounts.map((account) => {
+      const providerAccountId = String(account.ctidTraderAccountId);
+      const accountNumber =
+        account.traderLogin != null ? String(account.traderLogin) : null;
+      const brokerName = account.brokerTitleShort ?? null;
+
+      return {
+        providerAccountId,
+        accountNumber,
+        label:
+          [brokerName, accountNumber].filter(Boolean).join(" ") ||
+          `cTrader ${providerAccountId}`,
+        brokerName,
+        currency: null,
+        environment,
+        metadata: {
+          isLive: environment === "live",
+        },
+      } satisfies ProviderAuthorizedAccount;
+    });
+  }
 }
 
 /**
@@ -322,11 +515,43 @@ export class CTraderProvider implements TradingProvider {
  * Called from the connections router.
  */
 export function getCTraderAuthUrl(state: string): string {
+  const env = getServerEnv();
+  if (!env.CTRADER_CLIENT_ID || !env.CTRADER_REDIRECT_URI) {
+    throw new Error(
+      "cTrader OAuth is not configured. CTRADER_CLIENT_ID and CTRADER_REDIRECT_URI are required."
+    );
+  }
   const url = new URL("https://connect.spotware.com/apps/authorize");
-  url.searchParams.set("client_id", process.env.CTRADER_CLIENT_ID!);
-  url.searchParams.set("redirect_uri", process.env.CTRADER_REDIRECT_URI!);
+  url.searchParams.set("client_id", env.CTRADER_CLIENT_ID);
+  url.searchParams.set("redirect_uri", env.CTRADER_REDIRECT_URI);
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", "trading");
   url.searchParams.set("state", state);
   return url.toString();
+}
+
+function dedupeAuthorizedAccounts(
+  accounts: ProviderAuthorizedAccount[]
+): ProviderAuthorizedAccount[] {
+  const seen = new Set<string>();
+  const deduped: ProviderAuthorizedAccount[] = [];
+
+  for (const account of accounts) {
+    const key = [
+      account.environment,
+      account.providerAccountId,
+      account.accountNumber ?? "",
+    ].join(":");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(account);
+  }
+
+  return deduped;
+}
+
+function normalizeErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }

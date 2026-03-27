@@ -23,6 +23,7 @@ import {
   endOfMonth,
   formatMetricValue,
   formatSignedMetricValue,
+  getOverallPropProgress,
   getMetricMode,
   getPropStatusAppearance,
   getSurvivalTone,
@@ -289,10 +290,19 @@ export default function PropTrackerPage({
     ruleCheck.metrics.currentEquity,
     toNumber(account.liveEquity, currentBalance)
   );
-  const currentResult =
+  const phaseResult =
     metricMode === "currency"
       ? toNumber(ruleCheck.metrics.currentProfit)
       : toNumber(ruleCheck.metrics.currentProfitPercent);
+  const overallProgress = getOverallPropProgress({
+    initialBalance: account.initialBalance,
+    currentBalance,
+    fallbackBalance: account.liveBalance,
+  });
+  const displayResult =
+    metricMode === "currency"
+      ? overallProgress.profit
+      : overallProgress.profitPercent;
   const dailyDrawdown =
     metricMode === "currency"
       ? toNumber(ruleCheck.metrics.dailyDrawdown)
@@ -312,7 +322,7 @@ export default function PropTrackerPage({
   const maxLossLimit =
     currentPhase?.maxLoss != null ? toNumber(currentPhase.maxLoss) : null;
   const targetRemaining =
-    targetValue != null ? Math.max(0, targetValue - currentResult) : null;
+    targetValue != null ? Math.max(0, targetValue - phaseResult) : null;
   const requiredDailyPace =
     ruleCheck.metrics.daysRemaining != null &&
     ruleCheck.metrics.daysRemaining > 0 &&
@@ -384,15 +394,15 @@ export default function PropTrackerPage({
     },
     {
       label: "Target",
-      current: formatSignedMetricValue(currentResult, metricMode),
+      current: formatSignedMetricValue(phaseResult, metricMode),
       threshold: formatMetricValue(targetValue, metricMode),
       hint: "Phase target checked against live evaluated profit",
-      currentClassName: currentResult >= 0 ? "text-rose-300" : "text-teal-300",
+      currentClassName: phaseResult >= 0 ? "text-rose-300" : "text-teal-300",
       completed: isFunded,
       status:
-        targetValue != null && currentResult >= targetValue
+        targetValue != null && phaseResult >= targetValue
           ? ("safe" as const)
-          : targetValue != null && currentResult >= targetValue * 0.9
+          : targetValue != null && phaseResult >= targetValue * 0.9
           ? ("warning" as const)
           : ("danger" as const),
     },
@@ -412,7 +422,7 @@ export default function PropTrackerPage({
         phaseLabel={phaseLabel}
         isFunded={isFunded}
         metricMode={metricMode}
-        currentResult={currentResult}
+        currentResult={displayResult}
         tradingDays={ruleCheck.metrics.tradingDays}
         minTradingDays={minTradingDays}
         dailyDrawdown={dailyDrawdown}

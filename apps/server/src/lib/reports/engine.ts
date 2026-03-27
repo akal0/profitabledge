@@ -88,12 +88,14 @@ type AggregateRow = {
   tradeCount: number;
   netPnl: number;
   winRate: number;
+  avgPlannedRR: number | null;
   avgRR: number | null;
   profitFactor: number | null;
   expectancy: number;
   avgHold: number | null;
   avgMfe: number | null;
   avgMae: number | null;
+  protocolRate: number | null;
   rrCaptureEfficiency: number | null;
 };
 
@@ -103,6 +105,8 @@ type AggregateAccumulator = {
   grossProfit: number;
   grossLossAbs: number;
   wins: number;
+  plannedRrSum: number;
+  plannedRrCount: number;
   rrSum: number;
   rrCount: number;
   holdSum: number;
@@ -111,6 +115,7 @@ type AggregateAccumulator = {
   mfeCount: number;
   maeSum: number;
   maeCount: number;
+  protocolAlignedCount: number;
   captureSum: number;
   captureCount: number;
 };
@@ -119,12 +124,14 @@ type OverviewMetrics = {
   tradeCount: number;
   netPnl: number;
   winRate: number;
+  avgPlannedRR: number | null;
   avgRR: number | null;
   profitFactor: number | null;
   expectancy: number;
   avgHold: number | null;
   avgMfe: number | null;
   avgMae: number | null;
+  protocolRate: number | null;
   rrCaptureEfficiency: number | null;
 };
 
@@ -192,6 +199,8 @@ function createAccumulator(): AggregateAccumulator {
     grossProfit: 0,
     grossLossAbs: 0,
     wins: 0,
+    plannedRrSum: 0,
+    plannedRrCount: 0,
     rrSum: 0,
     rrCount: 0,
     holdSum: 0,
@@ -200,6 +209,7 @@ function createAccumulator(): AggregateAccumulator {
     mfeCount: 0,
     maeSum: 0,
     maeCount: 0,
+    protocolAlignedCount: 0,
     captureSum: 0,
     captureCount: 0,
   };
@@ -502,6 +512,11 @@ function accumulateTrade(
     accumulator.rrCount += 1;
   }
 
+  if (tradeRow.plannedRR != null) {
+    accumulator.plannedRrSum += tradeRow.plannedRR;
+    accumulator.plannedRrCount += 1;
+  }
+
   if (Number.isFinite(tradeRow.holdSeconds)) {
     accumulator.holdSum += tradeRow.holdSeconds;
     accumulator.holdCount += 1;
@@ -515,6 +530,10 @@ function accumulateTrade(
   if (tradeRow.maePips != null) {
     accumulator.maeSum += tradeRow.maePips;
     accumulator.maeCount += 1;
+  }
+
+  if (String(tradeRow.protocolAlignment || "").toLowerCase() === "aligned") {
+    accumulator.protocolAlignedCount += 1;
   }
 
   if (tradeRow.rrCaptureEfficiency != null) {
@@ -539,6 +558,10 @@ function finalizeAccumulator(
       accumulator.tradeCount > 0
         ? (accumulator.wins / accumulator.tradeCount) * 100
         : 0,
+    avgPlannedRR: average(
+      accumulator.plannedRrSum,
+      accumulator.plannedRrCount
+    ),
     avgRR: average(accumulator.rrSum, accumulator.rrCount),
     profitFactor: getProfitFactor(
       accumulator.grossProfit,
@@ -551,6 +574,10 @@ function finalizeAccumulator(
     avgHold: average(accumulator.holdSum, accumulator.holdCount),
     avgMfe: average(accumulator.mfeSum, accumulator.mfeCount),
     avgMae: average(accumulator.maeSum, accumulator.maeCount),
+    protocolRate:
+      accumulator.tradeCount > 0
+        ? (accumulator.protocolAlignedCount / accumulator.tradeCount) * 100
+        : null,
     rrCaptureEfficiency: average(
       accumulator.captureSum,
       accumulator.captureCount
@@ -596,6 +623,7 @@ function buildAggregateRows(
     dimension === "exitWindow" ||
     dimension === "holdBucket" ||
     dimension === "volumeBucket" ||
+    dimension === "protocolAlignment" ||
     dimension === "plannedRBucket" ||
     dimension === "realizedRBucket" ||
     dimension === "slippageBucket" ||
@@ -620,6 +648,10 @@ function getOverviewMetrics(trades: ReportTrade[]): OverviewMetrics {
       accumulator.tradeCount > 0
         ? (accumulator.wins / accumulator.tradeCount) * 100
         : 0,
+    avgPlannedRR: average(
+      accumulator.plannedRrSum,
+      accumulator.plannedRrCount
+    ),
     avgRR: average(accumulator.rrSum, accumulator.rrCount),
     profitFactor: getProfitFactor(
       accumulator.grossProfit,
@@ -632,6 +664,10 @@ function getOverviewMetrics(trades: ReportTrade[]): OverviewMetrics {
     avgHold: average(accumulator.holdSum, accumulator.holdCount),
     avgMfe: average(accumulator.mfeSum, accumulator.mfeCount),
     avgMae: average(accumulator.maeSum, accumulator.maeCount),
+    protocolRate:
+      accumulator.tradeCount > 0
+        ? (accumulator.protocolAlignedCount / accumulator.tradeCount) * 100
+        : null,
     rrCaptureEfficiency: average(
       accumulator.captureSum,
       accumulator.captureCount

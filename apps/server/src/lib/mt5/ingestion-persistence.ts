@@ -39,6 +39,12 @@ import {
   type MtSymbolSpecLike,
 } from "./symbol-specs";
 
+type MtPlatform = "mt4" | "mt5";
+
+function resolveMtPlatform(provider: string): MtPlatform {
+  return provider === "mt4-terminal" ? "mt4" : "mt5";
+}
+
 export async function ensureMt5TradingAccount(
   connectionId: string,
   account: Mt5SyncFrameInput["account"]
@@ -54,6 +60,7 @@ export async function ensureMt5TradingAccount(
   const accountNumber = account.login.trim();
   const brokerServer = account.serverName.trim();
   const brokerName = account.brokerName.trim();
+  const platform = resolveMtPlatform(connection.provider);
   const { updates: autoPropFields } = await buildAutoPropAccountFields({
     broker: brokerName,
     brokerServer,
@@ -75,7 +82,7 @@ export async function ensureMt5TradingAccount(
 
   const commonUpdates = {
     broker: brokerName,
-    brokerType: "mt5",
+    brokerType: platform,
     brokerServer,
     accountNumber,
     liveBalance: account.balance.toString(),
@@ -116,6 +123,7 @@ export async function ensureMt5TradingAccount(
     return {
       connection,
       accountId: existing.id,
+      platform,
     };
   }
 
@@ -140,12 +148,14 @@ export async function ensureMt5TradingAccount(
   return {
     connection,
     accountId,
+    platform,
   };
 }
 
 export async function upsertBrokerSession(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   session: Mt5SyncFrameInput["session"] | undefined
 ) {
   if (!session) {
@@ -157,7 +167,7 @@ export async function upsertBrokerSession(
     .values({
       connectionId,
       accountId,
-      platform: "mt5",
+      platform,
       workerHostId: session.workerHostId ?? null,
       sessionKey: session.sessionKey ?? null,
       status: session.status ?? "syncing",
@@ -192,6 +202,7 @@ export async function upsertBrokerSession(
 export async function projectAccountSnapshot(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   account: Mt5SyncFrameInput["account"]
 ) {
   const snapshotTime = parseDate(account.snapshotTime);
@@ -199,9 +210,9 @@ export async function projectAccountSnapshot(
   await db.insert(brokerAccountSnapshot).values({
     connectionId,
     accountId,
-    platform: "mt5",
-    login: account.login,
-    serverName: account.serverName,
+    platform,
+    login: null,
+    serverName: null,
     brokerName: account.brokerName,
     currency: account.currency.toUpperCase().slice(0, 16),
     leverage: account.leverage ?? null,
@@ -272,6 +283,7 @@ export async function projectPriceSnapshots(
 export async function projectSymbolSpecs(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   symbolSpecs: Mt5SyncFrameInput["symbolSpecs"]
 ) {
   if (symbolSpecs.length === 0) {
@@ -299,7 +311,7 @@ export async function projectSymbolSpecs(
   const values = [...deduped.values()].map((symbolSpec) => ({
     connectionId,
     accountId,
-    platform: "mt5" as const,
+    platform,
     symbol: normalizeBrokerSymbol(symbolSpec.symbol),
     canonicalSymbol: symbolSpec.canonicalSymbol
       ? normalizeBrokerSymbol(symbolSpec.canonicalSymbol)
@@ -365,6 +377,7 @@ export async function projectSymbolSpecs(
 export async function projectOpenPositions(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   positions: Mt5SyncFrameInput["positions"],
   snapshotTime: Date,
   executionContextsByTradeKey: Map<string, Mt5ExecutionContext>
@@ -435,7 +448,7 @@ export async function projectOpenPositions(
       positions.map((position) => ({
         connectionId,
         accountId,
-        platform: "mt5",
+        platform,
         remotePositionId: position.remotePositionId,
         side: position.side,
         symbol: position.symbol.toUpperCase(),
@@ -565,7 +578,7 @@ export async function projectOpenPositions(
             ? mergeBrokerMetaExecutionContext(
                 {
                   ...(tradeMetrics.brokerMeta ?? {}),
-                  platform: "mt5",
+                  platform,
                   positionId: position.remotePositionId,
                   magicNumber: position.magicNumber ?? null,
                   sessionTag,
@@ -653,6 +666,7 @@ export async function projectOpenPositions(
 export async function insertDealEvents(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   deals: Mt5SyncFrameInput["deals"],
   reconcileMode: "incremental" | "full-reconcile" = "incremental"
 ) {
@@ -664,7 +678,7 @@ export async function insertDealEvents(
     const values = {
       connectionId,
       accountId,
-      platform: "mt5",
+      platform,
       remoteDealId: deal.remoteDealId,
       remoteOrderId: deal.remoteOrderId ?? null,
       positionId: deal.positionId ?? null,
@@ -736,6 +750,7 @@ export async function insertDealEvents(
 export async function insertOrderEvents(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   orders: Mt5SyncFrameInput["orders"],
   reconcileMode: "incremental" | "full-reconcile" = "incremental"
 ) {
@@ -747,7 +762,7 @@ export async function insertOrderEvents(
     const values = {
       connectionId,
       accountId,
-      platform: "mt5",
+      platform,
       eventKey: order.eventKey,
       remoteOrderId: order.remoteOrderId,
       positionId: order.positionId ?? null,
@@ -816,6 +831,7 @@ export async function insertOrderEvents(
 export async function insertLedgerEvents(
   connectionId: string,
   accountId: string,
+  platform: MtPlatform,
   ledgerEvents: Mt5SyncFrameInput["ledgerEvents"],
   reconcileMode: "incremental" | "full-reconcile" = "incremental"
 ) {
@@ -826,7 +842,7 @@ export async function insertLedgerEvents(
     const values = {
       connectionId,
       accountId,
-      platform: "mt5",
+      platform,
       remoteDealId: event.remoteDealId,
       remoteOrderId: event.remoteOrderId ?? null,
       positionId: event.positionId ?? null,

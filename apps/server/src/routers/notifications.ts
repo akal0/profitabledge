@@ -2,7 +2,7 @@ import { z } from "zod";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
-import { notification } from "../db/schema/notifications";
+import { notification, pushSubscription } from "../db/schema/notifications";
 import { user as userTable } from "../db/schema/auth";
 import {
   mergeNotificationPreferences,
@@ -99,6 +99,63 @@ export const notificationsRouter = router({
       (rows[0]?.notificationPreferences as any) || null
     );
     return merged;
+  }),
+
+  getDeliveryHealth: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const subscriptions = await db
+      .select({
+        id: pushSubscription.id,
+        createdAt: pushSubscription.createdAt,
+        updatedAt: pushSubscription.updatedAt,
+        lastSuccessAt: pushSubscription.lastSuccessAt,
+        lastFailureAt: pushSubscription.lastFailureAt,
+        failureReason: pushSubscription.failureReason,
+      })
+      .from(pushSubscription)
+      .where(eq(pushSubscription.userId, userId))
+      .orderBy(desc(pushSubscription.updatedAt));
+
+    const lastSuccessAt = subscriptions.reduce<Date | null>(
+      (latest, subscription) => {
+        if (!subscription.lastSuccessAt) return latest;
+        if (!latest || subscription.lastSuccessAt > latest) {
+          return subscription.lastSuccessAt;
+        }
+        return latest;
+      },
+      null
+    );
+    const lastFailureAt = subscriptions.reduce<Date | null>(
+      (latest, subscription) => {
+        if (!subscription.lastFailureAt) return latest;
+        if (!latest || subscription.lastFailureAt > latest) {
+          return subscription.lastFailureAt;
+        }
+        return latest;
+      },
+      null
+    );
+    const activeFailureReasons = Array.from(
+      new Set(
+        subscriptions
+          .map((subscription) => subscription.failureReason?.trim())
+          .filter((reason): reason is string => Boolean(reason))
+      )
+    );
+
+    return {
+      subscriptionCount: subscriptions.length,
+      healthyCount: subscriptions.filter(
+        (subscription) => subscription.lastSuccessAt && !subscription.failureReason
+      ).length,
+      failingCount: subscriptions.filter((subscription) =>
+        Boolean(subscription.failureReason)
+      ).length,
+      lastSuccessAt,
+      lastFailureAt,
+      failureReasons: activeFailureReasons.slice(0, 3),
+    };
   }),
 
   updatePreferences: protectedProcedure

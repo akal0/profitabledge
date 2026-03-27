@@ -55,6 +55,7 @@ type CalendarControlsProps = {
   canNavigateNext: boolean;
   heatmapEnabled: boolean;
   goalOverlay: boolean;
+  showWeekends: boolean;
   exportTargetRef?: RefObject<HTMLElement | null>;
   showPresets?: boolean;
   showShareButton?: boolean;
@@ -66,6 +67,7 @@ type CalendarControlsProps = {
   onViewChange: (mode: ViewMode) => void;
   onToggleHeatmap: () => void;
   onToggleGoalOverlay: () => void;
+  onToggleWeekends: () => void;
   onApplyPreset: (
     widgets: CalendarWidgetType[],
     spans: Partial<Record<CalendarWidgetType, number>>
@@ -83,6 +85,7 @@ export function CalendarControls({
   canNavigateNext,
   heatmapEnabled,
   goalOverlay,
+  showWeekends,
   exportTargetRef,
   showPresets = true,
   showShareButton = true,
@@ -94,6 +97,7 @@ export function CalendarControls({
   onViewChange,
   onToggleHeatmap,
   onToggleGoalOverlay,
+  onToggleWeekends,
   onApplyPreset,
 }: CalendarControlsProps) {
   return (
@@ -142,6 +146,15 @@ export function CalendarControls({
                     disabled
                   >
                     Goals
+                  </Button>
+                ) : null}
+                {showWeekends ? (
+                  <Button
+                    aria-pressed
+                    className={getSegmentedButtonClass(true)}
+                    disabled
+                  >
+                    Weekends
                   </Button>
                 ) : null}
               </div>
@@ -225,6 +238,13 @@ export function CalendarControls({
               >
                 Goals
               </Button>
+              <Button
+                aria-pressed={showWeekends}
+                className={getSegmentedButtonClass(showWeekends)}
+                onClick={onToggleWeekends}
+              >
+                Weekends
+              </Button>
             </div>
           </>
         )}
@@ -247,6 +267,7 @@ export function CalendarControls({
               viewMode,
               heatmapEnabled,
               goalOverlay,
+              showWeekends,
               summaryWidgets,
               summaryWidgetSpans: Object.fromEntries(
                 Object.entries(summaryWidgetSpans).map(([key, value]) => [

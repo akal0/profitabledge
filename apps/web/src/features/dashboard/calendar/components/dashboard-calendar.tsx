@@ -109,6 +109,7 @@ type DashboardCalendarProps = {
   initialViewMode?: ViewMode;
   initialHeatmapEnabled?: boolean;
   initialGoalOverlay?: boolean;
+  initialShowWeekends?: boolean;
   showPresets?: boolean;
   showShareButton?: boolean;
   readOnly?: boolean;
@@ -126,6 +127,7 @@ export default function DashboardCalendar({
   initialViewMode = "month",
   initialHeatmapEnabled = false,
   initialGoalOverlay = false,
+  initialShowWeekends = true,
   showPresets = true,
   showShareButton = true,
   readOnly = false,
@@ -146,6 +148,7 @@ export default function DashboardCalendar({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [heatmapEnabled, setHeatmapEnabled] = useState(initialHeatmapEnabled);
   const [goalOverlay, setGoalOverlay] = useState(initialGoalOverlay);
+  const [showWeekends, setShowWeekends] = useState(initialShowWeekends);
   const [goals, setGoals] = useState<CalendarGoal[]>([]);
   const [rangeSummary, setRangeSummary] = useState<RangeSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -198,8 +201,19 @@ export default function DashboardCalendar({
         addDays(range.start, index)
       );
     }
-    return buildMonthGrid(startOfMonth(range.start));
-  }, [range, viewMode]);
+    const nextGrid = buildMonthGrid(startOfMonth(range.start));
+    return showWeekends
+      ? nextGrid
+      : nextGrid.filter((day) => ![0, 6].includes(day.getDay()));
+  }, [range, showWeekends, viewMode]);
+
+  const visibleWeekDays = useMemo(
+    () =>
+      showWeekends
+        ? calendarDays
+        : calendarDays.filter((day) => ![0, 6].includes(fromDateISO(day.dateISO).getDay())),
+    [calendarDays, showWeekends]
+  );
 
   const heatmapMaxAbs = useMemo(() => {
     if (calendarDays.length === 0) return 1;
@@ -720,6 +734,7 @@ export default function DashboardCalendar({
         canNavigateNext={canNavigateNext}
         heatmapEnabled={heatmapEnabled}
         goalOverlay={goalOverlay}
+        showWeekends={showWeekends}
         exportTargetRef={exportRef}
         showPresets={showPresets}
         showShareButton={showShareButton}
@@ -731,12 +746,13 @@ export default function DashboardCalendar({
         onViewChange={handleViewChange}
         onToggleHeatmap={() => setHeatmapEnabled((value) => !value)}
         onToggleGoalOverlay={() => setGoalOverlay((value) => !value)}
+        onToggleWeekends={() => setShowWeekends((value) => !value)}
         onApplyPreset={onApplyPreset || (() => undefined)}
       />
 
       {loading || !days ? (
         <div className="flex w-full">
-          {Array.from({ length: 7 }).map((_, index) => (
+          {Array.from({ length: showWeekends ? 7 : 5 }).map((_, index) => (
             <div
               key={index}
               className="first:border last:border-l-0 not-last:border-l-0 not-first:border w-full border-black/10 bg-white p-5 dark:border-white/5 dark:bg-sidebar"
@@ -759,6 +775,7 @@ export default function DashboardCalendar({
           <CalendarMonthView
             monthGrid={monthGrid}
             activeMonth={range?.start.getMonth() ?? null}
+            showWeekends={showWeekends}
             dayMap={dayMap}
             goalMap={goalMap}
             goalOverlay={goalOverlay}
@@ -782,7 +799,7 @@ export default function DashboardCalendar({
         </div>
       ) : (
         <CalendarWeekView
-          days={calendarDays}
+          days={visibleWeekDays}
           goalMap={goalMap}
           goalOverlay={goalOverlay}
           heatmapEnabled={heatmapEnabled}

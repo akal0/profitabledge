@@ -52,6 +52,39 @@ export interface NormalizedAccountInfo {
 
 export type ProviderCredentials = Record<string, string>;
 
+export type ProviderMethodName =
+  | "connect"
+  | "disconnect"
+  | "fetchHistory"
+  | "fetchOpenPositions"
+  | "fetchAccountInfo"
+  | "exchangeCode"
+  | "refreshToken";
+
+export type ProviderCapabilityReadiness =
+  | "implemented"
+  | "scaffolded"
+  | "planned";
+
+export interface ProviderCapabilityDetail {
+  supported: boolean;
+  readiness: ProviderCapabilityReadiness;
+  note: string;
+}
+
+export type ProviderCapabilityMap = Partial<
+  Record<ProviderMethodName, ProviderCapabilityDetail>
+>;
+
+export interface ProviderScaffoldMetadata {
+  name: string;
+  description: string;
+  authType: "oauth" | "credentials";
+  fields: string[];
+  status: "active" | "coming_soon";
+  capabilities: ProviderCapabilityMap;
+}
+
 export interface ProviderConfig {
   credentials: ProviderCredentials;
   meta: Record<string, unknown>;

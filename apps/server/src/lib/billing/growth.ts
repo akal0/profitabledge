@@ -43,6 +43,60 @@ import {
   REFERRAL_UPGRADE_TRIAL_THRESHOLD,
   type BillingPlanKey,
 } from "./config";
+import {
+  AFFILIATE_PREMIUM_PLAN_KEY,
+  AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS,
+  AFFILIATE_TIER_CONFIG,
+  AFFILIATE_TIER_EFFECT_VARIANTS,
+  AFFILIATE_TIER_KEYS,
+  AFFILIATE_TIER_MODES,
+  AFFILIATE_TIER_OVERRIDE_ENDS_AT,
+  AFFILIATE_TIER_OVERRIDE_SOURCE,
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  CHECKOUT_ORDER_GRACE_WINDOW_MS,
+  GROWTH_TOUCH_COOKIE,
+  GROWTH_VISITOR_COOKIE,
+  REWARD_TYPE_EDGE_CREDITS,
+  REWARD_TYPE_FREE_MONTH,
+  REWARD_TYPE_UPGRADE_TRIAL,
+  type AffiliateBenefitKey,
+  type AffiliateEffectVariant,
+  type AffiliateTierKey,
+  type AffiliateTierMode,
+} from "./growth-config";
+import {
+  buildAffiliateCode,
+  buildAffiliateOfferCode,
+  buildAffiliateBenefitFlags,
+  buildAffiliatePublicProofMetadata,
+  buildAffiliateProgramMetadata,
+  buildAffiliateShareUrl,
+  buildAffiliateTrackingLinkSlug,
+  buildAffiliateTierSnapshot,
+  buildAttributionExpiryDate,
+  buildGroupName,
+  buildReferralCode,
+  buildReferralShareUrl,
+  collapseWhitespace,
+  formatAffiliatePlanLabel,
+  getAffiliateAutomaticTierKey,
+  getAffiliateMetadataObject,
+  isAffiliateEffectVariant,
+  isAffiliateTierKey,
+  isAffiliateTierMode,
+  normalizeDestinationPath,
+  normalizeAffiliateTierKey,
+  normalizeAffiliateTierMode,
+  normalizeGrowthCode,
+  normalizeGrowthSlug,
+  normalizeWaitlistEmail,
+  normalizeVisitorToken,
+  parseAffiliateBenefitFlags,
+  parseStoredGrowthTouch,
+  readGrowthTouchFromCookies,
+  readGrowthVisitorTokenFromCookies,
+  slugify,
+} from "./growth-helpers";
 import { clampStripeDisplayString, getStripeClient } from "./stripe";
 import {
   createStripeConnectedAccount,
@@ -54,218 +108,57 @@ import {
   retrieveStripeConnectedAccount,
 } from "./stripe-connect";
 
-const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
-const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
-const AFFILIATE_ATTRIBUTION_WINDOW_DAYS = 180;
-const GROWTH_VISITOR_COOKIE = "pe_growth_visitor";
-const GROWTH_TOUCH_COOKIE = "pe_growth_touch";
-const REWARD_TYPE_EDGE_CREDITS = "edge_credits";
-const REWARD_TYPE_FREE_MONTH = "free_month";
-const REWARD_TYPE_UPGRADE_TRIAL = "upgrade_trial";
-const AFFILIATE_TIER_OVERRIDE_SOURCE = "affiliate_tier";
-const AFFILIATE_PREMIUM_PLAN_KEY = "professional" as BillingPlanKey;
-const AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS = 250_000;
-const AFFILIATE_TIER_OVERRIDE_ENDS_AT = new Date("2099-12-31T23:59:59.999Z");
+export {
+  AFFILIATE_PREMIUM_PLAN_KEY,
+  AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS,
+  AFFILIATE_TIER_CONFIG,
+  AFFILIATE_TIER_EFFECT_VARIANTS,
+  AFFILIATE_TIER_KEYS,
+  AFFILIATE_TIER_MODES,
+  AFFILIATE_TIER_OVERRIDE_ENDS_AT,
+  AFFILIATE_TIER_OVERRIDE_SOURCE,
+  ACTIVE_SUBSCRIPTION_STATUSES,
+  CHECKOUT_ORDER_GRACE_WINDOW_MS,
+  GROWTH_TOUCH_COOKIE,
+  GROWTH_VISITOR_COOKIE,
+  REWARD_TYPE_EDGE_CREDITS,
+  REWARD_TYPE_FREE_MONTH,
+  REWARD_TYPE_UPGRADE_TRIAL,
+} from "./growth-config";
 
-export const AFFILIATE_TIER_KEYS = ["partner", "pro", "elite"] as const;
-export const AFFILIATE_TIER_MODES = ["automatic", "manual"] as const;
-export const AFFILIATE_TIER_EFFECT_VARIANTS = [
-  "gold-emerald",
-  "emerald_aurora",
-  "teal_signal",
-] as const;
-
-type AffiliateTierKey = (typeof AFFILIATE_TIER_KEYS)[number];
-type AffiliateTierMode = (typeof AFFILIATE_TIER_MODES)[number];
-type AffiliateEffectVariant = (typeof AFFILIATE_TIER_EFFECT_VARIANTS)[number];
-
-const AFFILIATE_BENEFIT_KEYS = [
-  "customCodeLinks",
-  "affiliateDashboard",
-  "withdrawals",
-  "proofBadge",
-  "premiumAccess",
-  "creatorKit",
-  "prioritySupport",
-  "earlyAccess",
-  "featuredProof",
-  "coBrandedCampaigns",
-  "milestoneBonuses",
-  "brandedEdge",
-  "founderSupport",
-] as const;
-
-type AffiliateBenefitKey = (typeof AFFILIATE_BENEFIT_KEYS)[number];
-
-const AFFILIATE_BENEFIT_COPY: Record<
-  AffiliateBenefitKey,
-  {
-    label: string;
-    description: string;
-    ctaLabel: string;
-  }
-> = {
-  customCodeLinks: {
-    label: "Custom code + tracked link",
-    description: "Share a branded discount code and tracked link from your affiliate dashboard.",
-    ctaLabel: "Share assets",
-  },
-  affiliateDashboard: {
-    label: "Affiliate dashboard",
-    description: "Track revenue, commissions, channels, and referred customers from one route.",
-    ctaLabel: "Open dashboard",
-  },
-  withdrawals: {
-    label: "Withdrawals",
-    description: "Connect Stripe and request payout withdrawals once commission becomes available.",
-    ctaLabel: "Open billing",
-  },
-  proofBadge: {
-    label: "Proof-page badge",
-    description: "Show an affiliate badge and public proof treatment tied to your current tier.",
-    ctaLabel: "View proof treatment",
-  },
-  premiumAccess: {
-    label: "Premium platform access",
-    description: "Stay on a paid platform plan while your affiliate profile remains active.",
-    ctaLabel: "Premium included",
-  },
-  creatorKit: {
-    label: "Creator kit",
-    description: "Unlock partner assets and launch material once you reach the Pro tier.",
-    ctaLabel: "Access creator kit",
-  },
-  prioritySupport: {
-    label: "Priority support",
-    description: "Get faster responses and partner support once your affiliate account levels up.",
-    ctaLabel: "Partner support",
-  },
-  earlyAccess: {
-    label: "Early access",
-    description: "Preview upcoming product releases before the main rollout.",
-    ctaLabel: "Early access",
-  },
-  featuredProof: {
-    label: "Featured proof treatment",
-    description: "Upgrade your public proof styling once you reach a higher affiliate tier.",
-    ctaLabel: "Proof treatment",
-  },
-  coBrandedCampaigns: {
-    label: "Co-branded campaigns",
-    description: "Run deeper launch campaigns and custom partner pages as an Elite affiliate.",
-    ctaLabel: "Campaign access",
-  },
-  milestoneBonuses: {
-    label: "Milestone bonuses",
-    description: "Become eligible for custom bonus payouts tied to launch or referral milestones.",
-    ctaLabel: "Bonus eligibility",
-  },
-  brandedEdge: {
-    label: "Branded Edge",
-    description: "Unlock your own Edge-style creator asset as part of the Elite program.",
-    ctaLabel: "Branded Edge",
-  },
-  founderSupport: {
-    label: "Founder line",
-    description: "Get the highest-touch support path reserved for Elite affiliate partners.",
-    ctaLabel: "Founder line",
-  },
-};
-
-const AFFILIATE_TIER_CONFIG: Record<
-  AffiliateTierKey,
-  {
-    label: string;
-    mode: AffiliateTierMode;
-    summary: string;
-    defaultCommissionBps: number;
-    defaultDiscountBasisPoints: number;
-    publicProof: {
-      badgeLabel: string;
-      effectVariant: AffiliateEffectVariant;
-    };
-    benefits: Record<AffiliateBenefitKey, boolean>;
-  }
-> = {
-  partner: {
-    label: "Partner",
-    mode: "automatic",
-    summary: "Default affiliate tier with recurring revenue share, tracked links, and standard proof treatment.",
-    defaultCommissionBps: 2000,
-    defaultDiscountBasisPoints: 1000,
-    publicProof: {
-      badgeLabel: "Affiliate",
-      effectVariant: "gold-emerald",
-    },
-    benefits: {
-      customCodeLinks: true,
-      affiliateDashboard: true,
-      withdrawals: true,
-      proofBadge: true,
-      premiumAccess: true,
-      creatorKit: false,
-      prioritySupport: false,
-      earlyAccess: false,
-      featuredProof: false,
-      coBrandedCampaigns: false,
-      milestoneBonuses: false,
-      brandedEdge: false,
-      founderSupport: false,
-    },
-  },
-  pro: {
-    label: "Pro",
-    mode: "automatic",
-    summary: "Automatic upgrade tier for affiliates who cross the referred revenue threshold.",
-    defaultCommissionBps: 2500,
-    defaultDiscountBasisPoints: 1000,
-    publicProof: {
-      badgeLabel: "Pro Affiliate",
-      effectVariant: "emerald_aurora",
-    },
-    benefits: {
-      customCodeLinks: true,
-      affiliateDashboard: true,
-      withdrawals: true,
-      proofBadge: true,
-      premiumAccess: true,
-      creatorKit: true,
-      prioritySupport: true,
-      earlyAccess: true,
-      featuredProof: true,
-      coBrandedCampaigns: false,
-      milestoneBonuses: false,
-      brandedEdge: false,
-      founderSupport: false,
-    },
-  },
-  elite: {
-    label: "Elite",
-    mode: "manual",
-    summary: "Manual partner tier for curated affiliates with custom economics and partner treatment.",
-    defaultCommissionBps: 2500,
-    defaultDiscountBasisPoints: 1500,
-    publicProof: {
-      badgeLabel: "Elite Affiliate",
-      effectVariant: "teal_signal",
-    },
-    benefits: {
-      customCodeLinks: true,
-      affiliateDashboard: true,
-      withdrawals: true,
-      proofBadge: true,
-      premiumAccess: true,
-      creatorKit: true,
-      prioritySupport: true,
-      earlyAccess: true,
-      featuredProof: true,
-      coBrandedCampaigns: true,
-      milestoneBonuses: true,
-      brandedEdge: true,
-      founderSupport: true,
-    },
-  },
-};
+export {
+  buildAffiliateBenefitFlags,
+  buildAffiliatePublicProofMetadata,
+  buildAffiliateProgramMetadata,
+  buildAffiliateShareUrl,
+  buildAffiliateTierSnapshot,
+  buildAttributionExpiryDate,
+  buildGroupName,
+  buildReferralShareUrl,
+  buildAffiliateTrackingLinkSlug,
+  buildAffiliateCode,
+  buildAffiliateOfferCode,
+  buildReferralCode,
+  collapseWhitespace,
+  formatAffiliatePlanLabel,
+  getAffiliateAutomaticTierKey,
+  getAffiliateMetadataObject,
+  isAffiliateEffectVariant,
+  isAffiliateTierKey,
+  isAffiliateTierMode,
+  normalizeAffiliateTierKey,
+  normalizeAffiliateTierMode,
+  normalizeDestinationPath,
+  normalizeGrowthCode,
+  normalizeGrowthSlug,
+  normalizeWaitlistEmail,
+  normalizeVisitorToken,
+  parseAffiliateBenefitFlags,
+  parseStoredGrowthTouch,
+  readGrowthTouchFromCookies,
+  readGrowthVisitorTokenFromCookies,
+  slugify,
+} from "./growth-helpers";
 
 type MinimalUser = {
   id: string;
@@ -295,38 +188,6 @@ type AffiliateTouchContext = {
 
 type PendingAttributionRow = typeof affiliatePendingAttribution.$inferSelect;
 
-function buildReferralCode() {
-  return `PE${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-}
-
-function buildAffiliateCode() {
-  return `AFF${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-}
-
-function buildAffiliateOfferCode(baseCode: string) {
-  return normalizeGrowthCode(baseCode);
-}
-
-function buildGroupName(name?: string | null) {
-  const base = name?.trim() || "Profitabledge";
-  return `${base}'s Mentorship`;
-}
-
-function slugify(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-}
-
-function buildReferralShareUrl(code: string) {
-  const url = new URL("/sign-up", getWebAppUrl());
-  url.searchParams.set("ref", code);
-  return url.toString();
-}
-
 async function getUsername(userId: string) {
   const [row] = await db
     .select({ username: userTable.username })
@@ -334,358 +195,6 @@ async function getUsername(userId: string) {
     .where(eq(userTable.id, userId))
     .limit(1);
   return row?.username ?? null;
-}
-
-function buildAffiliateShareUrl(input: {
-  affiliateCode: string;
-  username?: string | null;
-  groupSlug?: string | null;
-  offerCode?: string | null;
-  trackingLinkSlug?: string | null;
-  channel?: string | null;
-  destinationPath?: string | null;
-}) {
-  const handle = input.username || input.affiliateCode;
-  const url = new URL(`/invite/${encodeURIComponent(handle)}`, getWebAppUrl());
-  if (input.channel) {
-    url.searchParams.set("channel", input.channel);
-  }
-  return url.toString();
-}
-
-export function normalizeGrowthCode(input: string) {
-  return input.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
-
-function normalizeGrowthSlug(input?: string | null) {
-  return (input ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function normalizeVisitorToken(input?: string | null) {
-  const value = (input ?? "").trim();
-  return value.length > 0 ? value.slice(0, 120) : null;
-}
-
-function parseStoredGrowthTouch(value?: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(decodeURIComponent(value)) as StoredGrowthTouch;
-    if (!parsed?.type || !parsed?.visitorToken || !parsed?.capturedAtISO) {
-      return null;
-    }
-
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function readGrowthCookie(
-  cookies:
-    | {
-        get(name: string):
-          | {
-              value: string;
-            }
-          | undefined;
-      }
-    | null
-    | undefined,
-  name: string
-) {
-  return cookies?.get(name)?.value ?? null;
-}
-
-export function readGrowthVisitorTokenFromCookies(
-  cookies:
-    | {
-        get(name: string):
-          | {
-              value: string;
-            }
-          | undefined;
-      }
-    | null
-    | undefined
-) {
-  return normalizeVisitorToken(readGrowthCookie(cookies, GROWTH_VISITOR_COOKIE));
-}
-
-export function readGrowthTouchFromCookies(
-  cookies:
-    | {
-        get(name: string):
-          | {
-              value: string;
-            }
-          | undefined;
-      }
-    | null
-    | undefined
-) {
-  return parseStoredGrowthTouch(readGrowthCookie(cookies, GROWTH_TOUCH_COOKIE));
-}
-
-function normalizeWaitlistEmail(input: string) {
-  return input.trim().toLowerCase();
-}
-
-function normalizeDestinationPath(input?: string | null) {
-  const value = input?.trim() || "/sign-up";
-  return value.startsWith("/") ? value : "/sign-up";
-}
-
-function buildAffiliateTrackingLinkSlug(label: string) {
-  return slugify(label) || "main";
-}
-
-function formatAffiliatePlanLabel(planKey?: string | null) {
-  if (!planKey) {
-    return "Unknown";
-  }
-
-  const plan = getBillingPlanDefinition(planKey as BillingPlanKey);
-  if (plan?.title) {
-    return plan.title;
-  }
-
-  return planKey
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
-export function buildAffiliatePublicProofMetadata(
-  metadata?: Record<string, unknown> | null
-) {
-  const program =
-    metadata?.program && typeof metadata.program === "object"
-      ? (metadata.program as Record<string, unknown>)
-      : null;
-  const tierKey = isAffiliateTierKey(program?.tierKey) ? program.tierKey : "partner";
-  const tierDefaults = AFFILIATE_TIER_CONFIG[tierKey].publicProof;
-  const publicProof =
-    metadata && typeof metadata === "object"
-      ? ((metadata.publicProof as Record<string, unknown> | undefined) ?? undefined)
-      : undefined;
-
-  return {
-    badgeLabel:
-      typeof publicProof?.badgeLabel === "string" && publicProof.badgeLabel.trim()
-        ? publicProof.badgeLabel.trim()
-        : tierDefaults.badgeLabel,
-    effectVariant:
-      typeof publicProof?.effectVariant === "string" &&
-      publicProof.effectVariant.trim()
-        ? publicProof.effectVariant.trim()
-        : tierDefaults.effectVariant,
-  };
-}
-
-function isAffiliateTierKey(value: unknown): value is AffiliateTierKey {
-  return typeof value === "string" && AFFILIATE_TIER_KEYS.includes(value as AffiliateTierKey);
-}
-
-function isAffiliateTierMode(value: unknown): value is AffiliateTierMode {
-  return (
-    typeof value === "string" &&
-    AFFILIATE_TIER_MODES.includes(value as AffiliateTierMode)
-  );
-}
-
-function isAffiliateEffectVariant(value: unknown): value is AffiliateEffectVariant {
-  return (
-    typeof value === "string" &&
-    AFFILIATE_TIER_EFFECT_VARIANTS.includes(value as AffiliateEffectVariant)
-  );
-}
-
-function normalizeAffiliateTierKey(value: unknown): AffiliateTierKey {
-  return isAffiliateTierKey(value) ? value : "partner";
-}
-
-function normalizeAffiliateTierMode(value: unknown): AffiliateTierMode {
-  return isAffiliateTierMode(value) ? value : "automatic";
-}
-
-function getAffiliateMetadataObject(
-  metadata?: Record<string, unknown> | null
-): Record<string, unknown> {
-  return metadata && typeof metadata === "object" ? metadata : {};
-}
-
-function buildAffiliateBenefitFlags(
-  tierKey: AffiliateTierKey,
-  overrides?: Partial<Record<AffiliateBenefitKey, boolean>> | null
-) {
-  return AFFILIATE_BENEFIT_KEYS.reduce(
-    (acc, key) => {
-      acc[key] = overrides?.[key] ?? AFFILIATE_TIER_CONFIG[tierKey].benefits[key];
-      return acc;
-    },
-    {} as Record<AffiliateBenefitKey, boolean>
-  );
-}
-
-function parseAffiliateBenefitFlags(
-  program?: Record<string, unknown> | null,
-  tierKey: AffiliateTierKey = "partner"
-) {
-  const rawBenefits =
-    program?.benefits && typeof program.benefits === "object"
-      ? (program.benefits as Record<string, unknown>)
-      : null;
-
-  return buildAffiliateBenefitFlags(
-    tierKey,
-    rawBenefits
-      ? AFFILIATE_BENEFIT_KEYS.reduce(
-          (acc, key) => {
-            if (typeof rawBenefits[key] === "boolean") {
-              acc[key] = rawBenefits[key] as boolean;
-            }
-            return acc;
-          },
-          {} as Partial<Record<AffiliateBenefitKey, boolean>>
-        )
-      : null
-  );
-}
-
-function buildAffiliateProgramMetadata(input: {
-  tierKey: AffiliateTierKey;
-  tierMode: AffiliateTierMode;
-  referredRevenueAmount: number;
-  commissionBps: number;
-  discountBasisPoints: number;
-  benefits?: Partial<Record<AffiliateBenefitKey, boolean>> | null;
-}) {
-  return {
-    tierKey: input.tierKey,
-    tierMode: input.tierMode,
-    referredRevenueAmount: input.referredRevenueAmount,
-    commissionBps: input.commissionBps,
-    discountBasisPoints: input.discountBasisPoints,
-    premiumPlanKey: AFFILIATE_PREMIUM_PLAN_KEY,
-    benefits: buildAffiliateBenefitFlags(input.tierKey, input.benefits),
-  };
-}
-
-function getAffiliateAutomaticTierKey(referredRevenueAmount: number): AffiliateTierKey {
-  return referredRevenueAmount >= AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS
-    ? "pro"
-    : "partner";
-}
-
-function buildAffiliateTierProgress(
-  tierKey: AffiliateTierKey,
-  referredRevenueAmount: number
-) {
-  if (tierKey === "partner") {
-    const remaining = Math.max(
-      AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS - referredRevenueAmount,
-      0
-    );
-
-    return {
-      currentTierKey: tierKey,
-      nextTierKey: "pro" as AffiliateTierKey,
-      nextTierLabel: AFFILIATE_TIER_CONFIG.pro.label,
-      thresholdAmount: AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS,
-      remainingAmount: remaining,
-      progressPercent: Math.min(
-        100,
-        Math.round(
-          (Math.max(referredRevenueAmount, 0) / AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS) *
-            100
-        )
-      ),
-      statusMessage:
-        remaining > 0
-          ? `${new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-            }).format(remaining / 100)} in referred revenue until Pro`
-          : "Pro unlocked",
-      isAutomatic: true,
-    };
-  }
-
-  return {
-    currentTierKey: tierKey,
-    nextTierKey: "elite" as AffiliateTierKey,
-    nextTierLabel: AFFILIATE_TIER_CONFIG.elite.label,
-    thresholdAmount: null,
-    remainingAmount: null,
-    progressPercent: null,
-    statusMessage: "Elite is manually assigned for top affiliate partners.",
-    isAutomatic: false,
-  };
-}
-
-function buildAffiliateBenefitsList(input: {
-  tierKey: AffiliateTierKey;
-  benefitFlags: Record<AffiliateBenefitKey, boolean>;
-}) {
-  return AFFILIATE_BENEFIT_KEYS.map((key) => ({
-    key,
-    label: AFFILIATE_BENEFIT_COPY[key].label,
-    description: AFFILIATE_BENEFIT_COPY[key].description,
-    ctaLabel: AFFILIATE_BENEFIT_COPY[key].ctaLabel,
-    enabled: input.benefitFlags[key],
-  }));
-}
-
-function buildAffiliateTierSnapshot(input: {
-  profile: typeof affiliateProfile.$inferSelect;
-  referredRevenueAmount: number;
-  discountBasisPoints: number;
-}) {
-  const metadata = getAffiliateMetadataObject(
-    (input.profile.metadata as Record<string, unknown> | null | undefined) ?? null
-  );
-  const program =
-    metadata.program && typeof metadata.program === "object"
-      ? (metadata.program as Record<string, unknown>)
-      : null;
-  const tierKey = normalizeAffiliateTierKey(input.profile.tierKey);
-  const tierMode = normalizeAffiliateTierMode(input.profile.tierMode);
-  const benefitFlags = parseAffiliateBenefitFlags(program, tierKey);
-  const publicProof = buildAffiliatePublicProofMetadata(metadata);
-
-  return {
-    key: tierKey,
-    label: AFFILIATE_TIER_CONFIG[tierKey].label,
-    mode: tierMode,
-    modeLabel: tierMode === "manual" ? "Manual" : "Automatic",
-    summary: AFFILIATE_TIER_CONFIG[tierKey].summary,
-    referredRevenueAmount: input.referredRevenueAmount,
-    effectiveCommissionBps: input.profile.commissionBps,
-    effectiveDiscountBasisPoints: input.discountBasisPoints,
-    publicProof,
-    benefits: buildAffiliateBenefitsList({
-      tierKey,
-      benefitFlags,
-    }),
-    benefitFlags,
-    progress: buildAffiliateTierProgress(tierKey, input.referredRevenueAmount),
-    premiumPlanKey: AFFILIATE_PREMIUM_PLAN_KEY,
-    canCustomizeProof:
-      tierKey === "elite" && tierMode === "manual",
-  };
-}
-
-function buildAttributionExpiryDate(from = new Date()) {
-  return new Date(
-    from.getTime() + AFFILIATE_ATTRIBUTION_WINDOW_DAYS * 24 * 60 * 60 * 1000
-  );
 }
 
 function isPendingAttributionActive(

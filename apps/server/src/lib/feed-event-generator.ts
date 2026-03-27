@@ -50,6 +50,62 @@ function getBrokerMeta(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
+function parseFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function extractHighWaterMarkValue(
+  eventData: FeedEventInsert["eventData"] | null | undefined
+): number | null {
+  return parseFiniteNumber(eventData?.metricChange?.to);
+}
+
+export function buildHighWaterMarkEvent(
+  previousHighWaterMark: number,
+  currentBalance: number
+): {
+  type: "high_water_mark";
+  data: FeedEventInsert["eventData"];
+  caption: string;
+} | null {
+  if (
+    !Number.isFinite(previousHighWaterMark) ||
+    !Number.isFinite(currentBalance)
+  ) {
+    return null;
+  }
+
+  const normalizedPreviousHighWaterMark = Number(
+    previousHighWaterMark.toFixed(2)
+  );
+  const normalizedCurrentBalance = Number(currentBalance.toFixed(2));
+
+  if (normalizedCurrentBalance <= normalizedPreviousHighWaterMark) {
+    return null;
+  }
+
+  return {
+    type: "high_water_mark",
+    data: {
+      metricChange: {
+        metric: "account_high_water_mark",
+        from: normalizedPreviousHighWaterMark,
+        to: normalizedCurrentBalance,
+      },
+    },
+    caption: "New account high watermark",
+  };
+}
+
 /**
  * Generate feed event for a closed trade
  */
@@ -87,6 +143,9 @@ export async function generateFeedEventForTrade(tradeId: string): Promise<void> 
     .select({
       socialOptIn: tradingAccount.socialOptIn,
       verificationLevel: tradingAccount.verificationLevel,
+      initialBalance: tradingAccount.initialBalance,
+      liveBalance: tradingAccount.liveBalance,
+      liveEquity: tradingAccount.liveEquity,
     })
     .from(tradingAccount)
     .where(eq(tradingAccount.id, t.accountId))
@@ -96,6 +155,11 @@ export async function generateFeedEventForTrade(tradeId: string): Promise<void> 
     // Account not opted into social or not verified
     return;
   }
+
+  const currentBalance =
+    parseFiniteNumber(account[0].liveEquity) ??
+    parseFiniteNumber(account[0].liveBalance) ??
+    parseFiniteNumber(account[0].initialBalance);
 
   // Determine event types to generate
   const brokerMeta = getBrokerMeta(t.brokerMeta);
@@ -194,30 +258,32 @@ export async function generateFeedEventForTrade(tradeId: string): Promise<void> 
 
   const newEvents = events.filter((event) => !existingEventTypes.has(event.type));
 
-  if (newEvents.length === 0) {
-    return;
+  if (newEvents.length > 0) {
+    // Insert events
+    for (const event of newEvents) {
+      await db.insert(feedEvent).values([{
+        id: nanoid(),
+        accountId: t.accountId,
+        eventType: event.type,
+        tradeId: t.id,
+        eventData: event.data as FeedEventInsert["eventData"],
+        caption: event.caption,
+        isVisible: true,
+      }]);
+    }
+
+    // Update feed event count
+    await db
+      .update(tradingAccount)
+      .set({
+        feedEventCount: sql`${tradingAccount.feedEventCount} + ${newEvents.length}`,
+      })
+      .where(eq(tradingAccount.id, t.accountId));
   }
 
-  // Insert events
-  for (const event of newEvents) {
-    await db.insert(feedEvent).values([{
-      id: nanoid(),
-      accountId: t.accountId,
-      eventType: event.type,
-      tradeId: t.id,
-      eventData: event.data as FeedEventInsert["eventData"],
-      caption: event.caption,
-      isVisible: true,
-    }]);
+  if (currentBalance != null) {
+    await checkForHighWaterMark(t.accountId, currentBalance);
   }
-
-  // Update feed event count
-  await db
-    .update(tradingAccount)
-    .set({
-      feedEventCount: sql`${tradingAccount.feedEventCount} + ${newEvents.length}`,
-    })
-    .where(eq(tradingAccount.id, t.accountId));
 }
 
 /**
@@ -318,7 +384,68 @@ export async function checkForHighWaterMark(
   accountId: string,
   currentBalance: number
 ): Promise<void> {
-  // This would require tracking account equity over time
-  // For now, placeholder
-  // TODO: Implement high water mark tracking
+  if (!Number.isFinite(currentBalance)) {
+    return;
+  }
+
+  const account = await db
+    .select({
+      socialOptIn: tradingAccount.socialOptIn,
+      verificationLevel: tradingAccount.verificationLevel,
+      initialBalance: tradingAccount.initialBalance,
+    })
+    .from(tradingAccount)
+    .where(eq(tradingAccount.id, accountId))
+    .limit(1);
+
+  if (
+    !account[0] ||
+    !account[0].socialOptIn ||
+    account[0].verificationLevel === "unverified"
+  ) {
+    return;
+  }
+
+  const previousHighWaterMarkRows = await db
+    .select({ eventData: feedEvent.eventData })
+    .from(feedEvent)
+    .where(
+      and(
+        eq(feedEvent.accountId, accountId),
+        eq(feedEvent.eventType, "high_water_mark")
+      )
+    )
+    .orderBy(desc(feedEvent.createdAt))
+    .limit(1);
+
+  const previousHighWaterMark =
+    extractHighWaterMarkValue(previousHighWaterMarkRows[0]?.eventData) ??
+    parseFiniteNumber(account[0].initialBalance) ??
+    0;
+
+  const highWaterMarkEvent = buildHighWaterMarkEvent(
+    previousHighWaterMark,
+    currentBalance
+  );
+
+  if (!highWaterMarkEvent) {
+    return;
+  }
+
+  await db.insert(feedEvent).values([{
+    id: nanoid(),
+    accountId,
+    eventType: highWaterMarkEvent.type,
+    tradeId: null,
+    eventData: highWaterMarkEvent.data,
+    caption: highWaterMarkEvent.caption,
+    isVisible: true,
+  }]);
+
+  await db
+    .update(tradingAccount)
+    .set({
+      feedEventCount: sql`${tradingAccount.feedEventCount} + 1`,
+    })
+    .where(eq(tradingAccount.id, accountId));
 }

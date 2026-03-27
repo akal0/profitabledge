@@ -16,7 +16,8 @@ const NAV_LINKS = [
 const BROWSER_TABS = [
   {
     icon: "/landing/tab-pe.svg",
-    label: "profitabledge: Build, prove, and grow your trading edge.",
+    label:
+      "profitabledge: Turn your trading data into your own profitable edge",
     active: true,
   },
   {
@@ -48,7 +49,7 @@ export function Hero({ heroOpacity }: HeroProps) {
     >
       {/* Background illustration */}
       <div
-        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat opacity-25"
+        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat opacity-50"
         style={{
           backgroundImage: "url(/landing/hero-background.svg)",
         }}
@@ -119,9 +120,9 @@ export function Hero({ heroOpacity }: HeroProps) {
                 "radial-gradient(ellipse at top left, #fff 0%, rgba(255,255,255,0.75) 59%, rgba(255,255,255,0.20) 100%)",
             }}
           >
-            Build, prove, and grow
+            Turn your trading data
             <br />
-            your trading edge
+            into your own profitable edge
           </h1>
         </motion.div>
 

@@ -1,13 +1,15 @@
 "use client";
 
 import type { RefObject } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
+import { toast } from "sonner";
 
 import EditWidgets from "@/public/icons/edit-widgets.svg";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -17,7 +19,7 @@ import {
 import { cn } from "@/lib/utils";
 import { WidgetPresets } from "./widget-presets";
 import { exportWidgetsAsJson, exportWidgetsAsCsv } from "./widget-export";
-import { WidgetShareButton } from "@/features/dashboard/widgets/components/widget-share-button";
+import { exportWidgetsAsCombinedPng } from "@/features/dashboard/widgets/lib/widget-share";
 import type { WidgetType } from "./widgets";
 import type { WidgetValueMode } from "@/features/dashboard/widgets/lib/widget-shared";
 
@@ -39,6 +41,8 @@ type Props = {
   widgets?: WidgetType[];
   widgetSpans?: Partial<Record<WidgetType, number>>;
   widgetsExportTargetRef?: RefObject<HTMLElement | null>;
+  calendarExportTargetRef?: RefObject<HTMLElement | null>;
+  chartWidgetsExportTargetRef?: RefObject<HTMLElement | null>;
   leadingActions?: React.ReactNode;
   onApplyPreset?: (
     widgets: WidgetType[],
@@ -58,6 +62,8 @@ const DashboardActionButtons: React.FC<Props> = ({
   widgets = [],
   widgetSpans = {},
   widgetsExportTargetRef,
+  calendarExportTargetRef,
+  chartWidgetsExportTargetRef,
   leadingActions,
   onApplyPreset,
 }) => {
@@ -89,6 +95,58 @@ const DashboardActionButtons: React.FC<Props> = ({
   };
   const hasCurrencySelector =
     currencyOptions.length > 1 && !!onCurrencyCodeChange;
+  const shareOptions = [
+    {
+      key: "all-widgets",
+      label: "All widgets",
+      title: "dashboard-all-widgets",
+      minimumNodes: 3,
+      getNodes: () =>
+        [
+          widgetsExportTargetRef?.current,
+          calendarExportTargetRef?.current,
+          chartWidgetsExportTargetRef?.current,
+        ].filter(Boolean) as HTMLElement[],
+    },
+    {
+      key: "widgets-only",
+      label: "Widget only",
+      title: "dashboard-widgets",
+      minimumNodes: 1,
+      getNodes: () => [widgetsExportTargetRef?.current].filter(Boolean) as HTMLElement[],
+    },
+    {
+      key: "widgets-calendar",
+      label: "Widgets + calendar",
+      title: "dashboard-widgets-calendar",
+      minimumNodes: 2,
+      getNodes: () =>
+        [widgetsExportTargetRef?.current, calendarExportTargetRef?.current].filter(
+          Boolean
+        ) as HTMLElement[],
+    },
+    {
+      key: "widgets-chart-widgets",
+      label: "Widgets + chart widgets",
+      title: "dashboard-widgets-chart-widgets",
+      minimumNodes: 2,
+      getNodes: () =>
+        [
+          widgetsExportTargetRef?.current,
+          chartWidgetsExportTargetRef?.current,
+        ].filter(Boolean) as HTMLElement[],
+    },
+    {
+      key: "calendar-chart-widgets",
+      label: "Calendar + chart widgets",
+      title: "dashboard-calendar-chart-widgets",
+      minimumNodes: 2,
+      getNodes: () =>
+        [calendarExportTargetRef?.current, chartWidgetsExportTargetRef?.current].filter(
+          Boolean
+        ) as HTMLElement[],
+    },
+  ] as const;
   const modeButtonClassName = (isActive: boolean) =>
     cn(
       "cursor-pointer flex transform items-center justify-center gap-2 rounded-md py-2 h-max transition-all active:scale-95 w-max text-xs duration-250",
@@ -99,6 +157,21 @@ const DashboardActionButtons: React.FC<Props> = ({
 
   const controlButtonClassName =
     "cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-md hover:bg-sidebar-accent px-3";
+
+  const handleShare = async (title: string, nodes: HTMLElement[]) => {
+    if (nodes.length === 0) {
+      toast.error("Nothing to share yet");
+      return;
+    }
+
+    try {
+      await exportWidgetsAsCombinedPng({ nodes, title });
+      toast.success("Dashboard PNG downloaded");
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to export dashboard PNG");
+    }
+  };
 
   return (
     <div className="flex gap-2 items-center">
@@ -182,29 +255,42 @@ const DashboardActionButtons: React.FC<Props> = ({
         onExport={handleExport}
       />
       {!isEditing && widgetsExportTargetRef ? (
-        <WidgetShareButton
-          targetRef={widgetsExportTargetRef}
-          title="Dashboard widgets"
-          verificationSurface={{
-            kind: "dashboard",
-            widgets,
-            widgetSpans: Object.fromEntries(
-              Object.entries(widgetSpans).map(([key, value]) => [
-                key,
-                Math.max(1, Math.round(Number(value ?? 1))),
-              ])
-            ),
-            valueMode,
-            currencyCode:
-              currencyLabel && currencyLabel !== "Currency"
-                ? currencyLabel
-                : null,
-          }}
-          successMessage="Widgets PNG downloaded"
-          errorMessage="Failed to export widgets PNG"
-          buttonLabel="Share"
-          className="h-[38px] rounded-md px-3"
-        />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className={controlButtonClassName}>
+              <Download className="size-3.5 text-white/75" />
+              <span>Share</span>
+              <ChevronDown className="size-3.5 text-white/60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-56 rounded-md bg-sidebar p-1 text-white ring-white/5"
+          >
+            <DropdownMenuLabel className="px-3 py-2 text-xs font-normal text-white/40">
+              Export scope
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-white/5" />
+            {shareOptions.map((option) => {
+              const nodes = option.getNodes();
+              const isDisabled = nodes.length < option.minimumNodes;
+
+              return (
+                <DropdownMenuItem
+                  key={option.key}
+                  disabled={isDisabled}
+                  className="cursor-pointer rounded-sm px-3 py-2 text-xs text-white/80 focus:bg-sidebar-accent focus:text-white"
+                  onSelect={(event) => {
+                    event.preventDefault();
+                    void handleShare(option.title, nodes);
+                  }}
+                >
+                  {option.label}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       ) : null}
       <Button onClick={onToggleEdit} className={controlButtonClassName}>
         <EditWidgets className="size-3.5 fill-white/75" />

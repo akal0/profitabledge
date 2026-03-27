@@ -419,7 +419,7 @@ export const insightsProcedure = protectedProcedure
       userId,
       "manual"
     );
-    if (insights.length > 0 && !isAllAccountsScope(input.accountId)) {
+    if (insights.length > 0) {
       await saveInsights(input.accountId, userId, insights, "manual");
     }
 

@@ -35,7 +35,6 @@ import {
   type ConnectionRow as DashboardConnectionRow,
 } from "@/features/dashboard-shell/lib/connection-status";
 import { useDashboardWorkspaceReady } from "@/features/dashboard/home/hooks/use-dashboard-workspace-ready";
-import { AllAccountsBreakdownWidget } from "@/features/dashboard/widgets/components/all-accounts-breakdown-widget";
 
 type DashboardPageConnection = DashboardConnectionRow & {
   id: string;
@@ -45,6 +44,8 @@ type DashboardPageConnection = DashboardConnectionRow & {
 
 function DashboardPageContent() {
   const widgetsExportRef = useRef<HTMLDivElement | null>(null);
+  const calendarExportRef = useRef<HTMLDivElement | null>(null);
+  const chartWidgetsExportRef = useRef<HTMLDivElement | null>(null);
   const accountId = useAccountStore((state) => state.selectedAccountId);
   const allAccountsPreferredCurrencyCode = useAccountStore(
     (state) => state.allAccountsPreferredCurrencyCode
@@ -185,6 +186,8 @@ function DashboardPageContent() {
             accountAction={accountAction}
             leadingActions={<DashboardTradeFiltersBar mode="button" />}
             widgetsExportTargetRef={widgetsExportRef}
+            calendarExportTargetRef={calendarExportRef}
+            chartWidgetsExportTargetRef={chartWidgetsExportRef}
             widgets={widgets}
             widgetSpans={widgetSpans}
             onValueModeChange={setValueMode}
@@ -193,14 +196,7 @@ function DashboardPageContent() {
           />
 
           <div className="flex flex-1 flex-col gap-8">
-            <div ref={widgetsExportRef} className="space-y-1.5">
-              {accountId === ALL_ACCOUNTS_ID ? (
-                <AllAccountsBreakdownWidget
-                  accountId={accountId}
-                  currencyCode={currencyCode}
-                  className="h-[18rem]"
-                />
-              ) : null}
+            <div ref={widgetsExportRef}>
               <Widgets
                 enabledWidgets={widgets}
                 accountId={accountId}
@@ -216,23 +212,27 @@ function DashboardPageContent() {
               />
             </div>
 
-            <Calendar
-              accountId={accountId}
-              summaryWidgets={calendarWidgets}
-              summaryWidgetSpans={calendarWidgetSpans}
-              onApplyPreset={applyCalendarPreset}
-            />
+            <div ref={calendarExportRef}>
+              <Calendar
+                accountId={accountId}
+                summaryWidgets={calendarWidgets}
+                summaryWidgetSpans={calendarWidgetSpans}
+                onApplyPreset={applyCalendarPreset}
+              />
+            </div>
 
-            <ChartWidgets
-              accountId={accountId}
-              enabledWidgets={chartWidgets}
-              isEditing={isChartWidgetsEditing}
-              onToggleWidget={toggleChartWidget}
-              onReorder={reorderChartWidgets}
-              onEnterEdit={enterChartWidgetsEdit}
-              onToggleEdit={toggleChartWidgetsEdit}
-              onApplyPreset={applyChartPreset}
-            />
+            <div ref={chartWidgetsExportRef}>
+              <ChartWidgets
+                accountId={accountId}
+                enabledWidgets={chartWidgets}
+                isEditing={isChartWidgetsEditing}
+                onToggleWidget={toggleChartWidget}
+                onReorder={reorderChartWidgets}
+                onEnterEdit={enterChartWidgetsEdit}
+                onToggleEdit={toggleChartWidgetsEdit}
+                onApplyPreset={applyChartPreset}
+              />
+            </div>
           </div>
         </main>
       </WidgetShareScopeProvider>

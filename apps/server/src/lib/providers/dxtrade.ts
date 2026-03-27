@@ -1,45 +1,35 @@
 /**
- * DXTrade REST API Provider (Stub)
+ * DXTrade REST API Provider scaffold.
  *
- * Session cookie auth: POST /dxsca-web/login → JSESSIONID cookie
+ * Session cookie auth: POST /dxsca-web/login -> JSESSIONID cookie
  * Used by: FundingPips, Alpha Capital, BrightFunded, FundedNext
- *
- * TODO: Implement once DXTrade API access is configured.
  */
-import type {
-  TradingProvider,
-  ProviderConfig,
-  NormalizedTrade,
-  NormalizedPosition,
-  NormalizedAccountInfo,
-} from "./types";
+import {
+  createProviderScaffoldMetadata,
+  ScaffoldedTradingProvider,
+} from "./scaffold";
 
-export class DXTradeProvider implements TradingProvider {
-  async connect(_config: ProviderConfig): Promise<NormalizedAccountInfo> {
-    throw new Error("DXTrade provider is not yet implemented. Coming soon.");
-  }
+export const DXTRADE_PROVIDER_INFO = createProviderScaffoldMetadata({
+  name: "DXTrade",
+  description: "Used by FundingPips, Alpha Capital, BrightFunded, FundedNext.",
+  authType: "credentials",
+  fields: ["serverUrl", "login", "password"],
+  status: "coming_soon",
+  capabilityNotes: {
+    connect: "DXTrade login is not wired into the sync engine yet.",
+    fetchHistory:
+      "Trade history sync depends on the DXTrade session and reporting APIs.",
+    fetchOpenPositions:
+      "Open-position sync depends on the DXTrade session and reporting APIs.",
+    fetchAccountInfo:
+      "Account snapshot sync depends on the DXTrade session and reporting APIs.",
+    exchangeCode: "DXTrade does not use an OAuth flow.",
+    refreshToken: "DXTrade credentials are not refreshed through this scaffold.",
+  },
+});
 
-  async disconnect(): Promise<void> {}
-
-  async fetchHistory(
-    _config: ProviderConfig,
-    _since: Date | null,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedTrade[]> {
-    throw new Error("DXTrade provider is not yet implemented.");
-  }
-
-  async fetchOpenPositions(
-    _config: ProviderConfig,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedPosition[]> {
-    throw new Error("DXTrade provider is not yet implemented.");
-  }
-
-  async fetchAccountInfo(
-    _config: ProviderConfig,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedAccountInfo> {
-    throw new Error("DXTrade provider is not yet implemented.");
+export class DXTradeProvider extends ScaffoldedTradingProvider {
+  constructor() {
+    super("DXTrade", DXTRADE_PROVIDER_INFO.capabilities);
   }
 }

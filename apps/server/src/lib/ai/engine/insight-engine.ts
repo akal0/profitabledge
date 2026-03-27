@@ -216,21 +216,40 @@ export async function saveInsights(
   triggeredBy?: string
 ): Promise<void> {
   if (insights.length === 0) return;
-  if (isAllAccountsScope(accountId)) return;
+
+  let targetAccountId = accountId;
+  let scopedAccountIds: string[] = [];
+
+  if (isAllAccountsScope(accountId)) {
+    scopedAccountIds = await resolveScopedAccountIds(userId, accountId);
+    if (scopedAccountIds.length === 0) return;
+    targetAccountId = scopedAccountIds[0]!;
+  }
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 7); // Insights expire after 7 days
 
   await db.insert(traderInsight).values(
     insights.map((insight) => ({
-      accountId,
+      accountId: targetAccountId,
       userId,
       category: insight.category,
       severity: insight.severity,
       title: insight.title,
       message: insight.message,
       recommendation: insight.recommendation,
-      data: insight.data,
+      data: isAllAccountsScope(accountId)
+        ? {
+            ...(insight.data &&
+            typeof insight.data === "object" &&
+            !Array.isArray(insight.data)
+              ? insight.data
+              : {}),
+            scope: "all_accounts",
+            scopedAccountIds,
+            scopedAccountCount: scopedAccountIds.length,
+          }
+        : insight.data,
       triggerType: trigger,
       triggeredBy: triggeredBy || null,
       expiresAt,

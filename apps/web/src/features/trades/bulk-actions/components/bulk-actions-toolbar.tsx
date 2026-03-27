@@ -319,6 +319,7 @@ export function BulkActionsToolbar({
 
   const singleTradeCardData: PnlCardData | null = singleTrade
     ? {
+        tradeId: singleTrade.id,
         symbol: singleTrade.symbol || "Unknown",
         tradeType: singleTrade.tradeDirection,
         profit: singleTrade.profit,

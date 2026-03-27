@@ -2,6 +2,7 @@
 
 export type WidgetType =
   | "account-balance"
+  | "account-contribution"
   | "account-equity"
   | "win-streak"
   | "profit-factor"
@@ -25,6 +26,7 @@ export type WidgetType =
 
 export const ALL_WIDGET_TYPES: WidgetType[] = [
   "account-balance",
+  "account-contribution",
   "account-equity",
   "win-rate",
   "profit-factor",
@@ -51,9 +53,11 @@ export const DEFAULT_WIDGETS: WidgetType[] = [
   "account-balance",
   "win-rate",
   "profit-factor",
+  "account-contribution",
 ];
 
 export const DEFAULT_WIDGET_SPANS: Partial<Record<WidgetType, number>> = {
+  "account-contribution": 2,
   "asset-profitability": 2,
   "total-losses": 2,
   "open-trades": 2,

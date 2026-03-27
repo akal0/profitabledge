@@ -55,6 +55,7 @@ interface WidgetPresetsProps {
 const STORAGE_KEY = "profitable-edge-widget-presets";
 const VALID_WIDGET_TYPES = new Set<WidgetType>([
   "account-balance",
+  "account-contribution",
   "account-equity",
   "win-rate",
   "profit-factor",
@@ -90,7 +91,13 @@ const builtInPresets: WidgetPreset[] = [
     id: "builtin-default",
     name: "Default",
     createdAt: new Date().toISOString(),
-    widgets: ["account-balance", "win-rate", "profit-factor", "win-streak"],
+    widgets: [
+      "account-balance",
+      "win-rate",
+      "profit-factor",
+      "win-streak",
+      "account-contribution",
+    ],
     spans: {},
   },
   {

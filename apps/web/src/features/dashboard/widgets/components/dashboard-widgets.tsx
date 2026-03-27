@@ -21,6 +21,7 @@ import {
 } from "@/features/dashboard/widgets/lib/widget-config";
 import type { WidgetValueMode } from "@/features/dashboard/widgets/lib/widget-shared";
 import { useDashboardAssistantContextStore } from "@/stores/dashboard-assistant-context";
+import { ALL_ACCOUNTS_ID } from "@/stores/account";
 
 export interface TopWidgetsProps {
   enabledWidgets: WidgetType[];
@@ -41,6 +42,7 @@ const LIVE_ONLY_WIDGETS = new Set<WidgetType>([
   "account-equity",
   "open-trades",
 ]);
+const ALL_ACCOUNTS_ONLY_WIDGETS = new Set<WidgetType>(["account-contribution"]);
 
 export function DashboardWidgets({
   enabledWidgets,
@@ -68,9 +70,17 @@ export function DashboardWidgets({
     type: WidgetType;
     span: number;
   } | null>(null);
+  const isAllAccounts = accountId === ALL_ACCOUNTS_ID;
+  const isWidgetAvailableForScope = useMemo(
+    () => (widget: WidgetType) =>
+      isAllAccounts || !ALL_ACCOUNTS_ONLY_WIDGETS.has(widget),
+    [isAllAccounts]
+  );
 
   const visibleEnabledWidgets = enabledWidgets.filter(
-    (widget) => supportsLiveWidgets || !LIVE_ONLY_WIDGETS.has(widget)
+    (widget) =>
+      isWidgetAvailableForScope(widget) &&
+      (supportsLiveWidgets || !LIVE_ONLY_WIDGETS.has(widget))
   );
   const displayWidgets = visibleEnabledWidgets.slice(0, maxWidgets);
 
@@ -78,10 +88,11 @@ export function DashboardWidgets({
     () =>
       ALL_WIDGET_TYPES.filter(
         (widget) =>
+          isWidgetAvailableForScope(widget) &&
           (supportsLiveWidgets || !LIVE_ONLY_WIDGETS.has(widget)) &&
-          !displayWidgets.includes(widget)
+          !visibleEnabledWidgets.includes(widget)
       ),
-    [displayWidgets, supportsLiveWidgets]
+    [isWidgetAvailableForScope, supportsLiveWidgets, visibleEnabledWidgets]
   );
 
   // Fill the last partial row after ALL widgets (active + catalog tiles)

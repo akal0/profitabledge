@@ -5,6 +5,7 @@ import { formatDistance } from "date-fns";
 import QRCode from "react-qr-code";
 
 export interface PnlCardData {
+  tradeId: string;
   symbol: string;
   tradeType: "long" | "short" | "buy" | "sell";
   profit: number;

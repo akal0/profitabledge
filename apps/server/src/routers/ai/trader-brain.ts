@@ -6,6 +6,11 @@ import { db } from "../../db";
 import { trade as tradeTable } from "../../db/schema/trading";
 import { traderAlert, traderInsight } from "../../db/schema/trader-brain";
 import {
+  buildAccountScopeCondition,
+  isAllAccountsScope,
+  resolveScopedAccountIds,
+} from "../../lib/account-scope";
+import {
   computeTraderProfile,
   condenseProfile,
   generateInsights,
@@ -360,10 +365,15 @@ If you need clarification:
       })
     )
     .query(async ({ ctx, input }) => {
+      const scopedAccountIds = isAllAccountsScope(input.accountId)
+        ? await resolveScopedAccountIds(ctx.session.user.id, input.accountId)
+        : [];
       const conditions = [
-        eq(traderInsight.accountId, input.accountId),
         eq(traderInsight.userId, ctx.session.user.id),
         eq(traderInsight.isDismissed, false),
+        isAllAccountsScope(input.accountId)
+          ? buildAccountScopeCondition(traderInsight.accountId, scopedAccountIds)
+          : eq(traderInsight.accountId, input.accountId),
       ];
 
       if (input.unreadOnly) {
@@ -382,8 +392,13 @@ If you need clarification:
         .from(traderInsight)
         .where(
           and(
-            eq(traderInsight.accountId, input.accountId),
             eq(traderInsight.userId, ctx.session.user.id),
+            isAllAccountsScope(input.accountId)
+              ? buildAccountScopeCondition(
+                  traderInsight.accountId,
+                  scopedAccountIds
+                )
+              : eq(traderInsight.accountId, input.accountId),
             eq(traderInsight.isRead, false),
             eq(traderInsight.isDismissed, false)
           )

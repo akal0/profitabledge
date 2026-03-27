@@ -2,8 +2,11 @@
  * Central provider registry. Maps provider string identifiers
  * to lazy factory functions. Providers are only loaded when needed.
  */
-import type { TradingProvider } from "./types";
+import type { ProviderCapabilityMap, TradingProvider } from "./types";
 import { MT_TERMINAL_PROVIDERS } from "../mt5/constants";
+import { DXTRADE_PROVIDER_INFO } from "./dxtrade";
+import { TOPSTEPX_PROVIDER_INFO } from "./topstepx";
+import { TRADOVATE_PROVIDER_INFO } from "./tradovate";
 
 const providerFactories: Record<string, () => Promise<TradingProvider>> = {
   ctrader: async () => {
@@ -57,6 +60,7 @@ export const PROVIDER_INFO: Record<
     authType: "oauth" | "credentials";
     fields: string[];
     status: "active" | "coming_soon";
+    capabilities: ProviderCapabilityMap;
   }
 > = {
   "mt5-terminal": {
@@ -66,6 +70,33 @@ export const PROVIDER_INFO: Record<
     authType: "credentials",
     fields: ["login", "password", "server"],
     status: "active",
+    capabilities: {
+      connect: {
+        supported: true,
+        readiness: "implemented",
+        note: "MT5 terminal connections are fully supported.",
+      },
+      disconnect: {
+        supported: true,
+        readiness: "implemented",
+        note: "MT5 terminal connections are fully supported.",
+      },
+      fetchHistory: {
+        supported: true,
+        readiness: "implemented",
+        note: "MT5 terminal trade sync is supported.",
+      },
+      fetchOpenPositions: {
+        supported: true,
+        readiness: "implemented",
+        note: "MT5 terminal position sync is supported.",
+      },
+      fetchAccountInfo: {
+        supported: true,
+        readiness: "implemented",
+        note: "MT5 terminal account sync is supported.",
+      },
+    },
   },
   "mt4-terminal": {
     name: "MetaTrader 4",
@@ -74,6 +105,33 @@ export const PROVIDER_INFO: Record<
     authType: "credentials",
     fields: ["login", "password", "server"],
     status: "coming_soon",
+    capabilities: {
+      connect: {
+        supported: false,
+        readiness: "planned",
+        note: "MT4 terminal sync is not available yet.",
+      },
+      disconnect: {
+        supported: true,
+        readiness: "implemented",
+        note: "There is no live MT4 integration to release yet.",
+      },
+      fetchHistory: {
+        supported: false,
+        readiness: "planned",
+        note: "MT4 trade-history sync is not available yet.",
+      },
+      fetchOpenPositions: {
+        supported: false,
+        readiness: "planned",
+        note: "MT4 open-position sync is not available yet.",
+      },
+      fetchAccountInfo: {
+        supported: false,
+        readiness: "planned",
+        note: "MT4 account sync is not available yet.",
+      },
+    },
   },
   ctrader: {
     name: "cTrader",
@@ -82,6 +140,43 @@ export const PROVIDER_INFO: Record<
     authType: "oauth",
     fields: [],
     status: "active",
+    capabilities: {
+      connect: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader account verification is supported.",
+      },
+      disconnect: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader is stateless between sync runs.",
+      },
+      fetchHistory: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader trade-history sync is supported.",
+      },
+      fetchOpenPositions: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader open-position sync is supported.",
+      },
+      fetchAccountInfo: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader account sync is supported.",
+      },
+      exchangeCode: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader supports OAuth authorization-code exchange.",
+      },
+      refreshToken: {
+        supported: true,
+        readiness: "implemented",
+        note: "cTrader supports OAuth refresh-token rotation.",
+      },
+    },
   },
   "match-trader": {
     name: "Match-Trader",
@@ -90,6 +185,33 @@ export const PROVIDER_INFO: Record<
     authType: "credentials",
     fields: ["serverUrl", "login", "password"],
     status: "active",
+    capabilities: {
+      connect: {
+        supported: true,
+        readiness: "implemented",
+        note: "Match-Trader account verification is supported.",
+      },
+      disconnect: {
+        supported: true,
+        readiness: "implemented",
+        note: "Match-Trader is stateless between sync runs.",
+      },
+      fetchHistory: {
+        supported: true,
+        readiness: "implemented",
+        note: "Match-Trader trade-history sync is supported.",
+      },
+      fetchOpenPositions: {
+        supported: true,
+        readiness: "implemented",
+        note: "Match-Trader open-position sync is supported.",
+      },
+      fetchAccountInfo: {
+        supported: true,
+        readiness: "implemented",
+        note: "Match-Trader account sync is supported.",
+      },
+    },
   },
   tradelocker: {
     name: "TradeLocker",
@@ -98,28 +220,46 @@ export const PROVIDER_INFO: Record<
     authType: "credentials",
     fields: ["email", "password", "server"],
     status: "active",
+    capabilities: {
+      connect: {
+        supported: true,
+        readiness: "implemented",
+        note: "TradeLocker account verification is supported.",
+      },
+      disconnect: {
+        supported: true,
+        readiness: "implemented",
+        note: "TradeLocker is stateless between sync runs.",
+      },
+      fetchHistory: {
+        supported: true,
+        readiness: "implemented",
+        note: "TradeLocker trade-history sync is supported.",
+      },
+      fetchOpenPositions: {
+        supported: true,
+        readiness: "implemented",
+        note: "TradeLocker open-position sync is supported.",
+      },
+      fetchAccountInfo: {
+        supported: true,
+        readiness: "implemented",
+        note: "TradeLocker account sync is supported.",
+      },
+      refreshToken: {
+        supported: true,
+        readiness: "implemented",
+        note: "TradeLocker issues refresh tokens for its JWT auth flow.",
+      },
+    },
   },
   dxtrade: {
-    name: "DXTrade",
-    description:
-      "Used by FundingPips, Alpha Capital, BrightFunded, FundedNext.",
-    authType: "credentials",
-    fields: ["serverUrl", "login", "password"],
-    status: "coming_soon",
+    ...DXTRADE_PROVIDER_INFO,
   },
   tradovate: {
-    name: "Tradovate",
-    description:
-      "Futures platform. Used by Apex Trader Funding, Topstep (legacy).",
-    authType: "oauth",
-    fields: [],
-    status: "coming_soon",
+    ...TRADOVATE_PROVIDER_INFO,
   },
   topstepx: {
-    name: "TopstepX",
-    description: "Futures platform. Used by Topstep exclusively.",
-    authType: "credentials",
-    fields: ["apiKey"],
-    status: "coming_soon",
+    ...TOPSTEPX_PROVIDER_INFO,
   },
 };

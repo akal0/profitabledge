@@ -16,6 +16,7 @@ export interface WidgetExportData {
 
 const widgetLabels: Record<WidgetType, string> = {
   "account-balance": "Account Balance",
+  "account-contribution": "Account Contribution",
   "account-equity": "Account Equity",
   "win-rate": "Win Rate",
   "profit-factor": "Profit Factor",

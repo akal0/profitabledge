@@ -40,6 +40,7 @@ export function TradeActionsMenu({ trade }: TradeActionsMenuProps) {
 
   // Prepare card data
   const cardData: PnlCardData = {
+    tradeId: trade.id,
     symbol: trade.symbol || "Unknown",
     tradeType: trade.tradeDirection,
     profit: trade.profit,

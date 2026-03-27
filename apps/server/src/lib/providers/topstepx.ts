@@ -1,45 +1,35 @@
 /**
- * TopstepX / ProjectX REST API Provider (Stub)
+ * TopstepX / ProjectX REST API Provider scaffold.
  *
- * REST + JWT auth: POST /api/Auth/loginKey → token
+ * REST + JWT auth: POST /api/Auth/loginKey -> token
  * Used by: Topstep exclusively
- *
- * TODO: Implement once TopstepX API access is configured.
  */
-import type {
-  TradingProvider,
-  ProviderConfig,
-  NormalizedTrade,
-  NormalizedPosition,
-  NormalizedAccountInfo,
-} from "./types";
+import {
+  createProviderScaffoldMetadata,
+  ScaffoldedTradingProvider,
+} from "./scaffold";
 
-export class TopstepXProvider implements TradingProvider {
-  async connect(_config: ProviderConfig): Promise<NormalizedAccountInfo> {
-    throw new Error("TopstepX provider is not yet implemented. Coming soon.");
-  }
+export const TOPSTEPX_PROVIDER_INFO = createProviderScaffoldMetadata({
+  name: "TopstepX",
+  description: "Futures platform. Used by Topstep exclusively.",
+  authType: "credentials",
+  fields: ["apiKey"],
+  status: "coming_soon",
+  capabilityNotes: {
+    connect: "TopstepX authentication has not been wired into the sync engine yet.",
+    fetchHistory:
+      "Trade history sync depends on the ProjectX / TopstepX API integration.",
+    fetchOpenPositions:
+      "Open-position sync depends on the ProjectX / TopstepX API integration.",
+    fetchAccountInfo:
+      "Account snapshot sync depends on the ProjectX / TopstepX API integration.",
+    exchangeCode: "TopstepX does not use an OAuth flow.",
+    refreshToken: "TopstepX does not expose refresh-token credentials here.",
+  },
+});
 
-  async disconnect(): Promise<void> {}
-
-  async fetchHistory(
-    _config: ProviderConfig,
-    _since: Date | null,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedTrade[]> {
-    throw new Error("TopstepX provider is not yet implemented.");
-  }
-
-  async fetchOpenPositions(
-    _config: ProviderConfig,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedPosition[]> {
-    throw new Error("TopstepX provider is not yet implemented.");
-  }
-
-  async fetchAccountInfo(
-    _config: ProviderConfig,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedAccountInfo> {
-    throw new Error("TopstepX provider is not yet implemented.");
+export class TopstepXProvider extends ScaffoldedTradingProvider {
+  constructor() {
+    super("TopstepX", TOPSTEPX_PROVIDER_INFO.capabilities);
   }
 }

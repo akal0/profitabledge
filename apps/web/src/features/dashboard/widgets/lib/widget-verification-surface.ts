@@ -12,6 +12,7 @@ export type WidgetVerificationSurface =
       viewMode: "week" | "month";
       heatmapEnabled?: boolean;
       goalOverlay?: boolean;
+      showWeekends?: boolean;
       summaryWidgets?: string[];
       summaryWidgetSpans?: Record<string, number>;
     }
@@ -31,6 +32,7 @@ export type WidgetVerificationSurface =
 
 const DASHBOARD_WIDGET_TITLE_TO_TYPE: Record<string, WidgetType> = {
   "Account balance": "account-balance",
+  "Account contribution": "account-contribution",
   "Account equity": "account-equity",
   "Win rate": "win-rate",
   "Win streak": "win-streak",

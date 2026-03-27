@@ -1,45 +1,35 @@
 /**
- * Tradovate REST API Provider (Stub)
+ * Tradovate REST API Provider scaffold.
  *
  * OAuth2 + WebSocket for live data
  * Used by: Apex Trader Funding, Topstep (legacy), SpeedUp Trader
- *
- * TODO: Implement once Tradovate partner API access is configured.
  */
-import type {
-  TradingProvider,
-  ProviderConfig,
-  NormalizedTrade,
-  NormalizedPosition,
-  NormalizedAccountInfo,
-} from "./types";
+import {
+  createProviderScaffoldMetadata,
+  ScaffoldedTradingProvider,
+} from "./scaffold";
 
-export class TradovateProvider implements TradingProvider {
-  async connect(_config: ProviderConfig): Promise<NormalizedAccountInfo> {
-    throw new Error("Tradovate provider is not yet implemented. Coming soon.");
-  }
+export const TRADOVATE_PROVIDER_INFO = createProviderScaffoldMetadata({
+  name: "Tradovate",
+  description: "Futures platform. Used by Apex Trader Funding, Topstep (legacy).",
+  authType: "oauth",
+  fields: [],
+  status: "coming_soon",
+  capabilityNotes: {
+    connect: "Tradovate OAuth and live account lookup are not wired in yet.",
+    fetchHistory:
+      "Tradovate trade-history sync still needs authenticated REST/WebSocket wiring.",
+    fetchOpenPositions:
+      "Tradovate position sync still needs authenticated REST/WebSocket wiring.",
+    fetchAccountInfo:
+      "Tradovate account snapshots still need authenticated REST/WebSocket wiring.",
+    exchangeCode: "Tradovate OAuth exchange is not wired in yet.",
+    refreshToken: "Tradovate OAuth refresh is not wired in yet.",
+  },
+});
 
-  async disconnect(): Promise<void> {}
-
-  async fetchHistory(
-    _config: ProviderConfig,
-    _since: Date | null,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedTrade[]> {
-    throw new Error("Tradovate provider is not yet implemented.");
-  }
-
-  async fetchOpenPositions(
-    _config: ProviderConfig,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedPosition[]> {
-    throw new Error("Tradovate provider is not yet implemented.");
-  }
-
-  async fetchAccountInfo(
-    _config: ProviderConfig,
-    _accountMeta: Record<string, unknown>
-  ): Promise<NormalizedAccountInfo> {
-    throw new Error("Tradovate provider is not yet implemented.");
+export class TradovateProvider extends ScaffoldedTradingProvider {
+  constructor() {
+    super("Tradovate", TRADOVATE_PROVIDER_INFO.capabilities);
   }
 }

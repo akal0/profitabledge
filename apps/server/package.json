@@ -21,6 +21,7 @@
     "mt5:mock-sync": "bun run src/scripts/mock-mt5-worker-sync.ts",
     "price:dedupe": "bun run src/scripts/dedupe-historical-prices.ts",
     "price:prune": "bun run src/scripts/prune-price-data.ts",
+    "db:check-migrations": "bun run src/scripts/check-migration-integrity.ts",
     "db:push": "../../node_modules/.bin/drizzle-kit push",
     "db:rename-ai-action-log-indexes": "bun run src/scripts/rename-ai-action-log-indexes.ts",
     "db:find-duplicate-indexes": "bun run src/scripts/find-duplicate-indexes.ts",
@@ -67,7 +68,7 @@
     "@types/react": "^19",
     "typescript": "^5",
     "@types/bun": "^1.2.6",
-    "drizzle-kit": "^0.31.2",
+    "drizzle-kit": "^0.31.8",
     "@types/ws": "^8.18.1"
   }
 }

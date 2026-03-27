@@ -42,6 +42,10 @@ import {
   AssistantStatCardGrid,
   AssistantProfileSummaryWidgets,
 } from "@/components/ai/assistant-insight-widgets";
+import {
+  normalizeTradeIds,
+  viewTrades,
+} from "@/components/ai/trade-navigation";
 
 interface AnalysisBlockRendererProps {
   block: AnalysisBlock;
@@ -67,7 +71,9 @@ export function AnalysisBlockRenderer({
       {block.type === "coverage" && <CoverageBlock block={block} />}
       {block.type === "stats" && <StatsBlock block={block} />}
       {block.type === "breakdownTable" && <BreakdownTableBlock block={block} />}
-      {block.type === "tradePreview" && <TradePreviewBlock block={block} />}
+      {block.type === "tradePreview" && (
+        <TradePreviewBlock block={block} onViewTrades={onViewTrades} />
+      )}
       {block.type === "callout" && <CalloutBlock block={block} />}
       {block.type === "visualization" && (
         <VisualizationBlock viz={block.viz} onViewTrades={onViewTrades} />
@@ -387,25 +393,31 @@ function isDateColumn(columnLower: string): boolean {
 
 function TradePreviewBlock({
   block,
+  onViewTrades,
 }: {
   block: Extract<AnalysisBlock, { type: "tradePreview" }>;
+  onViewTrades?: (tradeIds: string[]) => void;
 }) {
+  const tradeIds = normalizeTradeIds(block.tradeIds);
   const handleShowAll = () => {
-    // TODO: Navigate to trades table with filtered IDs
-    const ids = block.tradeIds.join(",");
-    window.location.href = `/dashboard/trades?ids=${ids}`;
+    viewTrades(tradeIds, onViewTrades);
   };
 
   return (
     <AnalysisShellBlockShell
       title={sentenceCase(block.title)}
       actions={
-        <button
-          onClick={handleShowAll}
-          className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-        >
-          Show all →
-        </button>
+        tradeIds.length > 0 ? (
+          <button
+            type="button"
+            onClick={handleShowAll}
+            className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+          >
+            {tradeIds.length > 1
+              ? `Show all ${tradeIds.length} trades`
+              : "View trade"}
+          </button>
+        ) : null
       }
     >
       <div className="overflow-x-auto">

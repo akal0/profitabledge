@@ -24,6 +24,8 @@ export function DashboardOverviewHeader({
   accountAction,
   leadingActions,
   widgetsExportTargetRef,
+  calendarExportTargetRef,
+  chartWidgetsExportTargetRef,
   widgets,
   widgetSpans,
   onValueModeChange,
@@ -39,6 +41,8 @@ export function DashboardOverviewHeader({
   accountAction?: DashboardAccountAction | null;
   leadingActions?: React.ReactNode;
   widgetsExportTargetRef?: RefObject<HTMLElement | null>;
+  calendarExportTargetRef?: RefObject<HTMLElement | null>;
+  chartWidgetsExportTargetRef?: RefObject<HTMLElement | null>;
   widgets: WidgetType[];
   widgetSpans: Partial<Record<WidgetType, number>>;
   onValueModeChange: (value: WidgetValueMode) => void;
@@ -86,6 +90,8 @@ export function DashboardOverviewHeader({
           accountAction={accountAction}
           leadingActions={leadingActions}
           widgetsExportTargetRef={widgetsExportTargetRef}
+          calendarExportTargetRef={calendarExportTargetRef}
+          chartWidgetsExportTargetRef={chartWidgetsExportTargetRef}
           onValueModeChange={onValueModeChange}
           onToggleEdit={onToggleEdit}
           widgets={widgets}

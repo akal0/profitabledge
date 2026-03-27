@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { db } from "../../db";
 import { openTrade, trade, tradingRuleSet } from "../../db/schema/trading";
+import { evaluatePreTradeEdgeGuardrails } from "../../lib/edges/pre-trade-guardrails";
 import { publicProcedure } from "../../lib/trpc";
 import { findWebhookAccountIdByNumber, verifyApiKey } from "./shared";
 
@@ -15,6 +16,9 @@ export const preTradeWebhookProcedures = {
         symbol: z.string(),
         direction: z.enum(["buy", "sell"]),
         volume: z.number(),
+        edgeId: z.string().optional(),
+        modelTag: z.string().optional(),
+        sessionTag: z.string().optional(),
         sl: z.number().optional(),
         tp: z.number().optional(),
         spread: z.number().optional(),
@@ -242,6 +246,43 @@ export const preTradeWebhookProcedures = {
               });
             }
           }
+        }
+
+        const edgeGuardrails = await evaluatePreTradeEdgeGuardrails({
+          userId,
+          symbol: input.symbol,
+          sessionTag: input.sessionTag,
+          edgeId: input.edgeId,
+          modelTag: input.modelTag,
+          rules: {
+            requireEdgeId: Boolean(rules.requireEdgeId),
+            requiredEdgeId:
+              typeof rules.requiredEdgeId === "string"
+                ? rules.requiredEdgeId
+                : undefined,
+            minEdgeReadinessScore:
+              typeof rules.minEdgeReadinessScore === "number"
+                ? rules.minEdgeReadinessScore
+                : undefined,
+            warnOutsideTopSessions: Boolean(rules.warnOutsideTopSessions),
+            warnOutsideTopSymbols: Boolean(rules.warnOutsideTopSymbols),
+          },
+        });
+
+        for (const violation of edgeGuardrails.violations) {
+          violations.push({
+            rule: violation.rule,
+            ruleSet: ruleSetName,
+            message: violation.message,
+          });
+        }
+
+        for (const warning of edgeGuardrails.warnings) {
+          warnings.push({
+            rule: warning.rule,
+            ruleSet: ruleSetName,
+            message: warning.message,
+          });
         }
       }
 

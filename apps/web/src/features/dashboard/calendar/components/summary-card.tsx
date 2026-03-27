@@ -30,24 +30,24 @@ export function SummaryCard({
     <div className="group flex h-full w-full flex-col rounded-lg border border-white/5 bg-sidebar p-1">
       <div
         className={cn(
-          "flex h-full flex-col justify-center gap-1.5 rounded-sm bg-sidebar-accent px-5 py-4 ring ring-white/5 transition-all duration-250 group-hover:brightness-110",
-          isCentered && "items-center text-center"
+          "flex h-full flex-col items-center gap-1.5 rounded-sm bg-sidebar-accent px-5 py-4 ring ring-white/5 transition-all duration-250 group-hover:brightness-110",
+          isCentered && "text-center"
         )}
       >
         {children ? (
           <>
             <span
               className={cn(
-                "text-[11px] text-white/45",
-                isCentered && "text-center"
+                "self-start text-[11px] text-white/45",
+                isCentered && "self-center text-center"
               )}
             >
               {title}
             </span>
             <div
               className={cn(
-                "flex flex-1 flex-col justify-center",
-                isCentered && "w-full items-center text-center"
+                "flex w-full flex-1 flex-col",
+                isCentered && "items-center text-center"
               )}
             >
               {children}
@@ -56,7 +56,7 @@ export function SummaryCard({
         ) : (
           <div
             className={cn(
-              "flex h-full flex-col justify-center gap-1.5",
+              "flex flex-col gap-1.5",
               isCentered && "items-center text-center"
             )}
           >

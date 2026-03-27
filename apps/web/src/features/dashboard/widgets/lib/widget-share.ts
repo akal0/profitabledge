@@ -161,11 +161,9 @@ async function renderWidgetExportCanvas(input: {
   }
 
   const widgetImage = await loadImage(widgetDataUrl);
-  const padXPx = outerPadding.x * input.pixelRatio;
-  const padYPx = outerPadding.y * input.pixelRatio;
   const canvas = document.createElement("canvas");
-  canvas.width = widgetImage.width + padXPx * 2;
-  canvas.height = widgetImage.height + padYPx * 2;
+  canvas.width = widgetImage.width;
+  canvas.height = widgetImage.height;
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -174,15 +172,108 @@ async function renderWidgetExportCanvas(input: {
 
   context.imageSmoothingEnabled = true;
   context.imageSmoothingQuality = "high";
-  context.fillStyle = sidebarBackground;
+  context.drawImage(widgetImage, 0, 0, widgetImage.width, widgetImage.height);
+
+  return {
+    canvas,
+    sidebarBackground,
+    outerPadding,
+  };
+}
+
+async function renderSingleWidgetExportCanvas(input: {
+  node: HTMLElement;
+  pixelRatio: number;
+}) {
+  const capture = await renderWidgetExportCanvas(input);
+  const padXPx = capture.outerPadding.x * input.pixelRatio;
+  const padYPx = capture.outerPadding.y * input.pixelRatio;
+  const canvas = document.createElement("canvas");
+  canvas.width = capture.canvas.width + padXPx * 2;
+  canvas.height = capture.canvas.height + padYPx * 2;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Failed to create export canvas");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.fillStyle = capture.sidebarBackground;
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(
-    widgetImage,
+    capture.canvas,
     padXPx,
     padYPx,
-    widgetImage.width,
-    widgetImage.height
+    capture.canvas.width,
+    capture.canvas.height
   );
+
+  return canvas;
+}
+
+async function renderCompositeWidgetExportCanvas(input: {
+  nodes: HTMLElement[];
+  pixelRatio: number;
+}) {
+  const captures = await Promise.all(
+    input.nodes.map((node) =>
+      renderWidgetExportCanvas({
+        node,
+        pixelRatio: input.pixelRatio,
+      })
+    )
+  );
+
+  if (captures.length === 0) {
+    throw new Error("No export targets provided");
+  }
+
+  const maxInnerWidth = Math.max(...captures.map((capture) => capture.canvas.width));
+  const totalInnerHeight = captures.reduce(
+    (sum, capture) => sum + capture.canvas.height,
+    0
+  );
+  // Each captured section already includes its own top/bottom breathing room,
+  // so adding another synthetic gap here makes the combined export look much
+  // looser than the live dashboard layout.
+  const gapPx = 0;
+  const totalGapHeight = gapPx * Math.max(0, captures.length - 1);
+  const referencePadding = resolveExportPadding({
+    width: Math.round(maxInnerWidth / input.pixelRatio),
+    height: Math.round((totalInnerHeight + totalGapHeight) / input.pixelRatio),
+  });
+  const padXPx = referencePadding.x * input.pixelRatio;
+  const padYPx = referencePadding.y * input.pixelRatio;
+  const canvas = document.createElement("canvas");
+  canvas.width = maxInnerWidth + padXPx * 2;
+  canvas.height = totalInnerHeight + totalGapHeight + padYPx * 2;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Failed to create export canvas");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.fillStyle = captures[0]!.sidebarBackground;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  let offsetY = padYPx;
+  captures.forEach((capture, index) => {
+    const offsetX = padXPx + Math.round((maxInnerWidth - capture.canvas.width) / 2);
+    context.drawImage(
+      capture.canvas,
+      offsetX,
+      offsetY,
+      capture.canvas.width,
+      capture.canvas.height
+    );
+    offsetY += capture.canvas.height;
+    if (index < captures.length - 1) {
+      offsetY += gapPx;
+    }
+  });
 
   return canvas;
 }
@@ -212,7 +303,7 @@ export async function createWidgetShareImageFile(input: {
   node: HTMLElement;
   title: string;
 }) {
-  const canvas = await renderWidgetExportCanvas({
+  const canvas = await renderSingleWidgetExportCanvas({
     node: input.node,
     pixelRatio: 2,
   });
@@ -234,10 +325,37 @@ export async function exportWidgetAsPng(input: {
   node: HTMLElement;
   title: string;
 }) {
-  const canvas = await renderWidgetExportCanvas({
+  const canvas = await renderSingleWidgetExportCanvas({
     node: input.node,
     pixelRatio: 3,
   });
+
+  const finalDataUrl = canvas.toDataURL("image/png");
+  downloadDataUrl(
+    finalDataUrl,
+    `${slugify(input.title) || "dashboard-widget"}.png`
+  );
+}
+
+export async function exportWidgetsAsCombinedPng(input: {
+  nodes: HTMLElement[];
+  title: string;
+}) {
+  const exportNodes = input.nodes.filter(Boolean);
+  if (exportNodes.length === 0) {
+    throw new Error("No export targets provided");
+  }
+
+  const canvas =
+    exportNodes.length === 1
+      ? await renderSingleWidgetExportCanvas({
+          node: exportNodes[0]!,
+          pixelRatio: 3,
+        })
+      : await renderCompositeWidgetExportCanvas({
+          nodes: exportNodes,
+          pixelRatio: 3,
+        });
 
   const finalDataUrl = canvas.toDataURL("image/png");
   downloadDataUrl(

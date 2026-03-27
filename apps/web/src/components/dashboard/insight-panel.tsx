@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { useAccountStore } from "@/stores/account";
+import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
 import {
   Sheet,
   SheetContent,
@@ -83,10 +83,11 @@ function formatInsightTitle(title: string): string {
 
 export function InsightPanel() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
+  const insightAccountId = ALL_ACCOUNTS_ID;
   const [open, setOpen] = useState(false);
 
   const { data: insightsData, refetch } = trpc.ai.getInsights.useQuery(
-    { accountId: accountId ?? "", unreadOnly: false, limit: 20 },
+    { accountId: insightAccountId, unreadOnly: false, limit: 20 },
     { enabled: !!accountId && open, refetchInterval: 30_000 }
   );
 
@@ -143,7 +144,7 @@ export function InsightPanel() {
                   size="sm"
                   className="h-8 gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-xs text-white/60 hover:text-white"
                   onClick={() => {
-                    if (accountId) generate.mutate({ accountId });
+                    if (accountId) generate.mutate({ accountId: insightAccountId });
                   }}
                   disabled={generate.isPending}
                 >
@@ -182,7 +183,7 @@ export function InsightPanel() {
                 variant="ghost"
                 size="sm"
                 className="mt-4 h-8 gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-4 text-xs text-white/60 hover:text-white"
-                onClick={() => generate.mutate({ accountId })}
+                onClick={() => generate.mutate({ accountId: insightAccountId })}
                 disabled={generate.isPending}
               >
                 <RefreshCw
@@ -305,9 +306,10 @@ export function InsightPanel() {
  */
 export function InsightBadge() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
+  const insightAccountId = ALL_ACCOUNTS_ID;
 
   const { data } = trpc.ai.getInsights.useQuery(
-    { accountId: accountId ?? "", unreadOnly: true, limit: 1 },
+    { accountId: insightAccountId, unreadOnly: true, limit: 1 },
     { enabled: !!accountId, refetchInterval: 30_000 }
   );
 

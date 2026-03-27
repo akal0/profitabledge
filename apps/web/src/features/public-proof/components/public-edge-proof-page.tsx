@@ -15,14 +15,12 @@ import {
   TrendingUp,
   UsersRound,
   Waypoints,
-  type LucideIcon,
 } from "lucide-react";
 
 import {
   GoalContentSeparator,
   GoalSurface,
 } from "@/components/goals/goal-surface";
-import { JournalEditorStyles } from "@/components/journal/editor/journal-editor-styles";
 import { ProfitabledgeVerificationCard, resolveAbsolutePublicUrl } from "@/components/verification/profitabledge-verification-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +34,10 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { trpcOptions } from "@/utils/trpc";
+import {
+  PublicProofHtmlPreview,
+  PublicProofMetricCard,
+} from "@/features/public-proof/components/public-proof-primitives";
 
 type PublicPassportCard = {
   label?: string;
@@ -168,60 +170,6 @@ function resolveSourceEdgeHref(source?: PublicLineageSource | null) {
   if (source.publicPath?.trim()) return source.publicPath.trim();
   if (source.shareId?.trim()) return `/edge/${source.shareId.trim()}`;
   return null;
-}
-
-function PublicMetricCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: LucideIcon;
-}) {
-  return (
-    <GoalSurface className="w-full">
-      <div className="p-3.5">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-teal-300" />
-          <span className="text-xs text-white/50">{label}</span>
-        </div>
-        <GoalContentSeparator className="mb-3.5 mt-3.5" />
-        <p className="text-2xl font-semibold text-white">{value}</p>
-        <p className="mt-1 text-xs text-white/40">{detail}</p>
-      </div>
-    </GoalSurface>
-  );
-}
-
-function PublicHtmlPreview({
-  html,
-  emptyLabel,
-}: {
-  html?: string | null;
-  emptyLabel: string;
-}) {
-  if (!html?.trim()) {
-    return (
-      <div className="flex min-h-48 items-center justify-center rounded-sm border border-dashed border-white/10 bg-white/[0.03] px-5 py-6 text-sm text-white/45">
-        {emptyLabel}
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-sm border border-white/8 bg-white/[0.03] px-5 py-4">
-      <div className="journal-editor" data-compact="true">
-        <JournalEditorStyles />
-        <article
-          className="journal-editor-content focus:outline-none"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-      </div>
-    </div>
-  );
 }
 
 export function PublicEdgeProofPage({ shareId }: { shareId: string }) {
@@ -424,41 +372,47 @@ export function PublicEdgeProofPage({ shareId }: { shareId: string }) {
 
         {metrics ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <PublicMetricCard
+            <PublicProofMetricCard
               icon={Layers3}
               label="Trades"
               value={String(metrics.tradeCount ?? 0)}
               detail="Tagged sample"
+              iconClassName="text-teal-300"
             />
-            <PublicMetricCard
+            <PublicProofMetricCard
               icon={TrendingUp}
               label="Win rate"
               value={formatPercent(metrics.winRate)}
               detail="Executed sample"
+              iconClassName="text-teal-300"
             />
-            <PublicMetricCard
+            <PublicProofMetricCard
               icon={Target}
               label="Expectancy"
               value={formatR(metrics.expectancy)}
               detail="Average realized R"
+              iconClassName="text-teal-300"
             />
-            <PublicMetricCard
+            <PublicProofMetricCard
               icon={BarChart3}
               label="Net P&L"
               value={formatMoney(metrics.netPnl)}
               detail="Across tagged trades"
+              iconClassName="text-teal-300"
             />
-            <PublicMetricCard
+            <PublicProofMetricCard
               icon={CheckCircle2}
               label="Follow-through"
               value={formatPercent(metrics.followThroughRate)}
               detail="Rule execution"
+              iconClassName="text-teal-300"
             />
-            <PublicMetricCard
+            <PublicProofMetricCard
               icon={UsersRound}
               label="Forks"
               value={String(metrics.copyCount ?? 0)}
               detail={`${metrics.shareCount ?? 0} direct shares`}
+              iconClassName="text-teal-300"
             />
           </div>
         ) : null}
@@ -597,14 +551,14 @@ export function PublicEdgeProofPage({ shareId }: { shareId: string }) {
               </TabsListUnderlined>
 
               <TabsContent value="thesis" className="mt-0">
-                <PublicHtmlPreview
+                <PublicProofHtmlPreview
                   html={edge.contentHtml}
                   emptyLabel="No public thesis has been published for this edge yet."
                 />
               </TabsContent>
 
               <TabsContent value="examples" className="mt-0">
-                <PublicHtmlPreview
+                <PublicProofHtmlPreview
                   html={edge.examplesHtml}
                   emptyLabel="No public examples have been published for this edge yet."
                 />

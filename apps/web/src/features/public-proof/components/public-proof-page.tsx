@@ -59,6 +59,7 @@ import { PublicProofDrawdownCard } from "@/features/public-proof/components/publ
 import { PublicProofEquityCurveCard } from "@/features/public-proof/components/public-proof-equity-curve-card";
 import { PublicProofMonthlyReturnsCard } from "@/features/public-proof/components/public-proof-monthly-returns-card";
 import { AffiliateNameEffectText } from "@/features/public-proof/components/affiliate-name-effect-text";
+import { PublicProofMetricCard } from "@/features/public-proof/components/public-proof-primitives";
 import { PublicProofTopSymbolsCard } from "@/features/public-proof/components/public-proof-top-symbols-card";
 import { resolveAbsolutePublicUrl } from "@/components/verification/profitabledge-verification-card";
 import {
@@ -173,50 +174,6 @@ function formatProofVerificationLabel(
     default:
       return fallback || "Self-reported";
   }
-}
-
-function ProofMetricCard({
-  label,
-  value,
-  detail,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  icon: LucideIcon;
-  tone?: "positive" | "warning" | "neutral" | "info";
-}) {
-  const { valueClassName, iconClassName, railClassName } =
-    getMetricToneClasses(tone);
-
-  return (
-    <GoalSurface className="w-full h-full overflow-hidden">
-      <div className="flex h-full min-h-0 flex-col p-3.5">
-        <div className="flex items-center gap-2">
-          <Icon className={cn("h-3.5 w-3.5", iconClassName)} />
-          <span className="text-xs text-white/50">{label}</span>
-        </div>
-        <GoalContentSeparator className="mb-3.5 mt-3.5" />
-        <div className="flex min-h-0 flex-1 flex-col justify-end">
-          <p
-            className={cn(
-              "text-2xl font-semibold tracking-tight",
-              valueClassName
-            )}
-          >
-            {value}
-          </p>
-          <p className="mt-1 text-xs leading-4 text-white/40">{detail}</p>
-
-          <div className="mt-3 h-1.5 rounded-full bg-white/8 relative overflow-hidden">
-            <div className={cn("h-full w-full", railClassName)} />
-          </div>
-        </div>
-      </div>
-    </GoalSurface>
-  );
 }
 
 function OverviewStatusCard({
@@ -719,48 +676,88 @@ export function PublicProofPage({
               </div>
 
               <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-6">
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Net P&L"
                   value={formatCurrency(page.summary.totalPnl)}
                   detail="Closed-history realized profit and loss."
                   icon={TrendingUp}
-                  tone={page.summary.totalPnl >= 0 ? "positive" : "warning"}
+                  iconClassName={
+                    page.summary.totalPnl >= 0
+                      ? "text-teal-300"
+                      : "text-amber-300"
+                  }
+                  valueClassName={
+                    page.summary.totalPnl >= 0
+                      ? "text-teal-300"
+                      : "text-amber-200"
+                  }
+                  railClassName={
+                    page.summary.totalPnl >= 0 ? "bg-teal-400" : "bg-amber-400"
+                  }
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Floating P&L"
                   value={formatCurrency(page.summary.floatingPnl)}
                   detail="Live open-position profit and loss right now."
                   icon={Activity}
-                  tone={page.summary.floatingPnl >= 0 ? "positive" : "warning"}
+                  iconClassName={
+                    page.summary.floatingPnl >= 0
+                      ? "text-teal-300"
+                      : "text-amber-300"
+                  }
+                  valueClassName={
+                    page.summary.floatingPnl >= 0
+                      ? "text-teal-300"
+                      : "text-amber-200"
+                  }
+                  railClassName={
+                    page.summary.floatingPnl >= 0
+                      ? "bg-teal-400"
+                      : "bg-amber-400"
+                  }
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Win rate"
                   value={`${page.summary.winRate.toFixed(1)}%`}
                   detail="Closed winning outcomes relative to closed losing history."
                   icon={ShieldCheck}
-                  tone="positive"
+                  iconClassName="text-teal-300"
+                  valueClassName="text-teal-300"
+                  railClassName="bg-teal-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Profit factor"
                   value={page.summary.profitFactor.toFixed(2)}
                   detail="Gross profit divided by gross loss on closed trades."
                   icon={BarChart3}
-                  tone="info"
+                  iconClassName="text-sky-300"
+                  valueClassName="text-white"
+                  railClassName="bg-sky-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Average R"
                   value={formatR(page.summary.averageRR)}
                   detail="Average realized reward to risk across closed trades."
                   icon={TrendingUp}
-                  tone="info"
+                  iconClassName="text-sky-300"
+                  valueClassName="text-white"
+                  railClassName="bg-sky-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Open trades"
                   value={page.summary.openTradesCount.toLocaleString()}
                   detail="Positions that are live on the connected account now."
                   icon={Clock3}
-                  tone={
-                    page.summary.openTradesCount > 0 ? "positive" : "neutral"
+                  iconClassName={
+                    page.summary.openTradesCount > 0
+                      ? "text-teal-300"
+                      : "text-white/50"
+                  }
+                  valueClassName="text-white"
+                  railClassName={
+                    page.summary.openTradesCount > 0
+                      ? "bg-teal-400"
+                      : "bg-white/25"
                   }
                 />
               </div>
@@ -896,61 +893,87 @@ export function PublicProofPage({
 
             <TabsContent value="stats" className="mt-6 space-y-6">
               <div className="grid w-full gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Expectancy"
                   value={formatCurrency(page.stats.expectancy)}
                   detail="Average expected profit or loss per closed trade."
                   icon={TrendingUp}
-                  tone={page.stats.expectancy >= 0 ? "positive" : "warning"}
+                  iconClassName={
+                    page.stats.expectancy >= 0
+                      ? "text-teal-300"
+                      : "text-amber-300"
+                  }
+                  valueClassName={
+                    page.stats.expectancy >= 0
+                      ? "text-teal-300"
+                      : "text-amber-200"
+                  }
+                  railClassName={
+                    page.stats.expectancy >= 0 ? "bg-teal-400" : "bg-amber-400"
+                  }
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Average win"
                   value={formatCurrency(page.stats.avgWin)}
                   detail="Average result of closed winning trades."
                   icon={ShieldCheck}
-                  tone="positive"
+                  iconClassName="text-teal-300"
+                  valueClassName="text-teal-300"
+                  railClassName="bg-teal-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Average loss"
                   value={formatCurrency(-Math.abs(page.stats.avgLoss))}
                   detail="Average magnitude of closed losing trades."
                   icon={AlertTriangle}
-                  tone="warning"
+                  iconClassName="text-amber-300"
+                  valueClassName="text-amber-200"
+                  railClassName="bg-amber-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Median R"
                   value={formatR(page.summary.medianRR)}
                   detail="Middle realized reward to risk across closed trades."
                   icon={BarChart3}
-                  tone="info"
+                  iconClassName="text-sky-300"
+                  valueClassName="text-white"
+                  railClassName="bg-sky-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Best trade"
                   value={formatCurrency(page.stats.bestTrade)}
                   detail="Single best closed trade in the public record."
                   icon={TrendingUp}
-                  tone="positive"
+                  iconClassName="text-teal-300"
+                  valueClassName="text-teal-300"
+                  railClassName="bg-teal-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Worst trade"
                   value={formatCurrency(page.stats.worstTrade)}
                   detail="Single worst closed trade in the public record."
                   icon={AlertTriangle}
-                  tone="warning"
+                  iconClassName="text-amber-300"
+                  valueClassName="text-amber-200"
+                  railClassName="bg-amber-400"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Average hold"
                   value={formatDuration(page.stats.avgTradeDurationSeconds)}
                   detail="Average time spent in a closed position."
                   icon={Clock3}
-                  tone="neutral"
+                  iconClassName="text-white/50"
+                  valueClassName="text-white"
+                  railClassName="bg-white/25"
                 />
-                <ProofMetricCard
+                <PublicProofMetricCard
                   label="Longest win streak"
                   value={page.stats.longestWinStreak.toString()}
                   detail="Longest run of closed winning trades."
                   icon={ShieldCheck}
-                  tone="positive"
+                  iconClassName="text-teal-300"
+                  valueClassName="text-teal-300"
+                  railClassName="bg-teal-400"
                 />
               </div>
 
@@ -961,11 +984,11 @@ export function PublicProofPage({
                 />
 
                 <div className="grid h-[28rem] grid-rows-2 gap-4">
-                  <ProofContentCard
-                    label="Best day"
-                    description="Strongest net closed-trade day in the public record."
-                    icon={TrendingUp}
-                    tone="positive"
+                <ProofContentCard
+                  label="Best day"
+                  description="Strongest net closed-trade day in the public record."
+                  icon={TrendingUp}
+                  tone="positive"
                   >
                     <p className="text-2xl font-semibold tracking-tight text-teal-300">
                       {page.stats.bestDay
@@ -976,11 +999,11 @@ export function PublicProofPage({
                       {formatProofDay(page.stats.bestDay?.day)}
                     </p>
                   </ProofContentCard>
-                  <ProofContentCard
-                    label="Worst day"
-                    description="Weakest net closed-trade day in the public record."
-                    icon={AlertTriangle}
-                    tone="warning"
+                <ProofContentCard
+                  label="Worst day"
+                  description="Weakest net closed-trade day in the public record."
+                  icon={AlertTriangle}
+                  tone="warning"
                   >
                     <p className="text-2xl font-semibold tracking-tight text-amber-200">
                       {page.stats.worstDay

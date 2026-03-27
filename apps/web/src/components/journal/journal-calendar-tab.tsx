@@ -327,7 +327,7 @@ export function JournalCalendarTab({
           </div>
         </div>
 
-        <div className="grid h-full min-h-0 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2 xl:grid-cols-1 xl:grid-rows-6 xl:overflow-hidden">
+        <div className="grid h-full min-h-0 grid-cols-1 gap-2 overflow-auto sm:grid-cols-2 xl:grid-cols-1 xl:grid-rows-[auto_auto_auto_auto_1fr_1fr]">
           <SummaryCard
             title="Entries this month"
             value={monthSummary.totalEntries}

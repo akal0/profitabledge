@@ -23,6 +23,13 @@ import {
 } from "@/components/goals/goal-surface";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +43,11 @@ type ComplianceRules = {
   requireTP?: boolean;
   requireSessionTag?: boolean;
   requireModelTag?: boolean;
+  requireEdgeId?: boolean;
+  requiredEdgeId?: string;
+  minEdgeReadinessScore?: number;
+  warnOutsideTopSessions?: boolean;
+  warnOutsideTopSymbols?: boolean;
   maxEntrySpreadPips?: number;
   maxEntrySlippagePips?: number;
   maxExitSlippagePips?: number;
@@ -87,6 +99,31 @@ const REQUIRED_GUARDRAILS: Array<{
     description: "Make setup classification mandatory for review quality.",
   },
 ];
+
+const EDGE_GUARDRAILS: Array<{
+  key:
+    | "requireEdgeId"
+    | "warnOutsideTopSessions"
+    | "warnOutsideTopSymbols";
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "requireEdgeId",
+    label: "Require edge selection",
+    description: "Block pre-trade checks when no Edge is attached to the setup.",
+  },
+  {
+    key: "warnOutsideTopSessions",
+    label: "Warn outside top sessions",
+    description: "Warn when the setup is being taken outside this Edge's strongest session sample.",
+  },
+  {
+    key: "warnOutsideTopSymbols",
+    label: "Warn outside top symbols",
+    description: "Warn when the market is outside the Edge's most tested symbols.",
+  },
+] as const;
 
 const MANAGEMENT_GUARDRAILS: Array<{
   key: ComplianceRuleKey;
@@ -370,6 +407,9 @@ export default function RulesPage() {
     { accountId: accountId || undefined },
     { enabled: Boolean(accountId) }
   );
+  const assignableEdgesQuery = trpc.edges.listAssignable.useQuery(undefined, {
+    enabled: Boolean(accountId),
+  });
 
   useEffect(() => {
     setAuditRules((compliancePrefsQuery.data?.rules as ComplianceRules) || {});
@@ -384,6 +424,7 @@ export default function RulesPage() {
       violationsQuery.refetch(),
       checklistTemplatesQuery.refetch(),
       ruleSetsQuery.refetch(),
+      assignableEdgesQuery.refetch(),
     ]);
   };
 
@@ -522,13 +563,15 @@ export default function RulesPage() {
     suggestedRulesQuery.isLoading ||
     violationsQuery.isLoading ||
     checklistTemplatesQuery.isLoading ||
-    ruleSetsQuery.isLoading;
+    ruleSetsQuery.isLoading ||
+    assignableEdgesQuery.isLoading;
 
   const activeRules = rulesQuery.data ?? [];
   const suggestedRules = suggestedRulesQuery.data ?? [];
   const checklistTemplates = checklistTemplatesQuery.data ?? [];
   const recentViolations = violationsQuery.data ?? [];
   const replayRulebooks = ruleSetsQuery.data ?? [];
+  const assignableEdges = assignableEdgesQuery.data ?? [];
   const complianceRate = Math.round(complianceQuery.data?.complianceRate ?? 100);
   const reviewedTrades = complianceQuery.data?.trades ?? 0;
   const unresolvedViolations = recentViolations.length;
@@ -862,7 +905,7 @@ export default function RulesPage() {
 
           <GoalContentSeparator />
 
-          <div className="grid gap-4 p-4 xl:grid-cols-[0.95fr_1.05fr_1fr]">
+          <div className="grid gap-4 p-4 xl:grid-cols-4">
             <RulesCard>
               <div className="space-y-1">
                 <h4 className="text-sm font-medium text-white">
@@ -955,6 +998,93 @@ export default function RulesPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+            </RulesCard>
+
+            <RulesCard>
+              <div className="space-y-1">
+                <h4 className="text-sm font-medium text-white">
+                  Edge guardrails
+                </h4>
+                <p className="text-xs text-white/40">
+                  Feed live pre-trade checks with Edge context instead of relying on generic account rules alone.
+                </p>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-white/60">
+                    Required Edge
+                  </Label>
+                  <Select
+                    value={auditRules.requiredEdgeId ?? "__none__"}
+                    onValueChange={(value) =>
+                      updateAuditRule(
+                        "requiredEdgeId",
+                        (value === "__none__" ? undefined : value) as ComplianceRules["requiredEdgeId"]
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Optional Edge constraint" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No required Edge</SelectItem>
+                      {assignableEdges.map((edge) => (
+                        <SelectItem key={edge.id} value={edge.id}>
+                          {edge.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-white/35">
+                    If set, pre-trade checks will only allow setups linked to this Edge.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] text-white/60">
+                    Minimum Edge readiness score
+                  </Label>
+                  <Input
+                    value={numericInputValue(auditRules.minEdgeReadinessScore)}
+                    onChange={(event) =>
+                      updateAuditRule(
+                        "minEdgeReadinessScore",
+                        parseNumber(event.target.value) as ComplianceRules["minEdgeReadinessScore"]
+                      )
+                    }
+                    placeholder="e.g. 60"
+                  />
+                  <p className="text-[11px] text-white/35">
+                    Use the same readiness score shown on the Edge Overview to prevent low-proof setups from being traded live.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {EDGE_GUARDRAILS.map((field) => (
+                    <div
+                      key={field.key}
+                      className="flex items-start justify-between gap-3 rounded-lg border border-white/8 bg-black/10 px-3 py-3"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="text-sm text-white/85">{field.label}</p>
+                        <p className="text-[11px] text-white/35">
+                          {field.description}
+                        </p>
+                      </div>
+                      <Switch
+                        checked={Boolean(auditRules[field.key])}
+                        onCheckedChange={(next) =>
+                          updateAuditRule(
+                            field.key,
+                            next as ComplianceRules[typeof field.key]
+                          )
+                        }
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             </RulesCard>

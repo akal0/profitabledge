@@ -3,6 +3,11 @@ export type ComplianceRules = {
   requireTP?: boolean;
   requireSessionTag?: boolean;
   requireModelTag?: boolean;
+  requireEdgeId?: boolean;
+  requiredEdgeId?: string;
+  minEdgeReadinessScore?: number;
+  warnOutsideTopSessions?: boolean;
+  warnOutsideTopSymbols?: boolean;
   maxEntrySpreadPips?: number;
   maxEntrySlippagePips?: number;
   maxExitSlippagePips?: number;

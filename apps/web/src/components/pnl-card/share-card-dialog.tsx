@@ -167,7 +167,7 @@ export function ShareCardDialog({
     setIsGenerating(true);
     try {
       const result = await createSharedCard.mutateAsync({
-        tradeId: tradeData.symbol, // TODO: Use actual trade ID
+        tradeId: tradeData.tradeId,
         config: {
           ...config,
           customText,

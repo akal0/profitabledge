@@ -18,6 +18,7 @@ import { user as userTable } from "../db/schema/auth";
 import { eq, and, desc, sql, or, inArray, gte, lte, isNull, asc, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
+import { buildMirrorComparisonData } from "../lib/social-comparison";
 
 const ANONYMOUS_BENCHMARK_MIN_TRADES = 25;
 const ANONYMOUS_BENCHMARK_PROFIT_FACTOR_CAP = 10;
@@ -762,20 +763,39 @@ export const socialRouter = router({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Account not public" });
       }
 
-      // TODO: Calculate comparison metrics
-      // This would be a complex calculation comparing:
-      // - Avg hold time
-      // - RR capture efficiency
-      // - Exit efficiency
-      // - Protocol rate
-      // For now, return placeholder
+      const closedTradeFilter = or(
+        sql`${trade.closeTime} IS NOT NULL`,
+        sql`${trade.close} IS NOT NULL`
+      );
 
-      const comparisonData = {
-        avgHoldTime: { mine: 0, theirs: 0 },
-        rrCaptureEfficiency: { mine: 0, theirs: 0 },
-        exitEfficiency: { mine: 0, theirs: 0 },
-        protocolRate: { mine: 0, theirs: 0 },
+      const comparisonTradeSelect = {
+        tradeDurationSeconds: trade.tradeDurationSeconds,
+        openTime: trade.openTime,
+        closeTime: trade.closeTime,
+        open: trade.open,
+        close: trade.close,
+        rrCaptureEfficiency: trade.rrCaptureEfficiency,
+        exitEfficiency: trade.exitEfficiency,
+        protocolAlignment: trade.protocolAlignment,
       };
+
+      const [myTrades, theirTrades] = await Promise.all([
+        db
+          .select(comparisonTradeSelect)
+          .from(trade)
+          .where(and(eq(trade.accountId, input.myAccountId), closedTradeFilter))
+          .orderBy(desc(trade.closeTime)),
+        db
+          .select(comparisonTradeSelect)
+          .from(trade)
+          .where(and(eq(trade.accountId, input.theirAccountId), closedTradeFilter))
+          .orderBy(desc(trade.closeTime)),
+      ]);
+
+      const { comparisonData, insights } = buildMirrorComparisonData({
+        mineTrades: myTrades,
+        theirTrades,
+      });
 
       const comparison = await db
         .insert(mirrorComparison)
@@ -785,7 +805,7 @@ export const socialRouter = router({
           myAccountId: input.myAccountId,
           theirAccountId: input.theirAccountId,
           comparisonData: comparisonData as any,
-          insights: [],
+          insights,
         })
         .returning();
 

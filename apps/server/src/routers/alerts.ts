@@ -1,8 +1,16 @@
 import { z } from "zod";
 import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
-import { performanceAlertRule, performanceAlert, tradingAccount, trade } from "../db/schema/trading";
-import { eq, and, desc, gte, inArray, isNull, sql } from "drizzle-orm";
+import {
+  edge,
+  performanceAlertRule,
+  performanceAlert,
+  trade,
+  tradeEdgeAssignment,
+  tradeEdgeRuleEvaluation,
+  tradingAccount,
+} from "../db/schema/trading";
+import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { createNotification } from "../lib/notifications";
 
@@ -22,6 +30,89 @@ const ruleTypeEnum = z.enum([
 
 const thresholdUnitEnum = z.enum(["percent", "usd", "count"]);
 const severityEnum = z.enum(["info", "warning", "critical"]);
+
+export type EdgeConditionAlertCandidate = {
+  tradeId: string;
+  edgeId: string;
+  edgeName: string;
+  symbol: string | null;
+  sessionTag: string | null;
+  closeTime: Date | null;
+  followedCount: number;
+  brokenCount: number;
+  notReviewedCount: number;
+};
+
+function pluralizeRuleLabel(count: number) {
+  return `${count} rule${count === 1 ? "" : "s"}`;
+}
+
+function buildEdgeTradeLabel(candidate: Pick<EdgeConditionAlertCandidate, "symbol" | "sessionTag">) {
+  const symbolLabel = candidate.symbol?.trim() || "the latest trade";
+  const sessionLabel = candidate.sessionTag?.trim();
+  return sessionLabel ? `${symbolLabel} during ${sessionLabel}` : symbolLabel;
+}
+
+export function evaluateEdgeConditionMetCandidates(args: {
+  threshold: number;
+  thresholdUnit: z.infer<typeof thresholdUnitEnum>;
+  candidates: EdgeConditionAlertCandidate[];
+}) {
+  for (const candidate of args.candidates) {
+    const applicableCount =
+      candidate.followedCount + candidate.brokenCount + candidate.notReviewedCount;
+
+    if (candidate.followedCount <= 0 || applicableCount <= 0) {
+      continue;
+    }
+
+    if (candidate.brokenCount > 0) {
+      continue;
+    }
+
+    let currentValue = 0;
+    if (args.thresholdUnit === "count") {
+      currentValue = candidate.followedCount;
+    } else if (args.thresholdUnit === "percent") {
+      currentValue = (candidate.followedCount / applicableCount) * 100;
+    } else {
+      continue;
+    }
+
+    if (currentValue < args.threshold) {
+      continue;
+    }
+
+    const tradeLabel = buildEdgeTradeLabel(candidate);
+    const title = "Edge Condition Met";
+    const message =
+      args.thresholdUnit === "percent"
+        ? `${candidate.edgeName} reached ${currentValue.toFixed(0)}% reviewed rule alignment on ${tradeLabel}.`
+        : `${candidate.edgeName} matched ${pluralizeRuleLabel(
+            candidate.followedCount
+          )} on ${tradeLabel} with no broken edge conditions.`;
+
+    return {
+      candidate,
+      currentValue,
+      title,
+      message,
+      metadata: {
+        kind: "edge_condition",
+        edgeId: candidate.edgeId,
+        edgeName: candidate.edgeName,
+        tradeId: candidate.tradeId,
+        symbol: candidate.symbol,
+        sessionTag: candidate.sessionTag,
+        followedCount: candidate.followedCount,
+        brokenCount: candidate.brokenCount,
+        notReviewedCount: candidate.notReviewedCount,
+      } satisfies Record<string, unknown>,
+    };
+  }
+
+  return null;
+}
 
 export const alertsRouter = router({
   // List all alert rules for a user
@@ -240,6 +331,7 @@ export const alertsRouter = router({
         let currentValue = 0;
         let title = "";
         let message = "";
+        let alertMetadata: Record<string, unknown> | null = null;
 
         switch (rule.ruleType) {
           case "daily_loss": {
@@ -365,6 +457,115 @@ export const alertsRouter = router({
               : `Warning: ${streak} consecutive red days`;
             break;
           }
+
+          case "edge_condition_met": {
+            const candidateConditions = [
+              eq(trade.accountId, accountId),
+              eq(tradeEdgeAssignment.userId, userId),
+              sql`${trade.closeTime} IS NOT NULL`,
+            ];
+
+            if (rule.lastTriggeredAt) {
+              candidateConditions.push(gte(trade.closeTime, rule.lastTriggeredAt));
+            }
+
+            const candidateTrades = await db
+              .select({
+                tradeId: trade.id,
+                edgeId: edge.id,
+                edgeName: edge.name,
+                symbol: trade.symbol,
+                sessionTag: trade.sessionTag,
+                closeTime: trade.closeTime,
+              })
+              .from(tradeEdgeAssignment)
+              .innerJoin(trade, eq(trade.id, tradeEdgeAssignment.tradeId))
+              .innerJoin(edge, eq(edge.id, tradeEdgeAssignment.edgeId))
+              .where(and(...candidateConditions))
+              .orderBy(desc(trade.closeTime))
+              .limit(25);
+
+            if (candidateTrades.length === 0) {
+              break;
+            }
+
+            const evaluationRows = await db
+              .select({
+                tradeId: tradeEdgeRuleEvaluation.tradeId,
+                edgeId: tradeEdgeRuleEvaluation.edgeId,
+                status: tradeEdgeRuleEvaluation.status,
+              })
+              .from(tradeEdgeRuleEvaluation)
+              .where(
+                inArray(
+                  tradeEdgeRuleEvaluation.tradeId,
+                  candidateTrades.map((candidateTrade) => candidateTrade.tradeId)
+                )
+              );
+
+            const evaluationCounts = new Map<
+              string,
+              Pick<
+                EdgeConditionAlertCandidate,
+                "followedCount" | "brokenCount" | "notReviewedCount"
+              >
+            >();
+
+            for (const evaluation of evaluationRows) {
+              const key = `${evaluation.tradeId}:${evaluation.edgeId}`;
+              const currentCounts = evaluationCounts.get(key) ?? {
+                followedCount: 0,
+                brokenCount: 0,
+                notReviewedCount: 0,
+              };
+
+              if (evaluation.status === "followed") {
+                currentCounts.followedCount += 1;
+              } else if (evaluation.status === "broken") {
+                currentCounts.brokenCount += 1;
+              } else if (evaluation.status === "not_reviewed") {
+                currentCounts.notReviewedCount += 1;
+              }
+
+              evaluationCounts.set(key, currentCounts);
+            }
+
+            const evaluatedCandidates: EdgeConditionAlertCandidate[] =
+              candidateTrades.map((candidateTrade) => {
+                const counts =
+                  evaluationCounts.get(
+                    `${candidateTrade.tradeId}:${candidateTrade.edgeId}`
+                  ) ?? {
+                    followedCount: 0,
+                    brokenCount: 0,
+                    notReviewedCount: 0,
+                  };
+
+                return {
+                  ...candidateTrade,
+                  ...counts,
+                };
+              });
+
+            const edgeAlertEvaluation = evaluateEdgeConditionMetCandidates({
+              threshold,
+              thresholdUnit: rule.thresholdUnit as z.infer<
+                typeof thresholdUnitEnum
+              >,
+              candidates: evaluatedCandidates,
+            });
+
+            if (!edgeAlertEvaluation) {
+              break;
+            }
+
+            shouldTrigger = true;
+            currentValue = edgeAlertEvaluation.currentValue;
+            title = edgeAlertEvaluation.title;
+            message = edgeAlertEvaluation.message;
+            alertMetadata = edgeAlertEvaluation.metadata;
+            break;
+          }
         }
 
         if (shouldTrigger) {
@@ -379,6 +580,7 @@ export const alertsRouter = router({
             message,
             currentValue: currentValue.toString(),
             thresholdValue: threshold.toString(),
+            metadata: alertMetadata,
           });
 
           // Update last triggered time
@@ -402,6 +604,7 @@ export const alertsRouter = router({
                 severity: rule.alertSeverity,
                 currentValue,
                 thresholdValue: threshold,
+                ...(alertMetadata ?? {}),
               },
             });
           }

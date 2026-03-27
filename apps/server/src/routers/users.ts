@@ -16,6 +16,7 @@ import { createNotification } from "../lib/notifications";
 
 const DASHBOARD_WIDGET_IDS = [
   "account-balance",
+  "account-contribution",
   "account-equity",
   "win-rate",
   "profit-factor",
@@ -157,8 +158,10 @@ export const usersRouter = router({
       "win-rate",
       "win-streak",
       "profit-factor",
+      "account-contribution",
     ] as const satisfies readonly DashboardWidgetId[];
     const defaultWidgetSpans = {
+      "account-contribution": 2,
       "asset-profitability": 2,
     } as const satisfies Partial<Record<DashboardWidgetId, number>>;
 
@@ -193,6 +196,7 @@ export const usersRouter = router({
         ...nextWidgetPrefs,
         widgets: defaultWidgets,
         spans: defaultWidgetSpans,
+        accountContributionManaged: true,
       };
       shouldUpdateWidgets = true;
     } else {
@@ -211,13 +215,37 @@ export const usersRouter = router({
       const needsWidgetCleanup =
         filteredWidgets.length !== widgetsFromDb.length ||
         Object.keys(cleanedSpans).length !== Object.keys(spansFromDb).length;
+      const accountContributionManaged =
+        currentWidgetPrefs?.accountContributionManaged === true;
+      const nextFilteredWidgets =
+        !accountContributionManaged &&
+        !filteredWidgets.includes("account-contribution")
+          ? ([
+              ...filteredWidgets,
+              "account-contribution",
+            ] as DashboardWidgetId[]).slice(0, 15)
+          : filteredWidgets;
+      const nextCleanedSpans =
+        !accountContributionManaged &&
+        nextFilteredWidgets.includes("account-contribution")
+          ? {
+              ...cleanedSpans,
+              "account-contribution":
+                cleanedSpans["account-contribution"] ?? 2,
+            }
+          : cleanedSpans;
+      const needsAccountContributionMigration =
+        !accountContributionManaged ||
+        nextFilteredWidgets.length !== filteredWidgets.length ||
+        Object.keys(nextCleanedSpans).length !== Object.keys(cleanedSpans).length;
 
-      if (needsWidgetCleanup) {
+      if (needsWidgetCleanup || needsAccountContributionMigration) {
         nextWidgetPrefs = {
           ...nextWidgetPrefs,
           widgets:
-            filteredWidgets.length > 0 ? filteredWidgets : defaultWidgets,
-          spans: cleanedSpans,
+            nextFilteredWidgets.length > 0 ? nextFilteredWidgets : defaultWidgets,
+          spans: nextCleanedSpans,
+          accountContributionManaged: true,
         };
         shouldUpdateWidgets = true;
       }

@@ -40,6 +40,7 @@ import {
 type CalendarMonthViewProps = {
   monthGrid: Date[];
   activeMonth: number | null;
+  showWeekends: boolean;
   dayMap: Map<string, DayRow>;
   goalMap: Map<string, GoalMarker[]>;
   goalOverlay: boolean;
@@ -100,6 +101,7 @@ function buildGroupedPreviewRows(rows: TradePreview[]) {
 export function CalendarMonthView({
   monthGrid,
   activeMonth,
+  showWeekends,
   dayMap,
   goalMap,
   goalOverlay,
@@ -117,7 +119,12 @@ export function CalendarMonthView({
 
   return (
     <div className="border border-white/5 bg-white dark:bg-sidebar rounded-md overflow-hidden">
-      <div className="grid grid-cols-7 gap-[1px] bg-sidebar-accent">
+      <div
+        className={cn(
+          "grid gap-[1px] bg-sidebar-accent",
+          showWeekends ? "grid-cols-7" : "grid-cols-5"
+        )}
+      >
         {monthGrid.map((day) => {
           const key = toYMD(day);
           const inMonth = activeMonth != null ? day.getMonth() === activeMonth : true;

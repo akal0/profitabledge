@@ -22,6 +22,7 @@ import {
   SessionPerformanceCard,
   TradeStreakCalendarCard,
 } from "@/features/dashboard/widgets/components/activity-cards";
+import { AllAccountsBreakdownWidget } from "@/features/dashboard/widgets/components/all-accounts-breakdown-widget";
 import {
   AssetProfitabilityCard,
   ConsistencyScoreCard,
@@ -44,6 +45,7 @@ export const dashboardWidgetCardComponents: Record<
   ComponentType<WidgetCardComponentProps>
 > = {
   "account-balance": AccountBalanceCard,
+  "account-contribution": AllAccountsBreakdownWidget,
   "account-equity": AccountEquityCard,
   "win-rate": WinRateCard,
   "profit-factor": ProfitFactorCard,

@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { use, useCallback, useEffect, useRef, useMemo, useState } from "react";
+import {
+  use,
+  useCallback,
+  useEffect,
+  useRef,
+  useMemo,
+  useState,
+  type ComponentProps,
+} from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -33,43 +41,28 @@ import { toast } from "sonner";
 import {
   EDGE_ACTION_BUTTON_CLASSNAME,
   EDGE_PAGE_SHELL_CLASS,
-  EdgeMetricCard,
   EdgePanel,
 } from "@/components/edges/edge-page-primitives";
 import { EdgeCoverBanner } from "@/components/edges/edge-cover-banner";
-import {
-  EdgeAccountFitSection,
-  type EdgeAccountFitData,
-} from "@/components/edges/edge-account-fit-section";
 import { EdgeExecutedTradesTable } from "@/components/edges/edge-executed-trades-table";
 import {
   EdgeForkSheet,
   type EdgeForkSheetSubmit,
 } from "@/components/edges/edge-fork-sheet";
-import {
-  EdgeLineageGraph,
-  type EdgeLineageData,
-} from "@/components/edges/edge-lineage-graph";
 import { EdgeMissedTradesSection } from "@/components/edges/edge-missed-trades-section";
 import { EdgePassportSection } from "@/components/edges/edge-passport-section";
-import {
-  EdgeReadinessSection,
-  type EdgeReadinessData,
-} from "@/components/edges/edge-readiness-section";
 import { EdgeShareSheet } from "@/components/edges/edge-share-sheet";
 import {
   EdgeVersionHistoryPanel,
   type EdgeVersionHistoryData,
 } from "@/components/edges/edge-version-history-panel";
+import type { EdgeAccountFitData } from "@/components/edges/edge-account-fit-section";
+import type { EdgeLineageData } from "@/components/edges/edge-lineage-graph";
+import type { EdgeReadinessData } from "@/components/edges/edge-readiness-section";
 import {
   CoverImageCropDialog,
   type CoverFrameDimensions,
 } from "@/components/cover-image-crop-dialog";
-import {
-  EdgeBreakdownBarCard,
-  EdgeEquityCurveCard,
-  EdgeRMultipleSpreadCard,
-} from "@/components/edges/edge-overview-charts";
 import {
   journalActionButtonMutedClassName,
   journalActionIconButtonClassName,
@@ -91,351 +84,28 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EdgeDetailOverviewSection } from "@/app/(dashboard)/dashboard/edges/my/[edgeId]/_components/edge-detail-overview-section";
+import {
+  EDGE_OVERVIEW_ENTRIES_PAGE_SIZE,
+  EDGE_TABS,
+  formatDate,
+  formatMoney,
+  formatPercent,
+  formatPublicationModeLabel,
+  formatR,
+  formatRuleOutcomeLabel,
+  RULE_OUTCOME_OPTIONS,
+  isEdgeTab,
+  type EdgeDetailResponse,
+  type EdgePublicationState,
+  type EdgeTab,
+  type RuleDraft,
+  createEmptyRuleDraft,
+  normalizeOutcomeSelection,
+  parseCoverPosition,
+} from "@/app/(dashboard)/dashboard/edges/my/[edgeId]/_lib/edge-detail-page";
 import { cn } from "@/lib/utils";
 import { trpc, trpcOptions } from "@/utils/trpc";
-
-const EDGE_TABS = [
-  "overview",
-  "content",
-  "examples",
-  "rules",
-  "executed-trades",
-  "missed-trades",
-  "passport",
-  "versions",
-  "entries",
-] as const;
-
-const EDGE_OVERVIEW_ENTRIES_PAGE_SIZE = 8;
-
-type EdgeTab = (typeof EDGE_TABS)[number];
-
-type EdgeDetailResponse = {
-  edge: {
-    id: string;
-    name: string;
-    description?: string | null;
-    createdAt?: string | Date | null;
-    updatedAt?: string | Date | null;
-    color?: string | null;
-    isDemoSeeded?: boolean;
-    isFeatured?: boolean;
-    coverImageUrl?: string | null;
-    coverImagePosition?: number | null;
-    contentBlocks?: JournalBlock[] | null;
-    contentHtml?: string | null;
-    examplesBlocks?: JournalBlock[] | null;
-    examplesHtml?: string | null;
-    status: string;
-    publicationMode: string;
-    publicStatsVisible?: boolean | null;
-    sourceEdgeId?: string | null;
-    metrics: {
-      tradeCount: number;
-      winRate: number | null;
-      netPnl: number;
-      expectancy: number | null;
-      averageR: number | null;
-      profitFactor: number | null;
-      missedTradeCount: number;
-      missedTradeOpportunity: number;
-      shareCount: number;
-      copyCount: number;
-      followThroughRate: number | null;
-      reviewCoverage: number | null;
-      reviewCounts: {
-        followed: number;
-        broken: number;
-        notReviewed: number;
-        applicable: number;
-        reviewed: number;
-      };
-      charts: {
-        equityCurve: Array<{ index: number; equity: number; label: string }>;
-        outcomeBreakdown: Array<{ label: string; value: number }>;
-        sessionBreakdown: Array<{ label: string; value: number }>;
-        rDistribution: Array<{ label: string; value: number }>;
-      };
-    } | null;
-    passport?: {
-      cards: {
-        sample: {
-          label: string;
-          value: string;
-          detail: string;
-          tone: "teal" | "blue" | "amber" | "rose" | "slate";
-        };
-        proof: {
-          label: string;
-          value: string;
-          detail: string;
-          tone: "teal" | "blue" | "amber" | "rose" | "slate";
-        };
-        process: {
-          label: string;
-          value: string;
-          detail: string;
-          tone: "teal" | "blue" | "amber" | "rose" | "slate";
-        };
-        prop: {
-          label: string;
-          value: string;
-          detail: string;
-          tone: "teal" | "blue" | "amber" | "rose" | "slate";
-        };
-      };
-      fitNotes: Array<{
-        label: string;
-        value: string;
-      }>;
-      lineage: {
-        publicationLabel: string;
-        forkCount: number;
-        shareCount: number;
-        source: {
-          id: string;
-          name: string;
-          ownerName: string | null;
-          ownerUsername: string | null;
-        } | null;
-      };
-    } | null;
-    sourceEdge?: {
-      id: string;
-      name: string;
-      ownerName: string | null;
-      ownerUsername: string | null;
-    } | null;
-    readiness?: EdgeReadinessData | null;
-    accountFit?: EdgeAccountFitData | null;
-    lineageGraph?: EdgeLineageData | null;
-    versionHistory?: EdgeVersionHistoryData | null;
-  };
-  canEdit: boolean;
-  viewerCanSeeStats: boolean;
-  viewerCanSeePrivateActivity: boolean;
-  publishCapabilities:
-    | {
-        canFeature: boolean;
-        canPublishLibrary: boolean;
-      }
-    | undefined;
-  sections: Array<{
-    id: string;
-    title: string;
-    description?: string | null;
-    metrics: {
-      followThroughRate: number | null;
-      reviewCoverage: number | null;
-      reviewedCount: number;
-      sampleSize: number;
-      netPnl: number;
-    };
-    rules: Array<{
-      id: string;
-      title: string;
-      description?: string | null;
-      appliesOutcomes?: string[] | null;
-      metrics: {
-        followThroughRate: number | null;
-        reviewedCount: number;
-        sampleSize: number;
-        netPnl: number;
-        expectancy: number | null;
-        winRateWhenFollowed: number | null;
-        winRateWhenBroken: number | null;
-      };
-    }>;
-  }>;
-  executedTrades: Array<{
-    id: string;
-    symbol?: string | null;
-    tradeType?: string | null;
-    tradeDirection?: string | null;
-    profit?: number | null;
-    outcome?: string | null;
-    sessionTag?: string | null;
-    openTime?: string | Date | null;
-    closeTime?: string | Date | null;
-    realisedRR?: number | null;
-  }>;
-  missedTrades: Array<{
-    id: string;
-    accountId?: string | null;
-    symbol?: string | null;
-    tradeType?: string | null;
-    volume?: number | null;
-    openPrice?: number | null;
-    closePrice?: number | null;
-    sessionTag?: string | null;
-    modelTag?: string | null;
-    customTags?: string[] | null;
-    setupTime?: string | Date | null;
-    closeTime?: string | Date | null;
-    sl?: number | null;
-    tp?: number | null;
-    reasonMissed?: string | null;
-    notes?: string | null;
-    estimatedOutcome?: string | null;
-    estimatedProfit?: number | null;
-    estimatedRR?: number | null;
-    estimatedPnl?: number | null;
-    commissions?: number | null;
-    swap?: number | null;
-    mediaUrls?: string[] | null;
-    createdAt?: string | Date | null;
-    updatedAt?: string | Date | null;
-  }>;
-  entries: Array<{
-    id: string;
-    title: string;
-    entryType: string;
-    journalDate?: string | Date | null;
-    updatedAt?: string | Date | null;
-  }>;
-  sharedMembers: Array<{
-    id: string;
-    userId: string;
-    name: string | null;
-    displayName: string | null;
-    username: string | null;
-    email: string | null;
-    image: string | null;
-    role: "viewer" | "editor";
-    createdAt?: string | Date | null;
-    updatedAt?: string | Date | null;
-  }>;
-};
-
-const RULE_OUTCOME_OPTIONS = [
-  { value: "all", label: "All outcomes" },
-  { value: "winner", label: "Winner" },
-  { value: "partial_win", label: "Partial win" },
-  { value: "loser", label: "Loser" },
-  { value: "breakeven", label: "Breakeven" },
-  { value: "cut_trade", label: "Cut trade" },
-] as const;
-
-type RuleDraft = {
-  title: string;
-  description: string;
-  appliesOutcomes: string[];
-};
-
-type EdgePublicationState = "private" | "library" | "featured";
-
-function isEdgeTab(value: string | null): value is EdgeTab {
-  return value !== null && EDGE_TABS.includes(value as EdgeTab);
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function formatMoney(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function formatR(value: number | null | undefined) {
-  if (value == null || !Number.isFinite(value)) return "—";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(2)}R`;
-}
-
-function formatDate(value: string | Date | null | undefined) {
-  if (!value) return "Unscheduled";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unscheduled";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
-}
-
-function formatPublicationModeLabel(mode: EdgePublicationState) {
-  if (mode === "featured") {
-    return "Featured";
-  }
-
-  if (mode === "library") {
-    return "Library";
-  }
-
-  return "Private";
-}
-
-function formatEntryTypeLabel(entryType: string) {
-  return entryType
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function formatRuleOutcomeLabel(outcome: string) {
-  const matchedOption = RULE_OUTCOME_OPTIONS.find(
-    (option) => option.value === outcome
-  );
-  if (matchedOption) {
-    return matchedOption.label;
-  }
-
-  return outcome
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function getOverviewGridClass(count: number) {
-  if (count >= 5) {
-    return "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5";
-  }
-
-  if (count === 4) {
-    return "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4";
-  }
-
-  if (count === 3) {
-    return "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3";
-  }
-
-  if (count === 2) {
-    return "grid grid-cols-1 gap-4 md:grid-cols-2";
-  }
-
-  return "grid grid-cols-1 gap-4";
-}
-
-function createEmptyRuleDraft(): RuleDraft {
-  return {
-    title: "",
-    description: "",
-    appliesOutcomes: ["all"],
-  };
-}
-
-function parseCoverPosition(objectPosition: string) {
-  const y = objectPosition.trim().split(/\s+/)[1] ?? "50%";
-  const nextPosition = Number.parseFloat(y.replace("%", ""));
-
-  if (!Number.isFinite(nextPosition)) {
-    return 50;
-  }
-
-  return Math.max(0, Math.min(100, Math.round(nextPosition)));
-}
-
-function normalizeOutcomeSelection(outcomes: string[]) {
-  const deduped = Array.from(new Set(outcomes));
-  if (deduped.length === 0 || deduped.includes("all")) {
-    return ["all"];
-  }
-  return deduped;
-}
 
 function EdgeBuilderPreview({
   html,
@@ -479,6 +149,114 @@ function EdgeBuilderPreview({
       </div>
     </div>
   );
+}
+
+type EdgePassportData = ComponentProps<typeof EdgePassportSection>["passport"];
+type SharedMember = ComponentProps<typeof EdgeShareSheet>["sharedMembers"][number];
+
+const READINESS_TONES = [
+  "positive",
+  "warning",
+  "critical",
+  "neutral",
+] as const;
+const PASSPORT_TONES = ["teal", "blue", "amber", "rose", "slate"] as const;
+
+function isJournalBlock(value: unknown): value is JournalBlock {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<JournalBlock>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.type === "string" &&
+    typeof candidate.content === "string"
+  );
+}
+
+function normalizeJournalBlocks(value: unknown): JournalBlock[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter(isJournalBlock)
+    .map((block) => ({
+      ...block,
+      children: block.children ? normalizeJournalBlocks(block.children) : undefined,
+    }));
+}
+
+function normalizeReadiness(
+  readiness: EdgeDetailResponse["edge"]["readiness"] | null | undefined
+): EdgeReadinessData | null {
+  if (!readiness) {
+    return null;
+  }
+
+  return {
+    ...readiness,
+    badges: readiness.badges.map((badge) => ({
+      ...badge,
+      tone: READINESS_TONES.includes(
+        badge.tone as (typeof READINESS_TONES)[number]
+      )
+        ? (badge.tone as EdgeReadinessData["badges"][number]["tone"])
+        : "neutral",
+    })),
+  };
+}
+
+function normalizePassportTone(
+  tone: unknown
+): EdgePassportData["cards"]["sample"]["tone"] {
+  return PASSPORT_TONES.includes(tone as (typeof PASSPORT_TONES)[number])
+    ? (tone as EdgePassportData["cards"]["sample"]["tone"])
+    : "slate";
+}
+
+function normalizePassport(
+  passport: EdgeDetailResponse["edge"]["passport"] | null | undefined
+): EdgePassportData | null {
+  if (!passport) {
+    return null;
+  }
+
+  return {
+    ...passport,
+    cards: {
+      sample: {
+        ...passport.cards.sample,
+        tone: normalizePassportTone(passport.cards.sample.tone),
+      },
+      proof: {
+        ...passport.cards.proof,
+        tone: normalizePassportTone(passport.cards.proof.tone),
+      },
+      process: {
+        ...passport.cards.process,
+        tone: normalizePassportTone(passport.cards.process.tone),
+      },
+      prop: {
+        ...passport.cards.prop,
+        tone: normalizePassportTone(passport.cards.prop.tone),
+      },
+    },
+  };
+}
+
+function normalizeSharedMembers(
+  members: EdgeDetailResponse["sharedMembers"] | null | undefined
+): SharedMember[] {
+  if (!Array.isArray(members)) {
+    return [];
+  }
+
+  return members.map((member) => ({
+    ...member,
+    role: member.role === "editor" ? "editor" : "viewer",
+  }));
 }
 
 export default function EdgeDetailPage({
@@ -597,9 +375,9 @@ export default function EdgeDetailPage({
       description: detailEdge.description ?? "",
       coverImageUrl: detailEdge.coverImageUrl ?? null,
       coverImagePosition: detailEdge.coverImagePosition ?? 50,
-      contentBlocks: detailEdge.contentBlocks ?? [],
+      contentBlocks: normalizeJournalBlocks(detailEdge.contentBlocks),
       contentHtml: detailEdge.contentHtml ?? "",
-      examplesBlocks: detailEdge.examplesBlocks ?? [],
+      examplesBlocks: normalizeJournalBlocks(detailEdge.examplesBlocks),
       examplesHtml: detailEdge.examplesHtml ?? "",
       color: detailEdge.color ?? "#3B82F6",
       publicationMode: detailEdge.isFeatured
@@ -696,7 +474,7 @@ export default function EdgeDetailPage({
     }
 
     if (detailEdge.readiness) {
-      return detailEdge.readiness;
+      return normalizeReadiness(detailEdge.readiness);
     }
 
     const fallbackMetrics = detailEdge.metrics;
@@ -758,7 +536,7 @@ export default function EdgeDetailPage({
       );
     }
 
-    return {
+    return normalizeReadiness({
       score: normalizedScore,
       label:
         normalizedScore >= 75
@@ -817,7 +595,7 @@ export default function EdgeDetailPage({
       ],
       blockers,
       nextActions,
-    };
+    });
   }, [detailEdge]);
 
   const resolvedAccountFit = useMemo<EdgeAccountFitData | null>(() => {
@@ -999,7 +777,7 @@ export default function EdgeDetailPage({
 
   const currentEdge = detail.edge;
   const metrics = currentEdge.metrics;
-  const passport = currentEdge.passport ?? null;
+  const passport = normalizePassport(currentEdge.passport);
   const canShowStats = detail.viewerCanSeeStats && metrics != null;
   const canShowPrivateActivity = detail.viewerCanSeePrivateActivity;
   const isPublicTemplateView =
@@ -1505,9 +1283,13 @@ export default function EdgeDetailPage({
                       description: currentEdge.description ?? "",
                       coverImageUrl: currentEdge.coverImageUrl ?? null,
                       coverImagePosition: currentEdge.coverImagePosition ?? 50,
-                      contentBlocks: currentEdge.contentBlocks ?? [],
+                      contentBlocks: normalizeJournalBlocks(
+                        currentEdge.contentBlocks
+                      ),
                       contentHtml: currentEdge.contentHtml ?? "",
-                      examplesBlocks: currentEdge.examplesBlocks ?? [],
+                      examplesBlocks: normalizeJournalBlocks(
+                        currentEdge.examplesBlocks
+                      ),
                       examplesHtml: currentEdge.examplesHtml ?? "",
                       color: currentEdge.color ?? "#3B82F6",
                       publicationMode: currentEdge.isFeatured
@@ -1939,222 +1721,21 @@ export default function EdgeDetailPage({
             </TabsContent>
 
             <TabsContent value="overview" className="mt-0">
-              <div className="w-full space-y-6">
-                {canShowStats ? (
-                  <>
-                    <div
-                      className={getOverviewGridClass(
-                        overviewMetricCards.length
-                      )}
-                    >
-                      {overviewMetricCards.map((card) => (
-                        <EdgeMetricCard
-                          key={card.label}
-                          icon={card.icon}
-                          label={card.label}
-                          value={card.value}
-                          detail={card.detail}
-                        />
-                      ))}
-                    </div>
-
-                    <div className="space-y-6">
-                      <EdgeEquityCurveCard
-                        className="w-full"
-                        points={metrics!.charts.equityCurve}
-                      />
-
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-sm font-medium text-white/72">
-                            Edge profile
-                          </p>
-                          <p className="text-sm text-white/40">
-                            The current operating characteristics of this Edge.
-                          </p>
-                        </div>
-
-                        <div
-                          className={getOverviewGridClass(
-                            edgeProfileCards.length
-                          )}
-                        >
-                          {edgeProfileCards.map((card) => (
-                            <EdgeMetricCard
-                              key={card.label}
-                              icon={card.icon}
-                              label={card.label}
-                              value={card.value}
-                              detail={card.detail}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-6 xl:grid-cols-3">
-                      <EdgeBreakdownBarCard
-                        title="Outcome mix"
-                        items={metrics!.charts.outcomeBreakdown}
-                        emptyLabel="No outcome breakdown yet."
-                      />
-                      <EdgeBreakdownBarCard
-                        title="Session mix"
-                        items={metrics!.charts.sessionBreakdown}
-                        emptyLabel="Session data will appear after assignments."
-                      />
-                      <EdgeRMultipleSpreadCard
-                        items={metrics!.charts.rDistribution}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-white/10 bg-black/20 px-5 py-6 text-xs text-white/48">
-                    This creator chose to hide public Library stats for this
-                    Edge. Featured Edges always show their public performance
-                    metrics.
-                  </div>
-                )}
-
-                <EdgeReadinessSection readiness={resolvedReadiness} />
-                <EdgeAccountFitSection accountFit={resolvedAccountFit} />
-                <EdgeLineageGraph lineage={resolvedLineageGraph} />
-
-                {canShowPrivateActivity ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-end justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-white/72">
-                          Linked entries
-                        </p>
-                        <p className="text-sm text-white/40">
-                          Edge-linked reflections, reviews, and notes.
-                        </p>
-                      </div>
-                      <p className="text-xs text-white/34">
-                        {detail.entries.length} total entries
-                      </p>
-                    </div>
-
-                    {detail.entries.length > 0 ? (
-                      <>
-                        <div className="overflow-hidden border border-white/5 bg-sidebar/45">
-                          <table className="min-w-full text-xs">
-                            <thead className="border-b border-white/5 bg-sidebar-accent">
-                              <tr>
-                                <th className="px-6 py-4 text-left font-medium text-white/70">
-                                  Entry
-                                </th>
-                                <th className="px-6 py-4 text-left font-medium text-white/70">
-                                  Type
-                                </th>
-                                <th className="px-6 py-4 text-left font-medium text-white/70">
-                                  Journal date
-                                </th>
-                                <th className="px-6 py-4 text-left font-medium text-white/70">
-                                  Updated
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {overviewEntries.map((entry) => (
-                                <tr
-                                  key={entry.id}
-                                  className="cursor-pointer border-b border-white/5 transition-colors hover:bg-white/[0.03] last:border-b-0"
-                                  onClick={() =>
-                                    router.push(
-                                      `/dashboard/journal?entryId=${entry.id}`
-                                    )
-                                  }
-                                >
-                                  <td className="px-6 py-4">
-                                    <Link
-                                      href={`/dashboard/journal?entryId=${entry.id}`}
-                                      onClick={(event) =>
-                                        event.stopPropagation()
-                                      }
-                                      className="font-medium text-white transition-colors hover:text-teal-300"
-                                    >
-                                      {entry.title}
-                                    </Link>
-                                  </td>
-                                  <td className="px-6 py-4 text-white/55">
-                                    {formatEntryTypeLabel(entry.entryType)}
-                                  </td>
-                                  <td className="px-6 py-4 text-white/55">
-                                    {formatDate(entry.journalDate)}
-                                  </td>
-                                  <td className="px-6 py-4 text-white/55">
-                                    {formatDate(entry.updatedAt)}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-xs text-white/38">
-                            Showing{" "}
-                            {clampedOverviewEntriesPage *
-                              EDGE_OVERVIEW_ENTRIES_PAGE_SIZE +
-                              1}
-                            -
-                            {Math.min(
-                              (clampedOverviewEntriesPage + 1) *
-                                EDGE_OVERVIEW_ENTRIES_PAGE_SIZE,
-                              detail.entries.length
-                            )}{" "}
-                            of {detail.entries.length}
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
-                              disabled={clampedOverviewEntriesPage === 0}
-                              onClick={() =>
-                                setOverviewEntriesPage((currentPage) =>
-                                  Math.max(currentPage - 1, 0)
-                                )
-                              }
-                            >
-                              Previous
-                            </Button>
-                            <div className="text-xs text-white/48">
-                              Page {clampedOverviewEntriesPage + 1} of{" "}
-                              {overviewEntriesPageCount}
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
-                              disabled={
-                                clampedOverviewEntriesPage >=
-                                overviewEntriesPageCount - 1
-                              }
-                              onClick={() =>
-                                setOverviewEntriesPage((currentPage) =>
-                                  Math.min(
-                                    currentPage + 1,
-                                    Math.max(overviewEntriesPageCount - 1, 0)
-                                  )
-                                )
-                              }
-                            >
-                              Next
-                            </Button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="rounded-md border border-dashed border-white/10 bg-sidebar px-5 py-6 text-sm text-white/45">
-                        No linked entries yet.
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </div>
+              <EdgeDetailOverviewSection
+                detail={detail}
+                canShowStats={canShowStats}
+                canShowPrivateActivity={canShowPrivateActivity}
+                metrics={metrics}
+                overviewMetricCards={overviewMetricCards}
+                edgeProfileCards={edgeProfileCards}
+                resolvedReadiness={resolvedReadiness}
+                resolvedAccountFit={resolvedAccountFit}
+                resolvedLineageGraph={resolvedLineageGraph}
+                overviewEntries={overviewEntries}
+                overviewEntriesPageCount={overviewEntriesPageCount}
+                clampedOverviewEntriesPage={clampedOverviewEntriesPage}
+                setOverviewEntriesPage={setOverviewEntriesPage}
+              />
             </TabsContent>
 
             <TabsContent value="passport" className="mt-0">
@@ -2453,7 +2034,8 @@ export default function EdgeDetailPage({
                               </div>
 
                               <div className="mt-4 flex flex-wrap gap-2">
-                                {(rule.appliesOutcomes ?? []).map((outcome) => (
+                                {(rule.appliesOutcomes ?? []).map(
+                                  (outcome: string) => (
                                   <Badge
                                     key={`${rule.id}-${outcome}`}
                                     variant="outline"
@@ -2461,7 +2043,8 @@ export default function EdgeDetailPage({
                                   >
                                     {formatRuleOutcomeLabel(outcome)}
                                   </Badge>
-                                ))}
+                                  )
+                                )}
                               </div>
 
                               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -2730,7 +2313,7 @@ export default function EdgeDetailPage({
                             variant="secondary"
                             className="border-white/10 bg-white/5 text-white/70"
                           >
-                            {entry.entryType.replace(/_/g, " ")}
+                            {(entry.entryType ?? "entry").replace(/_/g, " ")}
                           </Badge>
                         </div>
                       </Link>
@@ -2758,7 +2341,7 @@ export default function EdgeDetailPage({
         onOpenChange={setShareSheetOpen}
         edgeId={edgeId}
         edgeName={edgeDraft.name.trim() || currentEdge.name}
-        sharedMembers={detail.sharedMembers ?? []}
+        sharedMembers={normalizeSharedMembers(detail.sharedMembers)}
         onSharedStateChange={refreshEdgeData}
       />
       <EdgeForkSheet

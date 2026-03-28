@@ -66,144 +66,6 @@ const BROKER_INIT = [
   { ringIndex: 0, angle: 290 },
 ];
 
-// Ghost brokers: faded/blurred duplicates across all systems
-type GhostDef = {
-  sysIdx: number;
-  ringIdx: number;
-  angle: number;
-  speed: number;
-  brokerIdx: number;
-  opacity: number;
-  blur: number;
-  size: number;
-};
-
-const GHOST_DEFS: GhostDef[] = [
-  // Left satellite
-  {
-    sysIdx: 0,
-    ringIdx: 2,
-    angle: 30,
-    speed: 11,
-    brokerIdx: 0,
-    opacity: 0.35,
-    blur: 1.5,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 0,
-    ringIdx: 2,
-    angle: 190,
-    speed: 13,
-    brokerIdx: 4,
-    opacity: 0.3,
-    blur: 1.5,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 0,
-    ringIdx: 1,
-    angle: 120,
-    speed: 15,
-    brokerIdx: 2,
-    opacity: 0.25,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 0,
-    ringIdx: 0,
-    angle: 270,
-    speed: 18,
-    brokerIdx: 6,
-    opacity: 0.2,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  // Right satellite
-  {
-    sysIdx: 2,
-    ringIdx: 2,
-    angle: 70,
-    speed: 12,
-    brokerIdx: 1,
-    opacity: 0.35,
-    blur: 1.5,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 2,
-    ringIdx: 2,
-    angle: 240,
-    speed: 10,
-    brokerIdx: 5,
-    opacity: 0.3,
-    blur: 1.5,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 2,
-    ringIdx: 1,
-    angle: 170,
-    speed: 14,
-    brokerIdx: 3,
-    opacity: 0.25,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 2,
-    ringIdx: 0,
-    angle: 320,
-    speed: 17,
-    brokerIdx: 7,
-    opacity: 0.2,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  // Center extras (between real brokers)
-  {
-    sysIdx: 1,
-    ringIdx: 2,
-    angle: 80,
-    speed: 14,
-    brokerIdx: 3,
-    opacity: 0.15,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 1,
-    ringIdx: 2,
-    angle: 200,
-    speed: 15,
-    brokerIdx: 5,
-    opacity: 0.15,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 1,
-    ringIdx: 1,
-    angle: 130,
-    speed: 13,
-    brokerIdx: 7,
-    opacity: 0.12,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-  {
-    sysIdx: 1,
-    ringIdx: 0,
-    angle: 200,
-    speed: 17,
-    brokerIdx: 1,
-    opacity: 0.12,
-    blur: 2,
-    size: ICON_SIZE,
-  },
-];
-
 type BrokerState = {
   systemIndex: number;
   ringIndex: number;
@@ -220,17 +82,6 @@ type BrokerState = {
   satStep: number;
   angleOnRing: number;
   cooldown: number;
-};
-
-type GhostState = {
-  sysIdx: number;
-  ringIdx: number;
-  angle: number;
-  speed: number;
-  brokerIdx: number;
-  opacity: number;
-  blur: number;
-  size: number;
 };
 
 function normalizeAngle(angle: number) {
@@ -254,14 +105,12 @@ function findAvailableOrbitAngle({
   targetRingIndex,
   currentBrokerIndex,
   states,
-  ghosts,
 }: {
   desiredAngle: number;
   targetSystemIndex: number;
   targetRingIndex: number;
   currentBrokerIndex: number;
   states: BrokerState[];
-  ghosts: GhostState[];
 }) {
   const occupiedAngles: number[] = [];
 
@@ -278,15 +127,6 @@ function findAvailableOrbitAngle({
     occupiedAngles.push(
       normalizeAngle(state.transitioning ? state.toAngle : state.angle)
     );
-  }
-
-  for (const ghost of ghosts) {
-    if (
-      ghost.sysIdx === targetSystemIndex &&
-      ghost.ringIdx === targetRingIndex
-    ) {
-      occupiedAngles.push(normalizeAngle(ghost.angle));
-    }
   }
 
   const minSpacing = getMinOrbitSpacing(targetSystemIndex, targetRingIndex);
@@ -338,8 +178,11 @@ function easeInOut(p: number): number {
 
 function OrbitalVisualization() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const realBrokerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const ghostBrokerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const animRef = useRef(0);
   const lastFrameRef = useRef(0);
+  const containerSizeRef = useRef({ w: 0, h: 0 });
 
   const statesRef = useRef<BrokerState[]>(
     BROKERS.map((_, i) => ({
@@ -361,25 +204,17 @@ function OrbitalVisualization() {
     }))
   );
 
-  const ghostsRef = useRef<GhostState[]>(GHOST_DEFS.map((d) => ({ ...d })));
-
-  const [positions, setPositions] = useState<{ x: number; y: number }[]>([]);
-  const [ghostPositions, setGhostPositions] = useState<
-    {
-      x: number;
-      y: number;
-      brokerIdx: number;
-      opacity: number;
-      blur: number;
-      size: number;
-      sysIdx: number;
-    }[]
-  >([]);
+  const ghostTrailRef = useRef(
+    BROKERS.map(() => ({
+      x: 0,
+      y: 0,
+      ready: false,
+    }))
+  );
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
   const animate = useCallback((now: number) => {
-    const container = containerRef.current;
-    if (!container) {
+    if (!containerRef.current) {
       animRef.current = requestAnimationFrame(animate);
       return;
     }
@@ -387,16 +222,22 @@ function OrbitalVisualization() {
     const dt = Math.min((now - lastFrameRef.current) / 1000, 0.05);
     lastFrameRef.current = now;
 
-    const rect = container.getBoundingClientRect();
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
+    const { w, h } = containerSizeRef.current;
+    if (!w || !h) {
+      animRef.current = requestAnimationFrame(animate);
+      return;
+    }
+
+    const cx = w / 2;
+    const cy = h / 2;
     const states = statesRef.current;
-    const ghosts = ghostsRef.current;
-    const newPos: { x: number; y: number }[] = [];
+    const ghostTrail = ghostTrailRef.current;
 
     for (let i = 0; i < BROKERS.length; i++) {
       const s = states[i];
       s.cooldown = Math.max(0, s.cooldown - dt);
+      let visualX = 0;
+      let visualY = 0;
 
       if (s.transitioning) {
         s.transitionProgress += dt * s.transitionSpeed;
@@ -420,16 +261,16 @@ function OrbitalVisualization() {
           s.toRingIndex,
           s.toAngle + extraAngle
         );
-        newPos.push({
-          x: s.fromX + (toP.x - s.fromX) * t,
-          y: s.fromY + (toP.y - s.fromY) * t,
-        });
+        visualX = s.fromX + (toP.x - s.fromX) * t;
+        visualY = s.fromY + (toP.y - s.fromY) * t;
       } else {
         const orbitSpeed = getOrbitAngularSpeed(s.systemIndex);
         const angleDelta = orbitSpeed * dt;
         s.angle = normalizeAngle(s.angle + angleDelta);
         s.angleOnRing += angleDelta;
         const pos = getAbsPos(cx, cy, s.systemIndex, s.ringIndex, s.angle);
+        visualX = pos.x;
+        visualY = pos.y;
 
         if (s.cooldown <= 0) {
           // Only outer ring brokers on center can transfer
@@ -454,11 +295,9 @@ function OrbitalVisualization() {
                   targetRingIndex: 2,
                   currentBrokerIndex: i,
                   states,
-                  ghosts,
                 });
 
                 if (safeAngle === null) {
-                  newPos.push(pos);
                   continue;
                 }
 
@@ -488,12 +327,10 @@ function OrbitalVisualization() {
                 targetRingIndex: nextRing,
                 currentBrokerIndex: i,
                 states,
-                ghosts,
               });
 
               if (safeAngle === null) {
                 s.satStep--;
-                newPos.push(pos);
                 continue;
               }
 
@@ -526,11 +363,9 @@ function OrbitalVisualization() {
                   targetRingIndex: 2,
                   currentBrokerIndex: i,
                   states,
-                  ghosts,
                 });
 
                 if (safeAngle === null) {
-                  newPos.push(pos);
                   continue;
                 }
 
@@ -550,38 +385,60 @@ function OrbitalVisualization() {
             }
           }
         }
+      }
 
-        newPos.push(pos);
+      const inFront = s.transitioning ? s.toSystemIndex === 1 : s.systemIndex === 1;
+      const realEl = realBrokerRefs.current[i];
+      if (realEl) {
+        realEl.style.transform = `translate3d(${visualX - ICON_SIZE / 2}px, ${visualY - ICON_SIZE / 2}px, 0)`;
+        realEl.style.zIndex = inFront ? "13" : "1";
+      }
+
+      const trail = ghostTrail[i];
+      if (!trail.ready) {
+        trail.x = visualX;
+        trail.y = visualY;
+        trail.ready = true;
+      } else {
+        const ghostLerp = Math.min(1, dt * 5.5);
+        trail.x += (visualX - trail.x) * ghostLerp;
+        trail.y += (visualY - trail.y) * ghostLerp;
+      }
+
+      const ghostEl = ghostBrokerRefs.current[i];
+      if (ghostEl) {
+        ghostEl.style.transform = `translate3d(${trail.x - ICON_SIZE / 2}px, ${trail.y - ICON_SIZE / 2}px, 0) scale(0.96)`;
+        ghostEl.style.zIndex = inFront ? "12" : "1";
       }
     }
 
-    // Ghost brokers — simple continuous orbiting
-    const newGhostPos: typeof ghostPositions = [];
-    for (const g of ghosts) {
-      g.speed = getOrbitAngularSpeed(g.sysIdx);
-      g.angle = normalizeAngle(g.angle + g.speed * dt);
-      const pos = getAbsPos(cx, cy, g.sysIdx, g.ringIdx, g.angle);
-      newGhostPos.push({
-        x: pos.x,
-        y: pos.y,
-        brokerIdx: g.brokerIdx,
-        opacity: g.opacity,
-        blur: g.blur,
-        size: g.size,
-        sysIdx: g.sysIdx,
-      });
-    }
-
-    setPositions(newPos);
-    setGhostPositions(newGhostPos);
-    setContainerSize({ w: rect.width, h: rect.height });
     animRef.current = requestAnimationFrame(animate);
   }, []);
 
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      containerSizeRef.current = { w: rect.width, h: rect.height };
+      setContainerSize((current) =>
+        current.w === rect.width && current.h === rect.height
+          ? current
+          : { w: rect.width, h: rect.height }
+      );
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(container);
+
     lastFrameRef.current = performance.now();
     animRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animRef.current);
+    return () => {
+      cancelAnimationFrame(animRef.current);
+      observer.disconnect();
+    };
   }, [animate]);
 
   const cx = containerSize.w / 2;
@@ -670,23 +527,28 @@ function OrbitalVisualization() {
         />
       ))}
 
-      {/* 4. Ghost brokers — same design as real, just blurred */}
-      {ghostPositions.map((gp, i) => (
+      {/* 4. Ghost brokers — mirrored trails of the real broker icons */}
+      {BROKERS.map((broker, i) => (
         <div
           key={`ghost-${i}`}
+          ref={(el) => {
+            ghostBrokerRefs.current[i] = el;
+          }}
           className="absolute flex items-center justify-center rounded-full bg-[#1a1a1e]/10 backdrop-blur-2xl ring-1 ring-white/10 shadow-lg shadow-black/50"
           style={{
-            width: gp.size,
-            height: gp.size,
-            left: gp.x - gp.size / 2,
-            top: gp.y - gp.size / 2,
-            opacity: gp.opacity,
-            filter: `blur(${gp.blur}px)`,
-            zIndex: gp.sysIdx === 1 ? 12 : 1,
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            left: 0,
+            top: 0,
+            opacity: 0.26,
+            filter: "blur(8px)",
+            transform: "translate3d(-9999px, -9999px, 0) scale(0.96)",
+            willChange: "transform",
+            pointerEvents: "none",
           }}
         >
           <Image
-            src={BROKERS[gp.brokerIdx].icon}
+            src={broker.icon}
             alt=""
             width={28}
             height={28}
@@ -737,38 +599,32 @@ function OrbitalVisualization() {
       </div>
 
       {/* 6. Real broker icons */}
-      {positions.map((pos, i) => {
-        const s = statesRef.current[i];
-        // If transitioning, use destination to determine layer
-        const inFront = s
-          ? s.transitioning
-            ? s.toSystemIndex === 1
-            : s.systemIndex === 1
-          : true;
-        return (
-          <div
-            key={i}
-            className="absolute flex items-center justify-center rounded-full bg-[#1a1a1e]/10 backdrop-blur-2xl ring-1 ring-white/10 shadow-lg shadow-black/50"
-            style={{
-              width: ICON_SIZE,
-              height: ICON_SIZE,
-              left: pos.x - ICON_SIZE / 2,
-              top: pos.y - ICON_SIZE / 2,
-              willChange: "transform",
-              zIndex: inFront ? 13 : 1,
-            }}
-          >
-            <Image
-              src={BROKERS[i].icon}
-              alt={BROKERS[i].name}
-              width={28}
-              height={28}
-              className="rounded-full object-contain"
-              unoptimized
-            />
-          </div>
-        );
-      })}
+      {BROKERS.map((broker, i) => (
+        <div
+          key={broker.name}
+          ref={(el) => {
+            realBrokerRefs.current[i] = el;
+          }}
+          className="absolute flex items-center justify-center rounded-full bg-[#1a1a1e]/10 backdrop-blur-2xl ring-1 ring-white/10 shadow-lg shadow-black/50"
+          style={{
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            left: 0,
+            top: 0,
+            transform: "translate3d(-9999px, -9999px, 0)",
+            willChange: "transform",
+          }}
+        >
+          <Image
+            src={broker.icon}
+            alt={broker.name}
+            width={28}
+            height={28}
+            className="rounded-full object-contain"
+            unoptimized
+          />
+        </div>
+      ))}
     </div>
   );
 }

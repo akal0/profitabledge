@@ -2452,25 +2452,6 @@ function ReportsWorkspaceContent() {
       </div>
 
       <main className="space-y-4 p-6 py-4">
-        <WidgetWrapper
-          className="!h-auto rounded-lg p-1"
-          contentClassName="flex h-auto flex-col rounded-sm px-4 py-4 md:px-5 md:py-5"
-        >
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="max-w-3xl">
-              <p className="text-xs text-white/35">Reports</p>
-              <h1 className="mt-1 text-2xl font-semibold text-white">
-                Advanced reports workspace
-              </h1>
-              <p className="mt-1 text-sm text-white/45">
-                One connected analysis surface. Compare multiple metrics on the
-                hero chart, click into a bucket, and let the rest of the lens
-                react in-place.
-              </p>
-            </div>
-          </div>
-        </WidgetWrapper>
-
         <div className="">
           <div className="flex min-w-max items-center justify-between gap-3">
             <div className="flex items-center gap-2">

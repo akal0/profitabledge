@@ -74,21 +74,23 @@ export function EntryCard({
           <div className="min-w-0 flex-1">
             <h3 className="truncate font-medium text-white">{entry.title}</h3>
             {isShared ? (
-              <div className="mt-1 flex flex-wrap items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge
                   variant="outline"
-                  className="border-teal-400/20 bg-teal-500/10 text-[10px] text-teal-200"
+                  className="ring-teal-400/30 bg-teal-500/10 text-[10px] text-teal-200"
                 >
-                  <Share2 className="mr-1 h-3 w-3" />
+                  <Share2 className="size-3" />
                   Shared journal
                 </Badge>
                 {entry.shareName ? (
-                  <span className="text-xs text-white/35">{entry.shareName}</span>
+                  <span className="text-xs text-white/35">
+                    {entry.shareName}
+                  </span>
                 ) : null}
               </div>
             ) : null}
             {entry.preview ? (
-              <p className="mt-1 line-clamp-2 text-sm text-white/40">
+              <p className="mt-2 line-clamp-2 text-sm text-white/40">
                 {entry.preview}
               </p>
             ) : null}

@@ -1,8 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, MotionValue } from "motion/react";
+import { AnimatePresence, motion, MotionValue } from "motion/react";
+import { Pause, Play } from "lucide-react";
+import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
@@ -13,35 +16,136 @@ const NAV_LINKS = [
   { href: "#resources", label: "Resources" },
 ];
 
-const BROWSER_TABS = [
+const LANDING_PREVIEWS = [
   {
-    icon: "/landing/tab-pe.svg",
-    label:
-      "profitabledge: Turn your trading data into your own profitable edge",
-    active: true,
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Dashboard",
+    path: "/dashboard",
+    image: "/landing/dashboard-preview.png",
+    alt: "Profitabledge dashboard preview",
   },
   {
-    icon: "/landing/tab-tv.svg",
-    label: "TradingView — Track all markets",
-    active: false,
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Trades",
+    path: "/dashboard/trades",
+    image: "/landing/trades-preview.png",
+    alt: "Profitabledge trades preview",
   },
   {
-    icon: "/landing/tab-ftmo.svg",
-    label: "FTMO | The Modern Prop Trading",
-    active: false,
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Reports",
+    path: "/dashboard/reports",
+    image: "/landing/reports-preview.png",
+    alt: "Profitabledge reports preview",
   },
   {
-    icon: "/landing/tab-notion.svg",
-    label: "The AI workspace that works",
-    active: false,
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Edges",
+    path: "/dashboard/edges",
+    image: "/landing/edges-preview.png",
+    alt: "Profitabledge edges preview",
+  },
+  {
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Journal",
+    path: "/dashboard/journal",
+    image: "/landing/journal-preview.png",
+    alt: "Profitabledge journal preview",
+  },
+  {
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Goals",
+    path: "/dashboard/goals",
+    image: "/landing/goals-preview.png",
+    alt: "Profitabledge goals preview",
+  },
+
+  {
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Prop tracker",
+    path: "/dashboard/prop-tracker",
+    image: "/landing/prop-preview.png",
+    alt: "Profitabledge prop tracker preview",
+  },
+  {
+    icon: PROFITABLEDGE_FAVICON_PATH,
+    label: "profitabledge - Assistant",
+    path: "/dashboard/assistant",
+    image: "/landing/assistant-preview.png",
+    alt: "Profitabledge assistant preview",
   },
 ];
+
+const LANDING_PREVIEW_WIDTH = 3423;
+const LANDING_PREVIEW_HEIGHT = 1277;
 
 interface HeroProps {
   heroOpacity: MotionValue<number>;
 }
 
 export function Hero({ heroOpacity }: HeroProps) {
+  const [activePreviewIndex, setActivePreviewIndex] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [isBrowserHovered, setIsBrowserHovered] = useState(false);
+  const shouldAutoCycle = isAutoPlaying && !isBrowserHovered;
+
+  const goToPreview = (nextIndex: number) => {
+    const previewCount = LANDING_PREVIEWS.length;
+    setActivePreviewIndex((nextIndex + previewCount) % previewCount);
+  };
+
+  const goToPreviousPreview = () => {
+    setActivePreviewIndex((current) => {
+      const previewCount = LANDING_PREVIEWS.length;
+      return (current - 1 + previewCount) % previewCount;
+    });
+  };
+
+  const goToNextPreview = () => {
+    setActivePreviewIndex((current) => (current + 1) % LANDING_PREVIEWS.length);
+  };
+
+  useEffect(() => {
+    if (!shouldAutoCycle) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      goToNextPreview();
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [activePreviewIndex, shouldAutoCycle]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toLowerCase();
+
+      if (
+        target?.isContentEditable ||
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select"
+      ) {
+        return;
+      }
+
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        goToPreviousPreview();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        goToNextPreview();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const activePreview = LANDING_PREVIEWS[activePreviewIndex];
+
   return (
     <motion.section
       style={{ opacity: heroOpacity }}
@@ -160,6 +264,8 @@ export function Hero({ heroOpacity }: HeroProps) {
           className="will-change-transform"
           initial={{ y: "100%" }}
           animate={{ y: "0%" }}
+          onMouseEnter={() => setIsBrowserHovered(true)}
+          onMouseLeave={() => setIsBrowserHovered(false)}
           transition={{
             duration: 4,
             ease: [0.4, 0.8, 0.2, 1],
@@ -179,7 +285,12 @@ export function Hero({ heroOpacity }: HeroProps) {
 
                 {/* Navigation arrows */}
                 <div className="ml-2 hidden sm:flex items-center gap-1">
-                  <button className="flex size-7 items-center justify-center rounded-md text-white/40 hover:bg-white/5">
+                  <button
+                    type="button"
+                    aria-label="Previous preview"
+                    onClick={goToPreviousPreview}
+                    className="flex size-7 cursor-pointer items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+                  >
                     <svg
                       width="14"
                       height="14"
@@ -193,7 +304,12 @@ export function Hero({ heroOpacity }: HeroProps) {
                       <path d="M15 18l-6-6 6-6" />
                     </svg>
                   </button>
-                  <button className="flex size-7 items-center justify-center rounded-md text-white/40 hover:bg-white/5">
+                  <button
+                    type="button"
+                    aria-label="Next preview"
+                    onClick={goToNextPreview}
+                    className="flex size-7 cursor-pointer items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/5 hover:text-white/70"
+                  >
                     <svg
                       width="14"
                       height="14"
@@ -211,12 +327,19 @@ export function Hero({ heroOpacity }: HeroProps) {
 
                 {/* URL bar */}
                 <div className="mx-4 flex flex-1 items-center justify-center">
-                  <div className="flex h-8 w-full max-w-md items-center justify-center rounded-lg bg-white/[0.05] px-4">
-                    <span className="text-xs text-white/50">
-                      profitabledge.com
-                    </span>
+                  <div className="relative flex h-8 w-full max-w-lg items-center overflow-hidden rounded-lg bg-white/[0.05] px-4">
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-10">
+                      <div className="flex min-w-0 items-center justify-center gap-0.5 text-center">
+                        <span className="shrink-0 text-xs text-white/65">
+                          profitabledge.com
+                        </span>
+                        <span className="truncate text-xs text-white/35">
+                          {activePreview.path}
+                        </span>
+                      </div>
+                    </div>
                     <svg
-                      className="ml-2 size-3 text-white/30"
+                      className="ml-auto size-3 shrink-0 text-white/30"
                       viewBox="0 0 24 24"
                       fill="none"
                       stroke="currentColor"
@@ -231,92 +354,133 @@ export function Hero({ heroOpacity }: HeroProps) {
 
                 {/* Right icons */}
                 <div className="hidden sm:flex items-center gap-1">
-                  <button className="flex size-7 items-center justify-center rounded-md text-white/30 hover:bg-white/5">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                      <polyline points="16,6 12,2 8,6" />
-                      <line x1="12" y1="2" x2="12" y2="15" />
-                    </svg>
-                  </button>
-                  <button className="flex size-7 items-center justify-center rounded-md text-white/30 hover:bg-white/5">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                  </button>
-                  <button className="flex size-7 items-center justify-center rounded-md text-white/30 hover:bg-white/5">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <rect x="3" y="3" width="7" height="7" />
-                      <rect x="14" y="3" width="7" height="7" />
-                      <rect x="3" y="14" width="7" height="7" />
-                      <rect x="14" y="14" width="7" height="7" />
-                    </svg>
+                  <button
+                    type="button"
+                    aria-label={
+                      isAutoPlaying ? "Pause autoplay" : "Play autoplay"
+                    }
+                    onClick={() => setIsAutoPlaying((current) => !current)}
+                    className="flex h-7 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2.5 text-white/35 transition-colors hover:bg-white/5 hover:text-white/70"
+                  >
+                    {isAutoPlaying ? (
+                      <Pause className="size-3.5" />
+                    ) : (
+                      <Play className="size-3.5 fill-current" />
+                    )}
+                    <span className="text-[10px]">
+                      {isAutoPlaying ? "Pause" : "Play"}
+                    </span>
                   </button>
                 </div>
               </div>
 
               {/* Browser tabs bar */}
-              <div className="hidden md:flex items-center border-b border-white/[0.06] bg-[#161618]">
-                {BROWSER_TABS.map((tab) => (
-                  <div
-                    key={tab.label}
-                    className={`flex max-w-[260px] flex-1 items-center gap-2 border-r border-white/[0.06] px-4 py-2.5 ${
-                      tab.active
-                        ? "bg-[#1e1e22]"
-                        : "bg-transparent text-white/40"
-                    }`}
-                  >
-                    {tab.icon && (
-                      <Image
-                        src={tab.icon}
-                        alt=""
-                        width={14}
-                        height={14}
-                        className="shrink-0"
-                      />
-                    )}
-                    <span className="truncate text-[11px] text-white/60">
-                      {tab.label}
-                    </span>
-                  </div>
-                ))}
+              <div className="hidden overflow-x-auto border-b border-white/[0.06] bg-[#161618] md:block">
+                <div className="flex min-w-max items-center">
+                  {LANDING_PREVIEWS.map((tab, index) => (
+                    <button
+                      key={tab.label}
+                      type="button"
+                      onClick={() => setActivePreviewIndex(index)}
+                      className={`relative flex w-[260px] shrink-0 cursor-pointer items-center gap-2 border-r border-white/[0.06] px-4 py-2.5 text-left transition-colors ${
+                        index === activePreviewIndex
+                          ? "bg-[#1e1e22]"
+                          : "bg-transparent text-white/40 hover:bg-white/[0.03]"
+                      }`}
+                    >
+                      {tab.icon && (
+                        <Image
+                          src={tab.icon}
+                          alt=""
+                          width={14}
+                          height={14}
+                          className="shrink-0"
+                        />
+                      )}
+                      <span
+                        className={`truncate text-[11px] transition-colors ${
+                          index === activePreviewIndex
+                            ? "text-white/70"
+                            : "text-white/40"
+                        }`}
+                      >
+                        {tab.label}
+                      </span>
+                      {index === activePreviewIndex ? (
+                        <>
+                          <motion.span
+                            layoutId="landing-browser-tab-highlight"
+                            className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-white/12"
+                          />
+                          <span
+                            key={`${activePreviewIndex}-${
+                              shouldAutoCycle ? "running" : "paused"
+                            }`}
+                            className="pointer-events-none absolute inset-x-0 bottom-0 h-px origin-left bg-white/60"
+                            style={{
+                              animation:
+                                "landing-tab-progress 5000ms linear forwards",
+                              animationPlayState: shouldAutoCycle
+                                ? "running"
+                                : "paused",
+                            }}
+                          />
+                        </>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Dashboard screenshot */}
-              <div className="relative aspect-[3564/1884] w-full bg-[#111114]">
-                <Image
-                  src="/landing/dashboard-preview.png"
-                  alt="ProfitabEdge Dashboard"
-                  fill
-                  className="object-fill"
-                  priority
-                />
+              {/* Browser preview */}
+              <div
+                className="relative w-full bg-[#111114]"
+                style={{
+                  aspectRatio: `${LANDING_PREVIEW_WIDTH} / ${LANDING_PREVIEW_HEIGHT}`,
+                }}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={activePreview.image}
+                    className="absolute inset-0"
+                    initial={{ opacity: 0, scale: 1.02, filter: "blur(12px)" }}
+                    animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                    exit={{ opacity: 0, scale: 0.985, filter: "blur(10px)" }}
+                    transition={{
+                      duration: 0.75,
+                      ease: [0.22, 1, 0.36, 1],
+                    }}
+                  >
+                    <Image
+                      src={activePreview.image}
+                      alt={activePreview.alt}
+                      width={LANDING_PREVIEW_WIDTH}
+                      height={LANDING_PREVIEW_HEIGHT}
+                      unoptimized
+                      quality={100}
+                      className="h-full w-full object-cover"
+                      priority={activePreviewIndex === 0}
+                    />
+                  </motion.div>
+                </AnimatePresence>
               </div>
             </div>
           </div>
         </motion.div>
       </div>
+      <style jsx global>{`
+        @keyframes landing-tab-progress {
+          0% {
+            transform: scaleX(0);
+            opacity: 0.35;
+          }
+
+          100% {
+            transform: scaleX(1);
+            opacity: 0.9;
+          }
+        }
+      `}</style>
     </motion.section>
   );
 }

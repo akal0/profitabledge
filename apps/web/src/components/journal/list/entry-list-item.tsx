@@ -1,7 +1,14 @@
 "use client";
 
 import { format } from "date-fns";
-import { Copy, FileText, MoreHorizontal, Pin, Share2, Trash2 } from "lucide-react";
+import {
+  Copy,
+  FileText,
+  MoreHorizontal,
+  Pin,
+  Share2,
+  Trash2,
+} from "lucide-react";
 
 import { journalCompactActionIconButtonClassName } from "@/components/journal/action-button-styles";
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +66,7 @@ export function EntryListItem({
               variant="outline"
               className="border-teal-400/20 bg-teal-500/10 text-[10px] text-teal-200"
             >
-              <Share2 className="mr-1 h-3 w-3" />
+              <Share2 className="size-3" />
               Shared journal
             </Badge>
             {entry.shareName ? (

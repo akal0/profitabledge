@@ -8,8 +8,6 @@
       "http://127.0.0.1:3001/*",
       "http://localhost:3310/*",
       "http://127.0.0.1:3310/*",
-      "https://beta.profitabledge.com/*",
-      "https://www.beta.profitabledge.com/*",
       "https://profitabledge.com/*",
       "https://www.profitabledge.com/*"
     ]

@@ -33,11 +33,11 @@ describe("auth cookie settings", () => {
     });
   });
 
-  it("keeps first-party root and beta subdomains on default cookie settings", () => {
+  it("keeps first-party root and www subdomains on default cookie settings", () => {
     expect(
       getAuthCookieSettings({
         baseUrl: "https://profitabledge.com",
-        allowedWebOrigins: ["https://beta.profitabledge.com"],
+        allowedWebOrigins: ["https://www.profitabledge.com"],
       })
     ).toEqual({
       useSecureCookies: true,
@@ -45,11 +45,11 @@ describe("auth cookie settings", () => {
     });
   });
 
-  it("keeps first-party www beta and www api hosts on default cookie settings", () => {
+  it("keeps first-party www and api hosts on default cookie settings", () => {
     expect(
       getAuthCookieSettings({
         baseUrl: "https://www.api.profitabledge.com",
-        allowedWebOrigins: ["https://www.beta.profitabledge.com"],
+        allowedWebOrigins: ["https://www.profitabledge.com"],
       })
     ).toEqual({
       useSecureCookies: true,

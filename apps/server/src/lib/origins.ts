@@ -19,8 +19,6 @@ const FIRST_PARTY_WEB_HOST_GROUPS = [
   [
     "profitabledge.com",
     "www.profitabledge.com",
-    "beta.profitabledge.com",
-    "www.beta.profitabledge.com",
   ],
 ] as const;
 

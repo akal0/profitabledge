@@ -32,14 +32,12 @@ describe("getAllowedWebOrigins", () => {
         "tauri://localhost",
         "https://profitabledge.com",
         "https://www.profitabledge.com",
-        "https://beta.profitabledge.com",
-        "https://www.beta.profitabledge.com",
       ])
     );
   });
 
-  it("includes the canonical app hostname when the beta domain is configured", () => {
-    process.env.CORS_ORIGIN = "https://beta.profitabledge.com";
+  it("includes the canonical app hostname when the app domain is configured", () => {
+    process.env.CORS_ORIGIN = "https://www.profitabledge.com";
     process.env.WEB_URL = undefined;
     process.env.NEXT_PUBLIC_WEB_URL = undefined;
 
@@ -56,23 +54,19 @@ describe("getAllowedWebOrigins", () => {
         "tauri://localhost",
         "https://profitabledge.com",
         "https://www.profitabledge.com",
-        "https://beta.profitabledge.com",
-        "https://www.beta.profitabledge.com",
       ])
     );
   });
 
-  it("includes all first-party aliases when the deployed www beta host is configured", () => {
+  it("includes all first-party aliases when the deployed www host is configured", () => {
     process.env.CORS_ORIGIN = undefined;
-    process.env.WEB_URL = "https://www.beta.profitabledge.com";
+    process.env.WEB_URL = "https://www.profitabledge.com";
     process.env.NEXT_PUBLIC_WEB_URL = undefined;
 
     expect(getAllowedWebOrigins()).toEqual(
       expect.arrayContaining([
         "https://profitabledge.com",
         "https://www.profitabledge.com",
-        "https://beta.profitabledge.com",
-        "https://www.beta.profitabledge.com",
       ])
     );
   });

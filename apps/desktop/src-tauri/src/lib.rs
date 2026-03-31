@@ -15,8 +15,6 @@ fn is_first_party_host(host: &str) -> bool {
         || host == "127.0.0.1"
         || host == "profitabledge.com"
         || host == "www.profitabledge.com"
-        || host == "beta.profitabledge.com"
-        || host == "www.beta.profitabledge.com"
         || host == "api.profitabledge.com"
         || host == "www.api.profitabledge.com"
 }

@@ -7,8 +7,6 @@ const SAME_SITE_FIRST_PARTY_HOST_GROUPS = [
   [
     "profitabledge.com",
     "www.profitabledge.com",
-    "beta.profitabledge.com",
-    "www.beta.profitabledge.com",
     "api.profitabledge.com",
     "www.api.profitabledge.com",
   ],

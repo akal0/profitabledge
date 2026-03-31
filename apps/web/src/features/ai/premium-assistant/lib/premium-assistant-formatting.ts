@@ -1,4 +1,5 @@
 import { formatDisplayCurrency } from "@/lib/format-display";
+import { toSentenceCase } from "@/lib/sentence-case";
 
 export function splitMarkdownSections(markdown: string): Array<{
   title: string;
@@ -34,9 +35,7 @@ export function splitMarkdownSections(markdown: string): Array<{
 }
 
 export function sentenceCase(value: string): string {
-  const trimmed = (value || "").trim();
-  if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return toSentenceCase(value);
 }
 
 export function decorateMentions(text: string): string {

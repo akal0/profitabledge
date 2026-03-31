@@ -33,7 +33,7 @@ const defaultFormat = (v: number) => {
 
 export function BaseAreaChart({
   data,
-  height = "100%",
+  height,
   variant = "default",
   formatValue: fmt = defaultFormat,
   gradientId = "areaGradient",
@@ -83,8 +83,8 @@ export function BaseAreaChart({
   return (
     <ChartContainer
       config={{ value: { label: "Value", color: strokeColor } }}
-      className={cn("aspect-auto w-full min-h-[18rem] flex-1", className)}
-      style={{ height }}
+      className={cn("mt-auto aspect-auto h-60 w-full md:h-72", className)}
+      style={height ? { height } : undefined}
     >
         <AreaChart
           data={chartData}

@@ -12,6 +12,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { toSentenceCase } from "@/lib/sentence-case";
 import {
   formatDisplayCurrency,
   formatDisplayNumber,
@@ -19,7 +20,7 @@ import {
 import type { VizSpec, VizDataConfig } from "@/types/assistant-stream";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Bar, BarChart, Cell, XAxis, YAxis, CartesianGrid } from "recharts";
-import { Calendar, ArrowRight } from "lucide-react";
+import { Calendar, ArrowRight, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   BaseBarChart,
@@ -171,6 +172,7 @@ function BarChartViz({
     <BaseBarChart
       data={chartData}
       mode={mode === "singular" ? "singular" : "plural"}
+      formatValue={createMetricFormatter(data.valueFormat)}
       summary={data.summary}
     />
   );
@@ -306,7 +308,7 @@ function AssetProfitabilityViz({
 
       <ChartContainer
         config={{ profit: { label: "Profit", color: "#2dd4bf" } }}
-        className="w-full min-h-[18rem] flex-1 aspect-auto"
+        className="mt-auto h-60 w-full md:h-72"
       >
         <BarChart
           data={chartData}
@@ -487,6 +489,7 @@ function ComparisonViz({ data }: { data: VizDataConfig }) {
       }
       deltaPercent={deltaPercent}
       formatValue={formatValue}
+      betterWhen={comparison.betterWhen}
     />
   );
 }
@@ -507,10 +510,7 @@ function TableViz({
   return (
     <BaseTable
       rows={data.rows || []}
-      columns={data.columns?.map((column) => ({
-        ...column,
-        type: column.type === "ratio" ? "number" : column.type,
-      }))}
+      columns={data.columns}
       tradeIds={data.tradeIds}
       onViewTrades={onViewTrades}
     />
@@ -534,7 +534,9 @@ function CalendarPreviewViz({
   }
 
   // Group by date for calendar-like display
-  const days = rows.slice(0, 14); // Show max 2 weeks
+  const days = [...rows]
+    .sort((a: any, b: any) => String(a.date).localeCompare(String(b.date)))
+    .slice(-14); // Show latest 2 weeks
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -724,17 +726,35 @@ function createComparisonFormatter(
   }
 }
 
+function createMetricFormatter(
+  format?: VizDataConfig["valueFormat"]
+) {
+  switch (format) {
+    case "percent":
+      return (value: number) =>
+        `${formatDisplayNumber(value, { maximumFractionDigits: 1 })}%`;
+    case "ratio":
+      return (value: number) =>
+        `${formatDisplayNumber(value, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}R`;
+    case "number":
+      return (value: number) =>
+        formatDisplayNumber(value, { maximumFractionDigits: 2 });
+    case "currency":
+    default:
+      return (value: number) => formatDisplayCurrency(value);
+  }
+}
+
 function formatCardTitle(title?: string): string {
   if (!title) return "";
-  const trimmed = title.trim();
-  if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return toSentenceCase(title);
 }
 
 function sentenceCase(value: string): string {
-  const trimmed = (value || "").trim();
-  if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  return toSentenceCase(value);
 }
 
 function EmptyVisualizationState({
@@ -804,6 +824,57 @@ export function WidgetBlockSkeleton() {
     >
       <div className="flex min-h-0 flex-1 flex-col p-3.5">
         <Skeleton className="h-full min-h-[16rem] w-full" />
+      </div>
+    </WidgetWrapper>
+  );
+}
+
+export function WidgetBlockStreamingShell({
+  title = "Visualization",
+  message = "Thinking...",
+  lines,
+}: {
+  title?: string;
+  message?: string;
+  lines?: string[];
+}) {
+  const statusLines = lines && lines.length > 0 ? lines : [message];
+
+  return (
+    <WidgetWrapper
+      className="h-auto min-h-[28rem] rounded-lg"
+      header={
+        <div className="widget-header flex min-h-[48px] w-full items-center gap-3 px-3.5">
+          <h2 className="text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
+            <span className="block truncate normal-case">
+              {toSentenceCase(title)}
+            </span>
+          </h2>
+        </div>
+      }
+      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+    >
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3.5 text-center">
+        <div className="space-y-1.5 text-left">
+          {statusLines.map((line, index) => (
+            <div
+              key={`${line}-${index}`}
+              className="flex items-center gap-2 text-sm"
+            >
+              {index === 0 ? (
+                <LoaderCircle className="h-4 w-4 animate-spin text-white/60" />
+              ) : (
+                <span className="ml-[0.125rem] h-4 w-4" />
+              )}
+              <span className={index === 0 ? "text-white/80" : "text-white/38"}>
+                {line}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="max-w-sm text-xs text-white/40">
+          Building the analysis as the response streams in.
+        </p>
       </div>
     </WidgetWrapper>
   );

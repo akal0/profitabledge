@@ -18,6 +18,11 @@ import { usePremiumAssistantSuggestions } from "@/features/ai/premium-assistant/
 import { showAIErrorToast } from "@/lib/ai-error-toast";
 import { getGoalSchedule } from "@/lib/goals-dates";
 import { invalidateGoalQueries } from "@/lib/goals-query";
+import { isLowSignalAssistantQuery } from "@/features/ai/premium-assistant/lib/premium-assistant-query-guards";
+import {
+  normalizeMisunderstoodAssistantPayload,
+  REPHRASE_REQUEST_MARKDOWN,
+} from "@/features/ai/premium-assistant/lib/premium-assistant-response-guards";
 
 interface UsePremiumAssistantControllerOptions {
   accountId?: string;
@@ -40,6 +45,7 @@ export function usePremiumAssistantController({
   const loadRequestRef = useRef(0);
   const pendingHydrationReportIdRef = useRef<string | null>(null);
   const finalizedAssistantSignatureRef = useRef<string | null>(null);
+  const lastSubmittedPromptRef = useRef("");
   const [inputValue, setInputValue] = useState("");
   const [inputHtml, setInputHtml] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -95,17 +101,42 @@ export function usePremiumAssistantController({
           return;
         }
 
-        const loadedMessages: ChatMessage[] = result.items.map((message: any) => ({
-          id: message.id,
-          role: message.role as "user" | "assistant",
-          content: message.content,
-          html: message.htmlContent || undefined,
-          createdAt: new Date(message.createdAt),
-          visualization: message.data?.visualization as VizSpec | undefined,
-          analysisBlocks: message.data?.analysisBlocks as
-            | AnalysisBlock[]
-            | undefined,
-        }));
+        const loadedMessages: ChatMessage[] = result.items.map((message: any) => {
+          const isAssistant = message.role === "assistant";
+          const normalized = isAssistant
+            ? normalizeMisunderstoodAssistantPayload({
+                content: message.content,
+                visualization: message.data?.visualization as
+                  | VizSpec
+                  | null
+                  | undefined,
+                analysisBlocks: message.data?.analysisBlocks as
+                  | AnalysisBlock[]
+                  | null
+                  | undefined,
+              })
+            : {
+                content: message.content,
+                visualization: message.data?.visualization as
+                  | VizSpec
+                  | null
+                  | undefined,
+                analysisBlocks: message.data?.analysisBlocks as
+                  | AnalysisBlock[]
+                  | null
+                  | undefined,
+              };
+
+          return {
+            id: message.id,
+            role: message.role as "user" | "assistant",
+            content: normalized.content,
+            html: message.htmlContent || undefined,
+            createdAt: new Date(message.createdAt),
+            visualization: normalized.visualization || undefined,
+            analysisBlocks: normalized.analysisBlocks || undefined,
+          };
+        });
         const latestAssistantWithAnalysis = [...loadedMessages]
           .reverse()
           .find(
@@ -147,16 +178,19 @@ export function usePremiumAssistantController({
   }, [messages, state.lines]);
 
   useEffect(() => {
+    if (isLowSignalAssistantQuery(lastSubmittedPromptRef.current)) {
+      return;
+    }
+
     if (
       messages.length > 0 &&
-      (state.isStreaming || state.visualization || state.analysisBlocks.length > 0)
+      (state.visualization || state.analysisBlocks.length > 0)
     ) {
       setPanelOpen(true);
     }
   }, [
     messages.length,
     state.analysisBlocks,
-    state.isStreaming,
     state.visualization,
   ]);
 
@@ -164,22 +198,39 @@ export function usePremiumAssistantController({
     const content = [...state.lines, state.lineBuffer]
       .filter((line): line is string => Boolean(line))
       .join("\n");
+    const shouldForceRephraseOnly = isLowSignalAssistantQuery(
+      lastSubmittedPromptRef.current
+    );
 
     if (!state.isDone) return;
 
     const fallbackContent =
       state.error
         ? `I ran into an error: ${state.error}`
-        : state.analysisBlocks.length > 0 || state.visualization
+        : shouldForceRephraseOnly
+          ? REPHRASE_REQUEST_MARKDOWN
+          : state.analysisBlocks.length > 0 || state.visualization
           ? "I analyzed your data and added the result to the analysis panel."
-          : "I couldn't generate a useful answer for that question. Try asking it with a bit more detail.";
+          : REPHRASE_REQUEST_MARKDOWN;
 
-    const finalContent = content.length > 0 ? content : fallbackContent;
+    const normalizedPayload = normalizeMisunderstoodAssistantPayload({
+      content:
+        shouldForceRephraseOnly
+          ? REPHRASE_REQUEST_MARKDOWN
+          : content.length > 0
+            ? content
+            : fallbackContent,
+      analysisBlocks: shouldForceRephraseOnly ? [] : state.analysisBlocks,
+      visualization: shouldForceRephraseOnly ? null : state.visualization,
+    });
+    const finalContent = normalizedPayload.content;
+    const finalAnalysisBlocks = normalizedPayload.analysisBlocks;
+    const finalVisualization = normalizedPayload.visualization;
     const completionSignature = [
       currentReportId || "no-report",
       finalContent,
-      state.analysisBlocks.length,
-      Boolean(state.visualization),
+      finalAnalysisBlocks.length,
+      Boolean(finalVisualization),
       state.error || "",
     ].join("::");
 
@@ -196,8 +247,8 @@ export function usePremiumAssistantController({
             ? {
                 ...message,
                 content: finalContent,
-                visualization: state.visualization || undefined,
-                analysisBlocks: state.analysisBlocks,
+                visualization: finalVisualization || undefined,
+                analysisBlocks: finalAnalysisBlocks,
               }
             : message
         );
@@ -210,8 +261,8 @@ export function usePremiumAssistantController({
           role: "assistant",
           content: finalContent,
           createdAt: new Date(),
-          visualization: state.visualization || undefined,
-          analysisBlocks: state.analysisBlocks,
+          visualization: finalVisualization || undefined,
+          analysisBlocks: finalAnalysisBlocks,
         },
       ];
     });
@@ -224,10 +275,10 @@ export function usePremiumAssistantController({
           role: "assistant",
           content: finalContent,
           data:
-            state.visualization || state.analysisBlocks.length > 0
+            finalVisualization || finalAnalysisBlocks.length > 0
               ? {
-                  visualization: state.visualization,
-                  analysisBlocks: state.analysisBlocks,
+                  visualization: finalVisualization,
+                  analysisBlocks: finalAnalysisBlocks,
                 }
               : undefined,
         })
@@ -275,6 +326,7 @@ export function usePremiumAssistantController({
 
       setSelectedVisualization(null);
       setSelectedAnalysisBlocks(null);
+      setPanelOpen(false);
 
       let reportId = currentReportId;
       if (!reportId) {
@@ -329,6 +381,8 @@ export function usePremiumAssistantController({
       }
 
       const message = inputValue;
+      lastSubmittedPromptRef.current = message;
+      const shouldSimulateRephraseOnly = isLowSignalAssistantQuery(message);
       const nextConversationHistory = [
         ...conversationHistory,
         `user: ${message}`,
@@ -341,6 +395,7 @@ export function usePremiumAssistantController({
       editorRef.current?.clear();
       editorRef.current?.focus();
       reset();
+      setPanelOpen(false);
 
       await startStream("/api/assistant/stream", {
         message,
@@ -348,6 +403,7 @@ export function usePremiumAssistantController({
         conversationHistory: nextConversationHistory,
         evidenceMode,
         pageContext,
+        simulateRephraseOnly: shouldSimulateRephraseOnly,
       });
     },
     [
@@ -473,21 +529,25 @@ export function usePremiumAssistantController({
   );
 
   const currentVisualization =
-    state.visualization ||
-    selectedVisualization ||
-    (!state.isStreaming
-      ? messages.filter((message) => message.role === "assistant").pop()
-          ?.visualization
-      : null);
+    isLowSignalAssistantQuery(lastSubmittedPromptRef.current)
+      ? null
+      : state.visualization ||
+        selectedVisualization ||
+        (!state.isStreaming
+          ? messages.filter((message) => message.role === "assistant").pop()
+              ?.visualization
+          : null);
 
   const currentAnalysisBlocks =
-    selectedAnalysisBlocks ??
-    (state.analysisBlocks.length > 0
-      ? state.analysisBlocks
-      : !state.isStreaming
-        ? messages.filter((message) => message.role === "assistant").pop()
-            ?.analysisBlocks || []
-        : []);
+    isLowSignalAssistantQuery(lastSubmittedPromptRef.current)
+      ? []
+      : selectedAnalysisBlocks ??
+        (state.analysisBlocks.length > 0
+          ? state.analysisBlocks
+          : !state.isStreaming
+            ? messages.filter((message) => message.role === "assistant").pop()
+                ?.analysisBlocks || []
+            : []);
 
   return {
     accountId,

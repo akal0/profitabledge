@@ -3,12 +3,13 @@
 import React from "react";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toSentenceCase } from "@/lib/sentence-case";
 import { formatDisplayCurrency, formatDisplayNumber } from "@/lib/format-display";
 
 export interface TableColumn {
   key: string;
   label: string;
-  type?: "string" | "currency" | "percent" | "number" | "date";
+  type?: "string" | "currency" | "percent" | "number" | "date" | "ratio";
 }
 
 export interface BaseTableProps {
@@ -20,9 +21,7 @@ export interface BaseTableProps {
 }
 
 function sentenceCase(value: string): string {
-  const trimmed = (value || "").trim();
-  if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return toSentenceCase(value);
 }
 
 function formatCellValue(value: any, type?: string): string {
@@ -35,6 +34,11 @@ function formatCellValue(value: any, type?: string): string {
       return `${Number(value).toFixed(1)}%`;
     case "number":
       return formatDisplayNumber(Number(value));
+    case "ratio":
+      return `${formatDisplayNumber(Number(value), {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}R`;
     case "date":
       return new Date(value).toLocaleDateString();
     default:

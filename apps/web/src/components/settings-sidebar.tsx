@@ -33,6 +33,10 @@ import {
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 import { trpcOptions } from "@/utils/trpc";
 
+function isTauriDesktop() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 type NavItem = {
   title: string;
   href: string;
@@ -46,8 +50,10 @@ type NavSection = {
 
 export function getSettingsNavSections({
   canViewSupport = false,
+  hideSecurity = false,
 }: {
   canViewSupport?: boolean;
+  hideSecurity?: boolean;
 } = {}): NavSection[] {
   return [
     {
@@ -58,11 +64,15 @@ export function getSettingsNavSections({
           href: "/dashboard/settings/profile",
           icon: UserPen,
         },
-        {
-          title: "Security",
-          href: "/dashboard/settings/security",
-          icon: Shield,
-        },
+        ...(!hideSecurity
+          ? [
+              {
+                title: "Security",
+                href: "/dashboard/settings/security",
+                icon: Shield,
+              },
+            ]
+          : []),
         {
           title: "Billing",
           href: "/dashboard/settings/billing",
@@ -145,6 +155,7 @@ export function SettingsSidebar({
   });
   const sections = getSettingsNavSections({
     canViewSupport: billingState?.admin?.isAdmin === true,
+    hideSecurity: isTauriDesktop(),
   });
 
   return (

@@ -92,7 +92,7 @@ export const METRIC_REGISTRY: Record<string, MetricDefinition> = {
     name: "Net P/L",
     category: METRIC_CATEGORY.EXECUTION,
     sampleGate: SAMPLE_GATE_TIERS.BASIC,
-    tooltip: "Total profit/loss including commissions and swap",
+    tooltip: "Total profit / loss including commissions and swap",
     format: "currency",
     unit: "$",
   },

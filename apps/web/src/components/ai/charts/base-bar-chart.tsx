@@ -35,7 +35,7 @@ const defaultFormat = (v: number) => {
 
 export function BaseBarChart({
   data,
-  height = "100%",
+  height,
   mode = "plural",
   formatValue: fmt = defaultFormat,
   summary,
@@ -47,8 +47,8 @@ export function BaseBarChart({
     <div className="flex h-full min-h-0 flex-col">
       <ChartContainer
         config={{ value: { label: "Value", color: "#2dd4bf" } }}
-        className={cn("aspect-auto w-full min-h-[18rem] flex-1", className)}
-        style={{ height }}
+        className={cn("mt-auto aspect-auto h-60 w-full md:h-72", className)}
+        style={height ? { height } : undefined}
       >
         <BarChart
           data={data}
@@ -104,10 +104,10 @@ export function BaseBarChart({
 
       {summary?.best && (
         <div className="mt-2 text-xs text-white/50">
-          Best: <span className="text-teal-400">{summary.best.label}</span>
+          Highest: <span className="text-teal-400">{summary.best.label}</span>
           {summary.worst && (
             <>
-              {" "}· Worst:{" "}
+              {" "}· Lowest:{" "}
               <span className="text-rose-400">{summary.worst.label}</span>
             </>
           )}

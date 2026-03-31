@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { useDesktopSessionBootstrap } from "@/lib/desktop-session-bootstrap";
 import {
   DEFAULT_SESSION_CONFIRM_RETRY_DELAYS_MS,
   waitForConfirmedSession,
@@ -21,6 +22,7 @@ export function useConfirmedSession({
     isPending: isSessionPending,
     refetch: refetchSession,
   } = authClient.useSession();
+  const desktopBootstrap = useDesktopSessionBootstrap();
   const [hasRecoveredSession, setHasRecoveredSession] = useState(false);
   const [hasAttemptedSessionRecovery, setHasAttemptedSessionRecovery] =
     useState(false);
@@ -33,6 +35,13 @@ export function useConfirmedSession({
       isMountedRef.current = false;
     };
   }, []);
+
+  const shouldTrustDesktopBootstrap =
+    !session && desktopBootstrap.authenticated && !desktopBootstrap.pending;
+  const effectiveIsSessionPending =
+    shouldTrustDesktopBootstrap ? false : isSessionPending;
+  const effectiveHasConfirmedSession =
+    Boolean(session) || hasRecoveredSession || shouldTrustDesktopBootstrap;
 
   useEffect(() => {
     if (!session) {
@@ -48,7 +57,7 @@ export function useConfirmedSession({
   useEffect(() => {
     if (
       !autoRecover ||
-      isSessionPending ||
+      effectiveIsSessionPending ||
       session ||
       isRecoveringSession ||
       hasAttemptedSessionRecovery ||
@@ -87,7 +96,7 @@ export function useConfirmedSession({
     autoRecover,
     hasAttemptedSessionRecovery,
     isRecoveringSession,
-    isSessionPending,
+    effectiveIsSessionPending,
     refetchSession,
     retryDelays,
     session,
@@ -95,10 +104,11 @@ export function useConfirmedSession({
 
   return {
     session,
-    isSessionPending,
+    isSessionPending: effectiveIsSessionPending,
     refetchSession,
-    hasConfirmedSession: Boolean(session) || hasRecoveredSession,
-    hasAttemptedSessionRecovery,
+    hasConfirmedSession: effectiveHasConfirmedSession,
+    hasAttemptedSessionRecovery:
+      hasAttemptedSessionRecovery || shouldTrustDesktopBootstrap,
     isRecoveringSession,
   };
 }

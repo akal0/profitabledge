@@ -11,6 +11,15 @@ export interface GuardrailStatus {
   message: string;
 }
 
+export function formatGuardrailFollowUp(status: GuardrailStatus): string {
+  const prompt =
+    status.reason === "missing_fields"
+      ? "If you can point me to a more complete metric, account, or timeframe, I can take another pass."
+      : "If you can narrow it down to a specific account, timeframe, setup, or metric, I can take another pass.";
+
+  return `${status.message}\n\n${prompt}`;
+}
+
 const MIN_SAMPLE_SIZE = 3;
 
 export function getGuardrailStatus(

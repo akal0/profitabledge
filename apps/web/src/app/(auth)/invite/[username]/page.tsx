@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { startDesktopSocialAuth } from "@/lib/desktop-social-auth";
 import { getErrorMessage } from "@/lib/error-message";
 import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import { storeAffiliateIntent } from "@/features/growth/lib/access-intent";
@@ -166,6 +167,15 @@ export default function InvitePage() {
     setSocialProviderLoading(provider);
 
     try {
+      const startedDesktopFlow = await startDesktopSocialAuth({
+        provider,
+        path: postAuthContinuePath,
+      });
+      if (startedDesktopFlow) {
+        setSocialProviderLoading(null);
+        return;
+      }
+
       await authClient.signIn.social({
         provider,
         callbackURL: `${window.location.origin}${postAuthContinuePath}`,

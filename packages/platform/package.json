@@ -8,6 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./failover-fetch": "./src/failover-fetch.ts",
-    "./origin-utils": "./src/origin-utils.ts"
+    "./origin-utils": "./src/origin-utils.ts",
+    "./notification-presentation": "./src/notification-presentation.ts",
+    "./notification-targets": "./src/notification-targets.ts"
   }
 }

@@ -1,17 +1,17 @@
 /**
  * Premium Trading AI Assistant - Streaming Protocol Types
- * 
+ *
  * Defines the event stream format for real-time assistant responses
  * with structured analysis blocks for the right panel.
  */
 
-export type StreamStage = 
-  | "thinking"      // Understanding the question
-  | "planning"      // Mapping to trade fields
-  | "querying"      // Scanning trades
-  | "aggregating"   // Computing metrics
-  | "writing"       // Drafting explanation
-  | "finalizing";   // Formatting output
+export type StreamStage =
+  | "thinking" // Understanding the question
+  | "planning" // Mapping to trade fields
+  | "querying" // Scanning trades
+  | "aggregating" // Computing metrics
+  | "writing" // Drafting explanation
+  | "finalizing"; // Formatting output
 
 export type ConfidenceLevel = "exploratory" | "moderate" | "high";
 
@@ -70,22 +70,23 @@ export interface VizDataConfig {
   unit?: string;
   change?: number;
   changeLabel?: string;
-  
+
   // For charts/tables - the actual data rows
   rows?: any[];
-  
+
   // Column definitions for tables
   columns?: Array<{
     key: string;
     label: string;
     type?: "string" | "number" | "currency" | "percent" | "date" | "ratio";
   }>;
-  
+
   // Chart-specific config
   xAxis?: string;
   yAxis?: string;
   groupKey?: string;
-  
+  valueFormat?: "currency" | "percent" | "ratio" | "number";
+
   // For comparisons
   comparison?: {
     a: { label: string; value: number | string; count?: number };
@@ -94,17 +95,18 @@ export interface VizDataConfig {
     deltaPercent?: string;
     metricField?: string;
     format?: "currency" | "percent" | "ratio" | "number";
+    betterWhen?: "higher" | "lower";
   };
-  
+
   // Trade IDs for "view trades" action
   tradeIds?: string[];
-  
+
   // Date range for calendar/timeline views
   dateRange?: {
     from: string;
     to: string;
   };
-  
+
   // Summary stats
   summary?: {
     total?: number;
@@ -130,7 +132,14 @@ export interface VizStyleConfig {
 /**
  * Visualization specification from server
  */
-export type ChartType = "bar" | "area" | "scatter" | "heatmap" | "kpi" | "comparison" | "table";
+export type ChartType =
+  | "bar"
+  | "area"
+  | "scatter"
+  | "heatmap"
+  | "kpi"
+  | "comparison"
+  | "table";
 
 export interface VizSpec {
   type: VizType;
@@ -216,8 +225,18 @@ export type AnalysisBlock =
   | {
       type: "edgeConditions";
       title: string;
-      edges: Array<{ label: string; winRate: number; trades: number; confidence: string }>;
-      leaks: Array<{ label: string; winRate: number; trades: number; confidence: string }>;
+      edges: Array<{
+        label: string;
+        winRate: number;
+        trades: number;
+        confidence: string;
+      }>;
+      leaks: Array<{
+        label: string;
+        winRate: number;
+        trades: number;
+        confidence: string;
+      }>;
     }
   | {
       type: "insightCard";
@@ -240,7 +259,12 @@ export type AnalysisBlock =
       wins: number;
       losses: number;
       runningPnL: number;
-      nudges: Array<{ type: string; title: string; message: string; severity: string }>;
+      nudges: Array<{
+        type: string;
+        title: string;
+        message: string;
+        severity: string;
+      }>;
     };
 
 /**
@@ -315,22 +339,23 @@ export interface AssistantStreamState {
   // Status
   stage: StreamStage | null;
   statusMessage: string;
-  
+
   // Markdown content
-  lines: string[];           // Committed lines
-  lineBuffer: string;        // Current incomplete line
-  
+  lines: string[]; // Committed lines
+  lineBuffer: string; // Current incomplete line
+
   // Analysis blocks
   analysisBlocks: AnalysisBlock[];
-  
+
   // Visualization
   visualization: VizSpec | null;
-  
+
   // State flags
   isStreaming: boolean;
   isDone: boolean;
-  justCompleted: boolean;    // For completion shimmer
-  
+  justCompleted: boolean; // For completion shimmer
+  presentationReady: boolean;
+
   // Error handling
   error: string | null;
 }
@@ -338,7 +363,10 @@ export interface AssistantStreamState {
 /**
  * Stage display configuration
  */
-export const STAGE_CONFIG: Record<StreamStage, { label: string; message: string }> = {
+export const STAGE_CONFIG: Record<
+  StreamStage,
+  { label: string; message: string }
+> = {
   thinking: {
     label: "Thinking",
     message: "Understanding your question…",
@@ -379,9 +407,9 @@ export function getConfidenceLabel(level: ConfidenceLevel): string {
     case "exploratory":
       return "Exploratory";
     case "moderate":
-      return "Moderate Confidence";
+      return "Moderate confidence";
     case "high":
-      return "High Confidence";
+      return "High confidence";
   }
 }
 

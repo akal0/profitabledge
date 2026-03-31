@@ -45,6 +45,10 @@ function getIconLinks() {
   return [created];
 }
 
+function isTauriDesktop() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 export function TabAttentionController() {
   const trpc = useTRPC();
   const { data: session, isPending: isSessionPending } =
@@ -82,6 +86,10 @@ export function TabAttentionController() {
       ),
     [badgeVariant]
   );
+
+  if (isTauriDesktop()) {
+    return null;
+  }
 
   useEffect(() => {
     if (typeof document === "undefined") {

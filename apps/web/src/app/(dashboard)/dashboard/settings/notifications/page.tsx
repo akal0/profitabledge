@@ -10,6 +10,7 @@ import {
   Newspaper,
   Settings,
   Activity,
+  Monitor,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -30,6 +31,9 @@ export default function NotificationsSettingsPage() {
     trpcOptions.notifications.getDeliveryHealth.queryOptions()
   );
   const showSocialNotifications = publicAlphaFlags.community;
+  const isDesktopShell =
+    typeof window !== "undefined" &&
+    (window.parent !== window || "__TAURI_INTERNALS__" in window);
 
   const formatHealthTimestamp = (value?: string | Date | null) => {
     if (!value) return null;
@@ -78,6 +82,37 @@ export default function NotificationsSettingsPage() {
       toast.success("Notification settings updated");
     } catch (error: any) {
       toast.error(error.message || "Failed to update notification settings");
+    }
+  };
+
+  const handleDesktopToggle = async (key: string, nextValue: boolean) => {
+    try {
+      await updatePreferences.mutateAsync({
+        desktop: {
+          [key]: nextValue,
+        },
+      });
+      toast.success("Desktop notification settings updated");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update desktop settings");
+    }
+  };
+
+  const handleQuietHoursUpdate = async (
+    key: string,
+    nextValue: boolean | number
+  ) => {
+    try {
+      await updatePreferences.mutateAsync({
+        desktop: {
+          quietHours: {
+            [key]: nextValue,
+          },
+        },
+      });
+      toast.success("Quiet hours updated");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to update quiet hours");
     }
   };
 
@@ -142,6 +177,177 @@ export default function NotificationsSettingsPage() {
       </div>
 
       <Separator />
+
+      {isDesktopShell ? (
+        <>
+          <div className="px-6 sm:px-8 py-5">
+            <div className="flex items-center gap-2">
+              <Monitor className="size-4 text-cyan-400" />
+              <h2 className="text-sm font-semibold text-white">
+                Desktop workstation
+              </h2>
+            </div>
+            <p className="mt-0.5 w-max text-xs text-white/40">
+              Native alerts, tray behaviour, autostart, and quieter desktop flows.
+            </p>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                Native desktop alerts
+              </Label>
+              <p className="mt-0.5 w-max text-xs text-white/40">
+                OS notifications from the desktop app itself.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Switch
+                checked={preferences?.desktop?.enabled ?? true}
+                onCheckedChange={(next) => handleDesktopToggle("enabled", next)}
+                disabled={updatePreferences.isPending}
+                className="data-[state=checked]:bg-cyan-600"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                Close to tray
+              </Label>
+              <p className="mt-0.5 w-max text-xs text-white/40">
+                Hide the main window instead of quitting.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Switch
+                checked={preferences?.desktop?.closeToTray ?? true}
+                onCheckedChange={(next) =>
+                  handleDesktopToggle("closeToTray", next)
+                }
+                disabled={updatePreferences.isPending}
+                className="data-[state=checked]:bg-cyan-600"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                Launch on login
+              </Label>
+              <p className="mt-0.5 w-max text-xs text-white/40">
+                Start the workstation when your computer signs in.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Switch
+                checked={preferences?.desktop?.launchOnLogin ?? false}
+                onCheckedChange={(next) =>
+                  handleDesktopToggle("launchOnLogin", next)
+                }
+                disabled={updatePreferences.isPending}
+                className="data-[state=checked]:bg-cyan-600"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                High priority only
+              </Label>
+              <p className="mt-0.5 w-max text-xs text-white/40">
+                Only surface alerts and higher-priority desktop events.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <Switch
+                checked={preferences?.desktop?.highPriorityOnly ?? false}
+                onCheckedChange={(next) =>
+                  handleDesktopToggle("highPriorityOnly", next)
+                }
+                disabled={updatePreferences.isPending}
+                className="data-[state=checked]:bg-cyan-600"
+              />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-start gap-2 sm:gap-6 px-6 sm:px-8 py-5">
+            <div>
+              <Label className="text-sm text-white/80 font-medium">
+                Quiet hours
+              </Label>
+              <p className="mt-0.5 max-w-[260px] text-xs text-white/40">
+                Mute desktop toasts during off-hours while keeping the in-app feed.
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-3">
+              <Switch
+                checked={preferences?.desktop?.quietHours?.enabled ?? false}
+                onCheckedChange={(next) =>
+                  handleQuietHoursUpdate("enabled", next)
+                }
+                disabled={updatePreferences.isPending}
+                className="data-[state=checked]:bg-cyan-600"
+              />
+              <div className="flex items-center gap-3 text-sm text-white/70">
+                <label className="flex items-center gap-2">
+                  <span>From</span>
+                  <select
+                    className="h-9 rounded-md border border-white/10 bg-white/5 px-2 text-white outline-none"
+                    value={preferences?.desktop?.quietHours?.startHour ?? 22}
+                    onChange={(event) =>
+                      handleQuietHoursUpdate(
+                        "startHour",
+                        Number(event.target.value)
+                      )
+                    }
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour} className="bg-[#0b1324]">
+                        {hour.toString().padStart(2, "0")}:00
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2">
+                  <span>To</span>
+                  <select
+                    className="h-9 rounded-md border border-white/10 bg-white/5 px-2 text-white outline-none"
+                    value={preferences?.desktop?.quietHours?.endHour ?? 7}
+                    onChange={(event) =>
+                      handleQuietHoursUpdate(
+                        "endHour",
+                        Number(event.target.value)
+                      )
+                    }
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour} className="bg-[#0b1324]">
+                        {hour.toString().padStart(2, "0")}:00
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+        </>
+      ) : null}
 
       {/* Trade Notifications heading */}
       <div className="px-6 sm:px-8 py-5">

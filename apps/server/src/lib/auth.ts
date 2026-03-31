@@ -8,6 +8,7 @@ import {
 import {
   admin,
   lastLoginMethod,
+  oneTimeToken,
   organization,
   twoFactor,
   username,
@@ -115,11 +116,35 @@ async function getXUserInfo(accessToken: string | undefined) {
 }
 
 const trustedOrigins = getAllowedWebOrigins();
-const baseURL = resolveAuthBaseUrl();
+const baseUrlFallback = resolveAuthBaseUrl();
 const moderatorAc = defaultAdminAc.newRole({
   user: ["list", "ban", "get", "update"],
   session: ["list", "revoke"],
 });
+
+function getDynamicAuthBaseHosts(origins: string[]) {
+  const hosts = new Set<string>();
+
+  for (const origin of origins) {
+    try {
+      const url = new URL(origin);
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        continue;
+      }
+      hosts.add(url.host);
+    } catch {
+      // Ignore malformed origins and non-URL desktop schemes.
+    }
+  }
+
+  return [...hosts];
+}
+
+const baseURL = {
+  allowedHosts: getDynamicAuthBaseHosts(trustedOrigins),
+  fallback: baseUrlFallback,
+  protocol: process.env.NODE_ENV === "development" ? "http" : "https",
+} satisfies BetterAuthOptions["baseURL"];
 
 const authOptions = {
   database: drizzleAdapter(db, {
@@ -146,6 +171,7 @@ const authOptions = {
     twoFactor({
       issuer: "profitabledge",
     }),
+    oneTimeToken(),
     passkey(),
     lastLoginMethod({
       storeInDatabase: true,
@@ -178,7 +204,7 @@ const authOptions = {
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL,
   advanced: getAuthCookieSettings({
-    baseUrl: baseURL,
+    baseUrl: baseUrlFallback,
     allowedWebOrigins: trustedOrigins,
   }),
 } satisfies BetterAuthOptions;

@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QRCode from "react-qr-code";
 import { Copy, Fingerprint, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 import {
   GoalContentSeparator,
@@ -43,7 +44,12 @@ function formatPasskeyDate(value?: string | Date | null) {
   return Number.isNaN(date.getTime()) ? "Recently added" : date.toLocaleString();
 }
 
+function isTauriDesktop() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 export default function SecuritySettingsPage() {
+  const router = useRouter();
   const session = authClient.useSession();
   const passkeys = authClient.useListPasskeys();
   const sessionUser = (session.data?.user ?? null) as
@@ -72,6 +78,18 @@ export default function SecuritySettingsPage() {
     () => formatLoginMethod(sessionUser?.lastLoginMethod),
     [sessionUser?.lastLoginMethod]
   );
+
+  useEffect(() => {
+    if (!isTauriDesktop()) {
+      return;
+    }
+
+    router.replace("/dashboard/settings/profile");
+  }, [router]);
+
+  if (isTauriDesktop()) {
+    return <RouteLoadingFallback route="settings" className="min-h-[calc(100vh-10rem)]" />;
+  }
 
   async function handleEnableTwoFactor() {
     if (!twoFactorPassword.trim()) {

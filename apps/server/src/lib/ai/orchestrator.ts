@@ -17,6 +17,7 @@ import {
   maybeHandleSpecialistQuery,
   type AssistantPageContext,
 } from "./assistant-specialists";
+import { isLowSignalAssistantQuery } from "./query-normalization";
 import {
   computeMentalPerformanceScore,
   detectTiltStatus,
@@ -25,6 +26,9 @@ import {
   generateCoachingNudges,
   getCurrentSessionState,
 } from "./engine/session-tracker";
+
+const REPHRASE_REQUEST_MARKDOWN =
+  "I couldn't understand your request. Could you please rephrase it?";
 
 export interface OrchestratorContext {
   userId: string;
@@ -60,6 +64,14 @@ export async function orchestrateQuery(
   };
 
   try {
+    if (isLowSignalAssistantQuery(userMessage)) {
+      return {
+        success: false,
+        message: REPHRASE_REQUEST_MARKDOWN,
+        debug,
+      };
+    }
+
     // Load trader profile (cached)
     let condensed: CondensedProfile | undefined;
     let fullProfileData:
@@ -148,8 +160,7 @@ export async function orchestrateQuery(
       if (planResult.needsFieldCatalog) {
         return {
           success: false,
-          message:
-            "I couldn't map that request to your trade fields. Try rephrasing or mention the metric you want to analyze.",
+          message: REPHRASE_REQUEST_MARKDOWN,
           debug,
         };
       }
@@ -164,7 +175,7 @@ export async function orchestrateQuery(
 
       return {
         success: false,
-        message: `I couldn't understand your query. ${planResult.error || "Please rephrase and try again."}`,
+        message: REPHRASE_REQUEST_MARKDOWN,
         debug,
       };
     }

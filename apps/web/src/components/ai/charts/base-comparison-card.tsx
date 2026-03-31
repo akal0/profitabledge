@@ -17,6 +17,7 @@ export interface BaseComparisonCardProps {
   delta: number;
   deltaPercent?: string;
   formatValue?: (v: number) => string;
+  betterWhen?: "higher" | "lower";
 }
 
 const defaultFormat = (v: number) => {
@@ -29,8 +30,20 @@ export function BaseComparisonCard({
   delta,
   deltaPercent,
   formatValue: fmt = defaultFormat,
+  betterWhen = "higher",
 }: BaseComparisonCardProps) {
-  const isABetter = a.value > b.value;
+  const isABetter =
+    betterWhen === "lower" ? a.value < b.value : a.value > b.value;
+  const deltaTone =
+    delta === 0
+      ? "text-white/70"
+      : betterWhen === "lower"
+      ? delta < 0
+        ? "text-teal-400"
+        : "text-rose-400"
+      : delta > 0
+      ? "text-teal-400"
+      : "text-rose-400";
 
   return (
     <div className="flex h-full min-h-0 flex-col justify-center space-y-4">
@@ -85,7 +98,7 @@ export function BaseComparisonCard({
         <span
           className={cn(
             "font-semibold",
-            delta >= 0 ? "text-teal-400" : "text-rose-400"
+            deltaTone
           )}
         >
           {delta >= 0 ? "+" : ""}

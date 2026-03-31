@@ -4,7 +4,14 @@ function normalizeOrigin(value: string | undefined | null) {
 }
 
 const SAME_SITE_FIRST_PARTY_HOST_GROUPS = [
-  ["profitabledge.com", "beta.profitabledge.com"],
+  [
+    "profitabledge.com",
+    "www.profitabledge.com",
+    "beta.profitabledge.com",
+    "www.beta.profitabledge.com",
+    "api.profitabledge.com",
+    "www.api.profitabledge.com",
+  ],
 ] as const;
 
 function toOrigin(value: string | undefined | null) {
@@ -68,6 +75,18 @@ function firstOrigin(csv: string | undefined | null): string | null {
   return null;
 }
 
+function isIgnoredLoopbackOrigin(origin: string) {
+  try {
+    const url = new URL(origin);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function resolveAuthBaseUrl(env: NodeJS.ProcessEnv = process.env) {
   return (
     normalizeOrigin(env.WEB_URL) ||
@@ -100,14 +119,10 @@ export function getAuthCookieSettings({
       const webOrigin = toOrigin(origin);
       if (!webOrigin || webOrigin === authOrigin) return false;
       if (isKnownSameSitePair(webOrigin, authOrigin)) return false;
-      // Ignore localhost origins — they should not force cross-origin
-      // cookie settings (SameSite=None) in production deployments.
-      try {
-        const { hostname } = new URL(webOrigin);
-        if (hostname === "localhost" || hostname === "127.0.0.1") return false;
-      } catch {
-        // fall through
-      }
+      // Ignore local HTTP loopback origins during browser development, but
+      // still treat custom desktop schemes as cross-origin so Tauri can send
+      // auth cookies on direct API calls.
+      if (isIgnoredLoopbackOrigin(webOrigin)) return false;
       return true;
     });
 

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Profitabledge",
+  "version": "0.1.0",
+  "identifier": "com.profitabledge.native",
+  "build": {
+    "beforeDevCommand": "bun run dev:web",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist",
+    "removeUnusedCommands": false
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "active": false,
+      "dialog": false,
+      "pubkey": "",
+      "endpoints": []
+    }
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "",
+        "create": true,
+        "width": 1520,
+        "height": 980,
+        "minWidth": 1160,
+        "minHeight": 760,
+        "maximized": true,
+        "resizable": true,
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 24
+        },
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": ["desktop-main", "desktop-detached"]
+    }
+  }
+}

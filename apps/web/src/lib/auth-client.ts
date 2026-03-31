@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import {
   adminClient,
+  oneTimeTokenClient,
   organizationClient,
   twoFactorClient,
   usernameClient,
@@ -39,6 +40,7 @@ export const authClient = createAuthClient({
     twoFactorClient(),
     adminClient(),
     organizationClient(),
+    oneTimeTokenClient(),
     passkeyClient(),
   ] as any,
   async fetch(input: RequestInfo | URL, init?: RequestInit) {

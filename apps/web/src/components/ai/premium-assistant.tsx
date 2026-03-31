@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import { AnimatePresence, motion } from "motion/react";
 import {
   AtSign,
   ChevronRight,
@@ -39,10 +41,15 @@ import { PremiumAssistantAnalysisPanel } from "@/features/ai/premium-assistant/c
 import { PremiumAssistantEmptyState } from "@/features/ai/premium-assistant/components/premium-assistant-empty-state";
 import { PremiumAssistantGoalDialog } from "@/features/ai/premium-assistant/components/premium-assistant-goal-dialog";
 import { PremiumAssistantResponseCards } from "@/features/ai/premium-assistant/components/premium-assistant-response-cards";
-import { PremiumAssistantStreamingContent } from "@/features/ai/premium-assistant/components/premium-assistant-streaming-content";
+import {
+  PremiumAssistantStreamingContent,
+} from "@/features/ai/premium-assistant/components/premium-assistant-streaming-content";
 import { usePremiumAssistantController } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-controller";
 import { TRADING_SUGGESTIONS } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
+import {
+  WidgetBlockRenderer,
+} from "@/components/ai/widget-block-renderer";
 
 function SidebarToggleButton() {
   const { toggleSidebar } = useSidebar();
@@ -97,6 +104,21 @@ export function PremiumAssistant({
     contextPathOverride,
   });
   const isEmptyState = controller.messages.length === 0;
+  const [streamPresentationComplete, setStreamPresentationComplete] =
+    useState(true);
+  const isAssistantPresentationInFlight =
+    controller.state.isStreaming ||
+    (controller.state.isDone && !streamPresentationComplete);
+  const effectivePanelOpen =
+    controller.panelOpen && !isAssistantPresentationInFlight;
+  const analysisPresentationReady =
+    controller.state.presentationReady && streamPresentationComplete;
+
+  useEffect(() => {
+    if (controller.state.isStreaming) {
+      setStreamPresentationComplete(false);
+    }
+  }, [controller.state.isStreaming]);
 
   return (
     <TooltipProvider>
@@ -108,7 +130,7 @@ export function PremiumAssistant({
         )}
         style={
           {
-            "--assistant-analysis-width": "clamp(48rem, 48vw, 72rem)",
+            "--assistant-analysis-width": "clamp(40rem, 40vw, 58rem)",
           } as React.CSSProperties
         }
       >
@@ -128,7 +150,7 @@ export function PremiumAssistant({
         <div
           className={cn(
             "relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden transition-[margin-right] ease-in-out",
-            controller.panelOpen
+            effectivePanelOpen
               ? "duration-0 lg:mr-[var(--assistant-analysis-width)]"
               : "duration-300 lg:mr-0"
           )}
@@ -155,7 +177,17 @@ export function PremiumAssistant({
             ) : (
               <ScrollArea className="relative z-0 h-full w-full">
                 <div className="relative z-0 w-full space-y-6 px-8 py-6">
-                  {controller.messages.map((message) => (
+                  {controller.messages.map((message, index) => {
+                    const isLatestMessage =
+                      index === controller.messages.length - 1;
+                    const isActiveAssistantPresentation =
+                      message.role === "assistant" &&
+                      isLatestMessage &&
+                      (controller.state.isStreaming ||
+                        (controller.state.isDone &&
+                          !streamPresentationComplete));
+
+                    return (
                     <Message
                       key={message.id}
                       from={message.role}
@@ -181,24 +213,40 @@ export function PremiumAssistant({
                         }
                       >
                         {message.role === "assistant" ? (
-                          message.content === "" &&
-                          controller.state.isStreaming ? (
-                            <div className="flex h-full w-full flex-col rounded-sm border border-white/5 bg-sidebar p-1">
-                              <div className="flex w-full items-start justify-between gap-3 px-3.5 py-2">
-                                <h2 className="text-sm font-medium text-white/50">
-                                  Your assistant
-                                </h2>
-                              </div>
-                              <div className="flex h-full w-full flex-col rounded-sm bg-white transition-all duration-150 dark:bg-sidebar-accent dark:hover:brightness-120">
-                                <div className="flex h-full flex-col p-3.5 text-white">
-                                  <PremiumAssistantStreamingContent
-                                    lines={controller.state.lines}
-                                    lineBuffer={controller.state.lineBuffer}
-                                    stage={controller.state.stage}
-                                    statusMessage={controller.state.statusMessage}
-                                  />
-                                </div>
-                              </div>
+                          isActiveAssistantPresentation ? (
+                            <div className="w-full space-y-4 py-1">
+                              <PremiumAssistantStreamingContent
+                                lines={controller.state.lines}
+                                lineBuffer={controller.state.lineBuffer}
+                                stage={controller.state.stage}
+                                statusMessage={controller.state.statusMessage}
+                                showResponse={controller.state.presentationReady}
+                                finalizePresentation={controller.state.isDone}
+                                onPresentationComplete={() =>
+                                  setStreamPresentationComplete(true)
+                                }
+                              />
+                              <AnimatePresence initial={false} mode="wait">
+                                {controller.state.presentationReady &&
+                                controller.state.visualization ? (
+                                  <motion.div
+                                    key={controller.state.visualization.title}
+                                    initial={{ opacity: 0, y: 12, filter: "blur(6px)" }}
+                                    animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                                    exit={{ opacity: 0, y: -8, filter: "blur(6px)" }}
+                                    transition={{
+                                      duration: 0.35,
+                                      ease: [0.22, 1, 0.36, 1],
+                                    }}
+                                  >
+                                    <WidgetBlockRenderer
+                                      viz={controller.state.visualization}
+                                      accountId={accountId}
+                                      onViewTrades={controller.handleViewTrades}
+                                    />
+                                  </motion.div>
+                                ) : null}
+                              </AnimatePresence>
                             </div>
                           ) : (
                             <PremiumAssistantResponseCards
@@ -254,7 +302,8 @@ export function PremiumAssistant({
                         ) : null}
                       </MessageContent>
                     </Message>
-                  ))}
+                    );
+                  })}
 
                   <div ref={controller.messagesEndRef} />
                   <div aria-hidden="true" className="h-36" />
@@ -366,15 +415,18 @@ export function PremiumAssistant({
         </div>
 
           <PremiumAssistantAnalysisPanel
-            panelOpen={controller.panelOpen}
+            panelOpen={effectivePanelOpen}
             isStreaming={controller.state.isStreaming}
+            presentationReady={analysisPresentationReady}
             currentVisualization={controller.currentVisualization}
             currentAnalysisBlocks={controller.currentAnalysisBlocks}
-          accountId={accountId}
-          onViewTrades={controller.handleViewTrades}
-          onClose={() => controller.setPanelOpen(false)}
-          onOpen={() => controller.setPanelOpen(true)}
-        />
+            streamStage={controller.state.stage}
+            statusMessage={controller.state.statusMessage}
+            accountId={accountId}
+            onViewTrades={controller.handleViewTrades}
+            onClose={() => controller.setPanelOpen(false)}
+            onOpen={() => controller.setPanelOpen(true)}
+          />
 
         <PremiumAssistantGoalDialog
           open={controller.showGoalDialog}

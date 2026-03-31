@@ -1,128 +1,15 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-// 256×256 grayscale noise tile — rendered once, tiled cheaply
-const NOISE_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='256'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='256' height='256' filter='url(%23n)'/%3E%3C/svg%3E\")";
-const CORNER_EDGE_FADE =
-  "radial-gradient(ellipse 78% 74% at 100% 0%, rgba(5,5,5,0.96) 0%, rgba(5,5,5,0.86) 18%, rgba(5,5,5,0.54) 34%, rgba(5,5,5,0.2) 50%, rgba(5,5,5,0.04) 62%, transparent 74%), radial-gradient(ellipse 78% 74% at 0% 100%, rgba(5,5,5,0.96) 0%, rgba(5,5,5,0.86) 18%, rgba(5,5,5,0.54) 34%, rgba(5,5,5,0.2) 50%, rgba(5,5,5,0.04) 62%, transparent 74%)";
-const ORB_BASE_STYLE = {
-  width: "60%",
-  height: "60%",
-  willChange: "transform" as const,
-  borderRadius: "9999px",
-  backgroundRepeat: "no-repeat" as const,
-  backgroundSize: "100% 100%",
-};
-
 export function AuthHeroArtwork({ className }: { className?: string }) {
-  const reduced = useReducedMotion();
-
   return (
     <div
       className={cn(
-        "pointer-events-none absolute inset-0 h-full w-full overflow-hidden bg-[#050505]",
+        "pointer-events-none absolute inset-0 h-full w-full overflow-hidden bg-[#050505] bg-[url('/landing/hero-background.svg')] bg-cover bg-center bg-no-repeat",
         className
       )}
       aria-hidden="true"
-    >
-      {/* Background SVG — what the orbs will reveal */}
-      <div className="absolute inset-0 bg-[url('/landing/hero-background.svg')] bg-cover [background-position:86%_4%] bg-no-repeat" />
-
-      {/* Grain baked into the SVG layer — revealed alongside the image */}
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: NOISE_BG,
-          backgroundSize: "200px 200px",
-          opacity: 0.1,
-          mixBlendMode: "overlay",
-        }}
-      />
-
-      {/*
-       * Multiply mask group.
-       * mix-blend-mode:multiply composites this group against the SVG layer below:
-       *   white (1,1,1) × SVG_pixel = SVG_pixel  →  image revealed
-       *   black (0,0,0) × SVG_pixel = 0          →  image hidden
-       * So orbs are white gradients on a black fill — they punch windows in the darkness.
-       */}
-      <div className="absolute inset-0 overflow-hidden" style={{ mixBlendMode: "multiply" }}>
-        {/* Pure black floor — nothing shows outside orb areas */}
-        <div className="absolute inset-0 bg-black" />
-
-        {/* Orb A — mirror of Orb B, originates bottom-left */}
-        <motion.div
-          className="absolute"
-          style={{
-            ...ORB_BASE_STYLE,
-            left: "-10%",
-            bottom: "-10%",
-            background:
-              "radial-gradient(ellipse at 32% 68%, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.5) 18%, rgba(255,255,255,0.24) 34%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 62%, rgba(255,255,255,0.008) 72%, rgba(255,255,255,0.001) 80%, rgba(255,255,255,0) 92%)",
-          }}
-          animate={
-            reduced
-              ? {}
-              : { x: ["0%", "8%", "-2%", "0%"], y: ["0%", "-10%", "3%", "0%"] }
-          }
-          transition={{
-            duration: 11,
-            ease: "easeInOut",
-            repeat: Infinity,
-            repeatType: "mirror",
-          }}
-        />
-
-        {/* Orb B — reveal spot, originates top-right */}
-        <motion.div
-          className="absolute"
-          style={{
-            ...ORB_BASE_STYLE,
-            right: "-10%",
-            top: "-10%",
-            background:
-              "radial-gradient(ellipse at 68% 32%, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.5) 18%, rgba(255,255,255,0.24) 34%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 62%, rgba(255,255,255,0.008) 72%, rgba(255,255,255,0.001) 80%, rgba(255,255,255,0) 92%)",
-          }}
-          animate={
-            reduced
-              ? {}
-              : { x: ["0%", "-8%", "2%", "0%"], y: ["0%", "10%", "-3%", "0%"] }
-          }
-          transition={{
-            duration: 11,
-            ease: "easeInOut",
-            repeat: Infinity,
-            repeatType: "mirror",
-          }}
-        />
-      </div>
-
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: CORNER_EDGE_FADE,
-        }}
-      />
-
-      {/* Ambient SVG layer — 5% always visible, sits above multiply so it's never killed */}
-      <div className="absolute inset-0 bg-[url('/landing/hero-background.svg')] bg-cover [background-position:86%_4%] bg-no-repeat opacity-[0.01]" />
-
-      {/* Fine grain across the whole composition — visible on dark areas too */}
-      <div
-        className="absolute inset-0"
-        style={{
-          backgroundImage: NOISE_BG,
-          backgroundSize: "200px 200px",
-          opacity: 0.09,
-          mixBlendMode: "screen",
-        }}
-      />
-
-      {/* Subtle corner vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(5,5,5,0.55)_100%)]" />
-    </div>
+    />
   );
 }

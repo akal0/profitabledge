@@ -39,17 +39,17 @@ export function InlineReport({
   children,
 }: InlineReportProps) {
   return (
-    <div className={cn(
-      "w-full rounded-sm bg-sidebar/30 border-white/5 p-6 space-y-4 my-4",
-      "border-none", // Following project style
-      className
-    )}>
+    <div
+      className={cn(
+        "w-full rounded-sm bg-sidebar/30 border-white/5 p-6 space-y-4 my-4",
+        "border-none", // Following project style
+        className
+      )}
+    >
       {/* Header */}
       <div className="space-y-2">
         <h3 className="text-base font-semibold text-white">{title}</h3>
-        {description && (
-          <p className="text-sm text-white/70">{description}</p>
-        )}
+        {description && <p className="text-sm text-white/70">{description}</p>}
       </div>
 
       {/* Summary Stats */}
@@ -58,7 +58,9 @@ export function InlineReport({
           {summary.totalTrades !== undefined && (
             <div className="space-y-1">
               <p className="text-xs text-white/50">Total Trades</p>
-              <p className="text-lg font-semibold text-white">{summary.totalTrades}</p>
+              <p className="text-lg font-semibold text-white">
+                {summary.totalTrades}
+              </p>
             </div>
           )}
           {summary.winRate !== undefined && (
@@ -71,17 +73,19 @@ export function InlineReport({
           )}
           {summary.totalProfit !== undefined && (
             <div className="space-y-1">
-              <p className="text-xs text-white/50">Total Profit</p>
+              <p className="text-xs text-white/50">Total profit</p>
               <div className="flex items-center gap-1">
                 {summary.totalProfit >= 0 ? (
                   <TrendingUp className="h-4 w-4 text-green-400" />
                 ) : (
                   <TrendingDown className="h-4 w-4 text-red-400" />
                 )}
-                <p className={cn(
-                  "text-lg font-semibold",
-                  summary.totalProfit >= 0 ? "text-green-400" : "text-red-400"
-                )}>
+                <p
+                  className={cn(
+                    "text-lg font-semibold",
+                    summary.totalProfit >= 0 ? "text-green-400" : "text-red-400"
+                  )}
+                >
                   {formatDisplayCurrency(summary.totalProfit)}
                 </p>
               </div>
@@ -90,10 +94,12 @@ export function InlineReport({
           {summary.avgProfit !== undefined && (
             <div className="space-y-1">
               <p className="text-xs text-white/50">Avg Profit</p>
-              <p className={cn(
-                "text-lg font-semibold",
-                summary.avgProfit >= 0 ? "text-green-400" : "text-red-400"
-              )}>
+              <p
+                className={cn(
+                  "text-lg font-semibold",
+                  summary.avgProfit >= 0 ? "text-green-400" : "text-red-400"
+                )}
+              >
                 {formatDisplayCurrency(summary.avgProfit)}
               </p>
             </div>
@@ -116,13 +122,13 @@ export function InlineReport({
             </div>
             {/* Rows */}
             {trades.map((trade) => (
-              <div 
-                key={trade.id} 
+              <div
+                key={trade.id}
                 className="grid grid-cols-6 gap-4 px-4 py-3 hover:bg-sidebar/30 transition-colors text-xs"
               >
                 <div className="font-medium text-white">{trade.symbol}</div>
                 <div>
-                  <Badge 
+                  <Badge
                     variant={trade.type === "BUY" ? "default" : "destructive"}
                     className="text-xs border-none"
                   >
@@ -135,10 +141,12 @@ export function InlineReport({
                 <div className="text-white/70">
                   {new Date(trade.closeTime).toLocaleString()}
                 </div>
-                <div className={cn(
-                  "text-right font-medium",
-                  trade.profit >= 0 ? "text-green-400" : "text-red-400"
-                )}>
+                <div
+                  className={cn(
+                    "text-right font-medium",
+                    trade.profit >= 0 ? "text-green-400" : "text-red-400"
+                  )}
+                >
                   {formatDisplayCurrency(trade.profit)}
                 </div>
                 <div className="text-right text-white/70">

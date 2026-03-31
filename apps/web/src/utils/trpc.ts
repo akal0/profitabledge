@@ -1,4 +1,9 @@
-import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
+import {
+  MutationCache,
+  QueryCache,
+  QueryClient,
+} from "@tanstack/react-query";
+import { isCancelledError } from "@tanstack/query-core";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
@@ -45,6 +50,10 @@ export const queryClient = new QueryClient({
   },
   queryCache: new QueryCache({
     onError: (error) => {
+      if (isCancelledError(error)) {
+        return;
+      }
+
       if (showAIErrorToast(error)) {
         return;
       }

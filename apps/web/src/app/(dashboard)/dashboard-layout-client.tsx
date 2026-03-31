@@ -525,9 +525,11 @@ export default function DashboardLayoutClient({
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setHasMounted(true);
   }, []);
+  const isDesktopContainer =
+    hasMounted && typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
   const currentDashboardPath = useMemo(() => {
     const query = searchParams?.toString() ?? "";
@@ -945,8 +947,10 @@ export default function DashboardLayoutClient({
           <DashboardTour />
           <TourBackdropBlur />
           <DashboardTourChrome />
-          <DashboardShellSidebar pathname={safePathname} />
-          <VerticalSeparator />
+          <>
+            <DashboardShellSidebar pathname={safePathname} />
+            <VerticalSeparator />
+          </>
 
           <DashboardContentStage
             breadcrumbs={breadcrumbs}

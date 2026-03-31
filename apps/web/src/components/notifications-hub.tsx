@@ -44,19 +44,19 @@ const priorityConfig: Record<
   { color: string; label: string }
 > = {
   urgent: {
-    color: "text-red-400 bg-red-500/10 border-red-500/20",
+    color: "text-red-400 bg-red-500/10 ring-red-500/20",
     label: "Urgent",
   },
   high: {
-    color: "text-orange-400 bg-orange-500/10 border-orange-500/20",
+    color: "text-orange-400 bg-orange-500/10 ring-orange-500/20",
     label: "High",
   },
   normal: {
-    color: "text-teal-400 bg-teal-500/10 border-teal-500/20",
+    color: "text-teal-400 bg-teal-500/10 ring-teal-500/20",
     label: "Normal",
   },
   low: {
-    color: "text-white/40 bg-white/5 border-white/10",
+    color: "text-white/40 bg-white/5 ring-white/10",
     label: "Low",
   },
 };
@@ -389,10 +389,10 @@ function groupByDate(
 }
 
 const dateGroupLabels: Record<DateGroup, string> = {
-  today: "today",
-  yesterday: "yesterday",
-  thisWeek: "this week",
-  older: "earlier",
+  today: "Today",
+  yesterday: "Yesterday",
+  thisWeek: "This week",
+  older: "Earlier",
 };
 
 function isKnownNotificationType(
@@ -525,7 +525,7 @@ function NotificationsList({
           {groupIndex > 0 && <Separator />}
           {/* Date Group Header */}
           <div className="sticky top-0 z-10 bg-sidebar/95 backdrop-blur-sm px-3 py-1.5">
-            <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
+            <span className="text-[10px] font-semibold text-white/40 normal-case">
               {dateGroupLabels[group.group]}
             </span>
           </div>
@@ -573,7 +573,7 @@ function NotificationsList({
                       isUrgent &&
                         "ring ring-red-500/25 bg-red-500/5 hover:bg-red-500/10! transition duration-250",
                       isFundedMilestone &&
-                        " border-amber-400/50 bg-amber-400/8 hover:bg-amber-400/15!"
+                        " ring-amber-400/50 bg-amber-400/8 hover:bg-amber-400/15!"
                     )}
                     onSelect={(event) => event.preventDefault()}
                     onClick={() => {
@@ -596,10 +596,10 @@ function NotificationsList({
                             isUrgent
                               ? "text-red-400"
                               : isFundedMilestone
-                                ? "text-amber-300"
-                                : isHigh
-                                  ? "text-orange-400"
-                                  : "text-teal-400"
+                              ? "text-amber-300"
+                              : isHigh
+                              ? "text-orange-400"
+                              : "text-teal-400"
                           )}
                         />
                       ) : (
@@ -611,10 +611,10 @@ function NotificationsList({
                           item.readAt
                             ? "text-white/50"
                             : isUrgent
-                              ? "text-red-100"
-                              : isFundedMilestone
-                                ? "text-amber-100"
-                                : "text-white"
+                            ? "text-red-100"
+                            : isFundedMilestone
+                            ? "text-amber-100"
+                            : "text-white"
                         )}
                       >
                         {item.title}
@@ -642,7 +642,7 @@ function NotificationsList({
                             className={cn(
                               "inline-flex items-center rounded-sm px-1.5 py-0.5 text-[9px] font-medium shrink-0",
                               isFundedMilestone
-                                ? "border border-amber-300/25 bg-amber-300/10 text-amber-100"
+                                ? "ring ring-amber-300/25 bg-amber-300/10 text-amber-100"
                                 : priorityStyle.color
                             )}
                           >
@@ -1034,7 +1034,7 @@ export default function NotificationsHub() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
-        className="rounded-sm bg-sidebar border border-white/5 p-0 w-[420px] h-[480px] overflow-hidden flex flex-col"
+        className="rounded-sm bg-sidebar ring ring-white/5 p-0 w-[420px] h-[480px] overflow-hidden flex flex-col"
         align="end"
       >
         {/* Header */}

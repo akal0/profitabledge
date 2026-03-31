@@ -177,6 +177,29 @@ export function buildAggregationSQL(agg: Aggregate): SQL | null {
     return sql<number>`sum(case when ${trade.profit} < 0 then ${trade.profit} else 0 end)`;
   }
 
+  if (isDerivedField(agg.field)) {
+    const expression = DERIVED_FIELDS[agg.field].getSelectSQL();
+
+    switch (agg.fn) {
+      case "avg":
+        return sql<number>`avg(${expression})`;
+      case "sum":
+        return sql<number>`sum(${expression})`;
+      case "min":
+        return sql<number>`min(${expression})`;
+      case "max":
+        return sql<number>`max(${expression})`;
+      case "count":
+        return sql<number>`count(${expression})`;
+      case "p50":
+        return sql<number>`percentile_cont(0.5) WITHIN GROUP (ORDER BY ${expression})`;
+      case "p90":
+        return sql<number>`percentile_cont(0.9) WITHIN GROUP (ORDER BY ${expression})`;
+      default:
+        return null;
+    }
+  }
+
   const column = (trade as any)[agg.field];
   if (!column) {
     console.warn(`[Query Executor] Column not found: ${agg.field}`);

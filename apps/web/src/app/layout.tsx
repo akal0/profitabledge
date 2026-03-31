@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 // import "@uploadthing/react/styles.css";
 import "../index.css";
 import Providers from "@/components/providers";
+import { DesktopBridge } from "@/components/desktop/desktop-bridge";
 
 export const metadata: Metadata = {
   title: {
@@ -48,6 +49,7 @@ export default function RootLayout({
         className="font-sans antialiased overflow-x-hidden"
       >
         <Providers>
+          <DesktopBridge />
           <div className="flex min-h-screen w-screen">{children}</div>
         </Providers>
       </body>

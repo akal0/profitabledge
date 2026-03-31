@@ -137,25 +137,45 @@ function isBroadSummaryQuery(message: string): boolean {
 }
 
 export function isPsychologyQuery(message: string): boolean {
-  return /\b(psychology|psychological|tilt|tilted|revenge|emotional|discipline|disciplined|confidence|mindset|mental|fear|greed|focus)\b/i.test(
+  return /\b(psychology|psychological|tilt|tilted|revenge|emotional|discipline|disciplined|mindset|mental|fear|greed|mental focus|focus issues?|confidence issues?|confidence problem|low confidence|lost confidence|overconfidence|underconfidence)\b/i.test(
     message
+  );
+}
+
+function isSessionPerformanceQuery(message: string): boolean {
+  const lower = message.toLowerCase();
+  const mentionsSession = /\bsessions?\b/.test(lower);
+
+  if (!mentionsSession) {
+    return false;
+  }
+
+  return (
+    /\b(best|worst|most|least|top|bottom|profitable|performing|performance|compare|comparison|breakdown|historical|history|closed trades?|previous trades?)\b/.test(
+      lower
+    ) || /\b(win rate|expectancy|profit factor|p&l|pnl)\b/.test(lower)
   );
 }
 
 export function isSessionQuery(message: string): boolean {
   const lower = message.toLowerCase();
+  if (isSessionPerformanceQuery(lower)) {
+    return false;
+  }
+
   if (
-    /\b(active trades?|current streak|should i stop|am i overtrading|how.?s this session|current session|live session)\b/i.test(
-      message
+    /\b(active trades?|active session|should i stop|am i overtrading|how.?s (this|my|the live) session|how am i trading today|current session|live session|this session|today'?s session)\b/i.test(
+      lower
     )
   ) {
     return true;
   }
 
   return (
-    /\bsession\b/i.test(message) ||
-    (/\b(today|right now)\b/i.test(message) &&
-      /\b(trading|trade|session|streak|overtrading|stop)\b/i.test(lower))
+    /\b(today|right now|currently)\b/i.test(lower) &&
+    /\b(how am i doing|how.?s it going|should i stop|overtrading|live session|current session)\b/i.test(
+      lower
+    )
   );
 }
 
@@ -163,10 +183,17 @@ function isPropQuery(
   message: string,
   pageContext: AssistantPageContext
 ): boolean {
+  const lower = message.toLowerCase();
   return (
-    /\b(prop|challenge|funded|pass probability|risk of failure|daily loss limit|max loss|phase|ftmo|fundednext|e8)\b/i.test(
-      message
+    /\b(prop(?:\s+firm|\s+challenge|\s+account)?|challenge|pass probability|risk of failure|daily loss limit|max loss|max daily loss|max overall loss|trailing drawdown|static drawdown|ftmo|fundednext|e8)\b/i.test(
+      lower
     ) ||
+    (/\bphase\b/i.test(lower) &&
+      /\b(prop|challenge|ftmo|fundednext|e8)\b/i.test(lower)) ||
+    (/\bfunded\b/i.test(lower) &&
+      /\b(prop|challenge|ftmo|fundednext|e8|drawdown|loss limit)\b/i.test(
+        lower
+      )) ||
     (pageContext.surface === "prop-tracker" && isBroadSummaryQuery(message))
   );
 }
@@ -176,7 +203,7 @@ function isJournalQuery(
   pageContext: AssistantPageContext
 ): boolean {
   return (
-    /\b(journal|journaling|reflection|reflect|entries|entry|review notes|lessons learned|what did i learn|what should i write)\b/i.test(
+    /\b(journal|journaling|journal entries?|reflection|reflect|review notes|lessons learned|what did i learn|what should i write)\b/i.test(
       message
     ) ||
     (pageContext.surface === "journal" && isBroadSummaryQuery(message))
@@ -187,9 +214,15 @@ function isDashboardQuery(
   message: string,
   pageContext: AssistantPageContext
 ): boolean {
+  const lower = message.toLowerCase();
   const onDashboardSurface = pageContext.surface === "dashboard";
   const focusedExplain =
     Boolean(pageContext.focusedWidgetId) && DASHBOARD_EXPLAIN_RE.test(message);
+  const explicitDashboardRef =
+    /\b(dashboard|what matters on this dashboard|focused widget|this widget|this chart|this card|this panel|edge summary|top priority|what matters today)\b/i.test(
+      message
+    );
+  const broadDashboardRef = /\b(overview|headline)\b/i.test(lower);
 
   if (
     isBroadProfileSummaryQuery(message) &&
@@ -206,10 +239,17 @@ function isDashboardQuery(
     return false;
   }
 
+  if (!onDashboardSurface && hasProfileAnalysisQualifier(message)) {
+    return false;
+  }
+
+  if (broadDashboardRef && hasProfileAnalysisQualifier(message)) {
+    return false;
+  }
+
   return (
-    /\b(dashboard|overview|headline|top priority|what matters today|what matters on this dashboard|edge summary|focused widget|this widget|this chart|this card|this panel)\b/i.test(
-      message
-    ) ||
+    explicitDashboardRef ||
+    (onDashboardSurface && broadDashboardRef) ||
     (onDashboardSurface &&
       (isBroadSummaryQuery(message) ||
         focusedExplain))

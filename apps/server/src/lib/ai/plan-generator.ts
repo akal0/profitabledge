@@ -19,6 +19,8 @@ import {
 import {
   buildAliasCatalog,
   inferTimeframeFromMessage,
+  isLowSignalAssistantQuery,
+  isMetaRephraseRequest,
   normalizeUserMessage,
   shouldUseProfileSummaryShortcut,
 } from "./query-normalization";
@@ -69,6 +71,20 @@ export async function generatePlan(
   const normalizedMessage = normalizeUserMessage(userMessage);
 
   try {
+    if (isMetaRephraseRequest(normalizedMessage)) {
+      return {
+        success: false,
+        error: "Could not understand query",
+      };
+    }
+
+    if (isLowSignalAssistantQuery(normalizedMessage)) {
+      return {
+        success: false,
+        error: "Could not understand query",
+      };
+    }
+
     const cacheKey = buildPlanCacheKey(
       normalizedMessage,
       conversationContext,

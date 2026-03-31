@@ -166,7 +166,7 @@ export function ChatHistorySidebar({
         >
           <div className="flex h-full w-80 flex-col bg-sidebar/95">
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+            <div className="flex items-center justify-between ring-b ring-white/5 px-4 py-3">
               <div className="flex items-center gap-2">
                 {userImage ? (
                   <Image
@@ -182,7 +182,7 @@ export function ChatHistorySidebar({
                   </div>
                 )}
                 <span className="text-sm font-medium text-white/90">
-                  Chat History
+                  Chat history
                 </span>
               </div>
               <Button
@@ -203,7 +203,7 @@ export function ChatHistorySidebar({
                   placeholder="Search conversations..."
                   value={searchInputValue}
                   onChange={handleInputChange}
-                  className="pl-9 bg-white/5 border-white/10 text-white placeholder:text-white/40 focus:border-white/20"
+                  className="pl-9 bg-white/5 ring-white/10 text-white placeholder:text-white/40 focus:ring-white/20"
                 />
               </div>
             </div>
@@ -213,10 +213,10 @@ export function ChatHistorySidebar({
               <Button
                 variant="outline"
                 onClick={onNewChat}
-                className="w-full justify-start gap-2 bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white"
+                className="w-full justify-start gap-2 bg-white/5 ring-white/10 text-white/80 hover:bg-white/10 hover:text-white text-xs"
               >
-                <Plus className="w-4 h-4" />
-                New Chat
+                <Plus className="size-3" />
+                New chat
               </Button>
             </div>
 
@@ -228,7 +228,7 @@ export function ChatHistorySidebar({
                 </div>
               ) : filteredReports.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-                  <MessageSquare className="mb-3 h-10 w-10 text-white/20" />
+                  <MessageSquare className="mb-3 h-10 w-10 text-white/20 stroke-1" />
                   <p className="text-sm text-white/50">
                     {searchQuery
                       ? "No conversations found"
@@ -240,84 +240,89 @@ export function ChatHistorySidebar({
                 </div>
               ) : (
                 <div className="space-y-4 px-2 pb-4">
-                  {Object.entries(groupedReports).map(([group, groupReports]) => (
-                    <div key={group}>
-                      <p className="mb-2 px-2 text-xs font-medium text-white/40">
-                        {group}
-                      </p>
-                      <div className="space-y-1">
-                        {groupReports.map((report) => (
-                          <div
-                            key={report.id}
-                            className={cn(
-                              "group flex items-start gap-2 rounded-lg border transition-colors",
-                              "hover:bg-white/5",
-                              currentReportId === report.id
-                                ? "border border-white/10 bg-white/10"
-                                : "border border-transparent"
-                            )}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => onSelectReport(report.id)}
-                              className="flex flex-1 items-start justify-between gap-2 px-3 py-2.5 text-left"
-                            >
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate text-sm font-medium text-white/80">
-                                  {report.title}
-                                </p>
-                                <p className="mt-0.5 text-xs text-white/40">
-                                  {formatDistanceToNow(new Date(report.updatedAt), {
-                                    addSuffix: true,
-                                  })}
-                                </p>
-                              </div>
-                              {currentReportId === report.id && (
-                                <div className="mt-1.5 h-2 w-2 rounded-full bg-purple-500" />
+                  {Object.entries(groupedReports).map(
+                    ([group, groupReports]) => (
+                      <div key={group}>
+                        <p className="mb-2 px-2 text-xs font-medium text-white/40">
+                          {group}
+                        </p>
+                        <div className="space-y-1">
+                          {groupReports.map((report) => (
+                            <div
+                              key={report.id}
+                              className={cn(
+                                "group flex items-start gap-2 rounded-lg ring transition-colors",
+                                "hover:bg-white/5 cursor-pointer",
+                                currentReportId === report.id
+                                  ? "ring ring-white/10 bg-white/10"
+                                  : "ring ring-transparent"
                               )}
-                            </button>
-
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="mr-1 mt-1 h-8 w-8 shrink-0 text-white/35 opacity-0 transition-opacity hover:text-white group-hover:opacity-100 data-[state=open]:opacity-100"
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent
-                                align="end"
-                                className="w-44 rounded-sm border border-white/10 bg-sidebar"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => onSelectReport(report.id)}
+                                className="flex items-start justify-between gap-1.5 px-3 py-2.5 text-left cursor-pointer"
                               >
-                                <DropdownMenuItem
-                                  className="text-sm text-white/80 focus:bg-sidebar-accent focus:text-white"
-                                  onClick={() => {
-                                    setRenameReportId(report.id);
-                                    setRenameValue(report.title);
-                                  }}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate text-sm font-medium text-white/80">
+                                    {report.title}
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-white/40">
+                                    {formatDistanceToNow(
+                                      new Date(report.updatedAt),
+                                      {
+                                        addSuffix: true,
+                                      }
+                                    )}
+                                  </p>
+                                </div>
+                                {currentReportId === report.id && (
+                                  <div className="mt-2 size-1 rounded-full bg-teal-400 animate-pulse" />
+                                )}
+                              </button>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute right-4 mt-1 h-8 w-8 shrink-0 text-white/35 opacity-0 transition-opacity hover:text-white group-hover:opacity-100 data-[state=open]:opacity-100"
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="w-44 rounded-sm ring ring-white/10 bg-sidebar"
                                 >
-                                  <Pencil className="h-4 w-4" />
-                                  Rename
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  className="text-sm text-rose-300 focus:bg-rose-500/10 focus:text-rose-200"
-                                  onClick={() => {
-                                    setDeleteReportId(report.id);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        ))}
+                                  <DropdownMenuItem
+                                    className="text-sm text-white/80 focus:bg-sidebar-accent focus:text-white"
+                                    onClick={() => {
+                                      setRenameReportId(report.id);
+                                      setRenameValue(report.title);
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                    Rename
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-sm text-rose-300 focus:bg-rose-500/10 focus:text-rose-200"
+                                    onClick={() => {
+                                      setDeleteReportId(report.id);
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  )}
                 </div>
               )}
             </ScrollArea>
@@ -334,7 +339,7 @@ export function ChatHistorySidebar({
               }
             }}
           >
-            <DialogContent className="border-white/10 bg-sidebar sm:max-w-md">
+            <DialogContent className="ring-white/10 bg-sidebar sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-white">
                   Rename conversation
@@ -345,7 +350,10 @@ export function ChatHistorySidebar({
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-2">
-                <Label htmlFor="assistant-report-title" className="text-white/70">
+                <Label
+                  htmlFor="assistant-report-title"
+                  className="text-white/70"
+                >
                   Title
                 </Label>
                 <Input
@@ -359,14 +367,14 @@ export function ChatHistorySidebar({
                     }
                   }}
                   placeholder="Untitled conversation"
-                  className="border-white/10 bg-white/5 text-white placeholder:text-white/30"
+                  className="ring-white/10 bg-white/5 text-white placeholder:text-white/30"
                 />
               </div>
               <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-white/10 bg-transparent text-white/70 hover:bg-white/5 hover:text-white"
+                  className="ring-white/10 bg-transparent text-white/70 hover:bg-white/5 hover:text-white"
                   onClick={() => {
                     setRenameReportId(null);
                     setRenameValue("");
@@ -399,7 +407,7 @@ export function ChatHistorySidebar({
               }
             }}
           >
-            <AlertDialogContent className="border-white/10 bg-sidebar">
+            <AlertDialogContent className="ring-white/10 bg-sidebar">
               <AlertDialogHeader>
                 <AlertDialogTitle className="text-white">
                   Delete conversation
@@ -411,7 +419,7 @@ export function ChatHistorySidebar({
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="border-white/10 bg-transparent text-white/70 hover:bg-white/5 hover:text-white">
+                <AlertDialogCancel className="ring-white/10 bg-transparent text-white/70 hover:bg-white/5 hover:text-white">
                   Cancel
                 </AlertDialogCancel>
                 <AlertDialogAction
@@ -438,14 +446,21 @@ export function ChatHistorySidebar({
 }
 
 function groupReportsByDate(
-  reports: Array<{ id: string; title: string; updatedAt: Date | string; createdAt: Date | string }>
+  reports: Array<{
+    id: string;
+    title: string;
+    updatedAt: Date | string;
+    createdAt: Date | string;
+  }>
 ): Record<string, typeof reports> {
   const groups: Record<string, typeof reports> = {};
   const now = new Date();
 
   reports.forEach((report) => {
     const date = new Date(report.updatedAt);
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24)
+    );
 
     let group: string;
     if (diffDays === 0) {

@@ -103,7 +103,8 @@ export const goalTemplates: GoalTemplate[] = [
     type: "weekly",
     targetType: "edgeTradeRate",
     title: "85% Edge Trades",
-    description: "Take most trades with a tagged session or model instead of impulse entries.",
+    description:
+      "Take most trades with a tagged session or model instead of impulse entries.",
     targetValue: 85,
     icon: TrendingUp,
     color: "#22c55e",
@@ -113,7 +114,8 @@ export const goalTemplates: GoalTemplate[] = [
     type: "weekly",
     targetType: "breakAfterLoss",
     title: "80% Post-Loss Pause",
-    description: "Respect a 15-minute pause after losses at least 80% of the time.",
+    description:
+      "Respect a 15-minute pause after losses at least 80% of the time.",
     targetValue: 80,
     icon: Calendar,
     color: "#f97316",
@@ -155,7 +157,8 @@ export const goalTemplates: GoalTemplate[] = [
     type: "monthly",
     targetType: "journalRate",
     title: "Journal 80% of Trades",
-    description: "Link reviews to most closed trades so mistakes and strengths stay searchable.",
+    description:
+      "Link reviews to most closed trades so mistakes and strengths stay searchable.",
     targetValue: 80,
     icon: Target,
     color: "#38bdf8",
@@ -196,7 +199,7 @@ export const goalTemplates: GoalTemplate[] = [
     id: "milestone-profit-50000",
     type: "milestone",
     targetType: "profit",
-    title: "$50,000 Total Profit",
+    title: "$50,000 total profit",
     description: "Reach $50,000 in total profits",
     targetValue: 50000,
     icon: Target,

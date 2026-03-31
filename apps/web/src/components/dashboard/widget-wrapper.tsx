@@ -83,7 +83,7 @@ export function WidgetWrapper({
       <div
         data-widget-share-surface="content"
         className={cn(
-          "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex h-full w-full rounded-sm ring ring-white/5",
+          "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250 flex flex-1 h-full w-full rounded-sm ring ring-white/5",
           contentClassName ?? "flex-col justify-end"
         )}
       >

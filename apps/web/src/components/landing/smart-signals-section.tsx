@@ -11,6 +11,15 @@ const LANDING_ACCENT_TEXT_STYLE = {
   color: "transparent",
 } as const;
 
+const SMART_SIGNALS_SECTION_TITLE_STYLE = {
+  backgroundImage:
+    "radial-gradient(110% 150% at 50% 0%, #17a1f3 0%, #e9f3eb 94%)",
+  WebkitBackgroundClip: "text",
+  WebkitTextFillColor: "transparent",
+  backgroundClip: "text",
+  color: "transparent",
+} as const;
+
 function LandingCardNoise() {
   return (
     <div
@@ -32,17 +41,23 @@ function LandingCardNoise() {
 
 export function SmartSignalsSection() {
   return (
-    <section className="relative w-full px-6 py-24 md:px-8 lg:px-12 xl:px-16 2xl:px-20 3xl:px-28">
+    <section
+      className="relative w-full px-6 py-24 md:px-8 lg:px-12 xl:px-16 2xl:px-20 3xl:px-28"
+      style={{
+        contentVisibility: "auto",
+        containIntrinsicSize: "1px 1100px",
+      }}
+    >
       {/* Section header */}
-      <div className="mb-16">
+      <div className="mb-8">
         <p
           className="mb-4 inline-block text-sm text-transparent font-medium"
-          style={LANDING_ACCENT_TEXT_STYLE}
+          style={SMART_SIGNALS_SECTION_TITLE_STYLE}
         >
           The stuff your broker forgot
         </p>
         <h2
-          className="max-w-3xl text-3xl font-semibold leading-[1.15] tracking-[-0.03em] sm:text-4xl md:text-5xl"
+          className="max-w-3xl text-3xl font-semibold leading-[1.15] tracking-[-0.03em] sm:text-4xl md:text-4xl"
           style={{
             backgroundImage:
               "linear-gradient(180deg, #fff 0%, rgba(255,255,255,0.7) 100%)",
@@ -74,15 +89,15 @@ export function SmartSignalsSection() {
               unoptimized
             />
           </div>
-
           {/* Notification preview */}
           <div className="relative z-[4] px-6 pt-8 md:px-8 md:pt-10">
             <div className="relative mx-auto aspect-[602/231] w-full max-w-[602px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/landing/notifications-group.svg"
                 alt="Notification examples showing reports, syncs, risk alerts, insights, and account updates"
-                className="absolute inset-0 h-full w-full object-contain"
+                fill
+                className="object-contain"
+                unoptimized
               />
             </div>
           </div>
@@ -122,15 +137,15 @@ export function SmartSignalsSection() {
               unoptimized
             />
           </div>
-
           {/* Edgebot illustration — fills edge to edge */}
           <div className="relative z-[4] px-6 pt-8 md:px-8 md:pt-10">
             <div className="relative mx-auto aspect-[602/231] w-full max-w-[602px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <Image
                 src="/assets/edgebot-illustration.svg"
                 alt="Edgebot assistant showing edge analysis, tag suggestions, and trade scoring"
-                className="absolute inset-0 h-full w-full object-contain"
+                fill
+                className="object-contain"
+                unoptimized
               />
             </div>
           </div>

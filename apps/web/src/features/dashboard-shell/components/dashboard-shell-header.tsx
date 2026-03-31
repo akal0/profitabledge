@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   Breadcrumb,
@@ -71,11 +72,29 @@ export function DashboardShellHeader({
   onOpenCommandPalette,
   onOpenGoalDialog,
 }: DashboardShellHeaderProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [desktopImportSheetOpen, setDesktopImportSheetOpen] = useState(false);
   const canEnrichCsvImport =
     Boolean(accountId) &&
     accountId !== ALL_ACCOUNTS_ID &&
     Boolean(currentAccountName) &&
     brokerSupportsMultiCsvImport(currentAccountBroker);
+
+  useEffect(() => {
+    if (!isAccountsRoute || searchParams?.get("desktopAction") !== "import-account") {
+      return;
+    }
+
+    setDesktopImportSheetOpen(true);
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("desktopAction");
+    router.replace(
+      next.size ? `${pathname ?? "/dashboard/accounts"}?${next.toString()}` : (pathname ?? "/dashboard/accounts"),
+      { scroll: false }
+    );
+  }, [isAccountsRoute, pathname, router, searchParams]);
 
   return (
     <div className="flex flex-col shrink-0">
@@ -204,6 +223,8 @@ export function DashboardShellHeader({
             {isAccountsRoute && (
               <AddAccountSheet
                 onAccountCreated={() => {}}
+                open={desktopImportSheetOpen}
+                onOpenChange={setDesktopImportSheetOpen}
                 trigger={
                   <Button className="cursor-pointer flex items-center justify-center py-2 h-[38px] transition-all active:scale-95 text-white w-max text-xs hover:brightness-110 duration-250 ring ring-white/5 bg-sidebar rounded-sm hover:bg-sidebar-accent px-3 gap-1">
                     <Plus className="size-3" />

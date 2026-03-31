@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { startDesktopSocialAuth } from "@/lib/desktop-social-auth";
 import { getErrorMessage } from "@/lib/error-message";
 import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import {
@@ -269,6 +270,15 @@ const SignupPage = () => {
     setSocialProviderLoading(provider);
 
     try {
+      const startedDesktopFlow = await startDesktopSocialAuth({
+        provider,
+        path: postAuthContinuePath,
+      });
+      if (startedDesktopFlow) {
+        setSocialProviderLoading(null);
+        return;
+      }
+
       await authClient.signIn.social({
         provider,
         callbackURL: `${window.location.origin}${postAuthContinuePath}`,
@@ -285,7 +295,6 @@ const SignupPage = () => {
     <AuthSplitShell
       heroSlides={SIGN_UP_HERO_SLIDES}
       affiliate={affiliate}
-      showFormGlow
     >
       <div className="space-y-8">
         <div className="space-y-3 text-center">
@@ -293,8 +302,7 @@ const SignupPage = () => {
             First time here?
           </p>
           <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
-            You've come to the right place. <br /> All roads lead back to{" "}
-            <span className="text-white font-semibold">profitabledge...</span>
+            You've come to the right place. <br /> Build your workspace and start strong.
           </p>
         </div>
 

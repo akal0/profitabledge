@@ -63,6 +63,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [reportBugOpen, setReportBugOpen] = useState(false);
   const [emptyStateAddAccountSheetOpen, setEmptyStateAddAccountSheetOpen] =
     useState(false);
+  const pathname = usePathname();
   const requestedAddAccountSheetOpen = useTourStore(
     (s) => s.requestedAddAccountSheetOpen
   );
@@ -116,7 +117,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     return Array.from(mergedAccounts.values());
   }, [createdAccounts, fetchedAccounts]);
 
-  const pathname = usePathname();
   const { isOnbordaVisible, currentStep, currentTour } = useOnborda();
   const isDashboardTourActive = isOnbordaVisible && currentTour === TOUR_ID;
   const isAddAccountSheetStep =

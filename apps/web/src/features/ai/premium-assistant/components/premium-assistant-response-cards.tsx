@@ -14,6 +14,10 @@ import {
   sentenceCase,
   splitMarkdownSections,
 } from "@/features/ai/premium-assistant/lib/premium-assistant-formatting";
+import {
+  isMisunderstoodAssistantResponse,
+  normalizeMisunderstoodAssistantPayload,
+} from "@/features/ai/premium-assistant/lib/premium-assistant-response-guards";
 
 function AssistantMessageCard({ children }: { children: React.ReactNode }) {
   return (
@@ -41,19 +45,39 @@ export function PremiumAssistantResponseCards({
   accountId?: string;
   onViewTrades?: (tradeIds: string[]) => void;
 }) {
-  const profileBlock = analysisBlocks.find(
+  const normalized = normalizeMisunderstoodAssistantPayload({
+    content,
+    analysisBlocks,
+    visualization,
+  });
+  const safeContent = normalized.content;
+  const safeAnalysisBlocks = normalized.analysisBlocks;
+  const safeVisualization = normalized.visualization;
+  const isMisunderstood = isMisunderstoodAssistantResponse(content);
+
+  if (isMisunderstood) {
+    return (
+      <div className="w-full py-1 text-white/88">
+        <Response parseIncompleteMarkdown={false}>
+          {decorateMentions(formatCurrencyNumbers(safeContent))}
+        </Response>
+      </div>
+    );
+  }
+
+  const profileBlock = safeAnalysisBlocks.find(
     (block): block is Extract<AnalysisBlock, { type: "profileSummary" }> =>
       block.type === "profileSummary"
   );
-  const edgeConditionsBlock = analysisBlocks.find(
+  const edgeConditionsBlock = safeAnalysisBlocks.find(
     (block): block is Extract<AnalysisBlock, { type: "edgeConditions" }> =>
       block.type === "edgeConditions"
   );
-  const visualizationBlock = analysisBlocks.find(
+  const visualizationBlock = safeAnalysisBlocks.find(
     (block): block is Extract<AnalysisBlock, { type: "visualization" }> =>
       block.type === "visualization"
   );
-  const effectiveVisualization = visualization ?? visualizationBlock?.viz;
+  const effectiveVisualization = safeVisualization ?? visualizationBlock?.viz;
   const excludedTitles = new Set(
     [
       profileBlock ? "your trading profile" : null,
@@ -63,7 +87,7 @@ export function PremiumAssistantResponseCards({
       edgeConditionsBlock ? "your edge & leak conditions" : null,
     ].filter(Boolean) as string[]
   );
-  const sections = splitMarkdownSections(content).filter(
+  const sections = splitMarkdownSections(safeContent).filter(
     (section) => !excludedTitles.has(section.title.trim().toLowerCase())
   );
   const introSectionIndex = sections.findIndex(
@@ -77,8 +101,8 @@ export function PremiumAssistantResponseCards({
   );
 
   if (
-    !content.trim() &&
-    analysisBlocks.length === 0 &&
+    !safeContent.trim() &&
+    safeAnalysisBlocks.length === 0 &&
     !profileBlock &&
     !edgeConditionsBlock &&
     !effectiveVisualization
@@ -90,12 +114,12 @@ export function PremiumAssistantResponseCards({
     if (
       !profileBlock &&
       !edgeConditionsBlock &&
-      analysisBlocks.length === 0 &&
+      safeAnalysisBlocks.length === 0 &&
       !effectiveVisualization
     ) {
       return (
         <Response parseIncompleteMarkdown={false}>
-          {decorateMentions(formatCurrencyNumbers(content))}
+          {decorateMentions(formatCurrencyNumbers(safeContent))}
         </Response>
       );
     }
@@ -113,9 +137,9 @@ export function PremiumAssistantResponseCards({
           : null
       }
     />
-  ) : analysisBlocks.length > 0 || effectiveVisualization ? (
+  ) : safeAnalysisBlocks.length > 0 || effectiveVisualization ? (
     <AssistantGenericSummaryWidgets
-      analysisBlocks={analysisBlocks}
+      analysisBlocks={safeAnalysisBlocks}
       visualization={effectiveVisualization}
     />
   ) : null;
@@ -126,7 +150,7 @@ export function PremiumAssistantResponseCards({
       (!summaryWidgets &&
         standaloneSections.length === 0 &&
         !effectiveVisualization &&
-        content.trim())
+        safeContent.trim())
   );
 
   return (
@@ -135,7 +159,7 @@ export function PremiumAssistantResponseCards({
         <AssistantMessageCard>
           <Response parseIncompleteMarkdown={false}>
             {decorateMentions(
-              formatCurrencyNumbers(bubbleBody || content)
+              formatCurrencyNumbers(bubbleBody || safeContent)
             )}
           </Response>
         </AssistantMessageCard>

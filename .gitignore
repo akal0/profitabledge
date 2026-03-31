@@ -1,7 +1,10 @@
 node_modules
 .turbo
 .next
+.DS_Store
 .mt5-worker
+apps/desktop/dist
+apps/desktop/src-tauri/target
 services/mt5-worker/.venv
 services/mt5-worker/.env.windows
 __pycache__/

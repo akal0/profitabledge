@@ -5,15 +5,44 @@ const SERVER_URL =
   normalizeOriginUrl(process.env.NEXT_PUBLIC_SERVER_URL) ||
   "http://localhost:3000";
 
+function normalizeOrigin(value: string | null | undefined) {
+  return value?.trim().replace(/\/+$/, "") || null;
+}
+
 function buildTargetUrl(request: NextRequest, path: string) {
   const url = new URL(request.url);
   return `${SERVER_URL}${path}${url.search}`;
 }
 
-function buildForwardHeaders(request: NextRequest) {
+function buildForwardHeaders(
+  request: NextRequest,
+  overrides: {
+    origin?: string | null;
+    referer?: string | null;
+  } = {}
+) {
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("content-length");
+
+  if ("origin" in overrides) {
+    const origin = normalizeOrigin(overrides.origin);
+    if (origin) {
+      headers.set("origin", origin);
+    } else {
+      headers.delete("origin");
+    }
+  }
+
+  if ("referer" in overrides) {
+    const referer = overrides.referer?.trim();
+    if (referer) {
+      headers.set("referer", referer);
+    } else {
+      headers.delete("referer");
+    }
+  }
+
   return headers;
 }
 
@@ -95,14 +124,21 @@ export async function proxyToServer(
   {
     preserveSetCookie = false,
     forwardAbortSignal = true,
+    forwardOrigin,
+    forwardReferer,
   }: {
     preserveSetCookie?: boolean;
     forwardAbortSignal?: boolean;
+    forwardOrigin?: string | null;
+    forwardReferer?: string | null;
   } = {}
 ) {
   const response = await fetch(buildTargetUrl(request, path), {
     method: request.method,
-    headers: buildForwardHeaders(request),
+    headers: buildForwardHeaders(request, {
+      origin: forwardOrigin,
+      referer: forwardReferer,
+    }),
     body: await buildRequestBody(request),
     redirect: "manual",
     cache: "no-store",

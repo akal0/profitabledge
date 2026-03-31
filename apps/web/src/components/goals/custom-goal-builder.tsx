@@ -78,7 +78,7 @@ const filterTypeLabels: Record<FilterType, string> = {
 
 const metricLabels: Record<MetricType, string> = {
   winRate: "Win Rate",
-  profit: "Total Profit",
+  profit: "Total profit",
   avgRR: "Avg Risk/Reward",
   consistency: "Consistency",
   tradeCount: "Trade Count",
@@ -128,11 +128,7 @@ export function CustomGoalBuilder({
   };
 
   // Update filter
-  const updateFilter = (
-    index: number,
-    field: keyof GoalFilter,
-    value: any
-  ) => {
+  const updateFilter = (index: number, field: keyof GoalFilter, value: any) => {
     const newFilters = [...filters];
     newFilters[index] = { ...newFilters[index], [field]: value };
     setFilters(newFilters);
@@ -144,11 +140,17 @@ export function CustomGoalBuilder({
 
     // Metric part
     if (comparator === "increase") {
-      desc = `Increase ${metricLabels[metric].toLowerCase()} from ${baselineValue} to ${targetValue}`;
+      desc = `Increase ${metricLabels[
+        metric
+      ].toLowerCase()} from ${baselineValue} to ${targetValue}`;
     } else if (comparator === "decrease") {
-      desc = `Decrease ${metricLabels[metric].toLowerCase()} from ${baselineValue} to ${targetValue}`;
+      desc = `Decrease ${metricLabels[
+        metric
+      ].toLowerCase()} from ${baselineValue} to ${targetValue}`;
     } else {
-      desc = `Achieve ${metricLabels[metric].toLowerCase()} ${comparatorLabels[comparator].toLowerCase()} ${targetValue}`;
+      desc = `Achieve ${metricLabels[metric].toLowerCase()} ${comparatorLabels[
+        comparator
+      ].toLowerCase()} ${targetValue}`;
     }
 
     // Add filters
@@ -253,7 +255,9 @@ export function CustomGoalBuilder({
               {/* Operator */}
               <Select
                 value={filter.operator || "is"}
-                onValueChange={(value) => updateFilter(index, "operator", value)}
+                onValueChange={(value) =>
+                  updateFilter(index, "operator", value)
+                }
               >
                 <SelectTrigger className="w-[120px] bg-white/5 border-white/10">
                   <SelectValue />
@@ -355,7 +359,10 @@ export function CustomGoalBuilder({
         <label className="text-sm font-medium text-white/80">
           What metric do you want to track?
         </label>
-        <Select value={metric} onValueChange={(v) => setMetric(v as MetricType)}>
+        <Select
+          value={metric}
+          onValueChange={(v) => setMetric(v as MetricType)}
+        >
           <SelectTrigger className="bg-white/5 border-white/10">
             <SelectValue />
           </SelectTrigger>
@@ -463,11 +470,7 @@ export function CustomGoalBuilder({
         <Button onClick={onCancel} variant="outline" className="flex-1">
           Cancel
         </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={!isValid}
-          className="flex-1"
-        >
+        <Button onClick={handleSubmit} disabled={!isValid} className="flex-1">
           <Target className="w-4 h-4 mr-2" />
           Create Custom Goal
         </Button>

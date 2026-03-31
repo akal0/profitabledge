@@ -1,4 +1,5 @@
 import type { TradeQueryPlan } from "./query-plan";
+import { inferTimeframeFromMessage } from "./query-normalization";
 
 export type PlanExpectation = {
   intent?: TradeQueryPlan["intent"];
@@ -7,7 +8,9 @@ export type PlanExpectation = {
   groupBy?: string[];
   aggregates?: Array<{ field: string; fn?: string }>;
   sort?: { field?: string; dir?: "asc" | "desc" };
-  timeframe?: TradeQueryPlan["timeframe"];
+  timeframe?:
+    | TradeQueryPlan["timeframe"]
+    | (() => TradeQueryPlan["timeframe"] | null | undefined);
   filters?: Array<{ field: string; op?: string; value?: any }>;
   limit?: number;
   minLimit?: number;
@@ -39,7 +42,7 @@ export const PLAN_TEST_SUITE: PlanTestCase[] = [
       groupBy: ["symbol"],
       aggregates: [{ field: "profit", fn: "sum" }],
       sort: { dir: "desc", field: "total_profit" },
-      timeframe: { lastNDays: 7 },
+      timeframe: () => inferTimeframeFromMessage("this week"),
       minLimit: 2,
     },
   },
@@ -53,7 +56,7 @@ export const PLAN_TEST_SUITE: PlanTestCase[] = [
       groupBy: ["symbol"],
       aggregates: [{ field: "profit", fn: "sum" }],
       sort: { dir: "desc", field: "total_profit" },
-      timeframe: { lastNDays: 7 },
+      timeframe: () => inferTimeframeFromMessage("this week"),
       limit: 1,
     },
   },
@@ -67,7 +70,7 @@ export const PLAN_TEST_SUITE: PlanTestCase[] = [
       groupBy: ["symbol"],
       aggregates: [{ field: "profit", fn: "sum" }],
       sort: { dir: "asc", field: "total_profit" },
-      timeframe: { lastNDays: 7 },
+      timeframe: () => inferTimeframeFromMessage("this week"),
     },
   },
   {
@@ -195,7 +198,7 @@ export const PLAN_TEST_SUITE: PlanTestCase[] = [
       vizType: "daily_pnl",
       groupBy: ["open"],
       aggregates: [{ field: "profit", fn: "sum" }],
-      timeframe: { lastNDays: 30 },
+      timeframe: () => inferTimeframeFromMessage("this month"),
     },
   },
   {
@@ -206,6 +209,112 @@ export const PLAN_TEST_SUITE: PlanTestCase[] = [
       vizType: "kpi_single",
       displayMode: "singular",
       aggregates: [{ field: "tradeDurationSeconds", fn: "avg" }],
+    },
+  },
+  {
+    id: "max-drawdown",
+    query: "What's my max drawdown?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      aggregates: [{ field: "maxDrawdown", fn: "avg" }],
+    },
+  },
+  {
+    id: "average-mae",
+    query: "What's my average MAE?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      aggregates: [{ field: "maePips", fn: "avg" }],
+    },
+  },
+  {
+    id: "average-entry-time",
+    query: "What's my average entry time?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      vizType: "kpi_single",
+      aggregates: [{ field: "hour", fn: "avg" }],
+    },
+  },
+  {
+    id: "trailing-stop-usage",
+    query: "What's my trailing stop usage?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      vizType: "kpi_single",
+      aggregates: [{ field: "id", fn: "count" }],
+      filters: [{ field: "trailingStopDetected", op: "eq", value: true }],
+    },
+  },
+  {
+    id: "partial-close-frequency",
+    query: "What's my partial close frequency?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      vizType: "kpi_single",
+      aggregates: [{ field: "id", fn: "count" }],
+      filters: [{ field: "partialCloseCount", op: "gt", value: 0 }],
+    },
+  },
+  {
+    id: "compliance-status",
+    query: "What's my compliance status?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "plural",
+      vizType: "bar_chart",
+      groupBy: ["complianceStatus"],
+      aggregates: [{ field: "id", fn: "count" }],
+    },
+  },
+  {
+    id: "win-rate-by-weekday",
+    query: "win rate by weekday",
+    expect: {
+      intent: "aggregate",
+      vizType: "weekday_performance",
+      groupBy: ["weekday"],
+      aggregates: [{ field: "winRate", fn: "avg" }],
+    },
+  },
+  {
+    id: "best-session-today-singular",
+    query: "best session today",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      groupBy: ["sessionTag"],
+      aggregates: [{ field: "profit", fn: "sum" }],
+      limit: 1,
+    },
+  },
+  {
+    id: "best-quarter-singular",
+    query: "What's my best quarter?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      groupBy: ["quarter"],
+      aggregates: [{ field: "profit", fn: "sum" }],
+      sort: { dir: "desc" },
+      limit: 1,
+    },
+  },
+  {
+    id: "best-year-singular",
+    query: "What's my best year?",
+    expect: {
+      intent: "aggregate",
+      displayMode: "singular",
+      groupBy: ["year"],
+      aggregates: [{ field: "profit", fn: "sum" }],
+      sort: { dir: "desc" },
+      limit: 1,
     },
   },
   {
@@ -289,33 +398,35 @@ export function evaluatePlanExpectations(
   }
 
   if (expect.timeframe) {
+    const expected =
+      typeof expect.timeframe === "function"
+        ? expect.timeframe()
+        : expect.timeframe;
     const actual = plan.timeframe;
     if (!actual) {
       failures.push("timeframe missing");
-    } else if (expect.timeframe.lastNDays || actual.lastNDays) {
-      if (expect.timeframe.lastNDays !== actual.lastNDays) {
+    } else if (expected?.lastNDays || actual.lastNDays) {
+      if (expected?.lastNDays !== actual.lastNDays) {
         failures.push(
           `timeframe lastNDays ${actual.lastNDays ?? "none"} !== ${
-            expect.timeframe.lastNDays ?? "none"
+            expected?.lastNDays ?? "none"
           }`
         );
       }
     } else if (
-      expect.timeframe.from ||
-      expect.timeframe.to ||
+      expected?.from ||
+      expected?.to ||
       actual.from ||
       actual.to
     ) {
-      if (expect.timeframe.from && actual.from !== expect.timeframe.from) {
+      if (expected?.from && actual.from !== expected.from) {
         failures.push(
-          `timeframe from ${actual.from ?? "none"} !== ${
-            expect.timeframe.from
-          }`
+          `timeframe from ${actual.from ?? "none"} !== ${expected.from}`
         );
       }
-      if (expect.timeframe.to && actual.to !== expect.timeframe.to) {
+      if (expected?.to && actual.to !== expected.to) {
         failures.push(
-          `timeframe to ${actual.to ?? "none"} !== ${expect.timeframe.to}`
+          `timeframe to ${actual.to ?? "none"} !== ${expected.to}`
         );
       }
     }

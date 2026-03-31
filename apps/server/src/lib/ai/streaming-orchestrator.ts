@@ -10,7 +10,7 @@ import { executePlan } from "./query-executor";
 import { assembleAnswer, assembleProfileAnswer } from "./answer-assembler";
 import { buildVizSpec, type VizSpec } from "./visualization-registry";
 import { buildTradesUrl } from "./url-builder";
-import { getGuardrailStatus } from "./guardrails";
+import { formatGuardrailFollowUp, getGuardrailStatus } from "./guardrails";
 import type { TradeQueryPlan } from "./query-plan";
 import { getFullProfile, condenseProfile } from "./engine/trader-profile";
 import type { CondensedProfile } from "./engine/types";
@@ -22,6 +22,7 @@ import {
   type AssistantPageContext,
 } from "./assistant-specialists";
 import { logAIProviderError } from "./provider-errors";
+import { isLowSignalAssistantQuery } from "./query-normalization";
 
 // ===== EVENT TYPES =====
 
@@ -133,6 +134,9 @@ export interface StreamingContext {
   pageContext?: AssistantPageContext;
 }
 
+const REPHRASE_REQUEST_MARKDOWN =
+  "I couldn't understand your request. Could you please rephrase it?";
+
 // ===== MAIN STREAMING ORCHESTRATOR =====
 
 /**
@@ -149,6 +153,15 @@ export async function* streamQuery(
       stage: "thinking",
       message: "Understanding your question...",
     };
+
+    if (isLowSignalAssistantQuery(userMessage)) {
+      yield {
+        event: "delta",
+        text: REPHRASE_REQUEST_MARKDOWN,
+      };
+      yield { event: "done" };
+      return;
+    }
 
     // Load trader profile, psychology, and memory in parallel
     let condensed: CondensedProfile | undefined;
@@ -219,13 +232,6 @@ export async function* streamQuery(
       return;
     }
 
-    // ===== STAGE: PLANNING =====
-    yield {
-      event: "status",
-      stage: "planning",
-      message: "Mapping question to trade fields...",
-    };
-
     // Enrich conversation history with coaching context
     const enrichedHistory = [...(context.conversationHistory ?? [])];
     if (memoryContext) {
@@ -254,22 +260,37 @@ export async function* streamQuery(
       if (planResult.needsFieldCatalog) {
         yield {
           event: "delta",
-          text:
-            "I couldn't map that request to your trade fields. Try rephrasing or mention the metric you want to analyze.",
+          text: REPHRASE_REQUEST_MARKDOWN,
+        };
+        yield { event: "done" };
+        return;
+      }
+
+      if (planResult.error?.startsWith("AI ")) {
+        yield {
+          event: "error",
+          message: planResult.error,
         };
         yield { event: "done" };
         return;
       }
 
       yield {
-        event: "error",
-        message: planResult.error || "Could not understand query",
+        event: "delta",
+        text: REPHRASE_REQUEST_MARKDOWN,
       };
       yield { event: "done" };
       return;
     }
 
     const plan = planResult.plan;
+
+    // ===== STAGE: PLANNING =====
+    yield {
+      event: "status",
+      stage: "planning",
+      message: "Mapping question to trade fields...",
+    };
 
     // ===== PROFILE SUMMARY SHORT-CIRCUIT =====
     if ((plan as any)._profileSummary && condensed) {
@@ -344,8 +365,8 @@ export async function* streamQuery(
         block: {
           type: "callout",
           tone: "warning",
-          title: "I don't know yet",
-          body: guardrail.message,
+          title: "I need a bit more context",
+          body: formatGuardrailFollowUp(guardrail),
         },
       };
     } else {
@@ -809,7 +830,7 @@ function buildPrimaryStatsBlock(
   const format = inferMetricFormatFromViz(viz, plan);
   if (rows.length === 0 && viz.data.summary?.best) {
     rows.push({
-      label: "Top result",
+      label: "Highest result",
       value: String(viz.data.summary.best.label),
       note: formatSummaryValue(viz.data.summary.best.value, format),
     });

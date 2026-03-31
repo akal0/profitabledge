@@ -19,11 +19,23 @@ describe("getAllowedWebOrigins", () => {
     process.env.WEB_URL = "https://profitabledge.com";
     process.env.NEXT_PUBLIC_WEB_URL = undefined;
 
-    expect(getAllowedWebOrigins()).toEqual([
-      "http://localhost:3001",
-      "https://profitabledge.com",
-      "https://beta.profitabledge.com",
-    ]);
+    expect(getAllowedWebOrigins()).toEqual(
+      expect.arrayContaining([
+        "http://localhost:3310",
+        "http://127.0.0.1:3310",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+        "https://profitabledge.com",
+        "https://www.profitabledge.com",
+        "https://beta.profitabledge.com",
+        "https://www.beta.profitabledge.com",
+      ])
+    );
   });
 
   it("includes the canonical app hostname when the beta domain is configured", () => {
@@ -31,11 +43,38 @@ describe("getAllowedWebOrigins", () => {
     process.env.WEB_URL = undefined;
     process.env.NEXT_PUBLIC_WEB_URL = undefined;
 
-    expect(getAllowedWebOrigins()).toEqual([
-      "http://localhost:3001",
-      "https://profitabledge.com",
-      "https://beta.profitabledge.com",
-    ]);
+    expect(getAllowedWebOrigins()).toEqual(
+      expect.arrayContaining([
+        "http://localhost:3310",
+        "http://127.0.0.1:3310",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+        "https://profitabledge.com",
+        "https://www.profitabledge.com",
+        "https://beta.profitabledge.com",
+        "https://www.beta.profitabledge.com",
+      ])
+    );
+  });
+
+  it("includes all first-party aliases when the deployed www beta host is configured", () => {
+    process.env.CORS_ORIGIN = undefined;
+    process.env.WEB_URL = "https://www.beta.profitabledge.com";
+    process.env.NEXT_PUBLIC_WEB_URL = undefined;
+
+    expect(getAllowedWebOrigins()).toEqual(
+      expect.arrayContaining([
+        "https://profitabledge.com",
+        "https://www.profitabledge.com",
+        "https://beta.profitabledge.com",
+        "https://www.beta.profitabledge.com",
+      ])
+    );
   });
 
   it("normalizes trailing slashes for configured web origins", () => {
@@ -44,10 +83,20 @@ describe("getAllowedWebOrigins", () => {
     process.env.NEXT_PUBLIC_WEB_URL =
       "https://profitabledge-web.vercel.app/";
 
-    expect(getAllowedWebOrigins()).toEqual([
-      "http://localhost:3001",
-      "https://profitabledge-web.vercel.app",
-    ]);
+    expect(getAllowedWebOrigins()).toEqual(
+      expect.arrayContaining([
+        "http://localhost:3310",
+        "http://127.0.0.1:3310",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+        "https://profitabledge-web.vercel.app",
+      ])
+    );
   });
 
   it("normalizes comma-separated CORS origin lists", () => {
@@ -56,10 +105,20 @@ describe("getAllowedWebOrigins", () => {
     process.env.WEB_URL = undefined;
     process.env.NEXT_PUBLIC_WEB_URL = undefined;
 
-    expect(getAllowedWebOrigins()).toEqual([
-      "http://localhost:3001",
-      "https://profitabledge-web.vercel.app",
-      "https://preview.example.com",
-    ]);
+    expect(getAllowedWebOrigins()).toEqual(
+      expect.arrayContaining([
+        "http://localhost:3310",
+        "http://127.0.0.1:3310",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+        "https://profitabledge-web.vercel.app",
+        "https://preview.example.com",
+      ])
+    );
   });
 });

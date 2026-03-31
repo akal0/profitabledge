@@ -33,6 +33,20 @@ export function buildAliasCatalog(): string {
   );
 }
 
+const META_REPHRASE_PATTERNS = [
+  /\b(could(?:n't| not)\s+understand|did(?:n't| not)\s+understand)\b.*\b(request|query|prompt)\b/i,
+  /\brequest was not understood\b/i,
+  /\bcould you please rephrase\b/i,
+  /\bplease rephrase\b/i,
+  /\brephrase it\b/i,
+];
+
+const QUERY_VERB_RE =
+  /\b(what|which|how|show|compare|give|tell|find|calculate|breakdown|summarize|analyse|analyze|review)\b/i;
+
+const ANALYTICS_SIGNAL_RE =
+  /\b(profit|loss|p&l|pnl|win|rate|session|setup|model|strategy|asset|symbol|pair|trade|journal|edge|leak|profile|overview|performance|rr|drawdown|mae|mfe|hold|entry|exit|volume|balance|equity|margin|slippage|spread|compliance|trailing|partial|goal|psychology|focus|confidence|expectancy|factor)\b/i;
+
 const ANALYSIS_DIMENSION_HINTS: Array<{ field: string; pattern: RegExp }> = [
   {
     field: "symbol",
@@ -137,9 +151,55 @@ export function hasProfileAnalysisQualifier(message: string): boolean {
 }
 
 export function shouldUseProfileSummaryShortcut(message: string): boolean {
+  if (isMetaRephraseRequest(message)) {
+    return false;
+  }
+
   return (
     isBroadProfileSummaryQuery(message) && !hasProfileAnalysisQualifier(message)
   );
+}
+
+export function isMetaRephraseRequest(message: string): boolean {
+  const trimmed = message.trim();
+  return META_REPHRASE_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+export function isLowSignalAssistantQuery(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed) return true;
+  if (isMetaRephraseRequest(trimmed)) return false;
+  if (isBroadProfileSummaryQuery(trimmed)) return false;
+  if (inferTimeframeFromMessage(trimmed)) return false;
+
+  const dimensions = detectAnalysisDimensions(trimmed);
+  const words = trimmed.match(/[a-z0-9$%/&.+-]+/gi) ?? [];
+  const hasQueryVerb = QUERY_VERB_RE.test(trimmed);
+  const hasAnalyticsSignal = ANALYTICS_SIGNAL_RE.test(trimmed);
+  const hasDimensionHint = dimensions.length > 0;
+
+  if (!hasAnalyticsSignal && !hasDimensionHint) {
+    return true;
+  }
+
+  const signalCount =
+    (hasQueryVerb ? 1 : 0) +
+    (hasAnalyticsSignal ? 1 : 0) +
+    (hasDimensionHint ? 1 : 0);
+
+  if (words.length <= 1) {
+    return signalCount < 2;
+  }
+
+  if (signalCount === 0) {
+    return true;
+  }
+
+  if (signalCount === 1 && words.length <= 3) {
+    return true;
+  }
+
+  return false;
 }
 
 export function inferTimeframeFromMessage(
@@ -148,10 +208,20 @@ export function inferTimeframeFromMessage(
   const lower = message.toLowerCase();
   const now = new Date();
   const today = toYmd(now);
+  const yesterday = shiftUtcDays(now, -1);
 
   const sinceDate = parseSinceDate(message);
   if (sinceDate) {
     return { from: sinceDate, to: today };
+  }
+
+  if (/\btoday\b/i.test(lower)) {
+    return { from: today, to: today };
+  }
+
+  if (/\byesterday\b/i.test(lower)) {
+    const day = toYmd(yesterday);
+    return { from: day, to: day };
   }
 
   if (lower.includes("week to date") || lower.includes("wtd")) {
@@ -202,29 +272,40 @@ export function inferTimeframeFromMessage(
     const months = match ? Number(match[1]) : 0;
     if (months > 0) return { lastNDays: months * 30 };
   }
-  if (
-    lower.includes("this week") ||
-    lower.includes("past week") ||
-    lower.includes("last week")
-  ) {
+  if (lower.includes("this week")) {
+    const start = startOfWeekUtc(now);
+    return { from: toYmd(start), to: today };
+  }
+  if (lower.includes("last week")) {
+    const range = lastWeekRange(now);
+    return { from: toYmd(range.start), to: toYmd(range.end) };
+  }
+  if (lower.includes("past week")) {
     return { lastNDays: 7 };
   }
-  if (
-    lower.includes("this month") ||
-    lower.includes("last month") ||
-    lower.includes("last 30 days") ||
-    lower.includes("past month")
-  ) {
+  if (lower.includes("this month")) {
+    const start = startOfMonthUtc(now);
+    return { from: toYmd(start), to: today };
+  }
+  if (lower.includes("last month")) {
+    const range = lastMonthRange(now);
+    return { from: toYmd(range.start), to: toYmd(range.end) };
+  }
+  if (lower.includes("last 30 days") || lower.includes("past month")) {
     return { lastNDays: 30 };
   }
-  if (lower.includes("this quarter") || lower.includes("last 90 days")) {
+  if (lower.includes("this quarter")) {
+    const start = startOfQuarterUtc(now);
+    return { from: toYmd(start), to: today };
+  }
+  if (lower.includes("last 90 days")) {
     return { lastNDays: 90 };
   }
-  if (
-    lower.includes("this year") ||
-    lower.includes("last 12 months") ||
-    lower.includes("past year")
-  ) {
+  if (lower.includes("this year")) {
+    const start = startOfYearUtc(now);
+    return { from: toYmd(start), to: today };
+  }
+  if (lower.includes("last 12 months") || lower.includes("past year")) {
     return { lastNDays: 365 };
   }
   return null;
@@ -248,6 +329,14 @@ function startOfMonthUtc(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
+function shiftUtcDays(date: Date, days: number): Date {
+  const d = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
+  );
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
 function startOfYearUtc(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
 }
@@ -256,6 +345,21 @@ function startOfQuarterUtc(date: Date): Date {
   const month = date.getUTCMonth();
   const quarterStart = Math.floor(month / 3) * 3;
   return new Date(Date.UTC(date.getUTCFullYear(), quarterStart, 1));
+}
+
+function lastWeekRange(date: Date): { start: Date; end: Date } {
+  const thisWeekStart = startOfWeekUtc(date);
+  const start = shiftUtcDays(thisWeekStart, -7);
+  const end = shiftUtcDays(thisWeekStart, -1);
+  return { start, end };
+}
+
+function lastMonthRange(date: Date): { start: Date; end: Date } {
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 0));
+  return { start, end };
 }
 
 function lastQuarterRange(date: Date): { start: Date; end: Date } {

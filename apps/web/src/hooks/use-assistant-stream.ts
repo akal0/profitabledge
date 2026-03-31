@@ -17,6 +17,9 @@ import type {
 import { showAIErrorToast } from "@/lib/ai-error-toast";
 import { startTabAttentionActivity } from "@/stores/tab-attention";
 
+const REPHRASE_REQUEST_MARKDOWN =
+  "I couldn't understand your request. Could you please rephrase it?";
+
 const INITIAL_STATE: AssistantStreamState = {
   stage: null,
   statusMessage: "",
@@ -27,6 +30,7 @@ const INITIAL_STATE: AssistantStreamState = {
   isStreaming: false,
   isDone: false,
   justCompleted: false,
+  presentationReady: false,
   error: null,
 };
 
@@ -105,6 +109,7 @@ export function useAssistantStream() {
               isStreaming: false,
               isDone: true,
               justCompleted: true,
+              presentationReady: true,
             };
           }
 
@@ -171,6 +176,38 @@ export function useAssistantStream() {
 
       setState((prev) => ({ ...prev, isStreaming: true }));
 
+      if (body?.simulateRephraseOnly === true) {
+        try {
+          applyEvent({
+            event: "status",
+            stage: "planning",
+            message: "Understanding your question...",
+          });
+
+          await new Promise((resolve) => window.setTimeout(resolve, 850));
+
+          if (abortController.signal.aborted) {
+            return;
+          }
+
+          applyEvent({
+            event: "delta",
+            text: REPHRASE_REQUEST_MARKDOWN,
+          });
+
+          await new Promise((resolve) => window.setTimeout(resolve, 120));
+
+          if (abortController.signal.aborted) {
+            return;
+          }
+
+          applyEvent({ event: "done" });
+        } finally {
+          releaseTabAttention();
+        }
+        return;
+      }
+
       try {
         const response = await fetch(endpoint, {
           method: "POST",
@@ -233,6 +270,7 @@ export function useAssistantStream() {
           isStreaming: false,
           isDone: true,
           justCompleted: true,
+          presentationReady: true,
           error: error.message || "Stream failed",
         }));
       } finally {

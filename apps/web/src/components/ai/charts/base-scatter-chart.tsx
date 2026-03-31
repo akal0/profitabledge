@@ -31,7 +31,7 @@ const defaultFormat = (v: number) => v.toFixed(2);
 
 export function BaseScatterChart({
   data,
-  height = "100%",
+  height,
   xLabel,
   yLabel,
   formatX = defaultFormat,
@@ -42,8 +42,8 @@ export function BaseScatterChart({
   return (
     <ChartContainer
       config={{ points: { label: yLabel || "Value", color } }}
-      className={cn("aspect-auto w-full min-h-[18rem] flex-1", className)}
-      style={{ height }}
+      className={cn("mt-auto aspect-auto h-60 w-full md:h-72", className)}
+      style={height ? { height } : undefined}
     >
         <ScatterChart margin={{ top: 12, right: 8, left: 8, bottom: 4 }}>
           <CartesianGrid

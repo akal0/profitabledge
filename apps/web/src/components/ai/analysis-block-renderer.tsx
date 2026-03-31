@@ -19,6 +19,7 @@ import {
   Shield,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toSentenceCase } from "@/lib/sentence-case";
 import type { AnalysisBlock, VizSpec } from "@/types/assistant-stream";
 import {
   formatDisplayCurrency,
@@ -375,8 +376,27 @@ function formatBreakdownValue(
       "swap",
     ].some((key) => columnLower.includes(key));
 
+  const isPercent = ["rate", "percent", "efficiency"].some((key) =>
+    columnLower.includes(key)
+  );
+  const isRatio = ["factor", "rr", "riskreward", "rmultiple"].some((key) =>
+    columnLower.includes(key)
+  );
+
   if (isCurrency) {
     return formatDisplayCurrency(value);
+  }
+
+  if (isPercent) {
+    return `${formatDisplayNumber(value, { maximumFractionDigits: 1 })}%`;
+  }
+
+  if (isRatio) {
+    const suffix = columnLower.includes("factor") ? ":1" : "R";
+    return `${formatDisplayNumber(value, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}${suffix}`;
   }
 
   return formatDisplayNumber(value, { maximumFractionDigits: 2 });
@@ -542,9 +562,7 @@ function AnalysisShellBlockShell({
 }
 
 function sentenceCase(value: string): string {
-  const trimmed = (value || "").trim();
-  if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return toSentenceCase(value);
 }
 
 // ─── Insight Card Block ─────────────────────────────────────────

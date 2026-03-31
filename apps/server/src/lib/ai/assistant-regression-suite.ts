@@ -9,6 +9,12 @@ import type { TradeQueryPlan } from "./query-plan";
 import { buildVizSpec } from "./visualization-registry";
 import { buildDeterministicTradePlan } from "./deterministic-plan-builder";
 import { generatePlan } from "./plan-generator";
+import {
+  inferTimeframeFromMessage,
+  isLowSignalAssistantQuery,
+  isMetaRephraseRequest,
+  shouldUseProfileSummaryShortcut,
+} from "./query-normalization";
 
 type AssistantRegressionCase = {
   id: string;
@@ -221,6 +227,41 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       }
       if ((viz.data.rows || []).length < 5) {
         failures.push(`expected >= 5 rows, got ${(viz.data.rows || []).length}`);
+      }
+      return failures;
+    },
+  },
+  {
+    id: "symbol-win-rate-ranking-uses-generic-chart",
+    run: () => {
+      const plan: TradeQueryPlan = {
+        intent: "aggregate",
+        filters: [],
+        groupBy: [{ field: "symbol" }],
+        aggregates: [{ fn: "avg", field: "winRate", as: "win_rate" }],
+        sort: { field: "win_rate", dir: "desc" },
+        limit: 1,
+        explanation: "Rank symbol by win rate",
+        vizType: "bar_chart",
+        componentHint: "auto",
+        displayMode: "singular",
+        vizTitle: "Win rate by symbol",
+      };
+      const viz = buildVizSpec(
+        plan,
+        buildGroupedExecutionResult("symbol", [
+          { symbol: "AUDUSD", win_rate: 68 },
+          { symbol: "USDJPY", win_rate: 61 },
+          { symbol: "EURUSD", win_rate: 47 },
+        ])
+      );
+
+      const failures: string[] = [];
+      if (viz.type === "asset_profitability") {
+        failures.push("symbol win-rate query should not use asset_profitability");
+      }
+      if (viz.data.valueFormat !== "percent") {
+        failures.push(`valueFormat ${viz.data.valueFormat ?? "none"} !== percent`);
       }
       return failures;
     },
@@ -704,6 +745,195 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
     },
   },
   {
+    id: "assistant-boundary-queries-bypass-specialists",
+    run: async () => {
+      const failures: string[] = [];
+      const cases = [
+        "What was my average entry time?",
+        "Which trade phase performs best?",
+        "How many trades did I take today?",
+        "What's my current streak?",
+        "What should I focus on today?",
+        "Give me an overview of my symbols this month",
+      ];
+
+      for (const message of cases) {
+        const domain = detectAssistantDomain(message, {
+          surface: "assistant",
+          accountScope: "all",
+        });
+        if (domain !== null) {
+          failures.push(`${message}: domain ${domain} should be null`);
+        }
+
+        const result = await maybeHandleSpecialistQuery(message, {
+          ...buildDashboardContext(),
+          pageContext: {
+            surface: "assistant",
+            accountScope: "all",
+          },
+        });
+        if (result.handled) {
+          failures.push(
+            `${message}: specialist ${result.domain ?? "null"} should not pre-handle`
+          );
+        }
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "meta-rephrase-request-never-short-circuits-to-profile-summary",
+    run: async () => {
+      const message =
+        "The user's request was not understood. providing a general overview of trading performance and recommendations based on the overall profile";
+      const failures: string[] = [];
+
+      if (!isMetaRephraseRequest(message)) {
+        failures.push("meta rephrase guard not detected");
+      }
+
+      if (shouldUseProfileSummaryShortcut(message)) {
+        failures.push("meta rephrase request should not use profile summary shortcut");
+      }
+
+      const result = await generatePlan(
+        message,
+        [],
+        "account_test",
+        buildDashboardContext().condensed
+      );
+
+      if (result.success || result.plan) {
+        failures.push("meta rephrase request should not generate a plan");
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "low-signal-gibberish-request-never-generates-a-plan",
+    run: async () => {
+      const cases = ["erdqe32", "asdfgh", "???"];
+      const failures: string[] = [];
+
+      for (const message of cases) {
+        if (!isLowSignalAssistantQuery(message)) {
+          failures.push(`${message}: low-signal guard not detected`);
+        }
+
+        if (shouldUseProfileSummaryShortcut(message)) {
+          failures.push(
+            `${message}: low-signal request should not use profile summary shortcut`
+          );
+        }
+
+        const result = await generatePlan(
+          message,
+          [],
+          "account_test",
+          buildDashboardContext().condensed
+        );
+
+        if (result.success || result.plan) {
+          failures.push(`${message}: low-signal request should not generate a plan`);
+        }
+      }
+
+      return failures;
+    },
+  },
+  {
+    id: "low-signal-gibberish-request-never-assembles-recommendation-sections",
+    run: () => {
+      const answer = assembleAnswer(
+        {
+          success: true,
+          data: {
+            improvements: [{ label: "Win rate", value: "90%" }],
+            insights: ["Best session is London"],
+            recommendations: ["Focus on London"],
+          },
+          meta: {
+            rowCount: 120,
+            explanation: "General overview",
+            filters: [],
+            timeframe: "Last 30 days",
+            improvements: [{ label: "Win rate", value: "90%" }],
+            insights: ["Best session is London"],
+            recommendations: ["Focus on London"],
+          },
+        },
+        {
+          intent: "recommendation",
+          filters: [],
+          aggregates: [],
+          explanation: "General overview",
+          vizType: "text_answer",
+          componentHint: "auto",
+          displayMode: "singular",
+          vizTitle: "Overview",
+        },
+        { userMessage: "sda9d" }
+      );
+
+      const failures: string[] = [];
+      if (
+        answer.markdown.trim() !==
+        "I couldn't understand your request. Could you please rephrase it?"
+      ) {
+        failures.push("expected exact rephrase-only markdown");
+      }
+      if (
+        answer.markdown.includes("Improvements") ||
+        answer.markdown.includes("Insights") ||
+        answer.markdown.includes("Recommendations") ||
+        answer.markdown.includes("Sample size")
+      ) {
+        failures.push("unexpected recommendation sections leaked into fallback");
+      }
+      return failures;
+    },
+  },
+  {
+    id: "session-performance-queries-bypass-live-session-specialist",
+    run: async () => {
+      const failures: string[] = [];
+      const cases = [
+        "What's my best session?",
+        "What's my most profitable session?",
+        "What's my worst session?",
+        "What's my least profitable session?",
+      ];
+
+      for (const message of cases) {
+        const domain = detectAssistantDomain(message, {
+          surface: "assistant",
+          accountScope: "all",
+        });
+        if (domain !== null) {
+          failures.push(`${message}: domain ${domain} should be null`);
+        }
+
+        const result = await maybeHandleSpecialistQuery(message, {
+          ...buildDashboardContext(),
+          pageContext: {
+            surface: "assistant",
+            accountScope: "all",
+          },
+        });
+        if (result.handled) {
+          failures.push(
+            `${message}: specialist ${result.domain ?? "null"} should not pre-handle`
+          );
+        }
+      }
+
+      return failures;
+    },
+  },
+  {
     id: "dashboard-specialist-payload-shape",
     run: async () => {
       const result = await maybeHandleSpecialistQuery(
@@ -797,6 +1027,13 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       if (!result.plan.groupBy?.some((group) => group.field === "edgeName")) {
         failures.push("missing edgeName grouping");
       }
+      if ((result.plan.groupBy?.length || 0) !== 1) {
+        failures.push(
+          `unexpected extra groupings: ${
+            result.plan.groupBy?.map((group) => group.field).join(", ") || "none"
+          }`
+        );
+      }
       if (
         !result.plan.filters?.some(
           (filter) =>
@@ -807,7 +1044,12 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       ) {
         failures.push("missing London filter");
       }
-      if (!result.plan.timeframe || result.plan.timeframe.lastNDays !== 30) {
+      const expectedTimeframe = inferTimeframeFromMessage("this month");
+      if (
+        !result.plan.timeframe ||
+        result.plan.timeframe.from !== expectedTimeframe?.from ||
+        result.plan.timeframe.to !== expectedTimeframe?.to
+      ) {
         failures.push("missing monthly timeframe");
       }
 
@@ -845,7 +1087,12 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       ) {
         failures.push("missing London filter");
       }
-      if (!result.plan.timeframe || result.plan.timeframe.lastNDays !== 30) {
+      const expectedTimeframe = inferTimeframeFromMessage("this month");
+      if (
+        !result.plan.timeframe ||
+        result.plan.timeframe.from !== expectedTimeframe?.from ||
+        result.plan.timeframe.to !== expectedTimeframe?.to
+      ) {
         failures.push("missing monthly timeframe");
       }
 
@@ -875,11 +1122,14 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       );
 
       const failures: string[] = [];
-      if (!answer.markdown.startsWith("### I don't know yet")) {
+      if (!answer.markdown.startsWith("### I need a bit more context")) {
         failures.push("missing guardrail heading");
       }
       if (!answer.markdown.includes("(n=0)")) {
         failures.push("missing empty sample size");
+      }
+      if (!answer.markdown.includes("take another pass")) {
+        failures.push("missing follow-up prompt");
       }
       if (answer.markdown.includes("### Suggested follow-up")) {
         failures.push("unexpected follow-up section");
@@ -911,11 +1161,14 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       );
 
       const failures: string[] = [];
-      if (!answer.markdown.startsWith("### I don't know yet")) {
+      if (!answer.markdown.startsWith("### I need a bit more context")) {
         failures.push("missing guardrail heading");
       }
       if (!answer.markdown.includes("missing required fields for this metric")) {
         failures.push("missing guardrail reason");
+      }
+      if (!answer.markdown.includes("take another pass")) {
+        failures.push("missing follow-up prompt");
       }
       if (answer.markdown.includes("### Suggested follow-up")) {
         failures.push("unexpected follow-up section");
@@ -984,7 +1237,12 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
       if (plan.vizType !== "kpi_single") {
         failures.push(`viz type ${plan.vizType} !== kpi_single`);
       }
-      if (!plan.timeframe || plan.timeframe.lastNDays !== 30) {
+      const expectedTimeframe = inferTimeframeFromMessage("last month");
+      if (
+        !plan.timeframe ||
+        plan.timeframe.from !== expectedTimeframe?.from ||
+        plan.timeframe.to !== expectedTimeframe?.to
+      ) {
         failures.push("missing monthly timeframe");
       }
       if (
@@ -998,6 +1256,71 @@ export const ASSISTANT_REGRESSION_SUITE: AssistantRegressionCase[] = [
         failures.push("missing London filter");
       }
 
+      return failures;
+    },
+  },
+  {
+    id: "average-entry-time-uses-derived-hour-metric",
+    run: () => {
+      const plan = buildDeterministicTradePlan("What was my average entry time?");
+      const failures: string[] = [];
+
+      if (!plan) {
+        failures.push("plan missing");
+        return failures;
+      }
+      if (plan.groupBy?.length) {
+        failures.push("average entry time should not group by hour");
+      }
+      if (
+        !plan.aggregates?.some(
+          (agg) => agg.fn === "avg" && agg.field === "hour"
+        )
+      ) {
+        failures.push("missing avg(hour) aggregate");
+      }
+      return failures;
+    },
+  },
+  {
+    id: "usage-frequency-queries-count-flagged-trades",
+    run: () => {
+      const cases = [
+        {
+          message: "What's my trailing stop usage?",
+          expectedFilter: { field: "trailingStopDetected", op: "eq", value: true },
+        },
+        {
+          message: "What's my partial close frequency?",
+          expectedFilter: { field: "partialCloseCount", op: "gt", value: 0 },
+        },
+      ];
+
+      const failures: string[] = [];
+      for (const { message, expectedFilter } of cases) {
+        const plan = buildDeterministicTradePlan(message);
+        if (!plan) {
+          failures.push(`${message}: plan missing`);
+          continue;
+        }
+        if (
+          !plan.aggregates?.some(
+            (agg) => agg.fn === "count" && agg.field === "id"
+          )
+        ) {
+          failures.push(`${message}: missing count(id) aggregate`);
+        }
+        if (
+          !plan.filters?.some(
+            (filter) =>
+              filter.field === expectedFilter.field &&
+              filter.op === expectedFilter.op &&
+              filter.value === expectedFilter.value
+          )
+        ) {
+          failures.push(`${message}: missing expected filter`);
+        }
+      }
       return failures;
     },
   },

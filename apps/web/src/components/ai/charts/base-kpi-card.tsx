@@ -2,6 +2,7 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
+import { toSentenceCase } from "@/lib/sentence-case";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { formatDisplayCurrency } from "@/lib/format-display";
@@ -50,9 +51,7 @@ const defaultFormatValue = (v: number, label?: string): string => {
 };
 
 function sentenceCase(value: string): string {
-  const trimmed = (value || "").trim();
-  if (!trimmed) return "";
-  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+  return toSentenceCase(value);
 }
 
 export function BaseKpiSingle({

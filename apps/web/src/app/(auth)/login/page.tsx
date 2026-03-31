@@ -27,6 +27,7 @@ import { authClient } from "@/lib/auth-client";
 import { getErrorMessage } from "@/lib/error-message";
 import { markLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import { signInWithPasskey } from "@/lib/passkey-sign-in";
+import { startDesktopSocialAuth } from "@/lib/desktop-social-auth";
 import {
   buildPostLoginPath,
   buildSignUpPath,
@@ -134,6 +135,15 @@ const LoginPage = () => {
 
     try {
       markLoginOnboardingBypass();
+      const startedDesktopFlow = await startDesktopSocialAuth({
+        provider,
+        path: postLoginPath,
+      });
+      if (startedDesktopFlow) {
+        setSocialProviderLoading(null);
+        return;
+      }
+
       await authClient.signIn.social({
         provider,
         callbackURL: `${window.location.origin}${postLoginPath}`,
@@ -166,14 +176,14 @@ const LoginPage = () => {
   }
 
   return (
-    <AuthSplitShell heroSlides={LOGIN_HERO_SLIDES} showFormGlow>
+    <AuthSplitShell heroSlides={LOGIN_HERO_SLIDES}>
       <div className="space-y-8">
         <div className="space-y-3 text-center">
           <p className="text-3xl font-medium tracking-[-0.05em] text-white sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
-            Welcome back to profitabledge
+            Welcome back
           </p>
           <p className="mx-auto max-w-md text-sm leading-6 text-white/56 sm:text-[15px] lg:text-base lg:leading-7">
-            Are you ready to dive back into your profitable edge?
+            Pick up where you left off and get back into your workspace.
           </p>
         </div>
 

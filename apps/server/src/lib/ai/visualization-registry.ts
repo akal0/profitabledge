@@ -66,6 +66,7 @@ export interface VizDataConfig {
   xAxis?: string; // field name for x-axis
   yAxis?: string; // field name for y-axis
   groupKey?: string; // field name for grouping
+  valueFormat?: "currency" | "percent" | "ratio" | "number";
 
   // For comparisons
   comparison?: {
@@ -75,6 +76,7 @@ export interface VizDataConfig {
     deltaPercent?: string;
     metricField?: string;
     format?: "currency" | "percent" | "ratio" | "number";
+    betterWhen?: "higher" | "lower";
   };
 
   // Trade IDs for "view trades" action
@@ -235,6 +237,10 @@ function resolveVizType(plan: TradeQueryPlan): VizType {
     return "asset_profitability";
   }
 
+  if (hasSymbolGroup && explicit === "asset_profitability" && !hasProfitAggregate) {
+    return inferred === "asset_profitability" ? "bar_chart" : inferred;
+  }
+
   if (
     plan.groupBy?.length &&
     explicit &&
@@ -289,8 +295,14 @@ function inferVizType(plan: TradeQueryPlan): VizType {
 
     const groupField = plan.groupBy[0].field;
 
-    // Asset grouping → asset profitability
-    if (groupField === "symbol") {
+    // Asset grouping → asset profitability only for summed profit
+    if (
+      groupField === "symbol" &&
+      plan.aggregates?.some(
+        (aggregate) =>
+          aggregate.field === "profit" && aggregate.fn === "sum"
+      )
+    ) {
       return "asset_profitability";
     }
 
@@ -488,6 +500,7 @@ function buildBarChartData(
     rows,
     xAxis: groupField,
     yAxis: valueField,
+    valueFormat: inferMetricDisplayFormat(valueField),
     summary: {
       count: result.meta?.rowCount,
       best,
@@ -551,6 +564,7 @@ function buildComparisonData(
       deltaPercent: data.deltaPercent,
       metricField,
       format,
+      betterWhen: inferMetricPolarity(metricField),
     },
   };
 }
@@ -729,7 +743,10 @@ function buildCalendarData(
   const byDate = new Map<string, { profit: number; count: number }>();
 
   for (const trade of rows) {
-    const date = trade.openedAt?.split("T")[0] || trade.date;
+    const date =
+      trade.closedAt?.split("T")[0] ||
+      trade.openedAt?.split("T")[0] ||
+      trade.date;
     if (!date) continue;
 
     const existing = byDate.get(date) || { profit: 0, count: 0 };
@@ -738,11 +755,13 @@ function buildCalendarData(
     byDate.set(date, existing);
   }
 
-  const calendarRows = Array.from(byDate.entries()).map(([date, data]) => ({
-    date,
-    profit: data.profit,
-    count: data.count,
-  }));
+  const calendarRows = Array.from(byDate.entries())
+    .map(([date, data]) => ({
+      date,
+      profit: data.profit,
+      count: data.count,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   // Find date range
   const dates = calendarRows.map((r) => r.date).sort();
@@ -882,4 +901,19 @@ function inferMetricDisplayFormat(
     return "ratio";
   }
   return "number";
+}
+
+function inferMetricPolarity(field?: string): "higher" | "lower" {
+  const lower = (field || "").toLowerCase();
+  if (
+    lower.includes("loss") ||
+    lower.includes("drawdown") ||
+    lower.includes("commission") ||
+    lower.includes("swap") ||
+    lower.includes("slippage") ||
+    lower.includes("mae")
+  ) {
+    return "lower";
+  }
+  return "higher";
 }

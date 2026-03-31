@@ -45,6 +45,18 @@ describe("auth cookie settings", () => {
     });
   });
 
+  it("keeps first-party www beta and www api hosts on default cookie settings", () => {
+    expect(
+      getAuthCookieSettings({
+        baseUrl: "https://www.api.profitabledge.com",
+        allowedWebOrigins: ["https://www.beta.profitabledge.com"],
+      })
+    ).toEqual({
+      useSecureCookies: true,
+      defaultCookieAttributes: undefined,
+    });
+  });
+
   it("normalizes the auth base url from env", () => {
     const env = {
       ...process.env,

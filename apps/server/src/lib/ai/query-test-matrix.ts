@@ -18,7 +18,7 @@ export const QUERY_TEST_MATRIX: QueryTestCase[] = [
     id: "alias-pnl",
     query: "p&l last week",
     expectedTokens: ["profit"],
-    expectedTimeframe: { lastNDays: 7 },
+    expectedTimeframe: () => inferTimeframeFromMessage("last week"),
   },
   {
     id: "alias-trading-costs",
@@ -30,13 +30,13 @@ export const QUERY_TEST_MATRIX: QueryTestCase[] = [
     id: "alias-risk-reward",
     query: "risk reward this month",
     expectedTokens: ["rr"],
-    expectedTimeframe: { lastNDays: 30 },
+    expectedTimeframe: () => inferTimeframeFromMessage("this month"),
   },
   {
     id: "alias-fees",
     query: "fees this month",
     expectedTokens: ["commissions"],
-    expectedTimeframe: { lastNDays: 30 },
+    expectedTimeframe: () => inferTimeframeFromMessage("this month"),
   },
   {
     id: "alias-swap-fees",
@@ -65,6 +65,26 @@ export const QUERY_TEST_MATRIX: QueryTestCase[] = [
     expectedTimeframe: () => inferTimeframeFromMessage("last quarter"),
   },
   {
+    id: "timeframe-today",
+    query: "performance today",
+    expectedTimeframe: () => inferTimeframeFromMessage("today"),
+  },
+  {
+    id: "timeframe-yesterday",
+    query: "performance yesterday",
+    expectedTimeframe: () => inferTimeframeFromMessage("yesterday"),
+  },
+  {
+    id: "timeframe-last-week",
+    query: "performance last week",
+    expectedTimeframe: () => inferTimeframeFromMessage("last week"),
+  },
+  {
+    id: "timeframe-last-month",
+    query: "performance last month",
+    expectedTimeframe: () => inferTimeframeFromMessage("last month"),
+  },
+  {
     id: "timeframe-since-date",
     query: "performance since Jan 5 2024",
     expectedTimeframe: () => inferTimeframeFromMessage("since Jan 5 2024"),
@@ -73,7 +93,7 @@ export const QUERY_TEST_MATRIX: QueryTestCase[] = [
     id: "timeframe-profitability-week",
     query: "most profitable assets this week",
     expectedTokens: ["profit"],
-    expectedTimeframe: { lastNDays: 7 },
+    expectedTimeframe: () => inferTimeframeFromMessage("this week"),
   },
   {
     id: "field-open-price",

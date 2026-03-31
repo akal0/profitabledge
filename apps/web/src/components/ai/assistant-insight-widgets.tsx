@@ -4,14 +4,21 @@ import { useState } from "react";
 import { Coins, TrendingDown, TrendingUp } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from "recharts";
 
-import { GoalContentSeparator, GoalSurface } from "@/components/goals/goal-surface";
+import {
+  GoalContentSeparator,
+  GoalSurface,
+} from "@/components/goals/goal-surface";
 import {
   formatDisplayCurrency,
   formatDisplayNumber,
   type CurrencySymbol,
 } from "@/lib/format-display";
 import { cn } from "@/lib/utils";
-import type { AnalysisBlock, CondensedProfile, VizSpec } from "@/types/assistant-stream";
+import type {
+  AnalysisBlock,
+  CondensedProfile,
+  VizSpec,
+} from "@/types/assistant-stream";
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import {
   DashboardChartTooltipFrame,
@@ -55,16 +62,58 @@ type AssistantStatRow = {
   note?: string;
 };
 
-function getGridColumnClasses(smColumns: 2 = 2, xlColumns: 2 | 3 | 4 = 4) {
-  return cn(
-    "grid gap-3",
-    smColumns === 2 ? "sm:grid-cols-2" : "",
-    xlColumns === 2
-      ? "xl:grid-cols-2"
-      : xlColumns === 3
-        ? "xl:grid-cols-3"
-        : "xl:grid-cols-4"
-  );
+function getGridColumnClasses(_smColumns: 2 = 2, _xlColumns: 2 | 3 | 4 = 4) {
+  return "grid grid-cols-1 gap-3 sm:grid-cols-12 xl:grid-cols-12";
+}
+
+function getRowSize(index: number, total: number, columns: 2 | 3 | 4) {
+  const rowStartIndex = Math.floor(index / columns) * columns;
+  return Math.min(columns, total - rowStartIndex);
+}
+
+function getSpanForRowSize(rowSize: number): 3 | 4 | 6 | 12 {
+  switch (rowSize) {
+    case 4:
+      return 3;
+    case 3:
+      return 4;
+    case 2:
+      return 6;
+    case 1:
+    default:
+      return 12;
+  }
+}
+
+function getResponsiveSpanClass(
+  prefix: "sm" | "xl",
+  span: 3 | 4 | 6 | 12
+) {
+  if (prefix === "sm") {
+    switch (span) {
+      case 12:
+        return "sm:col-span-12";
+      case 6:
+        return "sm:col-span-6";
+      case 4:
+        return "sm:col-span-4";
+      case 3:
+      default:
+        return "sm:col-span-3";
+    }
+  }
+
+  switch (span) {
+    case 12:
+      return "xl:col-span-12";
+    case 6:
+      return "xl:col-span-6";
+    case 4:
+      return "xl:col-span-4";
+    case 3:
+    default:
+      return "xl:col-span-3";
+  }
 }
 
 function getGridItemSpanClass({
@@ -78,16 +127,15 @@ function getGridItemSpanClass({
   smColumns?: 2;
   xlColumns?: 2 | 3 | 4;
 }) {
-  const isLast = index === total - 1;
-  if (!isLast) {
-    return "";
-  }
+  const smRowSize = getRowSize(index, total, smColumns);
+  const xlRowSize = getRowSize(index, total, xlColumns);
+  const smSpan = getSpanForRowSize(smRowSize);
+  const xlSpan = getSpanForRowSize(xlRowSize);
 
   return cn(
-    total % smColumns === 1 ? "sm:col-span-2" : "",
-    xlColumns === 2 && total % xlColumns === 1 ? "xl:col-span-2" : "",
-    xlColumns === 3 && total % xlColumns === 1 ? "xl:col-span-3" : "",
-    xlColumns === 4 && total % xlColumns === 1 ? "xl:col-span-4" : ""
+    "w-full",
+    getResponsiveSpanClass("sm", smSpan),
+    getResponsiveSpanClass("xl", xlSpan)
   );
 }
 
@@ -107,7 +155,7 @@ function SurfaceCard({
   className?: string;
 }) {
   return (
-    <GoalSurface className={cn("h-full overflow-hidden", className)}>
+    <GoalSurface className={cn("h-full w-full overflow-hidden", className)}>
       <div className="flex items-center justify-between gap-3 px-3.5 py-2">
         <h3 className="text-sm font-medium text-white/60">{title}</h3>
         {headerRight ? <div className="shrink-0">{headerRight}</div> : null}
@@ -128,7 +176,7 @@ function MetricCard({
   note?: string;
 }) {
   return (
-    <GoalSurface className="h-full overflow-hidden">
+    <GoalSurface className="h-full w-full overflow-hidden">
       <div className="flex h-full min-h-[6.25rem] px-3.5 py-3.5">
         <div className="flex w-full flex-col items-start justify-center gap-1.5 text-left">
           <p className="text-xs font-medium text-white/45">{label}</p>
@@ -155,16 +203,20 @@ function SummaryCard({
     tone === "positive"
       ? "text-emerald-300"
       : tone === "negative"
-        ? "text-rose-300"
-        : "text-white";
+      ? "text-rose-300"
+      : "text-white";
 
   return (
-    <GoalSurface className="overflow-hidden">
+    <GoalSurface className="w-full overflow-hidden">
       <div className="flex min-h-[6.25rem] px-3.5 py-3.5">
         <div className="flex w-full flex-col items-start justify-center gap-1.5 text-left">
           <p className="text-xs font-medium text-white/45">{label}</p>
-          <p className={cn("line-clamp-2 text-base font-semibold", accent)}>{value}</p>
-          {note ? <div className="line-clamp-2 text-xs text-white/35">{note}</div> : null}
+          <p className={cn("line-clamp-2 text-base font-semibold", accent)}>
+            {value}
+          </p>
+          {note ? (
+            <div className="line-clamp-2 text-xs text-white/35">{note}</div>
+          ) : null}
         </div>
       </div>
     </GoalSurface>
@@ -238,7 +290,13 @@ function formatSummaryMetric(
   }
 }
 
-function inferVizMetricFormat(viz?: VizSpec): "currency" | "percent" | "ratio" | "number" {
+function inferVizMetricFormat(
+  viz?: VizSpec
+): "currency" | "percent" | "ratio" | "number" {
+  if (viz?.data.valueFormat) {
+    return viz.data.valueFormat;
+  }
+
   const explicit = viz?.data.comparison?.format;
   if (explicit) {
     return explicit;
@@ -250,9 +308,17 @@ function inferVizMetricFormat(viz?: VizSpec): "currency" | "percent" | "ratio" |
     .toLowerCase();
 
   if (
-    ["profit", "loss", "pnl", "expectancy", "drawdown", "commission", "swap", "balance", "equity"].some((token) =>
-      hint.includes(token)
-    )
+    [
+      "profit",
+      "loss",
+      "pnl",
+      "expectancy",
+      "drawdown",
+      "commission",
+      "swap",
+      "balance",
+      "equity",
+    ].some((token) => hint.includes(token))
   ) {
     return "currency";
   }
@@ -282,12 +348,18 @@ function buildSummaryRowsFromVisualization(viz?: VizSpec): AssistantStatRow[] {
     rows.push(
       {
         label: comparison.a.label,
-        value: formatSummaryMetric(comparison.a.value, comparison.format || format),
+        value: formatSummaryMetric(
+          comparison.a.value,
+          comparison.format || format
+        ),
         note: comparison.a.count ? `${comparison.a.count} trades` : undefined,
       },
       {
         label: comparison.b.label,
-        value: formatSummaryMetric(comparison.b.value, comparison.format || format),
+        value: formatSummaryMetric(
+          comparison.b.value,
+          comparison.format || format
+        ),
         note: comparison.b.count ? `${comparison.b.count} trades` : undefined,
       }
     );
@@ -295,15 +367,20 @@ function buildSummaryRowsFromVisualization(viz?: VizSpec): AssistantStatRow[] {
     if (comparison.delta !== undefined) {
       rows.push({
         label: "Difference",
-        value: formatSummaryMetric(comparison.delta, comparison.format || format),
-        note: comparison.deltaPercent ? `${comparison.deltaPercent} vs baseline` : undefined,
+        value: formatSummaryMetric(
+          comparison.delta,
+          comparison.format || format
+        ),
+        note: comparison.deltaPercent
+          ? `${comparison.deltaPercent} vs baseline`
+          : undefined,
       });
     }
   }
 
   if (summary?.best) {
     rows.push({
-      label: "Top result",
+      label: "Highest result",
       value: String(summary.best.label),
       note: formatSummaryMetric(summary.best.value, format),
     });
@@ -332,15 +409,25 @@ function buildSummaryRowsFromVisualization(viz?: VizSpec): AssistantStatRow[] {
     });
   }
 
-  if (rows.length === 0 && viz.type === "kpi_single" && viz.data.value !== undefined) {
+  if (
+    rows.length === 0 &&
+    viz.type === "kpi_single" &&
+    viz.data.value !== undefined
+  ) {
     rows.push({
       label: viz.data.label || "Result",
       value: formatSummaryMetric(viz.data.value as number | string, format),
-      note: viz.data.summary?.count ? `${viz.data.summary.count} trades` : undefined,
+      note: viz.data.summary?.count
+        ? `${viz.data.summary.count} trades`
+        : undefined,
     });
   }
 
-  if (rows.length === 0 && viz.type === "kpi_grid" && Array.isArray(viz.data.rows)) {
+  if (
+    rows.length === 0 &&
+    viz.type === "kpi_grid" &&
+    Array.isArray(viz.data.rows)
+  ) {
     for (const row of viz.data.rows.slice(0, 4)) {
       rows.push({
         label: String(row.label || "Metric"),
@@ -406,8 +493,8 @@ export function AssistantGenericSummaryWidgets({
         calloutBlock.tone === "success"
           ? "High confidence"
           : calloutBlock.tone === "warning"
-            ? "Caution"
-            : "Info",
+          ? "Caution"
+          : "Info",
       note: calloutBlock.body,
     });
   }
@@ -431,9 +518,7 @@ function parseSessionStat(input: string): ParsedSessionStat {
   };
 }
 
-function normalizeCurrencySymbol(
-  value?: string | null
-): CurrencySymbol {
+function normalizeCurrencySymbol(value?: string | null): CurrencySymbol {
   if (value === "£" || value === "€") {
     return value;
   }
@@ -462,7 +547,10 @@ function parseCurrencyValue(input: string): {
   }
 
   const isNegative =
-    match[0].includes("-") || input.includes("-$") || input.includes("-£") || input.includes("-€");
+    match[0].includes("-") ||
+    input.includes("-$") ||
+    input.includes("-£") ||
+    input.includes("-€");
 
   return {
     value: isNegative ? -Math.abs(parsed) : parsed,
@@ -519,9 +607,7 @@ function formatSymbolNote(item: ParsedSymbolStat) {
   return parts.join(" • ");
 }
 
-function getSymbolNoteSegments(
-  item: ParsedSymbolStat
-): Array<{
+function getSymbolNoteSegments(item: ParsedSymbolStat): Array<{
   label: string;
   tone?: "positive" | "negative" | "neutral";
 }> {
@@ -568,7 +654,11 @@ function InsightBarChartCard({
 }) {
   if (rows.length === 0) {
     return (
-      <SurfaceCard title={title} headerRight={headerRight} className={className}>
+      <SurfaceCard
+        title={title}
+        headerRight={headerRight}
+        className={className}
+      >
         <p className="text-sm text-white/40">Not enough data yet.</p>
       </SurfaceCard>
     );
@@ -611,7 +701,8 @@ function InsightBarChartCard({
                 if (!active || !payload?.length) return null;
                 const datum = payload[0]?.payload;
                 const tone =
-                  forcedTone ?? (Number(datum?.value ?? 0) < 0 ? "negative" : "positive");
+                  forcedTone ??
+                  (Number(datum?.value ?? 0) < 0 ? "negative" : "positive");
 
                 return (
                   <DashboardChartTooltipFrame title={tooltipTitle}>
@@ -619,7 +710,9 @@ function InsightBarChartCard({
                       label={datum?.label ?? "Value"}
                       value={valueFormatter(Number(datum?.value ?? 0))}
                       tone={tone}
-                      indicatorColor={tone === "negative" ? "#fb7185" : "#2dd4bf"}
+                      indicatorColor={
+                        tone === "negative" ? "#fb7185" : "#2dd4bf"
+                      }
                     />
                     <DashboardChartTooltipRow
                       label="Details"
@@ -632,7 +725,10 @@ function InsightBarChartCard({
             />
             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
               {rows.map((row, index) => {
-                const tone = forcedTone ?? row.tone ?? (row.value < 0 ? "negative" : "positive");
+                const tone =
+                  forcedTone ??
+                  row.tone ??
+                  (row.value < 0 ? "negative" : "positive");
                 return (
                   <Cell
                     key={`${title}-${row.label}-${index}`}
@@ -657,17 +753,19 @@ function ChartModeSwitch({
   onChange: (next: "best" | "worst") => void;
 }) {
   return (
-    <div className="inline-flex rounded-sm border border-white/8 bg-white/5 p-0.5">
-      {([
-        ["best", "Best"],
-        ["worst", "Worst"],
-      ] as const).map(([nextValue, label]) => (
+    <div className="inline-flex rounded-sm ring ring-white/8 bg-white/5 p-0.5">
+      {(
+        [
+          ["best", "Best"],
+          ["worst", "Worst"],
+        ] as const
+      ).map(([nextValue, label]) => (
         <button
           key={nextValue}
           type="button"
           onClick={() => onChange(nextValue)}
           className={cn(
-            "rounded-[3px] px-2.5 py-1 text-[11px] font-medium transition-colors",
+            "rounded-[3px] px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
             value === nextValue
               ? "bg-white/10 text-white"
               : "text-white/45 hover:text-white/70"
@@ -853,17 +951,19 @@ function EdgeLeakWidget({
       title="Patterns"
       className="xl:col-span-2"
       headerRight={
-        <div className="inline-flex rounded-sm border border-white/8 bg-white/5 p-0.5">
-          {([
-            ["edges", "Edges"],
-            ["leaks", "Leaks"],
-          ] as const).map(([value, label]) => (
+        <div className="inline-flex rounded-sm ring ring-white/8 bg-white/5 p-0.5">
+          {(
+            [
+              ["edges", "Edges"],
+              ["leaks", "Leaks"],
+            ] as const
+          ).map(([value, label]) => (
             <button
               key={value}
               type="button"
               onClick={() => setMode(value)}
               className={cn(
-                "rounded-[3px] px-2.5 py-1 text-[11px] font-medium transition-colors",
+                "rounded-[3px] px-2.5 py-1 text-[11px] font-medium transition-colors cursor-pointer",
                 mode === value
                   ? "bg-white/10 text-white"
                   : "text-white/45 hover:text-white/70"
@@ -916,7 +1016,7 @@ function OpportunityCard({ profile }: { profile: CondensedProfile }) {
             {details.map((detail, index) => (
               <div
                 key={index}
-                className="rounded-sm border border-white/5 bg-white/5 px-3 py-2 text-sm text-white/75"
+                className="rounded-sm ring-amber-50 ring-amber-50-white/5 bg-white/5 px-3 py-2 text-sm text-white/75"
               >
                 {detail}
               </div>
@@ -1033,7 +1133,10 @@ export function AssistantQuickSummaryWidgets({
   edgeConditions,
 }: {
   profile?: CondensedProfile | null;
-  edgeConditions?: { edges: EdgeConditionItem[]; leaks: EdgeConditionItem[] } | null;
+  edgeConditions?: {
+    edges: EdgeConditionItem[];
+    leaks: EdgeConditionItem[];
+  } | null;
 }) {
   type QuickSummaryCard = {
     label: string;
@@ -1070,58 +1173,58 @@ export function AssistantQuickSummaryWidgets({
       ? (() => {
           const parsed = parseSymbolStat(bestSymbol);
           return {
-          label: "Best symbol",
-          value: parsed.label,
-          note: (
-            <>
-              {getSymbolNoteSegments(parsed).map((segment, index) => (
-                <span
-                  key={`best-symbol-${index}`}
-                  className={cn(
-                    segment.tone === "negative"
-                      ? "text-rose-300"
-                      : segment.tone === "positive"
+            label: "Best symbol",
+            value: parsed.label,
+            note: (
+              <>
+                {getSymbolNoteSegments(parsed).map((segment, index) => (
+                  <span
+                    key={`best-symbol-${index}`}
+                    className={cn(
+                      segment.tone === "negative"
+                        ? "text-rose-300"
+                        : segment.tone === "positive"
                         ? "text-emerald-300"
                         : "text-white/35"
-                  )}
-                >
-                  {index > 0 ? " • " : ""}
-                  {segment.label}
-                </span>
-              ))}
-            </>
-          ),
-          tone: "positive" as const,
-        };
+                    )}
+                  >
+                    {index > 0 ? " • " : ""}
+                    {segment.label}
+                  </span>
+                ))}
+              </>
+            ),
+            tone: "positive" as const,
+          };
         })()
       : null,
     weakestSymbol
       ? (() => {
           const parsed = parseSymbolStat(weakestSymbol);
           return {
-          label: "Weakest symbol",
-          value: parsed.label,
-          note: (
-            <>
-              {getSymbolNoteSegments(parsed).map((segment, index) => (
-                <span
-                  key={`weakest-symbol-${index}`}
-                  className={cn(
-                    segment.tone === "negative"
-                      ? "text-rose-300"
-                      : segment.tone === "positive"
+            label: "Weakest symbol",
+            value: parsed.label,
+            note: (
+              <>
+                {getSymbolNoteSegments(parsed).map((segment, index) => (
+                  <span
+                    key={`weakest-symbol-${index}`}
+                    className={cn(
+                      segment.tone === "negative"
+                        ? "text-rose-300"
+                        : segment.tone === "positive"
                         ? "text-emerald-300"
                         : "text-white/35"
-                  )}
-                >
-                  {index > 0 ? " • " : ""}
-                  {segment.label}
-                </span>
-              ))}
-            </>
-          ),
-          tone: "negative" as const,
-        };
+                    )}
+                  >
+                    {index > 0 ? " • " : ""}
+                    {segment.label}
+                  </span>
+                ))}
+              </>
+            ),
+            tone: "negative" as const,
+          };
         })()
       : null,
     topEdge
@@ -1134,13 +1237,13 @@ export function AssistantQuickSummaryWidgets({
           tone: "positive" as const,
         }
       : profile?.topEdges[0]
-        ? {
-            label: "Your edge",
-            value: profile.topEdges[0],
-            note: "Best repeating pattern",
-            tone: "positive" as const,
-          }
-        : null,
+      ? {
+          label: "Your edge",
+          value: profile.topEdges[0],
+          note: "Best repeating pattern",
+          tone: "positive" as const,
+        }
+      : null,
     topLeak
       ? {
           label: "Your leak",
@@ -1151,13 +1254,13 @@ export function AssistantQuickSummaryWidgets({
           tone: "negative" as const,
         }
       : profile?.topLeaks[0]
-        ? {
-            label: "Your leak",
-            value: profile.topLeaks[0],
-            note: "Main drag on performance",
-            tone: "negative" as const,
-          }
-        : null,
+      ? {
+          label: "Your leak",
+          value: profile.topLeaks[0],
+          note: "Main drag on performance",
+          tone: "negative" as const,
+        }
+      : null,
   ];
 
   const cards = cardCandidates.filter(

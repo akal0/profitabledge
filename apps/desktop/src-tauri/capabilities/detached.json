@@ -1,0 +1,24 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop-detached",
+  "description": "Capability set for detached report and prop-tracker windows.",
+  "remote": {
+    "urls": [
+      "http://localhost:3001/*",
+      "http://127.0.0.1:3001/*",
+      "http://localhost:3310/*",
+      "http://127.0.0.1:3310/*",
+      "https://beta.profitabledge.com/*",
+      "https://www.beta.profitabledge.com/*",
+      "https://profitabledge.com/*",
+      "https://www.profitabledge.com/*"
+    ]
+  },
+  "windows": ["detached-*"],
+  "permissions": [
+    "core:default",
+    "core:webview:allow-create-webview-window",
+    "opener:allow-default-urls",
+    "dialog:default"
+  ]
+}

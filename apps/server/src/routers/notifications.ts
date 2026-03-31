@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { router, protectedProcedure } from "../lib/trpc";
 import { db } from "../db";
 import { notification, pushSubscription } from "../db/schema/notifications";
@@ -8,8 +8,30 @@ import {
   mergeNotificationPreferences,
   defaultNotificationPreferences,
   createNotification,
+  isDesktopNotificationEnabled,
 } from "../lib/notifications";
 import type { NotificationType } from "../lib/notifications";
+
+const desktopPreferenceSchema = z.object({
+  enabled: z.boolean().optional(),
+  closeToTray: z.boolean().optional(),
+  launchOnLogin: z.boolean().optional(),
+  highPriorityOnly: z.boolean().optional(),
+  quietHours: z
+    .object({
+      enabled: z.boolean().optional(),
+      startHour: z.number().int().min(0).max(23).optional(),
+      endHour: z.number().int().min(0).max(23).optional(),
+      timezone: z.string().min(1).optional(),
+    })
+    .optional(),
+  trades: z.boolean().optional(),
+  goals: z.boolean().optional(),
+  alerts: z.boolean().optional(),
+  news: z.boolean().optional(),
+  system: z.boolean().optional(),
+  social: z.boolean().optional(),
+});
 
 const preferenceSchema = z.object({
   inApp: z.boolean().optional(),
@@ -23,6 +45,7 @@ const preferenceSchema = z.object({
   goals: z.boolean().optional(),
   alerts: z.boolean().optional(),
   social: z.boolean().optional(),
+  desktop: desktopPreferenceSchema.optional(),
 });
 
 export const notificationsRouter = router({
@@ -45,6 +68,72 @@ export const notificationsRouter = router({
         .where(where)
         .orderBy(desc(notification.createdAt))
         .limit(limit);
+    }),
+
+  desktopFeed: protectedProcedure
+    .input(
+      z
+        .object({
+          after: z.string().datetime().optional(),
+          limit: z.number().int().min(1).max(50).optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+      const rows = await db
+        .select({ notificationPreferences: userTable.notificationPreferences })
+        .from(userTable)
+        .where(eq(userTable.id, userId))
+        .limit(1);
+      const preferences = mergeNotificationPreferences(
+        (rows[0]?.notificationPreferences as any) || null
+      );
+
+      const conditions = [eq(notification.userId, userId)];
+      if (input?.after) {
+        const after = new Date(input.after);
+        if (!Number.isNaN(after.getTime())) {
+          conditions.push(gt(notification.createdAt, after));
+        }
+      }
+
+      const limit = input?.limit ?? 10;
+      const [items, unreadCountRows] = await Promise.all([
+        db
+          .select()
+          .from(notification)
+          .where(and(...conditions))
+          .orderBy(desc(notification.createdAt))
+          .limit(limit),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(notification)
+          .where(
+            and(eq(notification.userId, userId), isNull(notification.readAt))
+          ),
+      ]);
+
+      return {
+        unreadCount: Number(unreadCountRows[0]?.count ?? 0),
+        items: items
+          .filter((item) =>
+            isDesktopNotificationEnabled(
+              preferences,
+              item.type as NotificationType
+            )
+          )
+          .map((item) => ({
+            id: item.id,
+            accountId: item.accountId,
+            type: item.type,
+            title: item.title,
+            body: item.body,
+            metadata: item.metadata,
+            createdAt: item.createdAt,
+            readAt: item.readAt,
+          })),
+      };
     }),
 
   markRead: protectedProcedure
@@ -170,7 +259,22 @@ export const notificationsRouter = router({
       const current = mergeNotificationPreferences(
         (rows[0]?.notificationPreferences as any) || null
       );
-      const next = { ...current, ...input };
+      const next = mergeNotificationPreferences({
+        ...current,
+        ...input,
+        desktop: input.desktop
+          ? {
+              ...current.desktop,
+              ...input.desktop,
+              quietHours: input.desktop.quietHours
+                ? {
+                    ...current.desktop.quietHours,
+                    ...input.desktop.quietHours,
+                  }
+                : current.desktop.quietHours,
+            }
+          : current.desktop,
+      });
       await db
         .update(userTable)
         .set({ notificationPreferences: next, updatedAt: new Date() })

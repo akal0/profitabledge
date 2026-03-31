@@ -10,8 +10,9 @@
 
 import type { ExecutionResult } from "./query-executor";
 import type { TradeQueryPlan } from "./query-plan";
-import { getGuardrailStatus } from "./guardrails";
+import { formatGuardrailFollowUp, getGuardrailStatus } from "./guardrails";
 import type { CondensedProfile } from "./engine/types";
+import { isLowSignalAssistantQuery } from "./query-normalization";
 
 export interface FormattedAnswer {
   markdown: string;
@@ -87,6 +88,14 @@ export function assembleAnswer(
   plan: TradeQueryPlan,
   context?: { userMessage?: string; profile?: CondensedProfile }
 ): FormattedAnswer {
+  if (context?.userMessage && isLowSignalAssistantQuery(context.userMessage)) {
+    return {
+      markdown:
+        "I couldn't understand your request. Could you please rephrase it?",
+      data: null,
+    };
+  }
+
   if (!result.success) {
     return {
       markdown: `### Error\n\n${result.error || "Unknown error occurred"}`,
@@ -123,7 +132,9 @@ export function assembleAnswer(
   const guardrail = getGuardrailStatus(result, plan);
   if (guardrail) {
     return {
-      markdown: `### I don't know yet\n\n${guardrail.message}\n\n`,
+      markdown: `### I need a bit more context\n\n${formatGuardrailFollowUp(
+        guardrail
+      )}\n\n`,
       data: answer.data,
     };
   }

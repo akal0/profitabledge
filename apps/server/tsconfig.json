@@ -14,6 +14,7 @@
     "jsx": "preserve",
 	  "composite": true,
     "incremental": true,
+    "types": ["bun"],
     "plugins": [
       {
         "name": "next"

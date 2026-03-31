@@ -194,6 +194,10 @@ function requestDesktopExternalUrl(url: string) {
 }
 
 async function openDesktopExternalUrl(url: string) {
+  if (requestDesktopExternalUrl(url)) {
+    return true;
+  }
+
   if (isTauriDesktop()) {
     try {
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -203,10 +207,6 @@ async function openDesktopExternalUrl(url: string) {
       // Fall through to the desktop-shell bridge if the direct opener bridge
       // is unavailable in this webview context.
     }
-  }
-
-  if (requestDesktopExternalUrl(url)) {
-    return true;
   }
 
   if (typeof window !== "undefined") {

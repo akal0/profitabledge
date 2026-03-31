@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 
 const DESKTOP_SESSION_BOOTSTRAP_KEY = "pe.desktop.session-bootstrap";
 const DESKTOP_SESSION_BOOTSTRAP_EVENT = "pe:desktop-session-bootstrap";
+const DESKTOP_SESSION_BOOTSTRAP_MAX_AGE_MS = 15_000;
 
 type DesktopBootstrapUser = {
   id: string;
@@ -63,6 +64,16 @@ function readBootstrap(): DesktopSessionBootstrap {
       user: parsed.user ?? null,
       updatedAt: typeof parsed.updatedAt === "number" ? parsed.updatedAt : 0,
     };
+
+    if (
+      normalized.updatedAt > 0 &&
+      Date.now() - normalized.updatedAt > DESKTOP_SESSION_BOOTSTRAP_MAX_AGE_MS
+    ) {
+      cachedBootstrapRaw = null;
+      cachedBootstrapValue = DEFAULT_BOOTSTRAP;
+      return DEFAULT_BOOTSTRAP;
+    }
+
     cachedBootstrapRaw = raw;
     cachedBootstrapValue = normalized;
     return normalized;

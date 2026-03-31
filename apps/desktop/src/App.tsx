@@ -289,6 +289,46 @@ function App() {
     sessionStateRef.current = sessionState;
   }, [sessionState]);
 
+  useEffect(() => {
+    if (!isStateReady || sessionState.pending || sessionState.authenticated) {
+      return;
+    }
+
+    setDesktopState((previous) => {
+      const alreadyOnLoginOnly =
+        previous.tabs.length === 1 &&
+        sanitizeDesktopWebPath(
+          previous.tabs[0]?.lastKnownPath || previous.tabs[0]?.path || "/login",
+          false
+        ) === "/login";
+
+      if (alreadyOnLoginOnly) {
+        return previous;
+      }
+
+      const loginTab = createTab("/login", {
+        id: previous.tabs[0]?.id,
+        title: "Log in",
+        lastKnownPath: "/login",
+        accountId: null,
+      });
+
+      for (const [label, webview] of Object.entries(childWebviewsRef.current)) {
+        if (label !== getWebviewLabel(loginTab.id)) {
+          void closeChildWebview(webview).catch(() => undefined);
+          delete childWebviewsRef.current[label];
+        }
+      }
+
+      return {
+        ...previous,
+        tabs: [loginTab],
+        activeTabId: loginTab.id,
+        closedTabs: [],
+      };
+    });
+  }, [isStateReady, sessionState.authenticated, sessionState.pending]);
+
   const activeTab: DesktopTabState | null = useMemo(
     () => getActiveTab(desktopState),
     [desktopState]

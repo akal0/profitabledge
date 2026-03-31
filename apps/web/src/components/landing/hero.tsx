@@ -259,7 +259,7 @@ const HeroBrowser = memo(function HeroBrowser({
   return (
     <div
       ref={browserRef}
-      className="mt-6 w-full overflow-hidden md:mt-8 lg:mt-10 xl:mt-12 2xl:mt-10 3xl:mt-16"
+      className="mt-6 w-full overflow-hidden md:mt-8 lg:mt-8 xl:mt-8 2xl:mt-8 3xl:mt-12"
       onMouseEnter={() => setIsBrowserHovered(true)}
       onMouseLeave={() => setIsBrowserHovered(false)}
       style={{
@@ -269,9 +269,7 @@ const HeroBrowser = memo(function HeroBrowser({
           "radial-gradient(ellipse 95% 75% at 50% 25%, #fff 0%, #fff 60%, rgba(255,255,255,0.4) 75%, rgba(255,255,255,0.1) 85%, rgba(0,0,0,0) 95%)",
       }}
     >
-      <m.div
-        className="overflow-hidden rounded-t-xl border border-b-0 border-white/[0.08] bg-[#1a1a1e] shadow-2xl shadow-black/50 will-change-transform"
-      >
+      <m.div className="overflow-hidden rounded-t-xl border border-b-0 border-white/[0.08] bg-[#1a1a1e] shadow-2xl shadow-black/50 will-change-transform">
         <div className="flex items-center gap-2 border-b border-white/[0.06] bg-[#1e1e22] px-3 py-2 md:gap-3 md:px-4 md:py-3">
           <div className="flex shrink-0 items-center gap-1 md:gap-1.5">
             <div className="size-2.5 rounded-full bg-[#ff5f57] md:size-3" />
@@ -432,7 +430,9 @@ const HeroBrowser = memo(function HeroBrowser({
                       style={{
                         animation:
                           "landing-tab-progress 5000ms linear forwards",
-                        animationPlayState: shouldAutoCycle ? "running" : "paused",
+                        animationPlayState: shouldAutoCycle
+                          ? "running"
+                          : "paused",
                       }}
                     />
                   </>
@@ -583,7 +583,7 @@ export function Hero({ heroOpacity, isReady, isVisible }: HeroProps) {
           </div>
         </m.nav>
 
-        <div className="flex w-full flex-col gap-6 md:flex-row md:items-end md:justify-between h-[7.5rem] pb-2 mt-12">
+        <div className="flex w-full flex-col gap-6 md:flex-row md:items-end md:justify-between h-[7.5rem] pb-0 mt-16">
           {/* Heading — enters after browser morph */}
           <m.div
             className="will-change-transform"
@@ -646,7 +646,7 @@ export function Hero({ heroOpacity, isReady, isVisible }: HeroProps) {
             </h1>
           </m.div>
 
-          {/* Join waitlist button — enters after browser morph */}
+          {/* cta button — enters after browser morph */}
           <m.div
             className="shrink-0 will-change-transform"
             initial={false}
@@ -682,10 +682,6 @@ export function Hero({ heroOpacity, isReady, isVisible }: HeroProps) {
                 </a>
               </div>
             </div>
-            <p className="mt-3 text-center text-[11px] text-white/44 sm:text-left">
-              Native tabs, desktop alerts, saved workspaces, and detached
-              second-monitor views.
-            </p>
           </m.div>
         </div>
 

@@ -7,6 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { authClient } from "@/lib/auth-client";
+import { writeDesktopSessionBootstrap } from "@/lib/desktop-session-bootstrap";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { useRouter } from "next/navigation";
@@ -45,6 +46,11 @@ export default function UserMenu() {
               authClient.signOut({
                 fetchOptions: {
                   onSuccess: () => {
+                    writeDesktopSessionBootstrap({
+                      authenticated: false,
+                      pending: false,
+                      user: null,
+                    });
                     router.push("/login");
                   },
                 },

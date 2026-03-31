@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useQuery } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
+import { writeDesktopSessionBootstrap } from "@/lib/desktop-session-bootstrap";
 import { trpcOptions } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
@@ -115,6 +116,11 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
     authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
+          writeDesktopSessionBootstrap({
+            authenticated: false,
+            pending: false,
+            user: null,
+          });
           router.push("/login");
         },
       },

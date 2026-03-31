@@ -276,11 +276,11 @@ export async function startDesktopSocialAuth(options: {
   }
 
   const authOrigin = await resolveDesktopBrowserAuthOrigin();
-  const beginUrl = new URL("/desktop/auth/begin", authOrigin);
-  beginUrl.searchParams.set("provider", options.provider);
-  beginUrl.searchParams.set("path", sanitizeDesktopPath(options.path));
+  const startUrl = new URL("/desktop/auth/start", authOrigin);
+  startUrl.searchParams.set("provider", options.provider);
+  startUrl.searchParams.set("path", sanitizeDesktopPath(options.path));
 
-  const opened = await openDesktopExternalUrl(beginUrl.toString());
+  const opened = await openDesktopExternalUrl(startUrl.toString());
   if (!opened) {
     throw new Error("We couldn't open the browser sign-in flow.");
   }

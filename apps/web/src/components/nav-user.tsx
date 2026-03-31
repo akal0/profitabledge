@@ -115,7 +115,7 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
     authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          router.push("/");
+          router.push("/login");
         },
       },
     });

@@ -86,12 +86,13 @@ export function TabAttentionController() {
       ),
     [badgeVariant]
   );
-
-  if (isTauriDesktop()) {
-    return null;
-  }
+  const isDesktop = isTauriDesktop();
 
   useEffect(() => {
+    if (isDesktop) {
+      return;
+    }
+
     if (typeof document === "undefined") {
       return;
     }
@@ -143,9 +144,13 @@ export function TabAttentionController() {
       document.removeEventListener("visibilitychange", syncTitle);
       window.removeEventListener("focus", syncTitle);
     };
-  }, []);
+  }, [isDesktop]);
 
   useEffect(() => {
+    if (isDesktop) {
+      return;
+    }
+
     if (typeof document === "undefined") {
       return;
     }
@@ -156,7 +161,7 @@ export function TabAttentionController() {
       link.type = "image/svg+xml";
       link.href = faviconHref;
     });
-  }, [faviconHref]);
+  }, [faviconHref, isDesktop]);
 
   return null;
 }

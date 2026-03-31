@@ -1,14 +1,12 @@
 "use client";
 
 export const GROWTH_STORAGE_KEYS = {
-  betaCode: "pe_beta_code",
   referralCode: "pe_referral_code",
   affiliateCode: "pe_affiliate_code",
   affiliateChannel: "pe_affiliate_channel",
 } as const;
 
 export type StoredGrowthIntent = {
-  betaCode?: string;
   referralCode?: string;
   affiliateCode?: string;
   affiliateChannel?: string;
@@ -33,7 +31,6 @@ export function getStoredGrowthIntent(): StoredGrowthIntent {
   }
 
   return {
-    betaCode: storage.getItem(GROWTH_STORAGE_KEYS.betaCode) ?? undefined,
     referralCode:
       storage.getItem(GROWTH_STORAGE_KEYS.referralCode) ?? undefined,
     affiliateCode:
@@ -49,25 +46,9 @@ export function clearStoredGrowthIntent() {
     return;
   }
 
-  storage.removeItem(GROWTH_STORAGE_KEYS.betaCode);
   storage.removeItem(GROWTH_STORAGE_KEYS.referralCode);
   storage.removeItem(GROWTH_STORAGE_KEYS.affiliateCode);
   storage.removeItem(GROWTH_STORAGE_KEYS.affiliateChannel);
-}
-
-export function storeBetaCode(value: string) {
-  const storage = getStorage();
-  if (!storage) {
-    return;
-  }
-
-  const code = normalizeGrowthCode(value);
-  if (!code) {
-    storage.removeItem(GROWTH_STORAGE_KEYS.betaCode);
-    return;
-  }
-
-  storage.setItem(GROWTH_STORAGE_KEYS.betaCode, code);
 }
 
 export function storeReferralIntent(value: string) {

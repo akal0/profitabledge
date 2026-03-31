@@ -1,7 +1,7 @@
 "use client";
 
 const DEFAULT_POST_AUTH_PATH = "/dashboard";
-const AUTH_ROUTE_PREFIXES = ["/login", "/sign-up", "/beta", "/continue"] as const;
+const AUTH_ROUTE_PREFIXES = ["/login", "/sign-up", "/continue"] as const;
 
 function resolveAppRelativePath(
   value: string | null | undefined,

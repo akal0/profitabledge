@@ -45,7 +45,8 @@ export default function DesktopAuthCallbackPage() {
         path: targetPath,
       });
       const nextDeepLink = buildDesktopDeepLink(
-        `/desktop/auth/complete?${completeParams.toString()}`
+        `/desktop/auth/complete?${completeParams.toString()}`,
+        window.location.origin
       );
 
       if (cancelled) {
@@ -74,7 +75,7 @@ export default function DesktopAuthCallbackPage() {
   if (!error) {
     return (
       <DesktopAuthStateShell
-        title="Opening Profitabledge Desktop"
+        title="Opening Profitabledge"
         description="Your browser session is confirmed. We're handing the secure session back to the desktop app now."
       >
         <div className="space-y-4">
@@ -88,7 +89,7 @@ export default function DesktopAuthCallbackPage() {
               onClick={() => window.location.replace(deepLinkUrl)}
               className={PRIMARY_BUTTON_CLASS}
             >
-              Open Desktop
+              Open Profitabledge
             </Button>
           ) : null}
         </div>
@@ -98,7 +99,7 @@ export default function DesktopAuthCallbackPage() {
 
   return (
     <DesktopAuthStateShell
-      title="We couldn't open Profitabledge Desktop"
+      title="We couldn't open Profitabledge"
       description="Your browser sign-in completed, but the secure handoff back to the desktop app did not."
     >
       <div className="space-y-4">
@@ -110,7 +111,7 @@ export default function DesktopAuthCallbackPage() {
             onClick={() => window.location.replace(deepLinkUrl)}
             className={PRIMARY_BUTTON_CLASS}
           >
-            Open Desktop
+            Open Profitabledge
           </Button>
         ) : null}
       </div>

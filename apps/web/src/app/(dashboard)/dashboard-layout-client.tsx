@@ -771,8 +771,7 @@ export default function DashboardLayoutClient({
   );
 
   const hasBlockedAdminAccess = Boolean(
-    (pathname?.startsWith("/dashboard/beta-access") ||
-      pathname?.startsWith("/dashboard/growth-admin")) &&
+    pathname?.startsWith("/dashboard/growth-admin") &&
       !hasAdminAccess
   );
   const hasBlockedCommunityAccess = isHeldBackDashboardRoute(safePathname);

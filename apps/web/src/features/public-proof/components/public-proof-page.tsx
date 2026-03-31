@@ -301,8 +301,7 @@ export function PublicProofPage({
   const tradesQuery = useInfiniteQuery({
     ...tradeQueryOptions,
     enabled: pageQuery.status === "success",
-    refetchInterval: 5000,
-    refetchIntervalInBackground: true,
+    staleTime: 60_000,
   });
 
   const rows = useMemo<PublicProofTradeRow[]>(() => {

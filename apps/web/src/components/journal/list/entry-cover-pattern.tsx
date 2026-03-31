@@ -26,7 +26,7 @@ export function EntryCoverPattern({
         : `diag-${seed}`;
 
   return (
-    <div className={cn("relative h-20 overflow-hidden bg-sidebar-accent", className)}>
+    <div className={cn("relative h-24 overflow-hidden bg-sidebar-accent", className)}>
       <div
         className="absolute inset-0 opacity-[0.12]"
         style={{

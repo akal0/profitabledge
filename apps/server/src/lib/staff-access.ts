@@ -1,5 +1,3 @@
-import { isPrivateBetaAdminEmail } from "./billing/config";
-
 function hasRole(roleValue: string | null | undefined, expectedRole: string) {
   if (!roleValue) {
     return false;
@@ -16,16 +14,12 @@ export function hasAdminAccess(input: {
   role?: string | null;
   email?: string | null;
 }) {
-  return hasRole(input.role, "admin") || isPrivateBetaAdminEmail(input.email);
+  return hasRole(input.role, "admin");
 }
 
 export function hasStaffAccess(input: {
   role?: string | null;
   email?: string | null;
 }) {
-  return (
-    hasRole(input.role, "moderator") ||
-    hasRole(input.role, "admin") ||
-    isPrivateBetaAdminEmail(input.email)
-  );
+  return hasRole(input.role, "moderator") || hasRole(input.role, "admin");
 }

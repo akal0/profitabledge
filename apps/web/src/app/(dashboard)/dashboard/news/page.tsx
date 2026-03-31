@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function EconomicCalendarPage() {
+export default function NewsRedirectPage() {
   redirect("/dashboard/calendar");
 }

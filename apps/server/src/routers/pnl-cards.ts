@@ -278,6 +278,38 @@ export const pnlCardsRouter = router({
       };
     }),
 
+  getSharedCardAccess: publicProcedure
+    .input(
+      z.object({
+        shareId: z.string(),
+      })
+    )
+    .query(async ({ input }) => {
+      const card = await db
+        .select({
+          shareId: sharedPnlCard.shareId,
+          expiresAt: sharedPnlCard.expiresAt,
+          hasPassword: sharedPnlCard.password,
+        })
+        .from(sharedPnlCard)
+        .where(eq(sharedPnlCard.shareId, input.shareId))
+        .limit(1);
+
+      if (!card[0]) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Card not found" });
+      }
+
+      if (card[0].expiresAt && new Date() > card[0].expiresAt) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Card has expired" });
+      }
+
+      return {
+        shareId: card[0].shareId,
+        expiresAt: card[0].expiresAt,
+        requiresPassword: Boolean(card[0].hasPassword),
+      };
+    }),
+
   // Get a shared card by share ID (public endpoint)
   getSharedCard: publicProcedure
     .input(

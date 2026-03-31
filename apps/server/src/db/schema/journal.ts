@@ -121,6 +121,8 @@ export const journalEntry = pgTable("journal_entry", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+  itemType: varchar("item_type", { length: 16 }).notNull().default("entry"),
+  folderId: text("folder_id"),
   
   title: text("title").notNull().default("Untitled"),
   emoji: varchar("emoji", { length: 10 }),
@@ -186,6 +188,11 @@ export const journalEntry = pgTable("journal_entry", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (table) => ({
   userIdx: index("idx_journal_entry_user").on(table.userId),
+  userItemTypeIdx: index("idx_journal_entry_user_item_type").on(
+    table.userId,
+    table.itemType
+  ),
+  folderIdx: index("idx_journal_entry_folder").on(table.userId, table.folderId),
   userDateIdx: index("idx_journal_entry_user_date").on(table.userId, table.journalDate),
   userTypeIdx: index("idx_journal_entry_user_type").on(table.userId, table.entryType),
   pinnedIdx: index("idx_journal_entry_pinned").on(table.userId, table.isPinned),

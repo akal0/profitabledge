@@ -68,16 +68,7 @@ const serverEnvSchema = z.object({
   GITHUB_FEATURE_REQUEST_TOKEN: z.string().min(1).optional(),
   GITHUB_FEATURE_REQUEST_OWNER: z.string().min(1).optional(),
   GITHUB_FEATURE_REQUEST_REPO: z.string().min(1).optional(),
-  PRIVATE_BETA_REQUIRED: z.string().min(1).optional(),
-  PRIVATE_BETA_ADMIN_EMAILS: z.string().min(1).optional(),
   AFFILIATE_COMMISSION_BPS: z.coerce.number().int().min(0).max(10000).optional(),
-  ALPHA_ENABLE_AI_ASSISTANT: z.string().min(1).optional(),
-  ALPHA_ENABLE_COMMUNITY: z.string().min(1).optional(),
-  ALPHA_ENABLE_CONNECTIONS: z.string().min(1).optional(),
-  ALPHA_ENABLE_FEEDBACK: z.string().min(1).optional(),
-  ALPHA_ENABLE_SUPPORT_DIAGNOSTICS: z.string().min(1).optional(),
-  ALPHA_ENABLE_SCHEDULED_SYNC: z.string().min(1).optional(),
-  ALPHA_ENABLE_MT5_INGESTION: z.string().min(1).optional(),
   ALPHA_SUPPORT_EMAIL: z.string().email().optional(),
 });
 

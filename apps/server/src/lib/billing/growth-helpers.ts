@@ -62,10 +62,6 @@ export function normalizeVisitorToken(input?: string | null) {
   return value.length > 0 ? value.slice(0, 120) : null;
 }
 
-export function normalizeWaitlistEmail(input: string) {
-  return input.trim().toLowerCase();
-}
-
 export function normalizeDestinationPath(input?: string | null) {
   const value = input?.trim() || "/sign-up";
   return value.startsWith("/") ? value : "/sign-up";

@@ -5,8 +5,10 @@ use tauri::{
     Emitter, Manager, Runtime, Url,
 };
 use tauri_plugin_opener::OpenerExt;
+use tiny_http::{Response, Server};
 
 const TRAY_COMMAND_EVENT: &str = "desktop://tray-command";
+const LOCAL_AUTH_EVENT: &str = "desktop://local-auth";
 
 fn is_first_party_host(host: &str) -> bool {
     host == "localhost"
@@ -89,6 +91,36 @@ fn emit_tray_command<R: Runtime>(app: &tauri::AppHandle<R>, command: &str) {
     let _ = app.emit(TRAY_COMMAND_EVENT, command.to_string());
 }
 
+fn spawn_local_auth_bridge<R: Runtime>(app: tauri::AppHandle<R>) {
+    std::thread::spawn(move || {
+        let server = match Server::http("127.0.0.1:3310") {
+            Ok(server) => server,
+            Err(error) => {
+                eprintln!("[desktop] failed to start local auth bridge: {}", error);
+                return;
+            }
+        };
+
+        for request in server.incoming_requests() {
+            let url = request.url().to_string();
+            if url.starts_with("/desktop/auth/complete?") {
+                let payload = format!("http://127.0.0.1:3310{}", url);
+                let _ = app.emit(LOCAL_AUTH_EVENT, payload);
+            }
+
+            let response = Response::from_string(
+                "<!doctype html><html><head><meta charset=\"utf-8\"><title>Profitabledge</title><style>body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;background:#0b0d12;color:#f5f7fb;display:grid;place-items:center;min-height:100vh;margin:0}main{width:min(100%,28rem);text-align:center;padding:2rem}p{color:rgba(245,247,251,.72);line-height:1.6}</style></head><body><main><h1>Opening Profitabledge…</h1><p>You can return to the desktop app now.</p></main></body></html>"
+            )
+            .with_status_code(200)
+            .with_header(
+                tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..])
+                    .unwrap(),
+            );
+            let _ = request.respond(response);
+        }
+    });
+}
+
 fn build_tray<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "tray-show", "Open Profitabledge", true, None::<&str>)?;
     let new_tab = MenuItem::with_id(app, "tray-new-tab", "New tab", true, None::<&str>)?;
@@ -146,6 +178,8 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
             build_tray(&handle)?;
+            #[cfg(debug_assertions)]
+            spawn_local_auth_bridge(handle.clone());
             Ok(())
         })
         .plugin(tauri_plugin_opener::init())

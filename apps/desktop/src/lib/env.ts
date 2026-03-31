@@ -1,7 +1,7 @@
 import { normalizeOriginUrl } from "@profitabledge/platform/origin-utils";
 
 const productionServerUrl = "https://www.api.profitabledge.com";
-const productionWebUrl = "https://beta.profitabledge.com";
+const productionWebUrl = "https://www.profitabledge.com";
 
 function inferWebUrl(serverUrl: string) {
   if (serverUrl.includes(":3000")) {

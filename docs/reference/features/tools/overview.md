@@ -76,7 +76,7 @@ This section covers the tool-like product areas that sit alongside the main anal
 
 - `apps/server/src/routers/billing.ts`
 - `apps/server/src/routers/ai-keys.ts`
-- `apps/server/src/app/api/polar/webhooks/route.ts`
+- `apps/server/src/app/api/stripe/webhook/route.ts`
 - `apps/server/src/lib/billing/...`
 - `apps/server/src/lib/ai/provider-keys.ts`
 - `apps/server/src/routers/connections.ts`
@@ -119,15 +119,13 @@ This section covers the tool-like product areas that sit alongside the main anal
 - the AI settings route should also show where each provider key is created, so members can jump directly to Google AI Studio, OpenAI platform keys, or Anthropic Console keys from the settings UI
 - the AI settings route now includes a provider-toggled usage section for `Profitabledge`, `Gemini`, `OpenAI`, and `Anthropic`, backed by the persisted AI usage ledger rather than frontend-only estimates
 - billing settings now use a shared journal-style subnav mounted at the billing route-layout level directly under the settings shell header, so plan management stays on the overview page while affiliate payout instructions and payout history live on `/dashboard/settings/billing/payment-methods`
-- the billing overview page now also includes an invoice-history table sourced from mirrored Polar order records, without exposing the full trades-style table toolbar stack
-- for the current Vercel-oriented beta posture, keep local/dev envs free to enable Backtest, scheduled sync, and MT5 ingestion, but set those alpha flags off in production when deploying a workerless Vercel beta; the main sidebar keeps Backtest visible as a disabled `Coming soon!` item when the flag is off, while Connections downgrades MT5 terminal sync and background-sync messaging instead of implying the worker stack is live
-- the root route is a temporary private-beta gate that either validates/stores a beta code and forwards into sign-up/onboarding or captures a waitlist email through the public growth-access mutation
-- the sign-up form now includes the beta code in the Better Auth request so the server can reject account creation before a user row is written when private beta is compulsory
+- the billing overview page now also includes an invoice-history table sourced from mirrored Stripe billing records, without exposing the full trades-style table toolbar stack
+- for launch, keep local/dev envs free to enable Backtest, scheduled sync, and MT5 ingestion, and treat production alpha flags as operational rollout toggles instead of private-beta gates
+- the root route is now the public marketing entry that forwards directly into sign-up/onboarding rather than acting as a beta-code gate
 - billing settings now own plan management, while the dedicated billing payment-methods subpage owns affiliate payout methods and payout history
 - in localhost/non-production builds, billing also exposes affiliate payout-method test presets that prefill production-shaped manual payout details instead of introducing a separate dev-only payout type
-- the Growth sidebar section now exposes referrals and affiliate surfaces for normal members, while the `/dashboard/growth` overview and `/dashboard/growth-admin` stay admin-only routes for beta codes, waitlist review, affiliate approvals, and affiliate payouts
+- the Growth sidebar section now exposes referrals and affiliate surfaces for normal members, while the `/dashboard/growth` overview and `/dashboard/growth-admin` stay admin-only routes for affiliate approvals and affiliate payouts
 - the growth overview and growth-admin routes now share a billing-style route layout for allowlisted admins, mounting a `Growth` / `Growth admin` underlined tab strip directly under the dashboard header while keeping the page bodies on the same shadowed settings-card language used by Billing
-- allowlisted admin accounts bypass the redeemed beta-code requirement for admin-only growth tooling, so operators can issue codes before unlocking the rest of the platform on that account
 - referrals and affiliates are distinct systems and now live on separate routes: every non-affiliate member gets a referral profile with milestone rewards on `/dashboard/referrals`, while only admin-approved affiliates receive recurring commission tracking on `/dashboard/affiliate`
 - the affiliate dashboard owns commission totals, invite activity, affiliate share assets, and the single mentorship group attached to an approved affiliate, while Billing holds the affiliate's payout-method management
 - the referrals route owns member referral stats, reward progress/history, and affiliate applications

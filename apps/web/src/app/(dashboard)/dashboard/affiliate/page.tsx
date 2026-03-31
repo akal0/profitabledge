@@ -675,7 +675,7 @@ export default function AffiliateDashboardPage() {
                       </td>
                       <td className="px-4 py-3 align-top">
                         <p className="text-sm text-white">
-                          {event.orderReference || event.polarOrderId || "—"}
+                          {event.orderReference || "—"}
                         </p>
                       </td>
                       <td className="px-4 py-3 align-top text-sm text-white/75">

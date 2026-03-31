@@ -34,7 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { useAccountStore } from "@/stores/account";
+import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
 import { trpc } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 
@@ -371,6 +371,8 @@ function RulesCard({
 
 export default function RulesPage() {
   const accountId = useAccountStore((state) => state.selectedAccountId);
+  const scopedAccountId =
+    accountId && accountId !== ALL_ACCOUNTS_ID ? accountId : undefined;
   const [auditRules, setAuditRules] = useState<ComplianceRules>({});
   const [rulebookName, setRulebookName] = useState("");
   const [rulebookDescription, setRulebookDescription] = useState("");
@@ -380,35 +382,35 @@ export default function RulesPage() {
   const [checklistItems, setChecklistItems] = useState("");
 
   const compliancePrefsQuery = trpc.users.getCompliancePreferences.useQuery(
-    { accountId: accountId || "" },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || "" },
+    { enabled: Boolean(scopedAccountId) }
   );
   const rulesQuery = trpc.ai.getRules.useQuery(
-    { accountId: accountId || "" },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || "" },
+    { enabled: Boolean(scopedAccountId) }
   );
   const complianceQuery = trpc.ai.getDailyCompliance.useQuery(
-    { accountId: accountId || "" },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || "" },
+    { enabled: Boolean(scopedAccountId) }
   );
   const suggestedRulesQuery = trpc.ai.getSuggestedRules.useQuery(
-    { accountId: accountId || "" },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || "" },
+    { enabled: Boolean(scopedAccountId) }
   );
   const violationsQuery = trpc.ai.getRuleViolations.useQuery(
-    { accountId: accountId || "", limit: 8 },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || "", limit: 8 },
+    { enabled: Boolean(scopedAccountId) }
   );
   const checklistTemplatesQuery = trpc.ai.getChecklistTemplates.useQuery(
-    { accountId: accountId || "" },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || "" },
+    { enabled: Boolean(scopedAccountId) }
   );
   const ruleSetsQuery = trpc.rules.listRuleSets.useQuery(
-    { accountId: accountId || undefined },
-    { enabled: Boolean(accountId) }
+    { accountId: scopedAccountId || undefined },
+    { enabled: Boolean(scopedAccountId) }
   );
   const assignableEdgesQuery = trpc.edges.listAssignable.useQuery(undefined, {
-    enabled: Boolean(accountId),
+    enabled: Boolean(scopedAccountId),
   });
 
   useEffect(() => {
@@ -546,7 +548,7 @@ export default function RulesPage() {
     []
   );
 
-  if (!accountId) {
+  if (!scopedAccountId) {
     return (
       <div className="px-6 sm:px-8 py-8">
         <p className="text-sm text-white/40 text-center">
@@ -585,10 +587,10 @@ export default function RulesPage() {
   };
 
   const handleSaveAuditGuardrails = async () => {
-    if (!accountId) return;
+    if (!scopedAccountId) return;
 
     await updateCompliancePrefs.mutateAsync({
-      accountId,
+      accountId: scopedAccountId,
       rules: cleanRules(auditRules),
     });
   };
@@ -600,10 +602,10 @@ export default function RulesPage() {
     description: string;
     parameters: Record<string, unknown>;
   }) => {
-    if (!accountId) return;
+    if (!scopedAccountId) return;
 
     await createRule.mutateAsync({
-      accountId,
+      accountId: scopedAccountId,
       category: suggestion.category,
       ruleType: suggestion.ruleType,
       label: suggestion.label,
@@ -613,7 +615,7 @@ export default function RulesPage() {
   };
 
   const handleCreateRulebook = async () => {
-    if (!accountId) return;
+    if (!scopedAccountId) return;
 
     if (!rulebookName.trim()) {
       toast.error("Rulebook name is required");
@@ -621,7 +623,7 @@ export default function RulesPage() {
     }
 
     await createRuleSet.mutateAsync({
-      accountId,
+      accountId: scopedAccountId,
       name: rulebookName.trim(),
       description: rulebookDescription.trim() || undefined,
       rules: cleanRules(auditRules),
@@ -629,7 +631,7 @@ export default function RulesPage() {
   };
 
   const handleCreateChecklist = async () => {
-    if (!accountId) return;
+    if (!scopedAccountId) return;
 
     const items = parseChecklistItems(checklistItems);
     if (!checklistName.trim()) {
@@ -643,7 +645,7 @@ export default function RulesPage() {
     }
 
     await createChecklistTemplate.mutateAsync({
-      accountId,
+      accountId: scopedAccountId,
       name: checklistName.trim(),
       description: checklistDescription.trim() || undefined,
       strategyTag: checklistStrategyTag.trim() || undefined,

@@ -9,6 +9,7 @@ import {
   tradeEmotion,
   tradingRule,
 } from "../../db/schema/coaching";
+import { tradingAccount } from "../../db/schema/trading";
 import {
   computeMentalPerformanceScore,
   computePsychologyProfile,
@@ -18,6 +19,18 @@ import {
   getFullProfile,
 } from "../../lib/ai/engine";
 import { protectedProcedure } from "../../lib/trpc";
+import { TRPCError } from "@trpc/server";
+
+async function assertOwnedAccount(accountId: string, userId: string) {
+  const account = await db.query.tradingAccount.findFirst({
+    where: and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)),
+    columns: { id: true },
+  });
+
+  if (!account) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Account not found" });
+  }
+}
 
 export const aiPsychologyRuleProcedures = {
   tagEmotion: protectedProcedure
@@ -32,6 +45,8 @@ export const aiPsychologyRuleProcedures = {
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const baseConditions = [
         eq(tradeEmotion.accountId, input.accountId),
         eq(tradeEmotion.userId, ctx.session.user.id),
@@ -90,6 +105,8 @@ export const aiPsychologyRuleProcedures = {
       })
     )
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const conditions = [
         eq(tradeEmotion.accountId, input.accountId),
         eq(tradeEmotion.userId, ctx.session.user.id),
@@ -110,6 +127,8 @@ export const aiPsychologyRuleProcedures = {
   getPsychologyProfile: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const fullProfile = await getFullProfile(
         input.accountId,
         ctx.session.user.id
@@ -129,6 +148,8 @@ export const aiPsychologyRuleProcedures = {
   getTiltStatus: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const fullProfile = await getFullProfile(
         input.accountId,
         ctx.session.user.id
@@ -154,6 +175,8 @@ export const aiPsychologyRuleProcedures = {
   getMentalScore: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const fullProfile = await getFullProfile(
         input.accountId,
         ctx.session.user.id
@@ -173,6 +196,8 @@ export const aiPsychologyRuleProcedures = {
   getRules: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       return db
         .select()
         .from(tradingRule)
@@ -197,6 +222,8 @@ export const aiPsychologyRuleProcedures = {
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const [rule] = await db
         .insert(tradingRule)
         .values({
@@ -264,6 +291,8 @@ export const aiPsychologyRuleProcedures = {
   getSuggestedRules: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const fullProfile = await getFullProfile(
         input.accountId,
         ctx.session.user.id
@@ -283,6 +312,8 @@ export const aiPsychologyRuleProcedures = {
   getDailyCompliance: protectedProcedure
     .input(z.object({ accountId: z.string(), date: z.string().optional() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       return getDailyComplianceReport(
         input.accountId,
         ctx.session.user.id,
@@ -298,6 +329,8 @@ export const aiPsychologyRuleProcedures = {
       })
     )
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       return db
         .select()
         .from(ruleViolation)
@@ -314,6 +347,8 @@ export const aiPsychologyRuleProcedures = {
   getChecklistTemplates: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .query(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       return db
         .select()
         .from(tradeChecklistTemplate)
@@ -344,6 +379,8 @@ export const aiPsychologyRuleProcedures = {
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const [template] = await db
         .insert(tradeChecklistTemplate)
         .values({
@@ -392,6 +429,8 @@ export const aiPsychologyRuleProcedures = {
       })
     )
     .mutation(async ({ ctx, input }) => {
+      await assertOwnedAccount(input.accountId, ctx.session.user.id);
+
       const [result] = await db
         .insert(tradeChecklistResult)
         .values({

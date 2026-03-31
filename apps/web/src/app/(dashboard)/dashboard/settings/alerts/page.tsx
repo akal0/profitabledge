@@ -100,6 +100,8 @@ export default function AlertsSettingsPage() {
     }),
     enabled: true,
   });
+  const rulesError = !isLoading && !rules;
+  const summaryError = !isLoading && !summary;
 
   const resetForm = () => {
     setName("");
@@ -123,7 +125,7 @@ export default function AlertsSettingsPage() {
     setSeverity(rule.alertSeverity);
     setNotifyInApp(rule.notifyInApp);
     setNotifyEmail(rule.notifyEmail || false);
-    setWebhookUrl("");
+    setWebhookUrl(rule.webhookUrl || "");
     setCooldownMinutes(String(rule.cooldownMinutes || 60));
     setShowCreateDialog(true);
   };
@@ -134,16 +136,40 @@ export default function AlertsSettingsPage() {
       return;
     }
 
+    const parsedThresholdValue = Number.parseFloat(thresholdValue);
+    const parsedCooldownMinutes = Number.parseInt(cooldownMinutes, 10);
+    const normalizedWebhookUrl = webhookUrl.trim();
+
+    if (!Number.isFinite(parsedThresholdValue) || parsedThresholdValue <= 0) {
+      toast.error("Enter a valid threshold value");
+      return;
+    }
+
+    if (!Number.isInteger(parsedCooldownMinutes) || parsedCooldownMinutes < 0) {
+      toast.error("Cooldown must be 0 minutes or higher");
+      return;
+    }
+
+    if (normalizedWebhookUrl) {
+      try {
+        new URL(normalizedWebhookUrl);
+      } catch {
+        toast.error("Enter a valid webhook URL");
+        return;
+      }
+    }
+
     try {
       if (editingRule) {
         await trpcClient.alerts.updateRule.mutate({
           ruleId: editingRule.id,
           name,
-          thresholdValue: parseFloat(thresholdValue),
+          thresholdValue: parsedThresholdValue,
           alertSeverity: severity,
           notifyInApp,
           notifyEmail,
-          cooldownMinutes: parseInt(cooldownMinutes, 10),
+          webhookUrl: normalizedWebhookUrl || undefined,
+          cooldownMinutes: parsedCooldownMinutes,
         });
         toast.success("Alert rule updated");
       } else {
@@ -151,25 +177,14 @@ export default function AlertsSettingsPage() {
           accountId: selectedAccountId || undefined,
           name,
           ruleType,
-          thresholdValue: parseFloat(thresholdValue),
+          thresholdValue: parsedThresholdValue,
           thresholdUnit,
           alertSeverity: severity,
           notifyInApp,
           notifyEmail,
-          cooldownMinutes: parseInt(cooldownMinutes, 10),
+          webhookUrl: normalizedWebhookUrl || undefined,
+          cooldownMinutes: parsedCooldownMinutes,
         });
-        if (webhookUrl) {
-          try {
-            const existing = JSON.parse(
-              localStorage.getItem("profitabledge-alert-webhooks") || "{}"
-            );
-            existing[name] = webhookUrl;
-            localStorage.setItem(
-              "profitabledge-alert-webhooks",
-              JSON.stringify(existing)
-            );
-          } catch {}
-        }
         toast.success("Alert rule created");
       }
 
@@ -227,6 +242,12 @@ export default function AlertsSettingsPage() {
       </div>
 
       <Separator />
+
+      {rulesError || summaryError ? (
+        <div className="px-6 py-4 text-sm text-rose-300 sm:px-8">
+          We couldn't load your alert settings right now. Refresh and try again.
+        </div>
+      ) : null}
 
       {/* Summary Stats */}
       {summary && (
@@ -533,6 +554,9 @@ export default function AlertsSettingsPage() {
                   <Label className="text-white/80">
                     Webhook (Discord/Slack/custom)
                   </Label>
+                  <p className="text-[10px] text-white/30">
+                    Saved with this rule so you can fan alerts out to Discord, Slack, or your own endpoint.
+                  </p>
                   <Input
                     type="url"
                     placeholder="https://discord.com/api/webhooks/..."

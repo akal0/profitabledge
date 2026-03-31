@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { JournalList } from "@/components/journal/journal-list";
 import { JournalEntryPage } from "@/components/journal/journal-entry";
@@ -19,7 +18,7 @@ import type { JournalBlock } from "@/components/journal/types";
 import { JournalCalendarTab } from "@/components/journal/journal-calendar-tab";
 import { JournalInsightsTab } from "@/components/journal/journal-insights-tab";
 import { JournalSharesTab } from "@/components/journal/share/shares-tab";
-import { trpcOptions, trpc } from "@/utils/trpc";
+import { trpc } from "@/utils/trpc";
 
 const JOURNAL_TABS = [
   "entries",
@@ -98,6 +97,7 @@ function JournalPageContent() {
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [showTemplateBrowser, setShowTemplateBrowser] = useState(false);
+  const [pendingFolderId, setPendingFolderId] = useState<string | null>(null);
   const [initialContent, setInitialContent] = useState<JournalBlock[] | null>(
     null
   );
@@ -123,17 +123,9 @@ function JournalPageContent() {
     ].includes(entryTypeFromQuery)
       ? entryTypeFromQuery
       : undefined;
-  const { data: billingState, isFetched: hasResolvedBillingState } = useQuery(
-    trpcOptions.billing.getState.queryOptions()
-  );
-  const canAccessInsights = billingState?.admin?.isAdmin === true;
-  const shouldHoldInsightsTab =
-    requestedTab === "insights" && !hasResolvedBillingState;
-  const activeTab: JournalTab =
-    requestedTab === "insights" && hasResolvedBillingState && !canAccessInsights
-      ? "entries"
-      : requestedTab;
+  const activeTab: JournalTab = requestedTab;
   const completePromptMutation = trpc.journal.completePrompt.useMutation();
+  const updateEntryMutation = trpc.journal.update.useMutation();
 
   React.useEffect(() => {
     if (!entryIdFromQuery) return;
@@ -142,30 +134,6 @@ function JournalPageContent() {
     );
     setIsCreating(false);
   }, [entryIdFromQuery]);
-
-  React.useEffect(() => {
-    if (
-      !hasResolvedBillingState ||
-      requestedTab !== "insights" ||
-      canAccessInsights
-    ) {
-      return;
-    }
-
-    const params = new URLSearchParams(searchParams?.toString() ?? "");
-    params.delete("tab");
-    const query = params.toString();
-    router.replace(query ? `${safePathname}?${query}` : safePathname, {
-      scroll: false,
-    });
-  }, [
-    canAccessInsights,
-    hasResolvedBillingState,
-    requestedTab,
-    router,
-    safePathname,
-    searchParams,
-  ]);
 
   const clearEntryIdFromUrl = React.useCallback(() => {
     if (!searchParams?.get("entryId")) {
@@ -186,10 +154,6 @@ function JournalPageContent() {
         return;
       }
 
-      if (value === "insights" && !canAccessInsights) {
-        return;
-      }
-
       const params = new URLSearchParams(searchParams?.toString() ?? "");
 
       if (value === "entries") {
@@ -203,12 +167,13 @@ function JournalPageContent() {
         scroll: false,
       });
     },
-    [canAccessInsights, router, safePathname, searchParams]
+    [router, safePathname, searchParams]
   );
 
   // Handle template selection
   const handleSelectTemplate = (template: any) => {
     setActivePromptId(null);
+    setPendingFolderId(null);
     setInitialContent(template.content || []);
     setInitialTitle(template.name || "Untitled");
     setIsCreating(true);
@@ -217,20 +182,23 @@ function JournalPageContent() {
   // Handle starting blank entry
   const handleStartBlank = () => {
     setActivePromptId(null);
+    setPendingFolderId(null);
     setInitialContent(null);
     setInitialTitle(null);
     setIsCreating(true);
   };
 
   // Handle new entry button click
-  const handleCreateEntry = () => {
+  const handleCreateEntry = (folderId?: string) => {
     setActivePromptId(null);
+    setPendingFolderId(folderId ?? null);
     setShowTemplateBrowser(true);
   };
 
   const handleCreateFromPrompt = React.useCallback((prompt: any) => {
     setShowTemplateBrowser(false);
     setSelectedEntryId(null);
+    setPendingFolderId(null);
     setInitialContent(buildPromptBlocks(prompt));
     setInitialTitle(prompt?.title || "Prompt Reflection");
     setActivePromptId(prompt?.id || null);
@@ -244,6 +212,7 @@ function JournalPageContent() {
     setInitialContent(null);
     setInitialTitle(null);
     setActivePromptId(null);
+    setPendingFolderId(null);
     clearEntryIdFromUrl();
   };
 
@@ -263,6 +232,13 @@ function JournalPageContent() {
             setIsCreating(false);
             setInitialContent(null);
             setInitialTitle(null);
+            if (pendingFolderId && entry.id) {
+              void updateEntryMutation.mutateAsync({
+                id: entry.id,
+                folderId: pendingFolderId,
+              });
+            }
+            setPendingFolderId(null);
             if (activePromptId && entry.id) {
               void completePromptMutation.mutateAsync({
                 promptId: activePromptId,
@@ -273,14 +249,6 @@ function JournalPageContent() {
           }}
         />
       </div>
-    );
-  }
-
-  if (shouldHoldInsightsTab) {
-    return (
-      <main className="flex min-h-0 flex-1">
-        <RouteLoadingFallback route="journal" className="min-h-0" />
-      </main>
     );
   }
 
@@ -300,14 +268,12 @@ function JournalPageContent() {
             >
               Entries
             </TabsTriggerUnderlined>
-            {canAccessInsights ? (
-              <TabsTriggerUnderlined
-                value="insights"
-                className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
-              >
-                Insights
-              </TabsTriggerUnderlined>
-            ) : null}
+            <TabsTriggerUnderlined
+              value="insights"
+              className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
+            >
+              Insights
+            </TabsTriggerUnderlined>
             <TabsTriggerUnderlined
               value="calendar"
               className="h-10 pb-0 pt-0 text-xs font-medium text-secondary dark:text-neutral-400 hover:text-secondary dark:hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
@@ -339,19 +305,17 @@ function JournalPageContent() {
           />
         </TabsContent>
 
-        {canAccessInsights ? (
-          <TabsContent
-            value="insights"
-            className="mt-0 flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
-          >
-            <JournalInsightsTab
-              accountId={accountId || undefined}
-              onCreateEntry={handleCreateEntry}
-              onSelectEntry={(id) => setSelectedEntryId(id)}
-              onCreateFromPrompt={handleCreateFromPrompt}
-            />
-          </TabsContent>
-        ) : null}
+        <TabsContent
+          value="insights"
+          className="mt-0 flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 sm:px-6 lg:px-8"
+        >
+          <JournalInsightsTab
+            accountId={accountId || undefined}
+            onCreateEntry={handleCreateEntry}
+            onSelectEntry={(id) => setSelectedEntryId(id)}
+            onCreateFromPrompt={handleCreateFromPrompt}
+          />
+        </TabsContent>
 
         <TabsContent
           value="calendar"

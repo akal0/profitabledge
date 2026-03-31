@@ -302,7 +302,7 @@ export default function APISettingsPage() {
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-medium text-white">
-                  Your API showKeyDialog has been generated
+                  Your API key has been generated
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-rose-400">
                   Copy this key now - you won't be able to see it again!

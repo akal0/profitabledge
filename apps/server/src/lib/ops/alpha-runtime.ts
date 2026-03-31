@@ -1,10 +1,7 @@
 import {
-  getAlphaFeatureDisabledMessage,
   resolveServerAlphaFlags,
   type AlphaFeatureKey,
 } from "@profitabledge/platform";
-import { TRPCError } from "@trpc/server";
-import { getServerEnv } from "../env";
 
 let cachedFlags: ReturnType<typeof resolveServerAlphaFlags> | null = null;
 
@@ -13,8 +10,7 @@ export function getServerAlphaFlags() {
     return cachedFlags;
   }
 
-  getServerEnv();
-  cachedFlags = resolveServerAlphaFlags(process.env);
+  cachedFlags = resolveServerAlphaFlags();
   return cachedFlags;
 }
 
@@ -23,19 +19,12 @@ export function resetServerAlphaFlagsForTests() {
 }
 
 export function assertAlphaFeatureEnabled(feature: AlphaFeatureKey) {
-  const flags = getServerAlphaFlags();
-  if (flags[feature]) {
-    return;
-  }
-
-  throw new TRPCError({
-    code: "PRECONDITION_FAILED",
-    message: getAlphaFeatureDisabledMessage(feature),
-  });
+  void feature;
 }
 
 export function buildAlphaFeatureDisabledResponse(feature: AlphaFeatureKey) {
+  void feature;
   return {
-    error: getAlphaFeatureDisabledMessage(feature),
+    error: null,
   };
 }

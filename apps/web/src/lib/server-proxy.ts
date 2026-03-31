@@ -133,17 +133,35 @@ export async function proxyToServer(
     forwardReferer?: string | null;
   } = {}
 ) {
-  const response = await fetch(buildTargetUrl(request, path), {
-    method: request.method,
-    headers: buildForwardHeaders(request, {
-      origin: forwardOrigin,
-      referer: forwardReferer,
-    }),
-    body: await buildRequestBody(request),
-    redirect: "manual",
-    cache: "no-store",
-    signal: forwardAbortSignal ? request.signal : undefined,
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(buildTargetUrl(request, path), {
+      method: request.method,
+      headers: buildForwardHeaders(request, {
+        origin: forwardOrigin,
+        referer: forwardReferer,
+      }),
+      body: await buildRequestBody(request),
+      redirect: "manual",
+      cache: "no-store",
+      signal: forwardAbortSignal ? request.signal : undefined,
+    });
+  } catch (error) {
+    const errorName = error instanceof Error ? error.name : null;
+    if (
+      request.signal.aborted ||
+      errorName === "AbortError" ||
+      errorName === "ResponseAborted"
+    ) {
+      return new Response(null, {
+        status: 499,
+        statusText: "Client Closed Request",
+      });
+    }
+
+    throw error;
+  }
 
   return new Response(response.body, {
     status: response.status,

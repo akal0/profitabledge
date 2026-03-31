@@ -66,6 +66,7 @@ import {
   listenForRustEvent,
   openExternalUrl,
   registerGlobalPaletteShortcut,
+  registerDeepLinkScheme,
   sendNativeNotification,
   setChildWebviewBounds,
   showAppWindow,
@@ -81,6 +82,7 @@ const DESKTOP_BRIDGE_EVENT = "desktop://web-bridge";
 const DESKTOP_NAVIGATE_EVENT = "desktop://navigate";
 const DESKTOP_SET_ACCOUNT_EVENT = "desktop://set-account";
 const DESKTOP_TRAY_EVENT = "desktop://tray-command";
+const DESKTOP_LOCAL_AUTH_EVENT = "desktop://local-auth";
 const DESKTOP_BRIDGE_SOURCE = "profitabledge-web-bridge";
 const SHELL_SOURCE = "profitabledge-desktop-shell";
 
@@ -507,12 +509,20 @@ function App() {
   }, [desktopPrefs.closeToTray, enableNativeStartupHooks]);
 
   useEffect(() => {
-    if (!enableNativeStartupHooks) {
+    if (!enableDeepLinkHooks) {
       return;
     }
 
     void syncLaunchOnLogin(desktopPrefs.launchOnLogin);
   }, [desktopPrefs.launchOnLogin, enableNativeStartupHooks]);
+
+  useEffect(() => {
+    if (!isDesktopRuntime || !import.meta.env.DEV) {
+      return;
+    }
+
+    void registerDeepLinkScheme("profitabledge-dev");
+  }, [isDesktopRuntime]);
 
   useEffect(() => {
     if (!enableNativeStartupHooks) {
@@ -585,6 +595,63 @@ function App() {
       DESKTOP_BRIDGE_EVENT,
       handleDesktopBridgeEvent
     ).then((unlisten) => {
+      cleanup = unlisten;
+    });
+
+    return () => {
+      void cleanup?.();
+    };
+  }, [isDesktopRuntime, useEmbeddedIframeHost]);
+
+  useEffect(() => {
+    if (!isDesktopRuntime || !import.meta.env.DEV) {
+      return;
+    }
+
+    let cleanup: (() => void | Promise<void>) | null = null;
+    void listenForRustEvent<string>(DESKTOP_LOCAL_AUTH_EVENT, (rawUrl) => {
+      const parsed = parseDesktopDeepLink(rawUrl);
+      if (!parsed) {
+        return;
+      }
+
+      const normalizedPath = sanitizeDesktopWebPath(
+        parsed.path,
+        sessionStateRef.current.authenticated
+      );
+
+      void showAppWindow();
+      if (!sessionStateRef.current.authenticated) {
+        const pendingTab = getActiveTab(desktopStateRef.current);
+        const command: DesktopShellCommand = {
+          source: SHELL_SOURCE,
+          type: "navigate",
+          path: normalizedPath,
+          accountId: parsed.accountId,
+          targetWebviewLabel: pendingTab ? getWebviewLabel(pendingTab.id) : undefined,
+        };
+
+        if (useEmbeddedIframeHost) {
+          postDesktopCommandToEmbeddedFrame(command);
+        } else if (pendingTab) {
+          void emitToTarget(getWebviewLabel(pendingTab.id), DESKTOP_NAVIGATE_EVENT, command).catch(
+            () => undefined
+          );
+        }
+
+        setDesktopState((previous) =>
+          updateTab(previous, previous.activeTabId, {
+            kind: inferTabKindFromPath(normalizedPath),
+            path: normalizedPath,
+            lastKnownPath: normalizedPath,
+            accountId: parsed.accountId ?? getActiveTab(previous)?.accountId ?? null,
+          })
+        );
+        return;
+      }
+
+      navigateActiveTab(normalizedPath, { accountId: parsed.accountId });
+    }).then((unlisten) => {
       cleanup = unlisten;
     });
 

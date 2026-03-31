@@ -156,6 +156,23 @@ export async function listenForDeepLinks(
   }
 }
 
+export async function registerDeepLinkScheme(scheme: string) {
+  if (!isTauriApp()) {
+    return false;
+  }
+
+  try {
+    const deepLink = (await import(
+      "@tauri-apps/plugin-deep-link"
+    )) as DeepLinkModule;
+    await deepLink.register(scheme);
+    return true;
+  } catch (error) {
+    console.warn(`[desktop] failed to register deep link scheme '${scheme}'`, error);
+    return false;
+  }
+}
+
 export async function sendNativeNotification(options: {
   title: string;
   body: string;

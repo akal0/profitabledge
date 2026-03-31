@@ -1,5 +1,7 @@
 export interface JournalListEntry {
   id: string;
+  itemType: string;
+  folderId?: string | null;
   title: string;
   emoji?: string | null;
   coverImageUrl?: string | null;
@@ -16,12 +18,18 @@ export interface JournalListEntry {
   isShared?: boolean;
   shareToken?: string;
   shareName?: string;
+  folderEntryCount?: number | null;
+  folderPreviewItems?: Array<{
+    title: string;
+    emoji?: string | null;
+    coverImageUrl?: string | null;
+  }>;
 }
 
 export interface JournalListProps {
   accountId?: string;
   onSelectEntry: (entryId: string) => void;
-  onCreateEntry: () => void;
+  onCreateEntry: (folderId?: string) => void;
   className?: string;
   forceEntryType?: string;
 }

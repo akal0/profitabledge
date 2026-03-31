@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { DesktopAuthStateShell } from "@/components/auth/desktop-auth-state-shell";
 import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth-client";
+import { writeDesktopSessionBootstrap } from "@/lib/desktop-session-bootstrap";
 import {
   sanitizeDesktopPath,
   verifyDesktopOneTimeToken,
@@ -67,6 +69,21 @@ export default function DesktopAuthCompletePage() {
       );
       if (!confirmed) {
         throw new Error("We couldn't confirm your desktop session.");
+      }
+
+      const sessionResult = await authClient.getSession();
+      const sessionUser = sessionResult.data?.user ?? null;
+      if (sessionUser?.id) {
+        writeDesktopSessionBootstrap({
+          authenticated: true,
+          pending: false,
+          user: {
+            id: sessionUser.id,
+            name: sessionUser.name ?? null,
+            email: sessionUser.email ?? null,
+            image: sessionUser.image ?? null,
+          },
+        });
       }
 
       if (!cancelled) {

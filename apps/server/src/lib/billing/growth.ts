@@ -23,7 +23,6 @@ import {
   billingOrder,
   billingSubscription,
   edgeCreditGrant,
-  privateBetaWaitlist,
   referralConversion,
   referralProfile,
   referralRewardGrant,
@@ -89,7 +88,6 @@ import {
   normalizeAffiliateTierMode,
   normalizeGrowthCode,
   normalizeGrowthSlug,
-  normalizeWaitlistEmail,
   normalizeVisitorToken,
   parseAffiliateBenefitFlags,
   parseStoredGrowthTouch,
@@ -151,7 +149,6 @@ export {
   normalizeDestinationPath,
   normalizeGrowthCode,
   normalizeGrowthSlug,
-  normalizeWaitlistEmail,
   normalizeVisitorToken,
   parseAffiliateBenefitFlags,
   parseStoredGrowthTouch,
@@ -1797,83 +1794,6 @@ export async function rejectAffiliateApplication(input: {
     .returning();
 
   return updated ?? application;
-}
-
-export async function joinPrivateBetaWaitlist(input: {
-  email: string;
-  source?: string | null;
-}) {
-  const normalizedEmail = normalizeWaitlistEmail(input.email);
-  if (!normalizedEmail) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Email is required",
-    });
-  }
-
-  const rows = await db
-    .select()
-    .from(privateBetaWaitlist)
-    .where(eq(privateBetaWaitlist.email, normalizedEmail))
-    .limit(1);
-
-  if (rows[0]) {
-    return rows[0];
-  }
-
-  const [inserted] = await db
-    .insert(privateBetaWaitlist)
-    .values({
-      id: crypto.randomUUID(),
-      email: normalizedEmail,
-      source: input.source?.trim() || "root",
-    })
-    .returning();
-
-  return inserted;
-}
-
-export async function listPrivateBetaWaitlistEntries() {
-  return db
-    .select()
-    .from(privateBetaWaitlist)
-    .orderBy(desc(privateBetaWaitlist.createdAt));
-}
-
-export async function updatePrivateBetaWaitlistEntry(input: {
-  entryId: string;
-  reviewedByUserId: string;
-  status?: string | null;
-  notes?: string | null;
-  invitedCodeId?: string | null;
-}) {
-  const rows = await db
-    .select()
-    .from(privateBetaWaitlist)
-    .where(eq(privateBetaWaitlist.id, input.entryId))
-    .limit(1);
-
-  if (!rows[0]) {
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: "Waitlist entry not found",
-    });
-  }
-
-  const [updated] = await db
-    .update(privateBetaWaitlist)
-    .set({
-      status: input.status?.trim() || rows[0].status,
-      notes: input.notes?.trim() || null,
-      invitedCodeId: input.invitedCodeId ?? null,
-      reviewedByUserId: input.reviewedByUserId,
-      reviewedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(privateBetaWaitlist.id, rows[0].id))
-    .returning();
-
-  return updated ?? rows[0];
 }
 
 async function getReferralConversionsByReferrer(userId: string) {

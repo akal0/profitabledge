@@ -167,25 +167,6 @@ export function resolvePlanKeyFromStripePriceId(priceId?: string | null) {
   return plan?.key ?? ("student" as BillingPlanKey);
 }
 
-export function isPrivateBetaRequired() {
-  const env = getServerEnv();
-  return env.PRIVATE_BETA_REQUIRED === "true";
-}
-
-export function getPrivateBetaAdminEmails() {
-  const env = getServerEnv();
-  return new Set(
-    (env.PRIVATE_BETA_ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-export function isPrivateBetaAdminEmail(email?: string | null) {
-  return Boolean(email && getPrivateBetaAdminEmails().has(email.toLowerCase()));
-}
-
 export function getAffiliateCommissionBps() {
   return getServerEnv().AFFILIATE_COMMISSION_BPS ?? 2000;
 }

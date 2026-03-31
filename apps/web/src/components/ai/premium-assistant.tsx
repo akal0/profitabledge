@@ -51,6 +51,93 @@ import {
   WidgetBlockRenderer,
 } from "@/components/ai/widget-block-renderer";
 
+const ALLOWED_ASSISTANT_HTML_TAGS = new Set([
+  "p",
+  "br",
+  "strong",
+  "em",
+  "ul",
+  "ol",
+  "li",
+  "code",
+  "pre",
+  "blockquote",
+  "a",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+]);
+
+function sanitizeAssistantHtml(markup: string) {
+  if (typeof window === "undefined") {
+    return markup;
+  }
+
+  const parser = new DOMParser();
+  const documentFragment = parser.parseFromString(markup, "text/html");
+
+  const sanitizeNode = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as HTMLElement;
+      const tagName = element.tagName.toLowerCase();
+
+      if (!ALLOWED_ASSISTANT_HTML_TAGS.has(tagName)) {
+        const parent = element.parentNode;
+        if (parent) {
+          while (element.firstChild) {
+            parent.insertBefore(element.firstChild, element);
+          }
+          parent.removeChild(element);
+        }
+        return;
+      }
+
+      for (const attribute of Array.from(element.attributes)) {
+        const attributeName = attribute.name.toLowerCase();
+        if (attributeName.startsWith("on")) {
+          element.removeAttribute(attribute.name);
+          continue;
+        }
+
+        if (tagName === "a" && attributeName === "href") {
+          const href = attribute.value.trim();
+          if (
+            !href.startsWith("http://") &&
+            !href.startsWith("https://") &&
+            !href.startsWith("mailto:")
+          ) {
+            element.removeAttribute(attribute.name);
+          }
+          continue;
+        }
+
+        if (tagName === "a" && ["target", "rel"].includes(attributeName)) {
+          continue;
+        }
+
+        if (attributeName !== "class") {
+          element.removeAttribute(attribute.name);
+        }
+      }
+
+      if (tagName === "a") {
+        element.setAttribute("rel", "noopener noreferrer");
+        element.setAttribute("target", "_blank");
+      }
+    }
+
+    for (const child of Array.from(node.childNodes)) {
+      sanitizeNode(child);
+    }
+  };
+
+  sanitizeNode(documentFragment.body);
+  return documentFragment.body.innerHTML;
+}
+
 function SidebarToggleButton() {
   const { toggleSidebar } = useSidebar();
   return (
@@ -270,7 +357,7 @@ export function PremiumAssistant({
                                   <div
                                     className="prose prose-invert max-w-none text-sm"
                                     dangerouslySetInnerHTML={{
-                                      __html: message.html,
+                                      __html: sanitizeAssistantHtml(message.html),
                                     }}
                                   />
                                 ) : (

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { DataTable } from "@/components/data-table";
 import { Button } from "@/components/ui/button";
@@ -22,29 +22,14 @@ import { ALL_ACCOUNTS_ID } from "@/stores/account";
 import { trpcOptions } from "@/utils/trpc";
 
 const EDGE_EXECUTED_TRADES_PAGE_SIZE = 25;
-const EDGE_EXECUTED_TRADES_FETCH_LIMIT = 100;
 
-export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
+export function EdgeExecutedTradesTable({
+  executedTrades,
+}: {
+  executedTrades: TradeRow[];
+}) {
   const [selectedTrade, setSelectedTrade] = useState<TradeRow | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [advanceAfterFetch, setAdvanceAfterFetch] = useState(false);
-
-  const tradesQuery = useInfiniteQuery({
-    ...trpcOptions.trades.listInfinite.infiniteQueryOptions(
-      {
-        accountId: ALL_ACCOUNTS_ID,
-        edgeIds: [edgeId],
-        limit: EDGE_EXECUTED_TRADES_FETCH_LIMIT,
-      },
-      {
-        getNextPageParam: (lastPage) =>
-          lastPage && "nextCursor" in lastPage
-            ? lastPage.nextCursor
-            : undefined,
-      }
-    ),
-    staleTime: 30_000,
-  });
 
   const modelTagsQuery = useQuery({
     ...trpcOptions.trades.listModelTags.queryOptions({
@@ -65,23 +50,8 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
     staleTime: 60_000,
   });
 
-  const rows = useMemo<TradeRow[]>(() => {
-    const pages = (
-      tradesQuery.data as { pages?: Array<{ items: TradeRow[] }> } | undefined
-    )?.pages;
-    return pages?.flatMap((page) => page.items) ?? [];
-  }, [tradesQuery.data]);
-
-  const totalTradesCount = useMemo(() => {
-    const pages = (
-      tradesQuery.data as
-        | {
-            pages?: Array<{ totalTradesCount?: number }>;
-          }
-        | undefined
-    )?.pages;
-    return pages?.[0]?.totalTradesCount ?? 0;
-  }, [tradesQuery.data]);
+  const rows = useMemo(() => executedTrades ?? [], [executedTrades]);
+  const totalTradesCount = rows.length;
 
   const tableMeta = useMemo<TradeTableMeta>(
     () => ({
@@ -120,44 +90,9 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
   const pageStart = rows.length === 0 ? 0 : pageIndex * pageSize + 1;
   const pageEnd = rows.length === 0 ? 0 : pageStart + currentPageRows - 1;
 
-  useEffect(() => {
-    if (!advanceAfterFetch) {
-      return;
-    }
-
-    if (table.getPageCount() - 1 > pageIndex) {
-      table.nextPage();
-      setAdvanceAfterFetch(false);
-      return;
-    }
-
-    if (!tradesQuery.hasNextPage && !tradesQuery.isFetchingNextPage) {
-      setAdvanceAfterFetch(false);
-    }
-  }, [
-    advanceAfterFetch,
-    pageIndex,
-    rows.length,
-    table,
-    tradesQuery.hasNextPage,
-    tradesQuery.isFetchingNextPage,
-  ]);
-
-  if (tradesQuery.isLoading) {
+  if (sessionTagsQuery.isLoading || modelTagsQuery.isLoading || customTagsQuery.isLoading) {
     return <RouteLoadingFallback route="trades" className="min-h-[18rem]" />;
   }
-
-  const handleNextPage = async () => {
-    if (pageIndex < loadedPageCount - 1) {
-      table.nextPage();
-      return;
-    }
-
-    if (tradesQuery.hasNextPage && !tradesQuery.isFetchingNextPage) {
-      setAdvanceAfterFetch(true);
-      await tradesQuery.fetchNextPage();
-    }
-  };
 
   return (
     <div className="space-y-4">
@@ -211,7 +146,7 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
           </Button>
           <div className="text-xs text-white/48">
             Page {Math.max(pageIndex + 1, 1)} of{" "}
-            {Math.max(loadedPageCount + (tradesQuery.hasNextPage ? 1 : 0), 1)}
+            {Math.max(loadedPageCount, 1)}
           </div>
           <Button
             size="sm"
@@ -219,16 +154,11 @@ export function EdgeExecutedTradesTable({ edgeId }: { edgeId: string }) {
             className="h-8 border-white/10 bg-white/5 text-xs text-white/72 hover:bg-white/10"
             disabled={
               rows.length === 0 ||
-              tradesQuery.isFetchingNextPage ||
-              (!tradesQuery.hasNextPage && pageIndex >= loadedPageCount - 1)
+              pageIndex >= loadedPageCount - 1
             }
-            onClick={handleNextPage}
+            onClick={() => table.nextPage()}
           >
-            {tradesQuery.isFetchingNextPage ? (
-              <Loader2 className="size-3 animate-spin" />
-            ) : (
-              <ChevronRight className="size-3" />
-            )}
+            <ChevronRight className="size-3" />
           </Button>
         </div>
       </div>

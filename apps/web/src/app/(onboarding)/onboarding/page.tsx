@@ -1,7 +1,6 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -10,7 +9,6 @@ import Plans from "./components/plans";
 import Personal from "./components/personal";
 import { authClient } from "@/lib/auth-client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle } from "lucide-react";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -26,7 +24,9 @@ import {
   type OnboardingStep,
 } from "@/features/onboarding/lib/onboarding-step-storage";
 import {
+  buildLoginPath,
   buildPostAuthContinuePath,
+  buildOnboardingPath,
   resolvePostOnboardingPath,
 } from "@/lib/post-auth-paths";
 import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
@@ -42,10 +42,6 @@ function OnboardingPageContent() {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
   const [selectedPlanKey, setSelectedPlanKey] =
     useState<BillingPlanKey>("student");
-  const [activationCode, setActivationCode] = useState("");
-  const [activationMessage, setActivationMessage] = useState<string | null>(
-    null
-  );
   const [pendingPlanKey, setPendingPlanKey] = useState<BillingPlanKey | null>(
     null
   );
@@ -80,9 +76,6 @@ function OnboardingPageContent() {
   const bootstrapGrowthAccess = useMutation(
     trpcOptions.billing.completeGrowthAccess.mutationOptions()
   );
-  const redeemGrowthAccess = useMutation(
-    trpcOptions.billing.completeGrowthAccess.mutationOptions()
-  );
   const createCheckout = useMutation<any, unknown, any>({
     mutationFn: (input) => (trpcClient.billing as any).createCheckout.mutate(input),
   });
@@ -96,12 +89,8 @@ function OnboardingPageContent() {
       | undefined) ?? "student";
   const refetchBillingState = billingStateQuery.refetch;
   const onboardingStorageUserId = session?.user.id ?? null;
-  const accessLocked = Boolean(
-    billingStateQuery.data?.access.privateBetaRequired &&
-      !billingStateQuery.data.access.hasPrivateBetaAccess
-  );
   const shouldSkipOnboarding = Boolean(
-    billingStateQuery.data?.onboarding.isComplete && !accessLocked
+    billingStateQuery.data?.onboarding.isComplete
   );
   const completeOnboardingAndRedirect = useCallback(
     async (options?: { syncPlan?: boolean }) => {
@@ -191,7 +180,6 @@ function OnboardingPageContent() {
       setCurrentStep(storedStep);
     }
   }, [
-    accessLocked,
     activePlanKey,
     billingStateQuery.data,
     isSessionPending,
@@ -200,27 +188,12 @@ function OnboardingPageContent() {
   ]);
 
   useEffect(() => {
-    if (billingStateQuery.data?.onboarding.isComplete && accessLocked) {
-      setCurrentStep(2);
-    }
-  }, [accessLocked, billingStateQuery.data?.onboarding.isComplete]);
-
-  useEffect(() => {
-    const redeemedCode = billingStateQuery.data?.access.redemption?.code;
-    if (!redeemedCode) {
+    if (isSessionPending || session) {
       return;
     }
 
-    setActivationCode(redeemedCode);
-    setActivationMessage(
-      billingStateQuery.data?.access.redemption?.label
-        ? `${billingStateQuery.data.access.redemption.label} access unlocked`
-        : "Private beta access unlocked"
-    );
-  }, [
-    billingStateQuery.data?.access.redemption?.code,
-    billingStateQuery.data?.access.redemption?.label,
-  ]);
+    router.replace(buildLoginPath(buildOnboardingPath(searchParams?.get("returnTo"))));
+  }, [isSessionPending, router, searchParams, session]);
 
   useEffect(() => {
     if (!billingStateQuery.data || bootstrappedGrowthState.current) {
@@ -230,28 +203,21 @@ function OnboardingPageContent() {
     bootstrappedGrowthState.current = true;
 
     const storedIntent = getStoredGrowthIntent();
-    const storedBetaCode = storedIntent.betaCode;
     const storedReferralCode = storedIntent.referralCode;
     const storedAffiliateCode = storedIntent.affiliateCode;
 
-    if (!storedBetaCode && !storedReferralCode && !storedAffiliateCode) {
+    if (!storedReferralCode && !storedAffiliateCode) {
       return;
     }
 
     void bootstrapGrowthAccess
       .mutateAsync({
-        betaCode: storedBetaCode ?? undefined,
         referralCode: storedReferralCode ?? undefined,
         affiliateCode: storedAffiliateCode ?? undefined,
         source: "onboarding",
       })
       .then((result) => {
         clearStoredGrowthIntent();
-
-        if (storedBetaCode) {
-          setActivationCode(storedBetaCode);
-          setActivationMessage("Private beta access unlocked");
-        }
 
         if (result.growth.message) {
           toast.error(result.growth.message);
@@ -260,11 +226,9 @@ function OnboardingPageContent() {
         void billingStateQuery.refetch();
       })
       .catch((error: Error) => {
-        if (storedBetaCode) {
-          setActivationCode(storedBetaCode);
+        if (error.message) {
+          toast.error(error.message);
         }
-
-        setActivationMessage(error.message || "Unable to activate access");
       });
   }, [billingStateQuery.data, billingStateQuery, bootstrapGrowthAccess]);
 
@@ -389,45 +353,6 @@ function OnboardingPageContent() {
     router.push("/login");
   };
 
-  const handleRedeemAccess = async () => {
-    const normalizedCode = activationCode.trim().toUpperCase();
-    if (!normalizedCode) {
-      setActivationMessage("Enter your private beta code to continue");
-      return;
-    }
-
-    try {
-      const storedIntent = getStoredGrowthIntent();
-      const result = await redeemGrowthAccess.mutateAsync({
-        betaCode: normalizedCode,
-        referralCode: storedIntent.referralCode,
-        affiliateCode: storedIntent.affiliateCode,
-        source: "onboarding",
-      });
-
-      clearStoredGrowthIntent();
-      setActivationCode(normalizedCode);
-      setActivationMessage(
-        result.access.redemption?.label
-          ? `${result.access.redemption.label} access unlocked`
-          : "Private beta access unlocked"
-      );
-
-      if (result.growth.message) {
-        toast.error(result.growth.message);
-      } else {
-        toast.success("Private beta access unlocked");
-      }
-
-      await billingStateQuery.refetch();
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unable to activate access";
-      setActivationMessage(message);
-      toast.error(message);
-    }
-  };
-
   const handlePlanSelection = async (planKey: BillingPlanKey) => {
     setSelectedPlanKey(planKey);
 
@@ -464,6 +389,16 @@ function OnboardingPageContent() {
 
   if (shouldSkipOnboarding) {
     return null;
+  }
+
+  if (isSessionPending || !session) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-sidebar">
+        <div className="w-full max-w-md rounded-lg border border-white/10 bg-sidebar p-6 text-center text-sm text-white/55 shadow-sidebar-button">
+          Restoring your session and returning to onboarding...
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -575,7 +510,7 @@ function OnboardingPageContent() {
 
           {currentStep === 2 ? (
             <div className="flex w-full flex-col items-center gap-8">
-              {billingConfigQuery.data && !accessLocked ? (
+              {billingConfigQuery.data ? (
                 <>
                   <Plans
                     plans={billingConfigQuery.data.plans}
@@ -601,64 +536,6 @@ function OnboardingPageContent() {
                     </div>
                   ) : null}
                 </>
-              ) : accessLocked ? (
-                <div className="w-full max-w-2xl">
-                  <div className="flex flex-col gap-5 rounded-lg border border-white/10 bg-sidebar p-6 shadow-sidebar-button">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 flex size-10 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300">
-                        <AlertTriangle className="size-4" />
-                      </div>
-                      <div className="space-y-1">
-                        <h2 className="text-lg font-semibold text-white">
-                          Private beta access required
-                        </h2>
-                        <p className="text-sm leading-relaxed text-white/55">
-                          Redeem your invite code to unlock plan selection and
-                          the rest of onboarding.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                      <Input
-                        value={activationCode}
-                        onChange={(event) => {
-                          setActivationCode(event.target.value.toUpperCase());
-                          setActivationMessage(null);
-                        }}
-                        placeholder="Enter your beta code"
-                        className="flex-1"
-                      />
-
-                      <Button
-                        onClick={handleRedeemAccess}
-                        disabled={redeemGrowthAccess.isPending}
-                        className={getOnboardingButtonClassName({
-                          tone: "gold",
-                          className: "sm:min-w-40",
-                        })}
-                      >
-                        {redeemGrowthAccess.isPending
-                          ? "Activating..."
-                          : "Redeem access"}
-                      </Button>
-                    </div>
-
-                    <p
-                      className={cn(
-                        "text-xs",
-                        billingStateQuery.data?.access.redemption
-                          ? "text-emerald-400"
-                          : activationMessage
-                          ? "text-amber-200"
-                          : "text-white/40"
-                      )}
-                    >
-                      {activationMessage ??
-                        "Beta access is enforced for this environment."}
-                    </p>
-                  </div>
-                </div>
               ) : (
                 <div className="w-full max-w-2xl rounded-lg border border-white/10 bg-sidebar p-6 text-center text-sm text-white/45 shadow-sidebar-button">
                   Loading plan details...

@@ -1199,6 +1199,7 @@ export const socialRouter = router({
         .select({
           userId: tradingAccount.userId,
           verificationLevel: tradingAccount.verificationLevel,
+          socialVisibleSince: tradingAccount.socialVisibleSince,
         })
         .from(tradingAccount)
         .where(eq(tradingAccount.id, input.accountId))
@@ -1220,7 +1221,7 @@ export const socialRouter = router({
         socialOptIn: input.optIn,
       };
 
-      if (input.optIn && !account[0].verificationLevel) {
+      if (input.optIn && !account[0].socialVisibleSince) {
         updates.socialVisibleSince = new Date();
       }
 

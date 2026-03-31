@@ -1046,6 +1046,7 @@ export const performanceAlertRule = pgTable(
     isEnabled: boolean("is_enabled").notNull().default(true),
     notifyInApp: boolean("notify_in_app").notNull().default(true),
     notifyEmail: boolean("notify_email").notNull().default(false),
+    webhookUrl: text("webhook_url"),
     cooldownMinutes: integer("cooldown_minutes").default(60), // Min time between repeat alerts
     lastTriggeredAt: timestamp("last_triggered_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),

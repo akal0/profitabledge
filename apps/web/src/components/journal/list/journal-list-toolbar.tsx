@@ -1,13 +1,19 @@
 "use client";
 
 import {
+  Archive,
   ChevronDown,
+  CheckSquare,
+  CheckCheck,
+  Eraser,
+  FolderOpen,
   LayoutGrid,
   List,
   ListFilterPlus,
   Plus,
   Search,
   SortAsc,
+  Trash2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -80,6 +86,17 @@ interface JournalListToolbarProps {
   onSortByChange: (value: SortField) => void;
   onClearFilters: () => void;
   onCreateEntry: () => void;
+  onCreateFolder: () => void;
+  availableFolders: Array<{ id: string; title: string }>;
+  selectedCount: number;
+  totalSelectableCount: number;
+  isSelectionMode: boolean;
+  onSelectionModeChange: (value: boolean) => void;
+  onSelectAll: () => void;
+  onClearSelected: () => void;
+  onMoveSelectedToFolder: (folderId: string | null) => void;
+  onArchiveSelected: () => void;
+  onDeleteSelected: () => void;
   onOpenSearchDialog: () => void;
 }
 
@@ -100,6 +117,17 @@ export function JournalListToolbar({
   onSortByChange,
   onClearFilters,
   onCreateEntry,
+  onCreateFolder,
+  availableFolders,
+  selectedCount,
+  totalSelectableCount,
+  isSelectionMode,
+  onSelectionModeChange,
+  onSelectAll,
+  onClearSelected,
+  onMoveSelectedToFolder,
+  onArchiveSelected,
+  onDeleteSelected,
   onOpenSearchDialog,
 }: JournalListToolbarProps) {
   const badgeBaseClass =
@@ -262,6 +290,83 @@ export function JournalListToolbar({
               <Plus className="size-3" />
               New entry
             </Button>
+
+            <Button
+              onClick={onCreateFolder}
+              size="sm"
+              className={journalActionButtonMutedClassName}
+            >
+              <Plus className="size-3" />
+              New folder
+            </Button>
+
+            <Button
+              onClick={() => onSelectionModeChange(!isSelectionMode)}
+              size="sm"
+              className={cn(
+                journalActionButtonMutedClassName,
+                isSelectionMode && "border-teal-400/25 bg-teal-500/12 text-teal-100"
+              )}
+            >
+              <CheckSquare className="size-3" />
+              Select
+            </Button>
+
+            {isSelectionMode && selectedCount > 0 ? (
+              <>
+                <Button size="sm" className={journalActionButtonMutedClassName} onClick={onSelectAll}>
+                  <CheckCheck className="size-3" />
+                  Select all
+                </Button>
+                <Button size="sm" className={journalActionButtonMutedClassName} onClick={onClearSelected}>
+                  <Eraser className="size-3" />
+                  Clear
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" className={journalActionButtonMutedClassName}>
+                      <FolderOpen className="size-3" />
+                      Move {selectedCount}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="border-white/10 bg-sidebar">
+                    <DropdownMenuItem
+                      className="text-white/80 focus:bg-white/10 focus:text-white"
+                      onClick={() => onMoveSelectedToFolder(null)}
+                    >
+                      Remove from folder
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator className="bg-white/10" />
+                    {availableFolders.map((folder) => (
+                      <DropdownMenuItem
+                        key={folder.id}
+                        className="text-white/80 focus:bg-white/10 focus:text-white"
+                        onClick={() => onMoveSelectedToFolder(folder.id)}
+                      >
+                        {folder.title}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button size="sm" className={journalActionButtonMutedClassName} onClick={onArchiveSelected}>
+                  <Archive className="size-3" />
+                  Archive
+                </Button>
+                <Button
+                  size="sm"
+                  className={cn(journalActionButtonMutedClassName, "text-red-200 hover:text-red-100")}
+                  onClick={onDeleteSelected}
+                >
+                  <Trash2 className="size-3" />
+                  Delete
+                </Button>
+              </>
+            ) : isSelectionMode && totalSelectableCount > 0 ? (
+              <Button size="sm" className={journalActionButtonMutedClassName} onClick={onSelectAll}>
+                <CheckCheck className="size-3" />
+                Select all
+              </Button>
+            ) : null}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

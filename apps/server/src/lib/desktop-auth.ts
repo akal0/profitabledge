@@ -1,6 +1,46 @@
 const DEFAULT_DESKTOP_AUTH_PATH = "/dashboard";
 const DEFAULT_LOGIN_PATH = "/login";
 
+function resolveDesktopScheme(origin?: string | null) {
+  if (!origin) {
+    return "profitabledge";
+  }
+
+  try {
+    const url = new URL(origin);
+    if (
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+      (url.port === "3001" || url.port === "3310")
+    ) {
+      return "profitabledge-dev";
+    }
+  } catch {
+    // Ignore malformed origins and fall back to the production scheme.
+  }
+
+  return "profitabledge";
+}
+
+function resolveDesktopDevCallbackOrigin(origin?: string | null) {
+  if (!origin) {
+    return null;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (
+      (url.hostname == "localhost" || url.hostname == "127.0.0.1") &&
+      (url.port == "3001" || url.port == "3310")
+    ) {
+      return "http://127.0.0.1:3310";
+    }
+  } catch {
+    // Ignore malformed origins and fall back to protocol deep links.
+  }
+
+  return null;
+}
+
 export function sanitizeDesktopAuthPath(path: string | null | undefined) {
   if (!path || !path.startsWith("/")) {
     return DEFAULT_DESKTOP_AUTH_PATH;
@@ -9,15 +49,23 @@ export function sanitizeDesktopAuthPath(path: string | null | undefined) {
   return path;
 }
 
-export function buildDesktopDeepLink(path: string) {
+export function buildDesktopDeepLink(path: string, origin?: string | null) {
+  const sanitizedPath = sanitizeDesktopAuthPath(path);
+  const devCallbackOrigin = resolveDesktopDevCallbackOrigin(origin);
+  if (devCallbackOrigin) {
+    const url = new URL("/desktop/auth/complete", devCallbackOrigin);
+    url.searchParams.set("path", sanitizedPath);
+    return url.toString();
+  }
+
   const params = new URLSearchParams({
-    path: sanitizeDesktopAuthPath(path),
+    path: sanitizedPath,
   });
-  return `profitabledge://open?${params.toString()}`;
+  return `${resolveDesktopScheme(origin)}://open?${params.toString()}`;
 }
 
-export function buildDesktopLoginDeepLink() {
-  return `profitabledge://open?${new URLSearchParams({
+export function buildDesktopLoginDeepLink(origin?: string | null) {
+  return `${resolveDesktopScheme(origin)}://open?${new URLSearchParams({
     path: DEFAULT_LOGIN_PATH,
   }).toString()}`;
 }

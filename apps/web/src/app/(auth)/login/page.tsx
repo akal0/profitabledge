@@ -49,6 +49,10 @@ const INPUT_CLASS =
 const FIELD_LABEL_CLASS =
   "text-xs font-medium tracking-[-0.01em] text-white/42";
 
+function isTauriDesktop() {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
 const LOGIN_HERO_SLIDES: AuthHeroSlide[] = [
   {
     title: "See the edge before the same mistake repeats.",
@@ -87,6 +91,7 @@ const LoginPage = () => {
     "google" | null
   >(null);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const isDesktopApp = isTauriDesktop();
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -203,18 +208,20 @@ const LoginPage = () => {
             </span>
           </Button>
 
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={isBusy}
-            onClick={() => void handlePasskeyLogin()}
-            className={SOCIAL_BUTTON_CLASS}
-          >
-            <Fingerprint className="size-4 text-white/68 transition-colors group-hover:text-white" />
-            <span>
-              {passkeyLoading ? "Checking..." : "Sign in with passkey"}
-            </span>
-          </Button>
+          {!isDesktopApp ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={isBusy}
+              onClick={() => void handlePasskeyLogin()}
+              className={SOCIAL_BUTTON_CLASS}
+            >
+              <Fingerprint className="size-4 text-white/68 transition-colors group-hover:text-white" />
+              <span>
+                {passkeyLoading ? "Checking..." : "Sign in with passkey"}
+              </span>
+            </Button>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-4">

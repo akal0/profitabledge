@@ -400,6 +400,20 @@
       "when": 1774644775303,
       "tag": "0049_auth_plugin_upgrades",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1775000000000,
+      "tag": "0050_journal_folders",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1775000000001,
+      "tag": "0051_alert_rule_webhook_url",
+      "breakpoints": true
     }
   ]
 }

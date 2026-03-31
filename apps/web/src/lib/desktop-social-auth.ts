@@ -10,11 +10,51 @@ const DESKTOP_USER_AGENT_MARKER = "ProfitabledgeDesktop/1";
 const DESKTOP_OPEN_EXTERNAL_EVENT = "profitabledge:open-external-url";
 const DESKTOP_BRIDGE_READY_FLAG = "__PE_DESKTOP_BRIDGE_READY";
 const DEFAULT_DESKTOP_BROWSER_AUTH_ORIGIN =
-  "https://beta.profitabledge.com";
+  "https://www.profitabledge.com";
 const LOCAL_DESKTOP_PROXY_ORIGINS = new Set([
   "http://localhost:3310",
   "http://127.0.0.1:3310",
 ]);
+
+function resolveDesktopScheme(origin?: string | null) {
+  if (!origin) {
+    return "profitabledge";
+  }
+
+  try {
+    const url = new URL(origin);
+    if (
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+      (url.port === "3001" || url.port === "3310")
+    ) {
+      return "profitabledge-dev";
+    }
+  } catch {
+    // Ignore malformed origins and fall back to the production scheme.
+  }
+
+  return "profitabledge";
+}
+
+function resolveDesktopDevCallbackOrigin(origin?: string | null) {
+  if (!origin) {
+    return null;
+  }
+
+  try {
+    const url = new URL(origin);
+    if (
+      (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+      (url.port === "3001" || url.port === "3310")
+    ) {
+      return "http://127.0.0.1:3310";
+    }
+  } catch {
+    // Ignore malformed origins and fall back to protocol deep links.
+  }
+
+  return null;
+}
 
 function inferDesktopBrowserAuthOrigin(serverOrigin: string | null) {
   if (!serverOrigin) {
@@ -33,12 +73,12 @@ function inferDesktopBrowserAuthOrigin(serverOrigin: string | null) {
     }
 
     if (url.hostname === "api.profitabledge.com") {
-      url.hostname = "beta.profitabledge.com";
+      url.hostname = "www.profitabledge.com";
       return url.origin;
     }
 
     if (url.hostname === "www.api.profitabledge.com") {
-      url.hostname = "beta.profitabledge.com";
+      url.hostname = "www.profitabledge.com";
       return url.origin;
     }
   } catch {
@@ -163,9 +203,17 @@ function extractOneTimeToken(result: unknown) {
   return typeof token === "string" && token.length > 0 ? token : null;
 }
 
-export function buildDesktopDeepLink(path: string) {
-  const params = new URLSearchParams({ path: sanitizeDesktopPath(path) });
-  return `profitabledge://open?${params.toString()}`;
+export function buildDesktopDeepLink(path: string, origin?: string | null) {
+  const sanitizedPath = sanitizeDesktopPath(path);
+  const devCallbackOrigin = resolveDesktopDevCallbackOrigin(origin);
+  if (devCallbackOrigin) {
+    const url = new URL("/desktop/auth/complete", devCallbackOrigin);
+    url.searchParams.set("path", sanitizedPath);
+    return url.toString();
+  }
+
+  const params = new URLSearchParams({ path: sanitizedPath });
+  return `${resolveDesktopScheme(origin)}://open?${params.toString()}`;
 }
 
 function requestDesktopExternalUrl(url: string) {
@@ -194,10 +242,6 @@ function requestDesktopExternalUrl(url: string) {
 }
 
 async function openDesktopExternalUrl(url: string) {
-  if (requestDesktopExternalUrl(url)) {
-    return true;
-  }
-
   if (isTauriDesktop()) {
     try {
       const { openUrl } = await import("@tauri-apps/plugin-opener");
@@ -207,6 +251,10 @@ async function openDesktopExternalUrl(url: string) {
       // Fall through to the desktop-shell bridge if the direct opener bridge
       // is unavailable in this webview context.
     }
+  }
+
+  if (requestDesktopExternalUrl(url)) {
+    return true;
   }
 
   if (typeof window !== "undefined") {
@@ -279,6 +327,11 @@ export async function startDesktopSocialAuth(options: {
   const startUrl = new URL("/desktop/auth/start", authOrigin);
   startUrl.searchParams.set("provider", options.provider);
   startUrl.searchParams.set("path", sanitizeDesktopPath(options.path));
+
+  if (isTauriDesktop()) {
+    window.location.assign(startUrl.toString());
+    return true;
+  }
 
   const opened = await openDesktopExternalUrl(startUrl.toString());
   if (!opened) {

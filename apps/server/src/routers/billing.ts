@@ -9,8 +9,6 @@ import {
   billingOrder,
   billingSubscription,
   billingWebhookEvent,
-  privateBetaCode,
-  privateBetaRedemption,
 } from "../db/schema/billing";
 import { user as userTable } from "../db/schema/auth";
 import { activationMilestone } from "../db/schema/operations";
@@ -23,7 +21,6 @@ import {
   getHigherBillingPlanKey,
   BILLING_PLAN_TIER,
   getWebAppUrl,
-  isPrivateBetaRequired,
   REFERRAL_EDGE_CREDIT_AMOUNT,
   REFERRAL_EDGE_CREDIT_THRESHOLD,
   REFERRAL_FREE_MONTH_THRESHOLD,
@@ -34,10 +31,6 @@ import {
   type BillingPlanKey,
 } from "../lib/billing/config";
 import { createUpgradeOfferDiscount } from "../lib/billing/discounts";
-import {
-  normalizePrivateBetaCode,
-  validatePrivateBetaCodeInput,
-} from "../lib/billing/private-beta";
 import {
   applyForAffiliate,
   approveAffiliateApplication,
@@ -59,10 +52,8 @@ import {
   getAffiliatePayoutSettings,
   getAvailableReferralFreeMonthGrantForPlan,
   getEffectiveBillingState,
-  joinPrivateBetaWaitlist,
   listAffiliatePayoutQueue,
   listAffiliateApplications,
-  listPrivateBetaWaitlistEntries,
   markAffiliateSubscriptionActive,
   markAffiliateManualWithdrawalPaid,
   recordAffiliatePayout,
@@ -84,7 +75,6 @@ import {
   setDefaultAffiliatePaymentMethod,
   syncUserPremiumFlag,
   updateAffiliateProfileEffects,
-  updatePrivateBetaWaitlistEntry,
   approveAffiliateWithdrawal,
   getAffiliatePublicProfile,
   AFFILIATE_TIER_KEYS,
@@ -128,10 +118,6 @@ const AFFILIATE_PAYMENT_METHOD_TYPES = [
 ] as const;
 const BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE = "beta_stripe_migration";
 const BETA_STRIPE_MIGRATION_GRACE_DAYS = 30;
-
-function buildPrivateBetaCode() {
-  return `BETA${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-}
 
 function isGrowthAdmin(input: {
   role?: string | null;
@@ -271,32 +257,11 @@ async function getAccessStatus(input: {
   role?: string | null;
   email?: string | null;
 }) {
-  const required = isPrivateBetaRequired();
-  const isAdmin = isGrowthAdmin(input);
-
-  const redemptionRows = await db
-    .select({
-      id: privateBetaRedemption.id,
-      redeemedAt: privateBetaRedemption.redeemedAt,
-      source: privateBetaRedemption.source,
-      code: privateBetaCode.code,
-      label: privateBetaCode.label,
-    })
-    .from(privateBetaRedemption)
-    .innerJoin(
-      privateBetaCode,
-      eq(privateBetaRedemption.codeId, privateBetaCode.id)
-    )
-    .where(eq(privateBetaRedemption.userId, input.userId))
-    .limit(1);
-
-  const redemption = redemptionRows[0] ?? null;
-
   return {
-    privateBetaRequired: required,
-    hasPrivateBetaAccess: required ? Boolean(redemption || isAdmin) : true,
-    hasAdminBypass: required ? isAdmin && !redemption : false,
-    redemption,
+    privateBetaRequired: false,
+    hasPrivateBetaAccess: true,
+    hasAdminBypass: false,
+    redemption: null,
   };
 }
 
@@ -389,121 +354,6 @@ async function claimPendingGrowthAttributionIfOnboardingPending(input: {
   }
 
   return claimPendingGrowthAttribution(input);
-}
-
-async function redeemPrivateBetaCode(input: {
-  userId: string;
-  email?: string | null;
-  code: string;
-  source?: string;
-}) {
-  const normalized = normalizePrivateBetaCode(input.code);
-  if (!normalized) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Private beta code is required",
-    });
-  }
-
-  const access = await getAccessStatus({
-    userId: input.userId,
-    email: input.email,
-  });
-  if (access.redemption) {
-    return access.redemption;
-  }
-
-  const validation = await validatePrivateBetaCodeInput(normalized);
-  if (!validation.valid) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: validation.message,
-    });
-  }
-
-  const reservation = await db
-    .update(privateBetaCode)
-    .set({
-      redeemedCount: sql`${privateBetaCode.redeemedCount} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(privateBetaCode.id, validation.row.id),
-        eq(privateBetaCode.isActive, true),
-        sql`(${privateBetaCode.expiresAt} IS NULL OR ${privateBetaCode.expiresAt} >= NOW())`,
-        sql`(${privateBetaCode.maxRedemptions} IS NULL OR ${privateBetaCode.redeemedCount} < ${privateBetaCode.maxRedemptions})`
-      )
-    )
-    .returning({ id: privateBetaCode.id });
-
-  if (!reservation[0]) {
-    const latestAccess = await getAccessStatus({
-      userId: input.userId,
-      email: input.email,
-    });
-    if (latestAccess.redemption) {
-      return latestAccess.redemption;
-    }
-
-    const latestValidation = await validatePrivateBetaCodeInput(normalized);
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: latestValidation.valid
-        ? "That private beta code is no longer available"
-        : latestValidation.message,
-    });
-  }
-
-  const inserted = await db
-    .insert(privateBetaRedemption)
-    .values({
-      id: crypto.randomUUID(),
-      codeId: validation.row.id,
-      userId: input.userId,
-      email: input.email ?? null,
-      source: input.source ?? "app",
-    })
-    .onConflictDoNothing({
-      target: privateBetaRedemption.userId,
-    })
-    .returning({ id: privateBetaRedemption.id });
-
-  if (!inserted[0]) {
-    await db
-      .update(privateBetaCode)
-      .set({
-        redeemedCount: sql`GREATEST(${privateBetaCode.redeemedCount} - 1, 0)`,
-        updatedAt: new Date(),
-      })
-      .where(eq(privateBetaCode.id, validation.row.id));
-
-    const latestAccess = await getAccessStatus({
-      userId: input.userId,
-      email: input.email,
-    });
-    if (latestAccess.redemption) {
-      return latestAccess.redemption;
-    }
-
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Unable to redeem private beta code",
-    });
-  }
-
-  const redeemedAccess = await getAccessStatus({
-    userId: input.userId,
-    email: input.email,
-  });
-  if (redeemedAccess.redemption) {
-    return redeemedAccess.redemption;
-  }
-
-  throw new TRPCError({
-    code: "INTERNAL_SERVER_ERROR",
-    message: "Private beta access was redeemed but could not be loaded",
-  });
 }
 
 async function upsertBillingCustomerFromPolar(input: {
@@ -2100,7 +1950,6 @@ function assertGrowthAdmin(input: {
 }
 
 const completeGrowthAccessInput = z.object({
-  betaCode: z.string().optional(),
   referralCode: z.string().optional(),
   affiliateCode: z.string().optional(),
   source: z.string().optional(),
@@ -2154,26 +2003,11 @@ async function completeGrowthAccessForUser(
     }
   }
 
-  if (input.betaCode) {
-    await redeemPrivateBetaCode({
-      userId: user.id,
-      email: user.email,
-      code: input.betaCode,
-      source: input.source ?? "onboarding",
-    });
-  }
-
   const access = await getAccessStatus({
     userId: user.id,
     role: user.role,
     email: user.email,
   });
-  if (access.privateBetaRequired && !access.hasPrivateBetaAccess) {
-    throw new TRPCError({
-      code: "PRECONDITION_FAILED",
-      message: "A valid private beta code is required to continue",
-    });
-  }
 
   return {
     access,
@@ -2208,7 +2042,7 @@ export const billingRouter = router({
     }));
 
     return {
-      privateBetaRequired: isPrivateBetaRequired(),
+      privateBetaRequired: false,
       referralRewards: {
         edgeCreditThreshold: REFERRAL_EDGE_CREDIT_THRESHOLD,
         edgeCreditAmount: REFERRAL_EDGE_CREDIT_AMOUNT,
@@ -2224,46 +2058,6 @@ export const billingRouter = router({
     .input(z.object({ code: z.string().min(1) }))
     .query(async ({ input }) => {
       return getAffiliatePublicProfile(input.code);
-    }),
-
-  joinPrivateBetaWaitlist: publicProcedure
-    .input(
-      z.object({
-        email: z.string().email(),
-        source: z.string().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const entry = await joinPrivateBetaWaitlist({
-        email: input.email,
-        source: input.source ?? "root",
-      });
-
-      return {
-        id: entry.id,
-        email: entry.email,
-        status: entry.status,
-      };
-    }),
-
-  validatePrivateBetaCode: publicProcedure
-    .input(
-      z.object({
-        code: z.string().min(1),
-      })
-    )
-    .query(async ({ input }) => {
-      const validation = await validatePrivateBetaCodeInput(input.code);
-      if (!validation.valid) {
-        return validation;
-      }
-
-      return {
-        valid: true,
-        code: validation.code,
-        label: validation.label,
-        remaining: validation.remaining,
-      };
     }),
 
   captureGrowthTouch: publicProcedure
@@ -2779,18 +2573,6 @@ export const billingRouter = router({
           null,
         source: "checkout",
       });
-      const access = await getAccessStatus({
-        userId: user.id,
-        role: user.role,
-        email: user.email,
-      });
-      if (access.privateBetaRequired && !access.hasPrivateBetaAccess) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Redeem a private beta code before starting checkout",
-        });
-      }
-
       const billing = await getActiveBillingState(user.id);
       const currentPlanTier = BILLING_PLAN_TIER[billing.activePlanKey] ?? 0;
       const targetPlanTier = BILLING_PLAN_TIER[input.planKey] ?? 0;
@@ -2966,49 +2748,6 @@ export const billingRouter = router({
   syncFromPolar: protectedProcedure.mutation(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
     return syncStripeBillingStateForUser(user);
-  }),
-
-  createPrivateBetaCode: protectedProcedure
-    .input(
-      z.object({
-        label: z.string().min(2),
-        description: z.string().optional(),
-        code: z.string().optional(),
-        maxRedemptions: z.number().int().positive().nullable().optional(),
-        expiresAt: z.date().nullable().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin({ role: user.role, email: user.email });
-
-      const code = normalizePrivateBetaCode(
-        input.code ?? buildPrivateBetaCode()
-      );
-      const inserted = await db
-        .insert(privateBetaCode)
-        .values({
-          id: crypto.randomUUID(),
-          code,
-          label: input.label,
-          description: input.description ?? null,
-          maxRedemptions: input.maxRedemptions ?? null,
-          expiresAt: input.expiresAt ?? null,
-          createdByUserId: user.id,
-        })
-        .returning();
-
-      return inserted[0];
-    }),
-
-  listPrivateBetaCodes: protectedProcedure.query(async ({ ctx }) => {
-    const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin({ role: user.role, email: user.email });
-
-    return db
-      .select()
-      .from(privateBetaCode)
-      .orderBy(desc(privateBetaCode.createdAt));
   }),
 
   listAffiliateApplications: protectedProcedure.query(async ({ ctx }) => {
@@ -3200,34 +2939,6 @@ export const billingRouter = router({
       });
     }),
 
-  listPrivateBetaWaitlistEntries: protectedProcedure.query(async ({ ctx }) => {
-    const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin({ role: user.role, email: user.email });
-
-    return listPrivateBetaWaitlistEntries();
-  }),
-
-  updatePrivateBetaWaitlistEntry: protectedProcedure
-    .input(
-      z.object({
-        entryId: z.string(),
-        status: z.string().optional(),
-        notes: z.string().optional(),
-        invitedCodeId: z.string().nullable().optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin({ role: user.role, email: user.email });
-
-      return updatePrivateBetaWaitlistEntry({
-        entryId: input.entryId,
-        reviewedByUserId: user.id,
-        status: input.status ?? null,
-        notes: input.notes ?? null,
-        invitedCodeId: input.invitedCodeId ?? null,
-      });
-    }),
 });
 
 export async function syncPolarWebhookEvent(event: any) {

@@ -5,7 +5,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   BadgePercent,
   CheckCircle2,
-  Copy,
   Shield,
   Wallet,
   XCircle,
@@ -127,12 +126,6 @@ function parsePercentToBasisPoints(
 }
 
 export function GrowthAdminDashboard() {
-  const [betaForm, setBetaForm] = useState({
-    label: "",
-    description: "",
-    code: "",
-    maxRedemptions: "",
-  });
   const [tierDrafts, setTierDrafts] = useState<
     Record<
       string,
@@ -155,10 +148,6 @@ export function GrowthAdminDashboard() {
   const billingV2 = getBillingV2Options();
 
   const billingStateQuery = trpc.billing.getState.useQuery();
-  const betaCodesQuery = useQuery({
-    ...trpcOptions.billing.listPrivateBetaCodes.queryOptions(),
-    enabled: billingStateQuery.data?.admin?.isAdmin === true,
-  });
   const affiliateApplicationsQuery = useQuery({
     ...trpcOptions.billing.listAffiliateApplications.queryOptions(),
     enabled: billingStateQuery.data?.admin?.isAdmin === true,
@@ -167,9 +156,6 @@ export function GrowthAdminDashboard() {
     ...trpcOptions.billing.listAffiliatePayoutQueue.queryOptions(),
     enabled: billingStateQuery.data?.admin?.isAdmin === true,
   });
-  const createPrivateBetaCode = useMutation(
-    trpcOptions.billing.createPrivateBetaCode.mutationOptions()
-  );
   const approveAffiliate = useMutation({
     ...trpcOptions.billing.approveAffiliate.mutationOptions(),
     onSuccess: () => {
@@ -284,46 +270,6 @@ export function GrowthAdminDashboard() {
       );
     },
   });
-
-  const copyToClipboard = async (value: string, message: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success(message);
-    } catch {
-      toast.error("Unable to copy right now");
-    }
-  };
-
-  const handleCreateBetaCode = async () => {
-    if (!betaForm.label.trim()) {
-      toast.error("Label is required");
-      return;
-    }
-
-    const parsed = betaForm.maxRedemptions.trim()
-      ? Number(betaForm.maxRedemptions)
-      : null;
-    if (parsed !== null && (!Number.isFinite(parsed) || parsed <= 0)) {
-      toast.error("Max redemptions must be a positive number");
-      return;
-    }
-
-    try {
-      await createPrivateBetaCode.mutateAsync({
-        label: betaForm.label.trim(),
-        description: betaForm.description.trim() || undefined,
-        code: betaForm.code.trim() || undefined,
-        maxRedemptions: parsed ? Math.floor(parsed) : null,
-      });
-      setBetaForm({ label: "", description: "", code: "", maxRedemptions: "" });
-      toast.success("Beta code created");
-      void betaCodesQuery.refetch();
-    } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Unable to create beta code"
-      );
-    }
-  };
 
   const getTierDraft = (entry: any) =>
     tierDrafts[entry.affiliate.id] ?? {
@@ -442,13 +388,11 @@ export function GrowthAdminDashboard() {
     setAffiliateSettingsDialogOpen(false);
   };
 
-  const betaCodes = betaCodesQuery.data ?? [];
   const affiliateApplications = affiliateApplicationsQuery.data ?? [];
   const payoutQueue = (affiliatePayoutQueueQuery.data ?? []) as any[];
   const pendingApplications = affiliateApplications.filter(
     (entry) => entry.application.status === "pending"
   ).length;
-  const activeBetaCodes = betaCodes.filter((code) => code.isActive).length;
   const openWithdrawalCount = payoutQueue.reduce(
     (count, entry) =>
       count +
@@ -522,12 +466,6 @@ export function GrowthAdminDashboard() {
     <main className="space-y-6 p-6 py-4">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <GrowthStatCard
-          icon={Shield}
-          label="Active beta codes"
-          value={activeBetaCodes}
-          color="text-teal-300"
-        />
-        <GrowthStatCard
           icon={BadgePercent}
           label="Pending applications"
           value={pendingApplications}
@@ -539,6 +477,12 @@ export function GrowthAdminDashboard() {
           value={openWithdrawalCount}
           color="text-emerald-300"
         />
+        <GrowthStatCard
+          icon={Shield}
+          label="Ready to settle"
+          value={formatCurrency(readyPayoutAmount)}
+          color="text-teal-300"
+        />
       </div>
 
       <GoalSurface>
@@ -549,12 +493,12 @@ export function GrowthAdminDashboard() {
                 Admin only
               </Badge>
               <p className="mt-3 text-2xl font-semibold text-white">
-                Operational controls for growth access and affiliate settlement
+                Operational controls for affiliate review and payout settlement
               </p>
               <p className="mt-2 text-sm leading-6 text-white/45">
-                Beta access, affiliate approvals, and payout actions now
+                Affiliate approvals, offer configuration, and payout actions
                 follow the same dashboard rhythm as goals: key metrics first,
-                then the actual operating panels.
+                then the operating panels.
               </p>
             </div>
 
@@ -573,14 +517,6 @@ export function GrowthAdminDashboard() {
           <div className="grid gap-3 md:grid-cols-3">
             <div className="rounded-sm border border-white/5 bg-sidebar/70 p-3">
               <p className="text-[10px] text-white/25">
-                Beta rollout
-              </p>
-              <p className="mt-2 text-sm text-white/65">
-                Issue controlled access codes and keep redemption inventory visible.
-              </p>
-            </div>
-            <div className="rounded-sm border border-white/5 bg-sidebar/70 p-3">
-              <p className="text-[10px] text-white/25">
                 Affiliate review
               </p>
               <p className="mt-2 text-sm text-white/65">
@@ -597,195 +533,18 @@ export function GrowthAdminDashboard() {
                 split changes stay on one operational surface.
               </p>
             </div>
+            <div className="rounded-sm border border-white/5 bg-sidebar/70 p-3">
+              <p className="text-[10px] text-white/25">
+                Commission controls
+              </p>
+              <p className="mt-2 text-sm text-white/65">
+                Tune offer discount, payout split, and public proof effects from
+                the same admin workflow.
+              </p>
+            </div>
           </div>
         </div>
       </GoalSurface>
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <GoalPanel
-          icon={Shield}
-          title="Create beta code"
-          description="Issue a new private beta code for a rollout cohort, campaign, or manual invite set."
-          bodyClassName="space-y-4"
-        >
-          <div className="grid gap-3">
-            <div>
-              <Label className="text-[10px] text-white/40">Label</Label>
-              <Input
-                value={betaForm.label}
-                onChange={(event) =>
-                  setBetaForm((state) => ({
-                    ...state,
-                    label: event.target.value,
-                  }))
-                }
-                placeholder="March rollout cohort"
-                className="mt-1.5 bg-sidebar text-xs ring-white/5"
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] text-white/40">Description</Label>
-              <Input
-                value={betaForm.description}
-                onChange={(event) =>
-                  setBetaForm((state) => ({
-                    ...state,
-                    description: event.target.value,
-                  }))
-                }
-                placeholder="Optional internal note"
-                className="mt-1.5 bg-sidebar text-xs ring-white/5"
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] text-white/40">Custom code</Label>
-              <Input
-                value={betaForm.code}
-                onChange={(event) =>
-                  setBetaForm((state) => ({
-                    ...state,
-                    code: event.target.value.toUpperCase(),
-                  }))
-                }
-                placeholder="Optional"
-                className="mt-1.5 bg-sidebar text-xs ring-white/5"
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] text-white/40">
-                Max redemptions
-              </Label>
-              <Input
-                value={betaForm.maxRedemptions}
-                onChange={(event) =>
-                  setBetaForm((state) => ({
-                    ...state,
-                    maxRedemptions: event.target.value,
-                  }))
-                }
-                placeholder="Unlimited"
-                className="mt-1.5 bg-sidebar text-xs ring-white/5"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <Button
-              onClick={handleCreateBetaCode}
-              disabled={createPrivateBetaCode.isPending}
-              className="h-9 rounded-sm bg-teal-600 px-4 text-xs text-white hover:brightness-110"
-            >
-              {createPrivateBetaCode.isPending ? "Creating..." : "Create beta code"}
-            </Button>
-          </div>
-        </GoalPanel>
-
-        <section className="space-y-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex size-9 items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent">
-                <Shield className="size-4 text-teal-300" />
-              </div>
-              <div>
-                <h2 className="text-sm font-medium text-white">
-                  Issued beta codes
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-white/45">
-                  Track active inventory, remaining redemptions, and copyable code payloads.
-                </p>
-              </div>
-            </div>
-
-            <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
-              {betaCodes.length} codes
-            </Badge>
-          </div>
-
-          {betaCodes.length ? (
-            <div className="overflow-hidden rounded-lg border border-white/5 bg-sidebar">
-              <div className="overflow-x-auto">
-                <table className="min-w-[980px] w-full text-left">
-                  <thead className="bg-sidebar">
-                    <tr className="border-b border-white/5">
-                      {[
-                        "Label",
-                        "Description",
-                        "Code",
-                        "Redemptions",
-                        "Expires",
-                        "Status",
-                        "Action",
-                      ].map((column) => (
-                        <th
-                          key={column}
-                          className="px-4 py-3 text-xs font-medium text-white/55"
-                        >
-                          {column}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-sidebar-accent/60">
-                    {betaCodes.map((code) => {
-                      const remaining =
-                        code.maxRedemptions === null
-                          ? "Unlimited"
-                          : `${code.redeemedCount}/${code.maxRedemptions}`;
-
-                      return (
-                        <tr
-                          key={code.id}
-                          className="border-b border-white/5 last:border-b-0"
-                        >
-                          <td className="px-4 py-3 text-sm text-white">
-                            {code.label}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-white/75">
-                            {code.description || "No description"}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-white/75">
-                            {code.code}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-white/75">
-                            {remaining}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-white/75">
-                            {formatDate(code.expiresAt)}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Badge
-                              className={
-                                code.isActive
-                                  ? "bg-teal-900/30 text-[10px] text-teal-300 ring ring-teal-500/20"
-                                  : "bg-rose-900/30 text-[10px] text-rose-300 ring ring-rose-500/20"
-                              }
-                            >
-                              {code.isActive ? "Active" : "Disabled"}
-                            </Badge>
-                          </td>
-                          <td className="px-4 py-3">
-                            <Button
-                              onClick={() =>
-                                copyToClipboard(code.code, "Beta code copied")
-                              }
-                              className="h-8 gap-1 rounded-sm bg-sidebar px-3 text-[11px] text-white ring ring-white/5 hover:brightness-110"
-                            >
-                              <Copy className="size-3" />
-                              Copy
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <GrowthEmptyState message="No beta codes created yet." />
-          )}
-        </section>
-      </div>
 
       <div className="grid gap-6">
         <GoalPanel

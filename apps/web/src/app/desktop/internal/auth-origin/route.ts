@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_PRODUCTION_BROWSER_AUTH_ORIGIN =
-  "https://beta.profitabledge.com";
+  "https://www.profitabledge.com";
 const DEFAULT_LOCAL_BROWSER_AUTH_ORIGIN = "http://localhost:3001";
 
 function resolveBrowserAuthOrigin() {

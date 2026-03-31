@@ -30,6 +30,13 @@ const ruleTypeEnum = z.enum([
 
 const thresholdUnitEnum = z.enum(["percent", "usd", "count"]);
 const severityEnum = z.enum(["info", "warning", "critical"]);
+const webhookUrlSchema = z
+  .string()
+  .trim()
+  .url("Webhook URL must be a valid URL")
+  .max(2048)
+  .optional()
+  .nullable();
 
 export type EdgeConditionAlertCandidate = {
   tradeId: string;
@@ -141,11 +148,12 @@ export const alertsRouter = router({
       ruleType: ruleTypeEnum,
       thresholdValue: z.number().positive(),
       thresholdUnit: thresholdUnitEnum,
-      alertSeverity: severityEnum.optional(),
-      notifyInApp: z.boolean().optional(),
-      notifyEmail: z.boolean().optional(),
-      cooldownMinutes: z.number().int().min(0).optional(),
-    }))
+        alertSeverity: severityEnum.optional(),
+        notifyInApp: z.boolean().optional(),
+        notifyEmail: z.boolean().optional(),
+        webhookUrl: webhookUrlSchema,
+        cooldownMinutes: z.number().int().min(0).optional(),
+      }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
@@ -174,6 +182,7 @@ export const alertsRouter = router({
           alertSeverity: input.alertSeverity || "warning",
           notifyInApp: input.notifyInApp ?? true,
           notifyEmail: input.notifyEmail ?? false,
+          webhookUrl: input.webhookUrl?.trim() || null,
           cooldownMinutes: input.cooldownMinutes ?? 60,
         })
         .returning();
@@ -187,12 +196,13 @@ export const alertsRouter = router({
       ruleId: z.string(),
       name: z.string().min(1).max(100).optional(),
       thresholdValue: z.number().positive().optional(),
-      alertSeverity: severityEnum.optional(),
-      isEnabled: z.boolean().optional(),
-      notifyInApp: z.boolean().optional(),
-      notifyEmail: z.boolean().optional(),
-      cooldownMinutes: z.number().int().min(0).optional(),
-    }))
+        alertSeverity: severityEnum.optional(),
+        isEnabled: z.boolean().optional(),
+        notifyInApp: z.boolean().optional(),
+        notifyEmail: z.boolean().optional(),
+        webhookUrl: webhookUrlSchema,
+        cooldownMinutes: z.number().int().min(0).optional(),
+      }))
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
 
@@ -214,6 +224,8 @@ export const alertsRouter = router({
       if (input.isEnabled !== undefined) updates.isEnabled = input.isEnabled;
       if (input.notifyInApp !== undefined) updates.notifyInApp = input.notifyInApp;
       if (input.notifyEmail !== undefined) updates.notifyEmail = input.notifyEmail;
+      if (input.webhookUrl !== undefined)
+        updates.webhookUrl = input.webhookUrl?.trim() || null;
       if (input.cooldownMinutes !== undefined) updates.cooldownMinutes = input.cooldownMinutes;
 
       const [rule] = await db

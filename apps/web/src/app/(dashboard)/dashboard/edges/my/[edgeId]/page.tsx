@@ -2269,7 +2269,9 @@ export default function EdgeDetailPage({
 
             {canShowPrivateActivity ? (
               <TabsContent value="executed-trades" className="mt-0">
-                <EdgeExecutedTradesTable edgeId={edgeId} />
+                <EdgeExecutedTradesTable
+                  executedTrades={detail.executedTrades as any}
+                />
               </TabsContent>
             ) : null}
 

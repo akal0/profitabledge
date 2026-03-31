@@ -21,6 +21,16 @@
     ]
   },
   "plugins": {
+    "deep-link": {
+      "desktop": [
+        {
+          "schemes": ["profitabledge"]
+        },
+        {
+          "schemes": ["profitabledge-dev"]
+        }
+      ]
+    },
     "updater": {
       "active": false,
       "dialog": false,

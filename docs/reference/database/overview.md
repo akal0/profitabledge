@@ -36,7 +36,7 @@ Current schema files:
 - `operations.ts`
   - alpha activation milestones, app events, and in-app feedback/support records
 - `billing.ts`
-  - mirrored Polar billing state, webhook dedupe, member referral profiles/conversions/reward grants, admin-approved affiliate applications/profiles/attribution/groups/commission events, affiliate payment methods and payout records, private-beta codes/redemptions/waitlist, entitlement overrides, and Edge credit usage/grant ledgers for platform-funded AI
+  - mirrored Stripe billing state, webhook dedupe, member referral profiles/conversions/reward grants, admin-approved affiliate applications/profiles/attribution/groups/commission events, affiliate payment methods and payout records, entitlement overrides, and Edge credit usage/grant ledgers for platform-funded AI
 - `social-redesign.ts`
   - feed/social/leaderboard related entities
 - `ai.ts`
@@ -88,4 +88,4 @@ The recent prop challenge lineage work is the best example of that last rule: ch
 
 The same rule now applies to alpha operations work: support diagnostics, activation funnel tracking, and user feedback now persist in dedicated `operations.ts` tables instead of being inferred from ad hoc logs.
 
-Billing follows the same approach: Polar remains the external billing system of record, but customer/subscription/order state, referral and affiliate growth state, affiliate payout operations, webhook dedupe, private-beta access, and reward-based entitlement overrides are mirrored into dedicated `billing.ts` tables so the app can enforce entitlements locally.
+Billing follows the same approach: Stripe is the external billing system of record, and customer/subscription/order state, referral and affiliate growth state, affiliate payout operations, webhook dedupe, and reward-based entitlement overrides are mirrored into dedicated `billing.ts` tables so the app can enforce entitlements locally.

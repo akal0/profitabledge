@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_POST_AUTH_PATH = "/dashboard";
 const DEFAULT_LOCAL_SERVER_ORIGIN = "http://localhost:3000";
 const DEFAULT_PRODUCTION_SERVER_ORIGIN = "https://www.api.profitabledge.com";
-const AUTH_ROUTE_PREFIXES = ["/login", "/sign-up", "/beta", "/continue"] as const;
+const AUTH_ROUTE_PREFIXES = ["/login", "/sign-up", "/continue"] as const;
 
 function resolveServerOrigin() {
   return (

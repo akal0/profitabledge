@@ -19,7 +19,12 @@ export function DesktopAuthStateShell({
   className,
 }: DesktopAuthStateShellProps) {
   return (
-    <AuthSplitShell className={cn("max-w-[30rem]", className)}>
+    <main
+      className={cn(
+        "w-full flex flex-col items-center justify-center bg-sidebar",
+        className
+      )}
+    >
       <div className="space-y-8">
         <div className="space-y-3 text-center">
           <p className="text-3xl font-medium tracking-[-0.05em] text-white sm:text-[2.15rem] sm:leading-[1.02] lg:text-[2.3rem]">
@@ -31,6 +36,6 @@ export function DesktopAuthStateShell({
         </div>
         {children}
       </div>
-    </AuthSplitShell>
+    </main>
   );
 }

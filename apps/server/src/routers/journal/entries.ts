@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '../../db';
@@ -31,6 +31,7 @@ import {
 } from './shared';
 
 const tradePhaseSchema = z.enum(['pre-trade', 'during-trade', 'post-trade']);
+const journalItemTypeSchema = z.enum(["entry", "folder"]);
 
 const journalAICaptureResultSchema = z.object({
   title: z.string(),
@@ -130,6 +131,12 @@ function compareJournalListItems(
   return getSortableTimestamp(b.updatedAt) - getSortableTimestamp(a.updatedAt);
 }
 
+type JournalFolderPreviewItem = {
+  title: string;
+  emoji: string | null;
+  coverImageUrl: string | null;
+};
+
 export const journalEntryProcedures = {
   list: protectedProcedure
     .input(z.object({
@@ -143,6 +150,8 @@ export const journalEntryProcedures = {
       linkedMissedTradeId: z.string().optional(),
       isPinned: z.boolean().optional(),
       isArchived: z.boolean().optional(),
+      folderId: z.string().nullable().optional(),
+      itemType: journalItemTypeSchema.optional(),
       includeShared: z.boolean().optional(),
       tradePhase: z.enum(['pre-trade', 'during-trade', 'post-trade']).optional(),
       sortBy: z.enum(['createdAt', 'updatedAt', 'journalDate', 'title']).default('updatedAt'),
@@ -159,6 +168,8 @@ export const journalEntryProcedures = {
         linkedMissedTradeId,
         isPinned,
         isArchived = false,
+        folderId,
+        itemType,
         includeShared = false,
         tradePhase,
         sortBy = 'updatedAt',
@@ -169,6 +180,16 @@ export const journalEntryProcedures = {
         eq(journalEntry.userId, ctx.session.user.id),
         eq(journalEntry.isArchived, isArchived),
       ];
+
+      if (folderId === null) {
+        conditions.push(isNull(journalEntry.folderId));
+      } else if (folderId) {
+        conditions.push(eq(journalEntry.folderId, folderId));
+      }
+
+      if (itemType) {
+        conditions.push(eq(journalEntry.itemType, itemType));
+      }
 
       if (entryType) {
         conditions.push(eq(journalEntry.entryType, entryType));
@@ -240,6 +261,8 @@ export const journalEntryProcedures = {
       const entries = await db
         .select({
           id: journalEntry.id,
+          itemType: journalEntry.itemType,
+          folderId: journalEntry.folderId,
           title: journalEntry.title,
           emoji: journalEntry.emoji,
           coverImageUrl: journalEntry.coverImageUrl,
@@ -275,18 +298,82 @@ export const journalEntryProcedures = {
         .slice(0, includeShared ? entries.length : limit)
         .map((entry) => {
         const blocks = entry.content as JournalBlock[] | null;
-        const preview = buildJournalListPreview(blocks);
+        const preview =
+          entry.itemType === "folder" ? "" : buildJournalListPreview(blocks);
 
         return {
           ...entry,
           preview,
           content: undefined,
           isShared: false,
+          folderEntryCount: 0,
+          folderPreviewItems: [] as JournalFolderPreviewItem[],
         };
       });
 
+      const folderIds = processedEntries
+        .filter((entry) => entry.itemType === "folder")
+        .map((entry) => entry.id);
+
+      if (folderIds.length > 0) {
+        const folderChildren = await db
+          .select({
+            id: journalEntry.id,
+            folderId: journalEntry.folderId,
+            title: journalEntry.title,
+            emoji: journalEntry.emoji,
+            coverImageUrl: journalEntry.coverImageUrl,
+            updatedAt: journalEntry.updatedAt,
+          })
+          .from(journalEntry)
+          .where(
+            and(
+              eq(journalEntry.userId, ctx.session.user.id),
+              eq(journalEntry.itemType, "entry"),
+              eq(journalEntry.isArchived, false),
+              inArray(journalEntry.folderId, folderIds)
+            )
+          )
+          .orderBy(desc(journalEntry.updatedAt));
+
+        const folderChildrenMap = new Map<
+          string,
+          JournalFolderPreviewItem[]
+        >();
+        const folderCounts = new Map<string, number>();
+
+        for (const child of folderChildren) {
+          if (!child.folderId) {
+            continue;
+          }
+
+          folderCounts.set(child.folderId, (folderCounts.get(child.folderId) ?? 0) + 1);
+
+          const previews = folderChildrenMap.get(child.folderId) ?? [];
+          if (previews.length < 3) {
+            previews.push({
+              title: child.title,
+              emoji: child.emoji,
+              coverImageUrl: child.coverImageUrl,
+            });
+            folderChildrenMap.set(child.folderId, previews);
+          }
+        }
+
+        for (const entry of processedEntries) {
+          if (entry.itemType !== "folder") {
+            continue;
+          }
+
+          entry.folderEntryCount = folderCounts.get(entry.id) ?? 0;
+          entry.folderPreviewItems = folderChildrenMap.get(entry.id) ?? [];
+        }
+      }
+
       let sharedEntries: Array<{
         id: string;
+        itemType: "entry";
+        folderId: null;
         title: string;
         emoji: string | null;
         coverImageUrl: string | null;
@@ -305,9 +392,11 @@ export const journalEntryProcedures = {
         isShared: true;
         shareToken: string;
         shareName: string;
+        folderEntryCount: number;
+        folderPreviewItems: JournalFolderPreviewItem[];
       }> = [];
 
-      if (includeShared && !isArchived && isPinned !== true) {
+      if (includeShared && !folderId && !itemType && !isArchived && isPinned !== true) {
         const sharedRows = await db
           .select({
             shareToken: journalShare.shareToken,
@@ -375,6 +464,8 @@ export const journalEntryProcedures = {
           })
           .map(({ entry, shareName, shareToken }) => ({
             id: entry.id,
+            itemType: "entry" as const,
+            folderId: null,
             title: entry.title,
             emoji: entry.emoji,
             coverImageUrl: entry.coverImageUrl,
@@ -393,6 +484,8 @@ export const journalEntryProcedures = {
             isShared: true as const,
             shareToken,
             shareName,
+            folderEntryCount: 0,
+            folderPreviewItems: [],
           }));
       }
 
@@ -447,6 +540,7 @@ export const journalEntryProcedures = {
   create: protectedProcedure
     .input(z.object({
       title: z.string().default('Untitled'),
+      folderId: z.string().nullable().optional(),
       emoji: z.string().max(10).optional(),
       coverImageUrl: z.string().optional(),
       coverImagePosition: z.number().min(0).max(100).optional(),
@@ -507,6 +601,8 @@ export const journalEntryProcedures = {
         .insert(journalEntry)
         .values({
           userId: ctx.session.user.id,
+          itemType: 'entry',
+          folderId: input.folderId ?? null,
           title: input.title,
           emoji: input.emoji,
           coverImageUrl: input.coverImageUrl,
@@ -563,6 +659,60 @@ export const journalEntryProcedures = {
       return newEntry;
     }),
 
+  listFolders: protectedProcedure
+    .input(
+      z
+        .object({
+          accountId: z.string().optional(),
+        })
+        .optional()
+    )
+    .query(async ({ ctx }) => {
+      const folders = await db
+        .select({
+          id: journalEntry.id,
+          title: journalEntry.title,
+          updatedAt: journalEntry.updatedAt,
+        })
+        .from(journalEntry)
+        .where(
+          and(
+            eq(journalEntry.userId, ctx.session.user.id),
+            eq(journalEntry.itemType, "folder"),
+            eq(journalEntry.isArchived, false),
+            isNull(journalEntry.folderId)
+          )
+        )
+        .orderBy(asc(journalEntry.title));
+
+      return folders;
+    }),
+
+  createFolder: protectedProcedure
+    .input(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [folder] = await db
+        .insert(journalEntry)
+        .values({
+          userId: ctx.session.user.id,
+          itemType: "folder",
+          folderId: null,
+          title: input.title,
+          content: [],
+          entryType: "general",
+          tags: [],
+          wordCount: 0,
+          readTimeMinutes: 0,
+        })
+        .returning();
+
+      return folder;
+    }),
+
   parseNaturalCapture: protectedProcedure
     .input(
       z.object({
@@ -602,6 +752,7 @@ export const journalEntryProcedures = {
       linkedTradeIds: z.array(z.string()).optional(),
       linkedEdgeId: z.string().nullable().optional(),
       linkedMissedTradeId: z.string().nullable().optional(),
+      folderId: z.string().nullable().optional(),
       entryType: journalEntryTypeSchema.optional(),
       tags: z.array(z.string()).optional(),
       journalDate: z.string().nullable().optional(),
@@ -663,16 +814,36 @@ export const journalEntryProcedures = {
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [deleted] = await db
-        .delete(journalEntry)
-        .where(and(
-          eq(journalEntry.id, input.id),
-          eq(journalEntry.userId, ctx.session.user.id)
-        ))
-        .returning();
+        .select({
+          id: journalEntry.id,
+          itemType: journalEntry.itemType,
+        })
+        .from(journalEntry)
+        .where(and(eq(journalEntry.id, input.id), eq(journalEntry.userId, ctx.session.user.id)))
+        .limit(1);
 
       if (!deleted) {
         throw new Error('Journal entry not found');
       }
+
+      if (deleted.itemType === "folder") {
+        await db
+          .update(journalEntry)
+          .set({
+            folderId: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(journalEntry.userId, ctx.session.user.id),
+              eq(journalEntry.folderId, input.id)
+            )
+          );
+      }
+
+      await db
+        .delete(journalEntry)
+        .where(and(eq(journalEntry.id, input.id), eq(journalEntry.userId, ctx.session.user.id)));
 
       return { success: true };
     }),
@@ -700,6 +871,8 @@ export const journalEntryProcedures = {
         .insert(journalEntry)
         .values({
           userId: ctx.session.user.id,
+          itemType: original.itemType,
+          folderId: original.folderId,
           title: input.title ?? `${original.title} (Copy)`,
           emoji: original.emoji,
           coverImageUrl: original.coverImageUrl,
@@ -746,6 +919,7 @@ export const journalEntryProcedures = {
       }
 
       const baseConditions = [eq(journalEntry.userId, ctx.session.user.id)];
+      baseConditions.push(eq(journalEntry.itemType, "entry"));
 
       if (accountScopeCondition) {
         baseConditions.push(accountScopeCondition);
@@ -753,6 +927,7 @@ export const journalEntryProcedures = {
 
       const activeConditions = [
         eq(journalEntry.userId, ctx.session.user.id),
+        eq(journalEntry.itemType, "entry"),
         eq(journalEntry.isArchived, false),
       ];
 
@@ -817,6 +992,7 @@ export const journalEntryProcedures = {
 
       const conditions = [
         eq(journalEntry.userId, ctx.session.user.id),
+        eq(journalEntry.itemType, "entry"),
         eq(journalEntry.isArchived, false),
         sql`coalesce(${journalEntry.journalDate}, ${journalEntry.createdAt}) between ${input.startDate}::timestamp and ${input.endDate}::timestamp`,
       ];
@@ -969,6 +1145,7 @@ export const journalEntryProcedures = {
     .query(async ({ ctx, input }) => {
       const conditions = [
         eq(journalEntry.userId, ctx.session.user.id),
+        eq(journalEntry.itemType, "entry"),
         eq(journalEntry.isArchived, false),
         or(
           ilike(journalEntry.title, `%${input.query}%`),

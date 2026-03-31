@@ -67,14 +67,14 @@ export async function GET(request: Request) {
       token: result.token,
       path: targetPath,
     }).toString()}`;
-    const deepLink = buildDesktopDeepLink(completePath);
+    const deepLink = buildDesktopDeepLink(completePath, request.url);
 
     return new Response(
       renderDesktopLaunchPage({
-        title: "Opening Profitabledge Desktop…",
+        title: "Opening Profitabledge…",
         message: "Finishing your browser sign-in and returning to the desktop app.",
         actionUrl: deepLink,
-        actionLabel: "Open Desktop",
+        actionLabel: "Open Profitabledge",
       }),
       {
         headers: {

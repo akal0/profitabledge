@@ -22,10 +22,8 @@ export const billingCustomer = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    provider: varchar("provider", { length: 24 }).notNull().default("polar"),
+    provider: varchar("provider", { length: 24 }).notNull().default("stripe"),
     providerCustomerId: varchar("provider_customer_id", { length: 120 }),
-    polarCustomerId: varchar("polar_customer_id", { length: 120 }),
-    polarExternalId: varchar("polar_external_id", { length: 120 }),
     stripeCustomerId: varchar("stripe_customer_id", { length: 120 }),
     stripeDefaultPaymentMethodId: varchar("stripe_default_payment_method_id", {
       length: 120,
@@ -40,12 +38,6 @@ export const billingCustomer = pgTable(
     userIdx: index("billing_customer_user_idx").on(table.userId),
     providerCustomerUnique: uniqueIndex("billing_customer_provider_customer_idx").on(
       table.providerCustomerId
-    ),
-    polarCustomerUnique: uniqueIndex("billing_customer_polar_customer_idx").on(
-      table.polarCustomerId
-    ),
-    polarExternalUnique: uniqueIndex("billing_customer_polar_external_idx").on(
-      table.polarExternalId
     ),
     stripeCustomerUnique: uniqueIndex("billing_customer_stripe_customer_idx").on(
       table.stripeCustomerId
@@ -62,7 +54,7 @@ export const billingSubscription = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    provider: varchar("provider", { length: 24 }).notNull().default("polar"),
+    provider: varchar("provider", { length: 24 }).notNull().default("stripe"),
     providerSubscriptionId: varchar("provider_subscription_id", {
       length: 120,
     }),
@@ -72,12 +64,6 @@ export const billingSubscription = pgTable(
     }),
     providerPriceId: varchar("provider_price_id", { length: 120 }),
     providerProductId: varchar("provider_product_id", { length: 120 }),
-    polarSubscriptionId: varchar("polar_subscription_id", {
-      length: 120,
-    }),
-    polarCustomerId: varchar("polar_customer_id", { length: 120 }),
-    polarCheckoutId: varchar("polar_checkout_id", { length: 120 }),
-    polarProductId: varchar("polar_product_id", { length: 120 }),
     stripeSubscriptionId: varchar("stripe_subscription_id", {
       length: 120,
     }),
@@ -115,9 +101,6 @@ export const billingSubscription = pgTable(
     providerSubscriptionUnique: uniqueIndex(
       "billing_subscription_provider_subscription_idx"
     ).on(table.providerSubscriptionId),
-    polarSubscriptionUnique: uniqueIndex(
-      "billing_subscription_polar_subscription_idx"
-    ).on(table.polarSubscriptionId),
     stripeSubscriptionUnique: uniqueIndex(
       "billing_subscription_stripe_subscription_idx"
     ).on(table.stripeSubscriptionId),
@@ -137,7 +120,7 @@ export const billingOrder = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    provider: varchar("provider", { length: 24 }).notNull().default("polar"),
+    provider: varchar("provider", { length: 24 }).notNull().default("stripe"),
     providerOrderId: varchar("provider_order_id", { length: 120 }),
     providerCustomerId: varchar("provider_customer_id", { length: 120 }),
     providerSubscriptionId: varchar("provider_subscription_id", { length: 120 }),
@@ -151,11 +134,6 @@ export const billingOrder = pgTable(
     providerChargeId: varchar("provider_charge_id", { length: 120 }),
     providerPriceId: varchar("provider_price_id", { length: 120 }),
     providerProductId: varchar("provider_product_id", { length: 120 }),
-    polarOrderId: varchar("polar_order_id", { length: 120 }),
-    polarCustomerId: varchar("polar_customer_id", { length: 120 }),
-    polarSubscriptionId: varchar("polar_subscription_id", { length: 120 }),
-    polarCheckoutId: varchar("polar_checkout_id", { length: 120 }),
-    polarProductId: varchar("polar_product_id", { length: 120 }),
     stripeInvoiceId: varchar("stripe_invoice_id", { length: 120 }),
     stripeCustomerId: varchar("stripe_customer_id", { length: 120 }),
     stripeSubscriptionId: varchar("stripe_subscription_id", { length: 120 }),
@@ -186,9 +164,6 @@ export const billingOrder = pgTable(
     providerOrderUnique: uniqueIndex("billing_order_provider_order_idx").on(
       table.providerOrderId
     ),
-    polarOrderUnique: uniqueIndex("billing_order_polar_order_idx").on(
-      table.polarOrderId
-    ),
     stripeInvoiceUnique: uniqueIndex("billing_order_stripe_invoice_idx").on(
       table.stripeInvoiceId
     ),
@@ -201,7 +176,7 @@ export const billingWebhookEvent = pgTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => crypto.randomUUID()),
-    provider: varchar("provider", { length: 24 }).notNull().default("polar"),
+    provider: varchar("provider", { length: 24 }).notNull().default("stripe"),
     providerEventId: varchar("provider_event_id", { length: 255 }),
     providerObjectId: varchar("provider_object_id", { length: 120 }),
     eventKey: varchar("event_key", { length: 255 }).notNull(),
@@ -381,8 +356,6 @@ export const referralRewardGrant = pgTable(
     discountProvider: varchar("discount_provider", { length: 24 }),
     providerDiscountId: varchar("provider_discount_id", { length: 120 }),
     providerDiscountCode: varchar("provider_discount_code", { length: 128 }),
-    polarDiscountId: varchar("polar_discount_id", { length: 120 }),
-    polarDiscountCode: varchar("polar_discount_code", { length: 128 }),
     targetPlanKey: varchar("target_plan_key", { length: 40 }),
     overrideStartsAt: timestamp("override_starts_at"),
     overrideEndsAt: timestamp("override_ends_at"),
@@ -519,7 +492,6 @@ export const affiliateOffer = pgTable(
     providerPromotionCodeId: varchar("provider_promotion_code_id", {
       length: 120,
     }),
-    polarDiscountId: varchar("polar_discount_id", { length: 120 }),
     discountType: varchar("discount_type", { length: 24 })
       .notNull()
       .default("percentage"),
@@ -960,14 +932,12 @@ export const affiliateCommissionEvent = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     referredUsername: text("referred_username"),
     referredEmail: text("referred_email"),
-    provider: varchar("provider", { length: 24 }).notNull().default("polar"),
+    provider: varchar("provider", { length: 24 }).notNull().default("stripe"),
     providerOrderId: varchar("provider_order_id", { length: 120 }),
     providerSubscriptionId: varchar("provider_subscription_id", { length: 120 }),
     billingOrderId: text("billing_order_id").references(() => billingOrder.id, {
       onDelete: "set null",
     }),
-    polarOrderId: varchar("polar_order_id", { length: 120 }),
-    polarSubscriptionId: varchar("polar_subscription_id", { length: 120 }),
     stripeInvoiceId: varchar("stripe_invoice_id", { length: 120 }),
     stripeSubscriptionId: varchar("stripe_subscription_id", { length: 120 }),
     planKey: varchar("plan_key", { length: 40 }),
@@ -991,9 +961,6 @@ export const affiliateCommissionEvent = pgTable(
     providerOrderUnique: uniqueIndex("affiliate_commission_event_provider_order_idx").on(
       table.provider,
       table.providerOrderId
-    ),
-    polarOrderUnique: uniqueIndex("affiliate_commission_event_order_idx").on(
-      table.polarOrderId
     ),
     stripeInvoiceUnique: uniqueIndex(
       "affiliate_commission_event_stripe_invoice_idx"

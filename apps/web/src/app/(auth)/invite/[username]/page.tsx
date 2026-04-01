@@ -178,7 +178,7 @@ export default function InvitePage() {
 
       await authClient.signIn.social({
         provider,
-        callbackURL: `${window.location.origin}${postAuthContinuePath}`,
+        callbackURL: postAuthContinuePath,
       });
     } catch (error) {
       toast.error(

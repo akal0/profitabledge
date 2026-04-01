@@ -151,7 +151,7 @@ const LoginPage = () => {
 
       await authClient.signIn.social({
         provider,
-        callbackURL: `${window.location.origin}${postLoginPath}`,
+        callbackURL: postLoginPath,
       });
     } catch (error) {
       toast.error(

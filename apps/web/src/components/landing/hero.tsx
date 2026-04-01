@@ -665,7 +665,7 @@ export function Hero({ heroOpacity, isReady, isVisible }: HeroProps) {
                 Walk the path of profitability
               </Link>
 
-              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+              {/*<div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <a
                   href={DESKTOP_DOWNLOADS.macos}
                   className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/6 px-4 py-3 text-[11px] font-medium text-white/88 backdrop-blur-[15px] transition-colors hover:border-white/24 hover:bg-white/10"
@@ -680,7 +680,7 @@ export function Hero({ heroOpacity, isReady, isVisible }: HeroProps) {
                   <Download className="size-3.5" />
                   Download for Windows
                 </a>
-              </div>
+              </div>*/}
             </div>
           </m.div>
         </div>

@@ -1030,7 +1030,7 @@ async function getActiveLegacyBillingSnapshot(userId: string) {
     .where(
       and(
         eq(billingSubscription.userId, userId),
-        eq(billingSubscription.provider, "polar"),
+        eq(billingSubscription.provider, "stripe"),
         inArray(billingSubscription.status, ["active", "trialing"])
       )
     )
@@ -1267,7 +1267,6 @@ async function listLegacyBillingCustomers() {
         id: billingCustomer.id,
         provider: billingCustomer.provider,
         stripeCustomerId: billingCustomer.stripeCustomerId,
-        polarCustomerId: billingCustomer.polarCustomerId,
       },
       user: {
         id: userTable.id,
@@ -1282,7 +1281,7 @@ async function listLegacyBillingCustomers() {
     .leftJoin(billingCustomer, eq(billingCustomer.userId, billingSubscription.userId))
     .where(
       and(
-        eq(billingSubscription.provider, "polar"),
+        eq(billingSubscription.provider, "stripe"),
         inArray(billingSubscription.status, ["active", "trialing"])
       )
     )
@@ -1304,7 +1303,6 @@ async function listLegacyBillingCustomers() {
       customer: {
         provider: string | null;
         stripeCustomerId: string | null;
-        polarCustomerId: string | null;
       } | null;
       activeLegacyPlanKey: BillingPlanKey;
       latestLegacyPeriodEnd: Date | null;
@@ -1392,7 +1390,6 @@ async function listLegacyBillingCustomers() {
       subscriptionCount: entry.subscriptions.length,
       hasStripeCustomer: Boolean(entry.customer?.stripeCustomerId),
       stripeCustomerId: entry.customer?.stripeCustomerId ?? null,
-      polarCustomerId: entry.customer?.polarCustomerId ?? null,
       hasActiveStripeSubscription: Boolean(
         cutoverStateByUserId.get(entry.user.id)?.hasActiveStripeSubscription
       ),
@@ -1640,7 +1637,7 @@ export async function disconnectLegacyBillingCustomerByUserId(input: {
     .where(
       and(
         eq(billingSubscription.userId, input.userId),
-        eq(billingSubscription.provider, "polar"),
+        eq(billingSubscription.provider, "stripe"),
         inArray(billingSubscription.status, ["active", "trialing"])
       )
     );

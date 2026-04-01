@@ -1918,8 +1918,6 @@ export async function buildAffiliateState(userId: string) {
       providerOrderId: affiliateCommissionEvent.providerOrderId,
       billingOrderId: affiliateCommissionEvent.billingOrderId,
       stripeInvoiceId: affiliateCommissionEvent.stripeInvoiceId,
-      polarOrderId: affiliateCommissionEvent.polarOrderId,
-      polarSubscriptionId: affiliateCommissionEvent.polarSubscriptionId,
       stripeSubscriptionId: affiliateCommissionEvent.stripeSubscriptionId,
       trackedPlanKey: affiliateCommissionEvent.planKey,
       orderAmount: affiliateCommissionEvent.orderAmount,

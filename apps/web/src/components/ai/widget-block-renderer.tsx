@@ -274,7 +274,7 @@ function AssetProfitabilityViz({
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-max w-full flex-col gap-3">
       {bestWorst && chartData.length > 1 && (
         <p className="text-xs text-white/50">
           Most profitable asset:{" "}
@@ -308,7 +308,7 @@ function AssetProfitabilityViz({
 
       <ChartContainer
         config={{ profit: { label: "Profit", color: "#2dd4bf" } }}
-        className="mt-auto h-60 w-full md:h-72"
+        className="h-56 w-full md:h-60"
       >
         <BarChart
           data={chartData}
@@ -397,7 +397,7 @@ function HorizontalBarViz({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center gap-4">
+    <div className="flex h-max w-full flex-col justify-center gap-4">
       {rows.map((row: any, i: number) => (
         <div key={i} className="space-y-1">
           <div className="flex justify-between text-xs">
@@ -539,7 +539,7 @@ function CalendarPreviewViz({
     .slice(-14); // Show latest 2 weeks
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-max w-full flex-col gap-3">
       {dateRange && (
         <div className="flex items-center gap-2 text-xs text-white/50">
           <Calendar className="w-3 h-3" />
@@ -621,7 +621,7 @@ function WinRateViz({ data }: { data: VizDataConfig }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col items-center justify-center py-4">
+    <div className="flex h-max w-full flex-col items-center justify-center py-4">
       <div className="relative w-24 h-24">
         <svg className="w-full h-full transform -rotate-90">
           <circle
@@ -668,7 +668,7 @@ function TradeCountsViz({ data }: { data: VizDataConfig }) {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center gap-2">
+    <div className="flex h-max w-full flex-col justify-center gap-2">
       {rows.map((row: any, i: number) => (
         <div key={i} className="flex items-center justify-between py-1">
           <span className="text-xs text-white/50">
@@ -784,7 +784,7 @@ function AnalysisWidgetShell({
 }) {
   return (
     <WidgetWrapper
-      className={cn("h-auto min-h-[28rem] rounded-lg", className)}
+      className={cn("h-max self-start rounded-lg", className)}
       header={
         <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -802,9 +802,9 @@ function AnalysisWidgetShell({
           ) : null}
         </div>
       }
-      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+      contentClassName="flex h-max min-h-0 w-full flex-col rounded-sm ring ring-white/5"
     >
-      <div className="flex min-h-0 flex-1 flex-col p-3.5">{children}</div>
+      <div className="flex h-max min-h-0 w-full flex-col p-3.5">{children}</div>
     </WidgetWrapper>
   );
 }
@@ -814,15 +814,15 @@ function AnalysisWidgetShell({
 export function WidgetBlockSkeleton() {
   return (
     <WidgetWrapper
-      className="h-auto min-h-[28rem] rounded-lg"
+      className="h-max self-start rounded-lg"
       header={
         <div className="widget-header flex min-h-[48px] w-full items-center gap-3 px-3.5">
           <Skeleton className="h-4 w-32" />
         </div>
       }
-      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+      contentClassName="flex h-max min-h-0 w-full flex-col rounded-sm ring ring-white/5"
     >
-      <div className="flex min-h-0 flex-1 flex-col p-3.5">
+      <div className="flex h-max min-h-0 w-full flex-col p-3.5">
         <Skeleton className="h-full min-h-[16rem] w-full" />
       </div>
     </WidgetWrapper>
@@ -842,7 +842,7 @@ export function WidgetBlockStreamingShell({
 
   return (
     <WidgetWrapper
-      className="h-auto min-h-[28rem] rounded-lg"
+      className="h-max self-start rounded-lg"
       header={
         <div className="widget-header flex min-h-[48px] w-full items-center gap-3 px-3.5">
           <h2 className="text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
@@ -852,9 +852,9 @@ export function WidgetBlockStreamingShell({
           </h2>
         </div>
       }
-      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+      contentClassName="flex h-max min-h-0 w-full flex-col rounded-sm ring ring-white/5"
     >
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-3.5 text-center">
+      <div className="flex h-max min-h-0 w-full flex-col items-center justify-center gap-3 p-3.5 text-center">
         <div className="space-y-1.5 text-left">
           {statusLines.map((line, index) => (
             <div

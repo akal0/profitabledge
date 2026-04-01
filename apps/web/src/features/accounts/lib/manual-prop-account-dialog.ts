@@ -63,14 +63,13 @@ export const EMPTY_CHALLENGE_RULES: PropChallengeRuleOption[] = [];
 export const EMPTY_CONTINUABLE_CHALLENGES: ContinuableChallengeOption[] = [];
 export const PROP_ASSIGN_SELECT_CONTENT_CLASS = cn(
   PROP_ASSIGN_SELECT_SURFACE_CLASS,
-  "max-w-[min(34rem,calc(100vw-3rem))] px-1.5 pb-1.5 pt-1"
+  "max-w-92 px-1.5 pb-1.5 pt-1"
 );
 export const PROP_ASSIGN_SELECT_LABEL_CLASS =
   "px-4 pb-2 pt-1 text-[11px] font-semibold text-white/55";
-export const PROP_ASSIGN_SELECT_SEPARATOR_CLASS =
-  "-mx-1.5 w-[calc(100%+0.75rem)]";
+export const PROP_ASSIGN_SELECT_SEPARATOR_CLASS = "-mx-6 w-full";
 export const PROP_ASSIGN_SELECT_ITEM_CLASS =
-  "h-auto items-start rounded-sm px-5 py-2.5 text-xs text-white/75 whitespace-normal data-[highlighted]:bg-sidebar-accent/80 data-[highlighted]:text-white";
+  "h-auto items-center rounded-sm px-5 py-2.5 text-xs text-white/75 whitespace-normal data-[highlighted]:bg-sidebar-accent/80 data-[highlighted]:text-white w-full";
 
 export function getPropFirmOptions(propFirms: PropFirmOption[]) {
   const byId = new Map<string, PropFirmOption>([
@@ -94,19 +93,24 @@ export function getChallengeRuleOptions(
   propFirmId: string,
   challengeRules: PropChallengeRuleOption[]
 ) {
-  if (propFirmId !== FALLBACK_FTMO_PROP_FIRM.id) {
-    return challengeRules;
-  }
-
-  const byId = new Map<string, PropChallengeRuleOption>([
-    [FALLBACK_FTMO_CHALLENGE_RULE.id, FALLBACK_FTMO_CHALLENGE_RULE],
-  ]);
+  const byId = new Map<string, PropChallengeRuleOption>(
+    propFirmId === FALLBACK_FTMO_PROP_FIRM.id
+      ? [[FALLBACK_FTMO_CHALLENGE_RULE.id, FALLBACK_FTMO_CHALLENGE_RULE]]
+      : []
+  );
 
   for (const rule of challengeRules) {
     byId.set(rule.id, rule);
   }
 
-  return Array.from(byId.values());
+  return Array.from(byId.values()).sort((left, right) => {
+    const leftCustom = Boolean(left.createdByUserId);
+    const rightCustom = Boolean(right.createdByUserId);
+    if (leftCustom !== rightCustom) return leftCustom ? -1 : 1;
+    return (left.displayName || left.challengeType || left.id).localeCompare(
+      right.displayName || right.challengeType || right.id
+    );
+  });
 }
 
 export function getChallengeRuleMetrics(rule: PropChallengeRuleOption) {
@@ -120,8 +124,20 @@ export function getChallengeRuleMetrics(rule: PropChallengeRuleOption) {
   return {
     evaluationPhases: evaluationPhases.length || 1,
     profitTarget: toFiniteNumber(primaryPhase?.profitTarget),
+    profitTargetType:
+      primaryPhase?.profitTargetType === "absolute" ? "absolute" : "percentage",
     dailyLossLimit: toFiniteNumber(primaryPhase?.dailyLossLimit),
+    dailyLossLimitType:
+      primaryPhase?.dailyLossLimitType === "absolute"
+        ? "absolute"
+        : primaryPhase?.dailyLossLimitType === "percentage"
+        ? "percentage"
+        : primaryPhase?.profitTargetType === "absolute"
+        ? "absolute"
+        : "percentage",
     maxLoss: toFiniteNumber(primaryPhase?.maxLoss),
+    maxLossType:
+      primaryPhase?.maxLossType === "trailing" ? "trailing" : "absolute",
   };
 }
 
@@ -133,11 +149,32 @@ export function formatChallengeRuleRequirements(rule: PropChallengeRuleOption) {
     }`,
   ];
 
-  if (metrics.profitTarget !== null) parts.push(`${metrics.profitTarget}% target`);
   if (metrics.dailyLossLimit !== null) {
-    parts.push(`${metrics.dailyLossLimit}% daily DD`);
+    parts.push(
+      metrics.dailyLossLimitType === "absolute"
+        ? `$${metrics.dailyLossLimit} daily loss`
+        : `${metrics.dailyLossLimit}% daily DD`
+    );
   }
-  if (metrics.maxLoss !== null) parts.push(`${metrics.maxLoss}% max DD`);
+  if (metrics.profitTarget !== null) {
+    parts.push(
+      metrics.profitTargetType === "absolute"
+        ? `$${metrics.profitTarget} target`
+        : `${metrics.profitTarget}% target`
+    );
+  }
+  if (metrics.maxLoss !== null) {
+    const lossLabel =
+      metrics.maxLossType === "trailing" ? "trailing DD" : "max DD";
+    const useAbsoluteLossMetric =
+      metrics.dailyLossLimitType === "absolute" ||
+      metrics.profitTargetType === "absolute";
+    parts.push(
+      useAbsoluteLossMetric
+        ? `$${metrics.maxLoss} ${lossLabel}`
+        : `${metrics.maxLoss}% ${lossLabel}`
+    );
+  }
 
   return parts.join(" • ");
 }

@@ -14,7 +14,8 @@ import { user as userTable } from "../db/schema/auth";
 import { activationMilestone } from "../db/schema/operations";
 import { tradingAccount } from "../db/schema/trading";
 import {
-  getAffiliateCommissionBps as getServerAffiliateCommissionBps,
+  DEFAULT_BILLING_INTERVAL,
+  BILLING_INTERVALS,
   getBillingPlanDefinition,
   getBillingPlanDefinitions,
   getHigherBillingPlanKey,
@@ -26,9 +27,15 @@ import {
   REFERRAL_UPGRADE_TRIAL_DAYS,
   REFERRAL_UPGRADE_TRIAL_THRESHOLD,
   resolvePlanKeyFromStripePriceId,
+  type BillingInterval,
   type BillingPlanKey,
 } from "../lib/billing/config";
 import { createUpgradeOfferDiscount } from "../lib/billing/discounts";
+import { STAFF_ACCESS_OVERRIDE_SOURCE } from "../lib/billing/effective-plan";
+import {
+  BILLING_FEATURE_GATES,
+  BILLING_PLAN_LIMITS,
+} from "../lib/billing/feature-gates";
 import {
   applyForAffiliate,
   approveAffiliateApplication,
@@ -43,7 +50,6 @@ import {
   deleteAffiliatePaymentMethod as deleteAffiliatePaymentMethodRecord,
   buildReferralState,
   disconnectAffiliateStripeConnect,
-  getAffiliateCommissionBpsForUser,
   ensureAffiliateOfferForCheckout,
   ensureReferralRewardsForUser,
   getAffiliateCheckoutAttribution,
@@ -84,11 +90,15 @@ import {
   AFFILIATE_NAME_FONTS,
   AFFILIATE_NAME_COLORS,
 } from "../lib/billing/growth";
-import { getUserEdgeCreditSnapshot } from "../lib/billing/edge-credits";
+import {
+  getLowCreditWarningThreshold,
+  getUserEdgeCreditSnapshot,
+} from "../lib/billing/edge-credits";
 import {
   createStripeBillingPortalSession,
   createStripeCheckoutSession,
   createStripeCustomer,
+  getStripePriceIdForPlan,
   getStripeClient,
   isStripeMissingCustomerError,
   retrieveStripeCustomer,
@@ -118,7 +128,6 @@ const AFFILIATE_PAYMENT_METHOD_TYPES = [
 ] as const;
 const BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE = "beta_stripe_migration";
 const BETA_STRIPE_MIGRATION_GRACE_DAYS = 30;
-const STAFF_ACCESS_OVERRIDE_SOURCE = "staff_access_manual";
 const STAFF_ACCESS_PRESET_KEYS = [
   "ambassador",
   "partner",
@@ -133,6 +142,18 @@ const STAFF_ACCESS_PRESETS = {
   lifetime: { label: "Lifetime", durationDays: 3650 },
   manual: { label: "Custom", durationDays: null },
 } as const;
+const BILLING_CANCELLATION_REASONS = [
+  "too_expensive",
+  "not_using_enough",
+  "stopped_trading",
+  "missing_features",
+  "switched_competitor",
+  "too_complex",
+  "other",
+] as const;
+const BILLING_PAUSE_MONTH_OPTIONS = [1, 2, 3] as const;
+
+type BillingCancellationReason = (typeof BILLING_CANCELLATION_REASONS)[number];
 
 function isGrowthAdmin(input: {
   role?: string | null;
@@ -215,6 +236,49 @@ async function findUserByBillingAccessIdentifier(identifier: string) {
   return targetUser;
 }
 
+async function searchUsersByBillingAccessIdentifier(query: string) {
+  const normalizedQuery = query.trim().toLowerCase();
+  const normalizedUsernameQuery = normalizeAuthUsername(query);
+  const usernameSearchToken = normalizedUsernameQuery || "~!~no-username-match~!~";
+  const usernamePrefixPattern = `${usernameSearchToken}%`;
+  const textPrefixPattern = `${normalizedQuery}%`;
+
+  return db
+    .select({
+      id: userTable.id,
+      email: userTable.email,
+      role: userTable.role,
+      username: userTable.username,
+      name: userTable.name,
+      displayName: userTable.displayName,
+    })
+    .from(userTable)
+    .where(
+      or(
+        sql`lower(coalesce(${userTable.username}, '')) like ${usernamePrefixPattern}`,
+        sql`lower(${userTable.email}) like ${textPrefixPattern}`,
+        sql`lower(coalesce(${userTable.displayName}, '')) like ${textPrefixPattern}`,
+        sql`lower(${userTable.name}) like ${textPrefixPattern}`
+      )
+    )
+    .orderBy(
+      sql`case
+        when lower(coalesce(${userTable.username}, '')) = ${usernameSearchToken} then 0
+        when lower(coalesce(${userTable.username}, '')) like ${usernamePrefixPattern} then 1
+        when lower(${userTable.email}) = ${normalizedQuery} then 2
+        when lower(${userTable.email}) like ${textPrefixPattern} then 3
+        when lower(coalesce(${userTable.displayName}, '')) like ${textPrefixPattern} then 4
+        when lower(${userTable.name}) like ${textPrefixPattern} then 5
+        else 6
+      end`,
+      desc(userTable.isVerified),
+      desc(userTable.isPremium),
+      userTable.username,
+      userTable.email
+    )
+    .limit(12);
+}
+
 async function upsertStaffAccessOverride(input: {
   targetUserId: string;
   planKey: Extract<BillingPlanKey, "professional" | "institutional">;
@@ -232,7 +296,7 @@ async function upsertStaffAccessOverride(input: {
     now.getTime() + input.durationDays * 24 * 60 * 60 * 1000
   );
 
-  const [existingOverride] = await db
+  const existingOverrides = await db
     .select({
       id: billingEntitlementOverride.id,
       metadata: billingEntitlementOverride.metadata,
@@ -245,8 +309,12 @@ async function upsertStaffAccessOverride(input: {
         eq(billingEntitlementOverride.sourceType, STAFF_ACCESS_OVERRIDE_SOURCE)
       )
     )
-    .orderBy(desc(billingEntitlementOverride.endsAt), desc(billingEntitlementOverride.createdAt))
-    .limit(1);
+    .orderBy(
+      desc(billingEntitlementOverride.updatedAt),
+      desc(billingEntitlementOverride.endsAt),
+      desc(billingEntitlementOverride.createdAt)
+    );
+  const [existingOverride] = existingOverrides;
 
   const metadata = {
     ...(existingOverride?.metadata && typeof existingOverride.metadata === "object"
@@ -309,6 +377,25 @@ async function upsertStaffAccessOverride(input: {
       })
       .where(eq(billingEntitlementOverride.id, existingOverride.id))
       .returning();
+
+    const supersededOverrideIds = existingOverrides
+      .slice(1)
+      .map((override) => override.id);
+
+    if (supersededOverrideIds.length > 0) {
+      await db
+        .update(billingEntitlementOverride)
+        .set({
+          endsAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            inArray(billingEntitlementOverride.id, supersededOverrideIds),
+            gte(billingEntitlementOverride.endsAt, now)
+          )
+        );
+    }
 
     return updated;
   }
@@ -448,8 +535,6 @@ function resolveCommissionableOrderAmount(input: {
 function extractAffiliateOrderMetadata(
   metadata?: Record<string, unknown> | null
 ) {
-  const parsedCommissionBps = Number(metadata?.affiliate_commission_bps);
-
   return {
     affiliateAttributionId:
       typeof metadata?.affiliate_attribution_id === "string"
@@ -458,10 +543,6 @@ function extractAffiliateOrderMetadata(
     rewardGrantId:
       typeof metadata?.referral_reward_grant_id === "string"
         ? metadata.referral_reward_grant_id
-        : null,
-    commissionBps:
-      Number.isFinite(parsedCommissionBps) && parsedCommissionBps > 0
-        ? Math.round(parsedCommissionBps)
         : null,
   };
 }
@@ -670,7 +751,15 @@ async function upsertBillingSubscriptionFromStripe(input: {
   status: string;
   currency?: string | null;
   amount?: number | null;
+  recurringInterval?: string | null;
+  recurringIntervalCount?: number | null;
+  pauseStatus?: string | null;
+  pauseBehavior?: string | null;
+  pausedAt?: Date | null;
+  pauseResumesAt?: Date | null;
   cancelAtPeriodEnd?: boolean;
+  cancelReason?: string | null;
+  cancelReasonDetail?: string | null;
   currentPeriodStart?: Date | null;
   currentPeriodEnd?: Date | null;
   trialStart?: Date | null;
@@ -709,7 +798,18 @@ async function upsertBillingSubscriptionFromStripe(input: {
     status: input.status,
     currency: input.currency ?? null,
     amount: input.amount ?? null,
+    recurringInterval: input.recurringInterval ?? null,
+    recurringIntervalCount: input.recurringIntervalCount ?? null,
+    pauseStatus: input.pauseStatus ?? null,
+    pauseBehavior: input.pauseBehavior ?? null,
+    pausedAt: input.pauseStatus
+      ? input.pausedAt ?? existing[0]?.pausedAt ?? new Date()
+      : null,
+    pauseResumesAt: input.pauseResumesAt ?? null,
     cancelAtPeriodEnd: Boolean(input.cancelAtPeriodEnd),
+    cancelReason: input.cancelReason ?? existing[0]?.cancelReason ?? null,
+    cancelReasonDetail:
+      input.cancelReasonDetail ?? existing[0]?.cancelReasonDetail ?? null,
     currentPeriodStart: input.currentPeriodStart ?? null,
     currentPeriodEnd: input.currentPeriodEnd ?? null,
     trialStart: input.trialStart ?? null,
@@ -739,6 +839,146 @@ async function upsertBillingSubscriptionFromStripe(input: {
     })
     .returning();
   return inserted;
+}
+
+async function getStripeManagedSubscriptionForUser(userId: string) {
+  const billing = await getActiveBillingState(userId);
+
+  if (!billing.customer?.stripeCustomerId || !billing.subscription?.stripeSubscriptionId) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "No active Stripe subscription is linked to this account yet",
+    });
+  }
+
+  return {
+    billing,
+    customerId: billing.customer.stripeCustomerId,
+    subscriptionId: billing.subscription.stripeSubscriptionId,
+  };
+}
+
+async function saveCancellationFeedback(input: {
+  userId: string;
+  reason: BillingCancellationReason;
+  detail?: string | null;
+  acceptedOffer?: string | null;
+  keepUsingProduct?: boolean;
+}) {
+  const billing = await getActiveBillingState(input.userId);
+  const subscriptionId = billing.subscription?.id;
+
+  if (!subscriptionId) {
+    return {
+      saved: false,
+      subscriptionId: null,
+    };
+  }
+
+  const now = new Date();
+  const feedback = {
+    cancelFlow: {
+      reason: input.reason,
+      detail: input.detail ?? null,
+      acceptedOffer: input.acceptedOffer ?? null,
+      keepUsingProduct: input.keepUsingProduct ?? false,
+      submittedAt: now.toISOString(),
+    },
+  };
+
+  const [updated] = await db
+    .update(billingSubscription)
+    .set({
+      cancelReason: input.reason,
+      cancelReasonDetail: input.detail ?? null,
+      metadata: sql`coalesce(${billingSubscription.metadata}, '{}'::jsonb) || ${JSON.stringify(
+        feedback
+      )}::jsonb`,
+      updatedAt: now,
+    })
+    .where(eq(billingSubscription.id, subscriptionId))
+    .returning({
+      id: billingSubscription.id,
+      cancelReason: billingSubscription.cancelReason,
+    });
+
+  return {
+    saved: Boolean(updated),
+    subscriptionId,
+  };
+}
+
+async function pauseStripeSubscription(input: {
+  userId: string;
+  months: (typeof BILLING_PAUSE_MONTH_OPTIONS)[number];
+  reason: BillingCancellationReason;
+  detail?: string | null;
+}) {
+  const managed = await getStripeManagedSubscriptionForUser(input.userId);
+  const stripe = getStripeClient();
+  const now = new Date();
+  const resumesAt = new Date(
+    now.getTime() + input.months * 30 * 24 * 60 * 60 * 1000
+  );
+
+  await saveCancellationFeedback({
+    userId: input.userId,
+    reason: input.reason,
+    detail: input.detail ?? null,
+    acceptedOffer: `pause_${input.months}_months`,
+    keepUsingProduct: true,
+  });
+
+  const subscription: any = await stripe.subscriptions.update(managed.subscriptionId, {
+    pause_collection: {
+      behavior: "void",
+      resumes_at: Math.floor(resumesAt.getTime() / 1000),
+    },
+  });
+  const primaryItem = subscription.items.data[0];
+
+  await upsertBillingSubscriptionFromStripe({
+    userId: input.userId,
+    stripeSubscriptionId: subscription.id,
+    stripeCustomerId:
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id ?? managed.customerId,
+    stripePriceId: primaryItem?.price?.id ?? null,
+    stripeProductId:
+      typeof primaryItem?.price?.product === "string"
+        ? primaryItem.price.product
+        : primaryItem?.price?.product?.id ?? null,
+    stripeLatestInvoiceId:
+      typeof subscription.latest_invoice === "string"
+        ? subscription.latest_invoice
+        : subscription.latest_invoice?.id ?? null,
+    metadata: normalizeBillingMetadata(subscription.metadata),
+    status: subscription.status,
+    currency: primaryItem?.price?.currency?.toUpperCase() ?? null,
+    amount: primaryItem?.price?.unit_amount ?? null,
+    recurringInterval: primaryItem?.price?.recurring?.interval ?? null,
+    recurringIntervalCount: primaryItem?.price?.recurring?.interval_count ?? null,
+    pauseStatus: subscription.pause_collection ? "active" : null,
+    pauseBehavior: subscription.pause_collection?.behavior ?? null,
+    pausedAt: now,
+    pauseResumesAt: fromStripeTimestamp(subscription.pause_collection?.resumes_at ?? null),
+    cancelAtPeriodEnd: subscription.cancel_at_period_end,
+    cancelReason: input.reason,
+    cancelReasonDetail: input.detail ?? null,
+    currentPeriodStart: fromStripeTimestamp(subscription.current_period_start),
+    currentPeriodEnd: fromStripeTimestamp(subscription.current_period_end),
+    trialStart: fromStripeTimestamp(subscription.trial_start),
+    trialEnd: fromStripeTimestamp(subscription.trial_end),
+    startedAt: fromStripeTimestamp(subscription.start_date),
+    endedAt: fromStripeTimestamp(subscription.ended_at),
+    canceledAt: fromStripeTimestamp(subscription.canceled_at),
+  });
+
+  return {
+    status: subscription.status,
+    resumesAt,
+  };
 }
 
 async function upsertBillingOrderFromStripe(input: {
@@ -1051,7 +1291,6 @@ async function syncStripePaidInvoiceForSubscription(input: {
     discountAmount,
     taxAmount,
     currency: invoice.currency?.toUpperCase() ?? null,
-    commissionBps: affiliateOrderMetadata.commissionBps,
     metadata,
     occurredAt: paidAt,
   });
@@ -1119,6 +1358,11 @@ async function syncStripeBillingStateForUser(
       status: subscription.status,
       currency: price?.currency?.toUpperCase() ?? null,
       amount: price?.unit_amount ?? null,
+      recurringInterval: price?.recurring?.interval ?? null,
+      recurringIntervalCount: price?.recurring?.interval_count ?? null,
+      pauseStatus: subscription.pause_collection ? "active" : null,
+      pauseBehavior: subscription.pause_collection?.behavior ?? null,
+      pauseResumesAt: fromStripeTimestamp(subscription.pause_collection?.resumes_at),
       cancelAtPeriodEnd: subscription.cancel_at_period_end,
       currentPeriodStart: fromStripeTimestamp(subscription.current_period_start),
       currentPeriodEnd: fromStripeTimestamp(subscription.current_period_end),
@@ -2069,8 +2313,14 @@ export const billingRouter = router({
     const plans = getBillingPlanDefinitions().map((plan) => ({
       key: plan.key,
       title: plan.title,
+      tagline: plan.tagline,
       summary: plan.summary,
       priceLabel: plan.priceLabel,
+      monthlyPriceCents: plan.monthlyPriceCents,
+      annualPriceCents: plan.annualPriceCents,
+      annualMonthlyPriceCents: plan.annualMonthlyPriceCents,
+      annualDiscountPercent: plan.annualDiscountPercent,
+      defaultTrialDays: plan.defaultTrialDays,
       highlight: plan.highlight,
       ctaLabel: plan.ctaLabel,
       features: plan.features,
@@ -2078,12 +2328,40 @@ export const billingRouter = router({
       includedAiCredits: plan.includedAiCredits,
       includedLiveSyncSlots: plan.includedLiveSyncSlots,
       includesPropTracker: plan.includesPropTracker,
+      includesAdvancedAnalytics: plan.includesAdvancedAnalytics,
+      includesExports: plan.includesExports,
+      liveSyncFrequencyLabel: plan.liveSyncFrequencyLabel,
+      limits: BILLING_PLAN_LIMITS[plan.key],
       isFree: plan.isFree,
-      isConfigured: plan.isFree || Boolean(plan.stripePriceId),
+      isConfigured:
+        plan.isFree || Boolean(plan.stripePriceId || plan.stripeAnnualPriceId),
+      pricing: {
+        monthly: {
+          interval: "monthly" as const,
+          priceCents: plan.monthlyPriceCents,
+          label: plan.isFree ? "Free" : `£${(plan.monthlyPriceCents / 100).toFixed(0)} / mo`,
+          isConfigured: plan.isFree || Boolean(plan.stripePriceId),
+        },
+        annual: plan.annualPriceCents
+          ? {
+              interval: "annual" as const,
+              priceCents: plan.annualPriceCents,
+              monthlyEquivalentCents: plan.annualMonthlyPriceCents,
+              discountPercent: plan.annualDiscountPercent,
+              label:
+                plan.annualMonthlyPriceCents != null
+                  ? `£${(plan.annualMonthlyPriceCents / 100).toFixed(0)} / mo billed annually`
+                  : null,
+              isConfigured: Boolean(plan.stripeAnnualPriceId),
+            }
+          : null,
+      },
     }));
 
     return {
       privateBetaRequired: false,
+      defaultBillingInterval: DEFAULT_BILLING_INTERVAL,
+      billingIntervals: BILLING_INTERVALS,
       referralRewards: {
         edgeCreditThreshold: REFERRAL_EDGE_CREDIT_THRESHOLD,
         edgeCreditAmount: REFERRAL_EDGE_CREDIT_AMOUNT,
@@ -2091,6 +2369,7 @@ export const billingRouter = router({
         upgradeTrialThreshold: REFERRAL_UPGRADE_TRIAL_THRESHOLD,
         upgradeTrialDays: REFERRAL_UPGRADE_TRIAL_DAYS,
       },
+      featureGates: Object.values(BILLING_FEATURE_GATES),
       plans,
     };
   }),
@@ -2164,15 +2443,27 @@ export const billingRouter = router({
       };
     }),
 
-  claimPendingGrowthAttribution: protectedProcedure.mutation(async ({ ctx }) => {
-    const { visitorToken, storedTouch } = getGrowthCookieContext(ctx);
+  claimPendingGrowthAttribution: protectedProcedure
+    .input(
+      z
+        .object({
+          visitorToken: z.string().trim().min(1).optional(),
+        })
+        .optional()
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { visitorToken, storedTouch } = getGrowthCookieContext(ctx);
 
-    return claimPendingGrowthAttributionIfOnboardingPending({
-      userId: ctx.session.user.id,
-      visitorToken: visitorToken ?? storedTouch?.visitorToken ?? null,
-      source: "auth_claim",
-    });
-  }),
+      return claimPendingGrowthAttributionIfOnboardingPending({
+        userId: ctx.session.user.id,
+        visitorToken:
+          input?.visitorToken?.trim() ||
+          visitorToken ||
+          storedTouch?.visitorToken ||
+          null,
+        source: "auth_claim",
+      });
+    }),
 
   completeGrowthAccess: protectedProcedure
     .input(completeGrowthAccessInput)
@@ -2218,7 +2509,12 @@ export const billingRouter = router({
         customer: billing.customer,
         subscription: billing.subscription,
         override: billing.override,
-        credits,
+        credits: {
+          ...credits,
+          lowCreditWarningThreshold: getLowCreditWarningThreshold(
+            credits.allowanceCredits
+          ),
+        },
       },
       admin: {
         isAdmin,
@@ -2254,7 +2550,7 @@ export const billingRouter = router({
       referenceId: invoice.providerOrderId ?? invoice.stripeInvoiceId,
       planTitle:
         getBillingPlanDefinition(invoice.planKey as BillingPlanKey)?.title ??
-        "Student",
+        "Explorer",
     }));
   }),
 
@@ -2311,7 +2607,7 @@ export const billingRouter = router({
   saveAffiliateOffer: protectedProcedure
     .input(
       z.object({
-        affiliateUserId: z.string(),
+        affiliateUserId: z.string().optional(),
         affiliateOfferId: z.string().optional(),
         code: z.string().min(3).max(64),
         label: z.string().min(2).max(80),
@@ -2322,16 +2618,26 @@ export const billingRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin({ role: user.role, email: user.email });
+      const isAdmin = isGrowthAdmin({ role: user.role, email: user.email });
+
+      const affiliateUserId = isAdmin ? input.affiliateUserId ?? user.id : user.id;
+      const affiliateState = !isAdmin ? await buildAffiliateState(affiliateUserId) : null;
+      if (!isAdmin && !affiliateState?.isAffiliate) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Affiliate access required",
+        });
+      }
 
       return saveAffiliateOffer({
-        affiliateUserId: input.affiliateUserId,
+        affiliateUserId,
         createdByUserId: user.id,
         affiliateOfferId: input.affiliateOfferId ?? null,
         code: input.code,
         label: input.label,
         description: input.description ?? null,
-        discountBasisPoints: input.discountBasisPoints,
+        discountBasisPoints:
+          affiliateState?.tier?.effectiveDiscountBasisPoints ?? input.discountBasisPoints,
         isDefault: input.isDefault,
       });
     }),
@@ -2584,16 +2890,19 @@ export const billingRouter = router({
     .input(
       z.object({
         planKey: z.enum(["professional", "institutional"]),
+        billingInterval: z.enum(BILLING_INTERVALS).default(DEFAULT_BILLING_INTERVAL),
         returnPath: z.string().optional(),
         affiliateOfferCode: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       const plan = getBillingPlanDefinition(input.planKey);
-      if (!plan || !plan.stripePriceId) {
+      getStripePriceIdForPlan(input.planKey, input.billingInterval);
+
+      if (!plan) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "That plan is not configured in Stripe",
+          message: `That ${input.billingInterval} plan is not configured in Stripe`,
         });
       }
 
@@ -2611,8 +2920,17 @@ export const billingRouter = router({
       const billing = await getActiveBillingState(user.id);
       const currentPlanTier = BILLING_PLAN_TIER[billing.activePlanKey] ?? 0;
       const targetPlanTier = BILLING_PLAN_TIER[input.planKey] ?? 0;
+      const currentBillingInterval: BillingInterval =
+        billing.subscription?.recurringInterval === "year" ? "annual" : "monthly";
+      const isPlanUpgrade = targetPlanTier > currentPlanTier;
+      const isIntervalChange =
+        targetPlanTier === currentPlanTier &&
+        billing.activePlanKey === input.planKey &&
+        input.billingInterval !== currentBillingInterval;
+      const trialPeriodDays =
+        currentPlanTier === 0 ? Math.max(0, plan.defaultTrialDays ?? 0) : 0;
 
-      if (targetPlanTier <= currentPlanTier) {
+      if (!isPlanUpgrade && !isIntervalChange) {
         const targetPlanTitle = getBillingPlanDefinition(input.planKey)?.title ?? "plan";
 
         throw new TRPCError({
@@ -2624,20 +2942,16 @@ export const billingRouter = router({
         });
       }
 
-      const referralRewardGrant =
-        await getAvailableReferralFreeMonthGrantForPlan(user.id, input.planKey);
+      const referralRewardGrant = isPlanUpgrade
+        ? await getAvailableReferralFreeMonthGrantForPlan(user.id, input.planKey)
+        : null;
       const affiliateCheckout = input.affiliateOfferCode?.trim()
         ? await ensureAffiliateOfferForCheckout({
             userId: user.id,
             affiliateOfferCode: input.affiliateOfferCode,
           })
         : await getAffiliateCheckoutAttribution(user.id);
-      const affiliateCommissionBps = affiliateCheckout.attribution?.affiliateUserId
-        ? await getAffiliateCommissionBpsForUser(
-            affiliateCheckout.attribution.affiliateUserId
-          )
-        : null;
-      const upgradeOfferDiscount = referralRewardGrant
+      const upgradeOfferDiscount = !isPlanUpgrade || referralRewardGrant
         ? null
         : await createUpgradeOfferDiscount({
             userId: user.id,
@@ -2679,20 +2993,19 @@ export const billingRouter = router({
       const successBase = buildAppUrl(returnPath, {
         checkout: "success",
         plan: plan.key,
+        interval: input.billingInterval,
       });
       const successUrl = `${successBase}&session_id={CHECKOUT_SESSION_ID}`;
 
       const metadata = {
         user_id: user.id,
         plan_key: plan.key,
+        billing_interval: input.billingInterval,
         billing_provider: "stripe",
         ...(affiliateCheckout.attribution?.id
           ? {
               affiliate_attribution_id: affiliateCheckout.attribution.id,
               affiliate_code: affiliateCheckout.attribution.affiliateCode,
-              affiliate_commission_bps: String(
-                affiliateCommissionBps ?? getServerAffiliateCommissionBps()
-              ),
               ...(affiliateCheckout.offer?.id
                 ? {
                     affiliate_offer_id: affiliateCheckout.offer.id,
@@ -2722,7 +3035,9 @@ export const billingRouter = router({
         customerName: user.name,
         clientReferenceId: user.id,
         planKey: plan.key,
+        billingInterval: input.billingInterval,
         couponId: checkoutCouponId,
+        trialPeriodDays,
         successUrl,
         cancelUrl: buildAppUrl(returnPath),
         metadata: {
@@ -2740,7 +3055,9 @@ export const billingRouter = router({
     .input(
       z.object({
         returnPath: z.string().optional(),
-        flow: z.enum(["manage", "cancel"]).optional(),
+        flow: z.enum(["manage", "cancel", "update"]).optional(),
+        planKey: z.enum(["professional", "institutional"]).optional(),
+        billingInterval: z.enum(BILLING_INTERVALS).default(DEFAULT_BILLING_INTERVAL),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -2761,18 +3078,91 @@ export const billingRouter = router({
         });
       }
 
+      let subscriptionItemId: string | null = null;
+      let subscriptionItemQuantity: number | null = null;
+      let priceId: string | null = null;
+
+      if (input.flow === "update") {
+        if (!input.planKey) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "A target plan is required for subscription updates",
+          });
+        }
+
+        const managed = await getStripeManagedSubscriptionForUser(user.id);
+        const stripe = getStripeClient();
+        const stripeSubscription = await stripe.subscriptions.retrieve(
+          managed.subscriptionId
+        );
+        const primaryItem = stripeSubscription.items.data[0];
+
+        if (!primaryItem) {
+          throw new TRPCError({
+            code: "PRECONDITION_FAILED",
+            message: "The active Stripe subscription could not be updated",
+          });
+        }
+
+        subscriptionItemId = primaryItem.id;
+        subscriptionItemQuantity = primaryItem.quantity ?? 1;
+        priceId = getStripePriceIdForPlan(input.planKey, input.billingInterval);
+      }
+
       const session = await createStripeBillingPortalSession({
         customerId: billing.customer.stripeCustomerId,
         returnUrl: buildAppUrl(
           input.returnPath ?? "/dashboard/settings/billing"
         ),
-        flow: input.flow,
+        flow:
+          input.flow === "update"
+            ? "update_confirm"
+            : input.flow,
         subscriptionId: billing.subscription?.stripeSubscriptionId ?? null,
+        subscriptionItemId,
+        subscriptionItemQuantity,
+        priceId,
       });
 
       return {
         url: session.url,
       };
+    }),
+
+  saveCancellationFeedback: protectedProcedure
+    .input(
+      z.object({
+        reason: z.enum(BILLING_CANCELLATION_REASONS),
+        detail: z.string().trim().max(1_000).optional(),
+        acceptedOffer: z.string().trim().max(120).optional(),
+        keepUsingProduct: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return saveCancellationFeedback({
+        userId: ctx.session.user.id,
+        reason: input.reason,
+        detail: input.detail ?? null,
+        acceptedOffer: input.acceptedOffer ?? null,
+        keepUsingProduct: input.keepUsingProduct ?? false,
+      });
+    }),
+
+  pauseSubscription: protectedProcedure
+    .input(
+      z.object({
+        months: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+        reason: z.enum(BILLING_CANCELLATION_REASONS),
+        detail: z.string().trim().max(1_000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      return pauseStripeSubscription({
+        userId: ctx.session.user.id,
+        months: input.months,
+        reason: input.reason,
+        detail: input.detail ?? null,
+      });
     }),
 
   syncBillingState: protectedProcedure.mutation(async ({ ctx }) => {
@@ -2787,10 +3177,23 @@ export const billingRouter = router({
     return listStaffAccessOverrides();
   }),
 
+  searchStaffAccessCandidates: protectedProcedure
+    .input(
+      z.object({
+        query: z.string().trim().min(1).max(160),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin({ role: user.role, email: user.email });
+
+      return searchUsersByBillingAccessIdentifier(input.query);
+    }),
+
   grantStaffAccessOverride: protectedProcedure
     .input(
       z.object({
-        userIdentifier: z.string().trim().min(3).max(160),
+        userIdentifier: z.string().trim().min(1).max(160),
         planKey: z.enum(["professional", "institutional"]),
         presetKey: z.enum(STAFF_ACCESS_PRESET_KEYS),
         durationDays: z.number().int().min(1).max(3650).default(365),
@@ -2828,7 +3231,7 @@ export const billingRouter = router({
   revokeStaffAccessOverride: protectedProcedure
     .input(
       z.object({
-        userIdentifier: z.string().trim().min(3).max(160),
+        userIdentifier: z.string().trim().min(1).max(160),
         reason: z.string().trim().max(240).optional(),
       })
     )
@@ -3161,6 +3564,11 @@ export async function syncStripeWebhookEvent(event: Stripe.Event) {
           status: subscription.status,
           currency: price?.currency?.toUpperCase() ?? null,
           amount: price?.unit_amount ?? null,
+          recurringInterval: price?.recurring?.interval ?? null,
+          recurringIntervalCount: price?.recurring?.interval_count ?? null,
+          pauseStatus: subscription.pause_collection ? "active" : null,
+          pauseBehavior: subscription.pause_collection?.behavior ?? null,
+          pauseResumesAt: fromStripeTimestamp(subscription.pause_collection?.resumes_at),
           cancelAtPeriodEnd: subscription.cancel_at_period_end,
           currentPeriodStart: fromStripeTimestamp(
             subscription.current_period_start
@@ -3303,7 +3711,6 @@ export async function syncStripeWebhookEvent(event: Stripe.Event) {
             discountAmount,
             taxAmount,
             currency: invoice.currency?.toUpperCase() ?? null,
-            commissionBps: affiliateOrderMetadata.commissionBps,
             metadata,
             occurredAt: paidAt,
           });

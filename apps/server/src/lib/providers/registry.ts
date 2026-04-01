@@ -3,8 +3,10 @@
  * to lazy factory functions. Providers are only loaded when needed.
  */
 import type { ProviderCapabilityMap, TradingProvider } from "./types";
-import { MT_TERMINAL_PROVIDERS } from "../mt5/constants";
+import { WORKER_MANAGED_PROVIDERS } from "../mt5/constants";
 import { DXTRADE_PROVIDER_INFO } from "./dxtrade";
+import { NINJATRADER_PROVIDER_INFO } from "./ninjatrader";
+import { RITHMIC_PROVIDER_INFO } from "./rithmic";
 import { TOPSTEPX_PROVIDER_INFO } from "./topstepx";
 import { TRADOVATE_PROVIDER_INFO } from "./tradovate";
 
@@ -24,6 +26,10 @@ const providerFactories: Record<string, () => Promise<TradingProvider>> = {
   dxtrade: async () => {
     const { DXTradeProvider } = await import("./dxtrade");
     return new DXTradeProvider();
+  },
+  ninjatrader: async () => {
+    const { NinjaTraderProvider } = await import("./ninjatrader");
+    return new NinjaTraderProvider();
   },
   tradovate: async () => {
     const { TradovateProvider } = await import("./tradovate");
@@ -48,7 +54,7 @@ export async function getProvider(name: string): Promise<TradingProvider> {
 }
 
 export function getSupportedProviders(): string[] {
-  return [...MT_TERMINAL_PROVIDERS, ...Object.keys(providerFactories)];
+  return [...WORKER_MANAGED_PROVIDERS, ...Object.keys(providerFactories)];
 }
 
 /** Provider display metadata for the frontend. */
@@ -57,8 +63,8 @@ export const PROVIDER_INFO: Record<
   {
     name: string;
     description: string;
-    authType: "oauth" | "credentials";
-    fields: string[];
+    authType: "oauth" | "credentials" | "api_key";
+    fields: readonly string[];
     status: "active" | "coming_soon";
     capabilities: ProviderCapabilityMap;
   }
@@ -255,6 +261,12 @@ export const PROVIDER_INFO: Record<
   },
   dxtrade: {
     ...DXTRADE_PROVIDER_INFO,
+  },
+  ninjatrader: {
+    ...NINJATRADER_PROVIDER_INFO,
+  },
+  rithmic: {
+    ...RITHMIC_PROVIDER_INFO,
   },
   tradovate: {
     ...TRADOVATE_PROVIDER_INFO,

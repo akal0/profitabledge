@@ -73,21 +73,21 @@ export function getAffiliatePfpEffectClassName(pfpEffect?: string | null) {
     case "gold_glow":
       return "ring-4 ring-amber-400/50 shadow-[0_0_20px_rgba(251,191,36,0.45),0_0_40px_rgba(251,191,36,0.2)]";
     case "emerald_pulse":
-      return "ring-4 ring-emerald-400/50 [--pfp-glow:rgba(16,185,129,0.45)] [--pfp-glow-outer:rgba(16,185,129,0.2)] shadow-[0_0_20px_rgba(16,185,129,0.45),0_0_40px_rgba(16,185,129,0.2)] animate-[pfp-pulse_2.5s_ease-in-out_infinite]";
+      return "ring-4 ring-emerald-400/50 [--pfp-glow:rgba(16,185,129,0.45)] [--pfp-glow-outer:rgba(16,185,129,0.2)] shadow-[0_0_20px_rgba(16,185,129,0.45),0_0_40px_rgba(16,185,129,0.2)] motion-reduce:animate-none animate-[pfp-pulse_2.5s_ease-in-out_infinite]";
     case "rainbow_ring":
-      return "ring-4 ring-transparent [background:conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)_padding-box] animate-[pfp-rainbow-spin_4s_linear_infinite]";
+      return "ring-4 ring-transparent [background:conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)_padding-box] motion-reduce:animate-none animate-[pfp-rainbow-spin_4s_linear_infinite]";
     case "frost_aura":
       return "ring-4 ring-sky-300/50 shadow-[0_0_24px_rgba(56,189,248,0.5),0_0_48px_rgba(56,189,248,0.2)]";
     case "shadow_pulse":
-      return "ring-4 ring-purple-500/40 [--pfp-glow:rgba(168,85,247,0.5)] [--pfp-glow-outer:rgba(88,28,135,0.3)] shadow-[0_0_20px_rgba(168,85,247,0.5),0_0_40px_rgba(88,28,135,0.3)] animate-[pfp-pulse_3s_ease-in-out_infinite]";
+      return "ring-4 ring-purple-500/40 [--pfp-glow:rgba(168,85,247,0.5)] [--pfp-glow-outer:rgba(88,28,135,0.3)] shadow-[0_0_20px_rgba(168,85,247,0.5),0_0_40px_rgba(88,28,135,0.3)] motion-reduce:animate-none animate-[pfp-pulse_3s_ease-in-out_infinite]";
     case "electric_spark":
-      return "ring-4 ring-cyan-400/50 [--pfp-glow:rgba(34,211,238,0.6)] [--pfp-glow-outer:rgba(56,189,248,0.3)] shadow-[0_0_16px_rgba(34,211,238,0.6),0_0_32px_rgba(56,189,248,0.3)] animate-[pfp-electric_1.5s_ease-in-out_infinite]";
+      return "ring-4 ring-cyan-400/50 [--pfp-glow:rgba(34,211,238,0.6)] [--pfp-glow-outer:rgba(56,189,248,0.3)] shadow-[0_0_16px_rgba(34,211,238,0.6),0_0_32px_rgba(56,189,248,0.3)] motion-reduce:animate-none animate-[pfp-electric_1.5s_ease-in-out_infinite]";
     case "sakura_ring":
-      return "ring-4 ring-pink-300/50 [--pfp-glow:rgba(244,114,182,0.45)] [--pfp-glow-outer:rgba(251,113,133,0.2)] shadow-[0_0_18px_rgba(244,114,182,0.45),0_0_36px_rgba(251,113,133,0.2)] animate-[pfp-sakura_3s_ease-in-out_infinite]";
+      return "ring-4 ring-pink-300/50 [--pfp-glow:rgba(244,114,182,0.45)] [--pfp-glow-outer:rgba(251,113,133,0.2)] shadow-[0_0_18px_rgba(244,114,182,0.45),0_0_36px_rgba(251,113,133,0.2)] motion-reduce:animate-none animate-[pfp-sakura_3s_ease-in-out_infinite]";
     case "neon_pulse":
-      return "ring-4 ring-green-400/60 [--pfp-glow:rgba(74,222,128,0.7)] [--pfp-glow-outer:rgba(34,197,94,0.4)] shadow-[0_0_12px_rgba(74,222,128,0.7),0_0_28px_rgba(34,197,94,0.4),0_0_56px_rgba(22,163,74,0.2)] animate-[pfp-pulse_2s_ease-in-out_infinite]";
+      return "ring-4 ring-green-400/60 [--pfp-glow:rgba(74,222,128,0.7)] [--pfp-glow-outer:rgba(34,197,94,0.4)] shadow-[0_0_12px_rgba(74,222,128,0.7),0_0_28px_rgba(34,197,94,0.4),0_0_56px_rgba(22,163,74,0.2)] motion-reduce:animate-none animate-[pfp-pulse_2s_ease-in-out_infinite]";
     case "hearts":
-      return "ring-4 ring-rose-400/50 [--pfp-glow:rgba(251,113,133,0.5)] [--pfp-glow-outer:rgba(244,63,94,0.25)] shadow-[0_0_20px_rgba(251,113,133,0.5),0_0_40px_rgba(244,63,94,0.25)] animate-[pfp-hearts_2s_ease-in-out_infinite]";
+      return "ring-4 ring-rose-400/50 [--pfp-glow:rgba(251,113,133,0.5)] [--pfp-glow-outer:rgba(244,63,94,0.25)] shadow-[0_0_20px_rgba(251,113,133,0.5),0_0_40px_rgba(244,63,94,0.25)] motion-reduce:animate-none animate-[pfp-hearts_2s_ease-in-out_infinite]";
     case "custom":
       return "ring-4";
     default:
@@ -97,10 +97,10 @@ export function getAffiliatePfpEffectClassName(pfpEffect?: string | null) {
 
 const CUSTOM_RING_ANIMATIONS: Record<string, string> = {
   none: "",
-  pulse: "animate-[pfp-pulse_2.5s_ease-in-out_infinite]",
-  electric: "animate-[pfp-electric_1.5s_ease-in-out_infinite]",
-  sakura: "animate-[pfp-sakura_3s_ease-in-out_infinite]",
-  heartbeat: "animate-[pfp-hearts_2s_ease-in-out_infinite]",
+  pulse: "motion-reduce:animate-none animate-[pfp-pulse_2.5s_ease-in-out_infinite]",
+  electric: "motion-reduce:animate-none animate-[pfp-electric_1.5s_ease-in-out_infinite]",
+  sakura: "motion-reduce:animate-none animate-[pfp-sakura_3s_ease-in-out_infinite]",
+  heartbeat: "motion-reduce:animate-none animate-[pfp-hearts_2s_ease-in-out_infinite]",
 };
 
 export function getCustomPfpAnimationClassName(
@@ -124,23 +124,27 @@ export function getAffiliatePfpEffectStyle(
   if (pfpEffect !== "custom" || !customRing?.from || !customRing?.to)
     return undefined;
   const from = customRing.from;
+  const to = customRing.to;
   const r1 = parseInt(from.slice(1, 3), 16);
   const g1 = parseInt(from.slice(3, 5), 16);
   const b1 = parseInt(from.slice(5, 7), 16);
+  const r2 = parseInt(to.slice(1, 3), 16);
+  const g2 = parseInt(to.slice(3, 5), 16);
+  const b2 = parseInt(to.slice(5, 7), 16);
   return {
     ["--tw-ring-color" as string]: from,
     ["--pfp-glow" as string]: `rgba(${r1},${g1},${b1},0.5)`,
-    ["--pfp-glow-outer" as string]: `rgba(${r1},${g1},${b1},0.2)`,
-    boxShadow: `var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), 0 0 20px rgba(${r1},${g1},${b1},0.5), 0 0 40px rgba(${r1},${g1},${b1},0.2)`,
+    ["--pfp-glow-outer" as string]: `rgba(${r2},${g2},${b2},0.24)`,
+    boxShadow: `var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), 0 0 20px rgba(${r1},${g1},${b1},0.5), 0 0 40px rgba(${r2},${g2},${b2},0.24)`,
   };
 }
 
 export function getAffiliatePfpWrapperClassName(pfpEffect?: string | null) {
   if (pfpEffect === "rainbow_ring") {
-    return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)] animate-[pfp-rainbow-spin_4s_linear_infinite]";
+    return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)] motion-reduce:animate-none animate-[pfp-rainbow-spin_4s_linear_infinite]";
   }
   if (pfpEffect === "sakura_ring") {
-    return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,#f9a8d4,#f472b6,#fb7185,#fda4af,#f9a8d4)] animate-[pfp-rainbow-spin_6s_linear_infinite]";
+    return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,#f9a8d4,#f472b6,#fb7185,#fda4af,#f9a8d4)] motion-reduce:animate-none animate-[pfp-rainbow-spin_6s_linear_infinite]";
   }
   return "";
 }
@@ -268,15 +272,15 @@ export function getAffiliateNameFontClassName(nameFont?: string | null) {
 export function getAffiliateNameEffectClassName(nameEffect?: string | null) {
   switch (nameEffect) {
     case "sparkle":
-      return "animate-[name-glow_2.5s_ease-in-out_infinite]";
+      return "motion-reduce:animate-none animate-[name-glow_2.5s_ease-in-out_infinite]";
     case "glow":
-      return "animate-[name-glow_2s_ease-in-out_infinite]";
+      return "motion-reduce:animate-none animate-[name-glow_2s_ease-in-out_infinite]";
     case "shimmer":
-      return "inline-block bg-clip-text text-transparent bg-[length:250%_100%] [background-repeat:no-repeat,padding-box] animate-[name-shimmer_2.5s_linear_infinite]";
+      return "inline-block bg-clip-text text-transparent bg-[length:250%_100%] [background-repeat:no-repeat,padding-box] motion-reduce:animate-none animate-[name-shimmer_2.5s_linear_infinite]";
     case "gradient_shift":
-      return "inline-block bg-clip-text text-transparent bg-[length:300%_100%] animate-[name-gradient-shift_4s_ease_infinite]";
+      return "inline-block bg-clip-text text-transparent bg-[length:300%_100%] motion-reduce:animate-none animate-[name-gradient-shift_4s_ease_infinite]";
     case "breathe":
-      return "animate-[name-breathe_3s_ease-in-out_infinite]";
+      return "motion-reduce:animate-none animate-[name-breathe_3s_ease-in-out_infinite]";
     default:
       return "";
   }

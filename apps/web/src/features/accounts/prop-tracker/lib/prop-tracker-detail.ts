@@ -3,6 +3,7 @@ export type SurvivalState = "critical" | "fragile" | "tight" | "stable";
 export type PropFirmLike = {
   id?: string | null;
   displayName?: string | null;
+  logo?: string | null;
 };
 
 export type StatusAppearance = {

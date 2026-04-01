@@ -12,6 +12,10 @@ import { Loader2, X } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  getBillingPlanTitle,
+  type BillingPlanKey,
+} from "@/features/settings/billing/lib/plan-labels";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 
@@ -25,17 +29,6 @@ type InviteCandidate = {
   isVerified?: boolean;
   isPremium?: boolean;
 };
-
-function getPlanTitle(planKey?: InviteCandidate["planKey"]) {
-  switch (planKey) {
-    case "professional":
-      return "Professional";
-    case "institutional":
-      return "Institutional";
-    default:
-      return "Student";
-  }
-}
 
 function getPlanBadgeClassName(planKey?: InviteCandidate["planKey"]) {
   switch (planKey) {
@@ -288,7 +281,9 @@ export function JournalShareInviteInput({
               <div className="max-h-72 overflow-y-auto p-1.5">
                 {candidates.map((candidate, index) => {
                   const label = getCandidateLabel(candidate);
-                  const planTitle = getPlanTitle(candidate.planKey);
+                  const planTitle = getBillingPlanTitle(
+                    (candidate.planKey ?? "student") as BillingPlanKey
+                  );
 
                   return (
                     <button

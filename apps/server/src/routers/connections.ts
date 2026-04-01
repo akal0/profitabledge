@@ -37,8 +37,11 @@ import { syncConnection } from "../lib/providers/sync-engine";
 import { getSyncSchedulerStatus } from "../lib/providers/sync-scheduler";
 import { getCTraderAuthUrl } from "../lib/providers/ctrader";
 import { getTradovateAuthUrl } from "../lib/providers/tradovate";
-import { createMtTerminalConnection } from "../lib/mt5/worker-control";
-import { isMtTerminalProvider } from "../lib/mt5/constants";
+import { createWorkerManagedConnection } from "../lib/mt5/worker-control";
+import {
+  isMtTerminalProvider,
+  isWorkerManagedProvider,
+} from "../lib/mt5/constants";
 import { buildMtConnectionCompleteness } from "../lib/mt5/completeness";
 import {
   buildMt5LiveLeaseHolder,
@@ -60,6 +63,10 @@ import {
 } from "../lib/ops/event-log";
 import { createOAuthConnection } from "../lib/connections/oauth";
 import type { ProviderAuthorizedAccount } from "../lib/providers/types";
+import {
+  buildDiscoveredAccountsMeta,
+  getProviderAccountMetaKey,
+} from "../lib/connections/discovered-accounts";
 
 const credentialsSchema = z.record(z.string(), z.string());
 const connectionMetaSchema = z
@@ -180,7 +187,10 @@ function chooseDiscoveredProviderAccount(input: {
     input.discoveredAccounts.find((candidate) => {
       return (
         normalizeAccountIdentifier(candidate.accountNumber) ===
-        normalizedAccountNumber
+          normalizedAccountNumber ||
+        normalizeAccountIdentifier(candidate.label) === normalizedAccountNumber ||
+        normalizeAccountIdentifier(candidate.providerAccountId) ===
+          normalizedAccountNumber
       );
     }) ?? null;
 
@@ -207,7 +217,8 @@ function resolveConnectionLinkMeta(input: {
       : {};
   const discoveredAccounts = getDiscoveredProviderAccounts(currentMeta);
 
-  if (input.provider !== "ctrader" && input.provider !== "tradovate") {
+  const providerAccountMetaKey = getProviderAccountMetaKey(input.provider);
+  if (!providerAccountMetaKey) {
     return currentMeta;
   }
 
@@ -224,13 +235,7 @@ function resolveConnectionLinkMeta(input: {
     });
   }
 
-  if (input.provider === "ctrader") {
-    currentMeta.ctraderAccountId = selectedAccount.providerAccountId;
-  }
-
-  if (input.provider === "tradovate") {
-    currentMeta.tradovateAccountId = selectedAccount.providerAccountId;
-  }
+  currentMeta[providerAccountMetaKey] = selectedAccount.providerAccountId;
 
   currentMeta.brokerName = selectedAccount.brokerName ?? currentMeta.brokerName;
   currentMeta.currency = selectedAccount.currency ?? currentMeta.currency;
@@ -295,7 +300,7 @@ export const connectionsRouter = router({
     });
     const scheduledConnections = rows.filter(
       (connection) =>
-        !isMtTerminalProvider(connection.provider) &&
+        !isWorkerManagedProvider(connection.provider) &&
         (connection.syncIntervalMinutes ?? 0) > 0
     );
     const now = Date.now();
@@ -934,7 +939,7 @@ export const connectionsRouter = router({
   getOAuthUrl: protectedProcedure
     .input(
       z.object({
-        provider: z.enum(["ctrader", "tradovate", "topstepx"]),
+        provider: z.enum(["ctrader", "tradovate"]),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -1036,12 +1041,13 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
-      if (isMtTerminalProvider(input.provider)) {
+      const providerInfo = PROVIDER_INFO[input.provider] ?? null;
+      if (isWorkerManagedProvider(input.provider)) {
         assertAlphaFeatureEnabled("mt5Ingestion");
       }
 
-      if (isMtTerminalProvider(input.provider)) {
-        const conn = await createMtTerminalConnection({
+      if (isWorkerManagedProvider(input.provider)) {
+        const conn = await createWorkerManagedConnection({
           userId: ctx.session.user.id,
           provider: input.provider,
           displayName: input.displayName,
@@ -1078,7 +1084,7 @@ export const connectionsRouter = router({
         await createConnectionSettingsNotification({
           userId: ctx.session.user.id,
           title: "Connection queued",
-          body: `${conn.displayName} was queued for the MT terminal worker.`,
+          body: `${conn.displayName} was queued for the broker worker.`,
           connectionId: conn.id,
           provider: conn.provider,
           displayName: conn.displayName,
@@ -1088,7 +1094,71 @@ export const connectionsRouter = router({
         return {
           connectionId: conn.id,
           accountInfo: null,
-          mode: "terminal-farm" as const,
+          mode: "worker-managed" as const,
+        };
+      }
+
+      if (
+        providerInfo &&
+        providerInfo.authType === "api_key" &&
+        providerInfo.status === "coming_soon"
+      ) {
+        const { encrypted, iv } = encryptCredentials(
+          JSON.stringify(input.credentials)
+        );
+        const displayName = await resolveUniqueConnectionDisplayName({
+          userId: ctx.session.user.id,
+          provider: input.provider,
+          displayName: input.displayName,
+        });
+        const safeMeta = sanitizeConnectionMeta({
+          ...input.meta,
+          connectionMode: "saved-credential",
+          providerStatus: "coming_soon",
+        });
+
+        const [conn] = await db
+          .insert(platformConnection)
+          .values({
+            userId: ctx.session.user.id,
+            provider: input.provider,
+            displayName,
+            meta: safeMeta,
+            encryptedCredentials: encrypted,
+            credentialIv: iv,
+            status: "pending",
+            syncIntervalMinutes: 0,
+          })
+          .returning();
+
+        await recordAppEvent({
+          userId: ctx.session.user.id,
+          category: "connections",
+          name: "connection.saved",
+          source: "server",
+          summary: `${displayName} saved for later`,
+          metadata: {
+            provider: conn.provider,
+            connectionId: conn.id,
+            mode: "saved-credential",
+          },
+          isUserVisible: true,
+        });
+
+        await createConnectionSettingsNotification({
+          userId: ctx.session.user.id,
+          title: "Credentials saved",
+          body: `${displayName} was saved and will activate once ${providerInfo.name} live sync is enabled.`,
+          connectionId: conn.id,
+          provider: conn.provider,
+          displayName: conn.displayName,
+          updatedFields: ["provider", "displayName", "status"],
+        });
+
+        return {
+          connectionId: conn.id,
+          accountInfo: null,
+          mode: "saved-credential" as const,
         };
       }
 
@@ -1096,11 +1166,18 @@ export const connectionsRouter = router({
 
       // Validate credentials by connecting
       let accountInfo;
+      let discoveredAccounts: ProviderAuthorizedAccount[] = [];
       try {
         accountInfo = await provider.connect({
           credentials: input.credentials,
           meta: input.meta,
         });
+
+        if (provider.listAuthorizedAccounts) {
+          discoveredAccounts = await provider
+            .listAuthorizedAccounts(input.credentials)
+            .catch(() => [] as ProviderAuthorizedAccount[]);
+        }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         await recordOperationalError({
@@ -1129,7 +1206,12 @@ export const connectionsRouter = router({
         provider: input.provider,
         displayName: input.displayName,
       });
-      const safeMeta = sanitizeConnectionMeta(input.meta);
+      const safeMeta = buildDiscoveredAccountsMeta({
+        provider: input.provider,
+        meta: input.meta,
+        discoveredAccounts,
+        accountInfo,
+      });
 
       const [conn] = await db
         .insert(platformConnection)
@@ -1273,7 +1355,7 @@ export const connectionsRouter = router({
 
       if (!conn) throw new TRPCError({ code: "NOT_FOUND" });
 
-      if (isMtTerminalProvider(conn.provider)) {
+      if (isWorkerManagedProvider(conn.provider)) {
         assertAlphaFeatureEnabled("mt5Ingestion");
         await db
           .update(platformConnection)

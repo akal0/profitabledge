@@ -87,6 +87,7 @@ export const accountsRouter = router({
             "mt4",
             "mt5",
             "ctrader",
+            "dxtrade",
             "ib",
             "oanda",
             "tradovate",

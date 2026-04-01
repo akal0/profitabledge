@@ -695,6 +695,10 @@ export const tradeMutationProcedures = {
         commissions: z.number().optional(),
         swap: z.number().optional(),
         sessionTag: z.string().nullable().optional(),
+        protocolAlignment: z
+          .enum(["aligned", "against", "discretionary"])
+          .nullable()
+          .optional(),
         edgeId: z.string().nullable().optional(),
         modelTag: z.string().nullable().optional(),
         customTags: z.array(z.string().trim().min(1)).optional(),
@@ -762,6 +766,9 @@ export const tradeMutationProcedures = {
       }
       if (input.swap !== undefined) updates.swap = input.swap.toString();
       if (input.sessionTag !== undefined) updates.sessionTag = input.sessionTag;
+      if (input.protocolAlignment !== undefined) {
+        updates.protocolAlignment = input.protocolAlignment;
+      }
       if (input.modelTag !== undefined) updates.modelTag = input.modelTag;
       if (input.customTags !== undefined) {
         updates.customTags = normalizeTradeTags(input.customTags);

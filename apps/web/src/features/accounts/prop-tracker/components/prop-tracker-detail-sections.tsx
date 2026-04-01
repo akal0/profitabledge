@@ -221,8 +221,7 @@ export function PropTrackerHeaderCard({
               {statusInfo.label}
             </Badge>
             <PropAccountPhaseActionsMenu
-              accountId={account.id}
-              accountName={account.name}
+              account={dashboard?.account ?? account}
               dashboard={dashboard ?? undefined}
             />
             <RemovePropAccountButton

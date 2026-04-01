@@ -40,6 +40,7 @@ export interface PropPhaseRules {
   profitTarget: number | null;
   profitTargetType: "percentage" | "absolute";
   dailyLossLimit: number | null;
+  dailyLossLimitType?: "percentage" | "absolute" | null;
   maxLoss: number | null;
   maxLossType: "trailing" | "absolute";
   timeLimitDays: number | null;
@@ -835,10 +836,16 @@ export async function checkPropRules(
 
   const thresholdMode =
     rules.profitTargetType === "absolute" ? "currency" : "percent";
+  const dailyLossMode =
+    rules.dailyLossLimitType === "absolute"
+      ? "currency"
+      : rules.dailyLossLimitType === "percentage"
+        ? "percent"
+        : thresholdMode;
   const dailyLossCurrentValue =
-    thresholdMode === "currency" ? dailyDrawdown : dailyDrawdownPercent;
+    dailyLossMode === "currency" ? dailyDrawdown : dailyDrawdownPercent;
   const dailyLossObservedValue =
-    thresholdMode === "currency"
+    dailyLossMode === "currency"
       ? dailyDrawdownTaken
       : dailyDrawdownTakenPercent;
   const maxLossCurrentValue =
@@ -868,8 +875,8 @@ export async function checkPropRules(
       rule: "daily_loss",
       message: `BREACH: Daily loss limit exceeded (${formatMetricValue(
         dailyLossObservedValue,
-        thresholdMode
-      )} / ${formatMetricValue(rules.dailyLossLimit!, thresholdMode)})`,
+        dailyLossMode
+      )} / ${formatMetricValue(rules.dailyLossLimit!, dailyLossMode)})`,
       currentValue: dailyLossObservedValue,
       thresholdValue: rules.dailyLossLimit!,
     });
@@ -883,8 +890,8 @@ export async function checkPropRules(
       rule: "daily_loss",
       message: `WARNING: Approaching daily loss limit (${formatMetricValue(
         dailyLossCurrentValue,
-        thresholdMode
-      )} / ${formatMetricValue(rules.dailyLossLimit, thresholdMode)})`,
+        dailyLossMode
+      )} / ${formatMetricValue(rules.dailyLossLimit, dailyLossMode)})`,
       currentValue: dailyLossCurrentValue,
       thresholdValue: rules.dailyLossLimit,
     });

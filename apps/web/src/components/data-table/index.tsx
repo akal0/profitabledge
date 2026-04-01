@@ -38,9 +38,13 @@ export function DataTable<TData>({
   onRowDoubleClick,
   onRowMouseDown,
   onRowMouseEnter,
+  onRowPointerDown,
+  onRowPointerEnter,
+  onRowPointerUp,
   containerRef,
   className,
   onRenderedRowIdsChange,
+  focusedRowId,
   getRowGroupKey,
   renderRowGroupHeader,
   fitColumnsToContent,
@@ -57,8 +61,12 @@ export function DataTable<TData>({
   onRowDoubleClick?: (row: any) => void;
   onRowMouseDown?: (e: React.MouseEvent, rowId: string) => void;
   onRowMouseEnter?: (rowId: string) => void;
+  onRowPointerDown?: (e: React.PointerEvent, rowId: string) => void;
+  onRowPointerEnter?: (rowId: string) => void;
+  onRowPointerUp?: (e: React.PointerEvent, rowId: string) => void;
   containerRef?: React.RefObject<HTMLDivElement | null>;
   className?: string;
+  focusedRowId?: string | null;
   onRenderedRowIdsChange?: (rowIds: string[]) => void;
   getRowGroupKey?: (row: Row<TData>) => string | null;
   renderRowGroupHeader?: (group: {
@@ -111,6 +119,7 @@ export function DataTable<TData>({
   const visibleColumnCount = Math.max(table.getVisibleLeafColumns().length, 1);
   const hasRowInteraction = Boolean(
     onRowClick || onRowDoubleClick || onRowMouseDown || onRowMouseEnter
+      || onRowPointerDown || onRowPointerEnter || onRowPointerUp
   );
   const shouldMeasureColumns =
     enableMeasuredColumnSizing ?? Boolean(fitColumnsToContent);
@@ -731,6 +740,7 @@ export function DataTable<TData>({
             row.getIsSelected()
               ? "bg-sidebar-accent"
               : "hover:bg-sidebar-accent",
+            focusedRowId === row.id && "ring-1 ring-inset ring-teal-400/40",
             item.className
           )}
           onClick={(e) => {
@@ -752,6 +762,15 @@ export function DataTable<TData>({
           }}
           onMouseEnter={() => {
             onRowMouseEnter?.(row.id);
+          }}
+          onPointerDown={(e) => {
+            onRowPointerDown?.(e, row.id);
+          }}
+          onPointerEnter={() => {
+            onRowPointerEnter?.(row.id);
+          }}
+          onPointerUp={(e) => {
+            onRowPointerUp?.(e, row.id);
           }}
         >
           {row.getVisibleCells().map((cell) => (
@@ -786,9 +805,13 @@ export function DataTable<TData>({
       onRowDoubleClick,
       onRowMouseDown,
       onRowMouseEnter,
+      onRowPointerDown,
+      onRowPointerEnter,
+      onRowPointerUp,
       renderRowGroupHeader,
       table,
       visibleColumnCount,
+      focusedRowId,
     ]
   );
 

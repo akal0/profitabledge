@@ -27,6 +27,7 @@ const INITIAL_STATE: AssistantStreamState = {
   lineBuffer: "",
   analysisBlocks: [],
   visualization: null,
+  metadata: null,
   isStreaming: false,
   isDone: false,
   justCompleted: false,
@@ -81,6 +82,12 @@ export function useAssistantStream() {
             return {
               ...prev,
               analysisBlocks: [...prev.analysisBlocks, event.block],
+            };
+
+          case "metadata":
+            return {
+              ...prev,
+              metadata: event.metadata,
             };
 
           case "visualization":

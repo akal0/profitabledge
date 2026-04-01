@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CancelFlow } from "@/components/cancel-flow";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
+import { UsageMeter } from "@/components/usage-meter";
 import { InvoiceHistoryTable } from "@/features/settings/billing/components/invoice-history-table";
 import {
   formatLiveSyncSlots,
@@ -37,6 +39,7 @@ import { trpcClient, trpcOptions } from "@/utils/trpc";
 import CircleCheck from "@/public/icons/circle-check.svg";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
+type BillingInterval = "monthly" | "annual";
 type BillingPageState = {
   activePlanKey: BillingPlanKey;
   customer?: {
@@ -45,7 +48,10 @@ type BillingPageState = {
   subscription?: {
     provider?: string | null;
     status?: string | null;
+    recurringInterval?: string | null;
     stripeSubscriptionId?: string | null;
+    pauseStatus?: string | null;
+    pauseResumesAt?: string | Date | null;
     cancelAtPeriodEnd?: boolean;
     currentPeriodEnd?: string | Date | null;
   } | null;
@@ -53,6 +59,8 @@ type BillingPageState = {
   credits?: {
     remainingCredits: number;
     allowanceCredits: number;
+    spentCredits: number;
+    lowCreditWarningThreshold?: number;
   } | null;
 };
 
@@ -73,6 +81,15 @@ type StaffAccessOverrideRow = {
   role: string | null;
 };
 
+type StaffAccessCandidate = {
+  id: string;
+  email: string;
+  username: string | null;
+  name: string;
+  displayName: string | null;
+  role: string | null;
+};
+
 const STAFF_ACCESS_PRESETS = [
   { key: "ambassador", label: "Ambassador year", durationDays: 365 },
   { key: "partner", label: "Partner year", durationDays: 365 },
@@ -89,6 +106,7 @@ type ResolvedAffiliateProfile = {
 };
 
 const AFFILIATE_CODE_TOAST_ID = "billing-affiliate-code-status";
+const STAFF_ACCESS_SEARCH_DEBOUNCE_MS = 200;
 
 const PLAN_CARD_META: Record<
   BillingPlanKey,
@@ -121,6 +139,52 @@ function splitPriceLabel(priceLabel: string) {
   return { amount, interval: interval ? `/ ${interval}` : null };
 }
 
+function segmentedBillingToggleButtonClassName(active: boolean) {
+  return cn(
+    "cursor-pointer flex h-max w-max items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-all duration-250 active:scale-95",
+    active
+      ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
+      : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
+  );
+}
+
+function getDisplayedPricing(plan: any, billingInterval: BillingInterval) {
+  if (plan?.isFree) {
+    return {
+      amount: "Free",
+      interval: null,
+      detail: null,
+      savings: null,
+    };
+  }
+
+  const annualPricing = plan?.pricing?.annual;
+  if (billingInterval === "annual" && annualPricing?.isConfigured) {
+    return {
+      amount: `£${(annualPricing.priceCents / 100).toFixed(0)}`,
+      interval: "/ year",
+      detail:
+        annualPricing.monthlyEquivalentCents != null
+          ? `£${(annualPricing.monthlyEquivalentCents / 100).toFixed(
+              0
+            )}/mo billed annually`
+          : null,
+      savings:
+        typeof annualPricing.discountPercent === "number"
+          ? `Save ${annualPricing.discountPercent}%`
+          : null,
+    };
+  }
+
+  const fallback = splitPriceLabel(plan?.priceLabel ?? "Free");
+  return {
+    amount: fallback.amount,
+    interval: fallback.interval,
+    detail: null,
+    savings: null,
+  };
+}
+
 function formatDate(value?: string | Date | null) {
   if (!value) return "N/A";
   const date = value instanceof Date ? value : new Date(value);
@@ -143,6 +207,15 @@ function formatEdgeCreditBalance(
   return `${new Intl.NumberFormat("en-US").format(
     remainingCredits
   )} / ${new Intl.NumberFormat("en-US").format(allowanceCredits)}`;
+}
+
+function getStaffAccessCandidateIdentifier(candidate: StaffAccessCandidate) {
+  return candidate.username ? `@${candidate.username}` : candidate.email;
+}
+
+function getStaffAccessCandidateLabel(candidate: StaffAccessCandidate) {
+  const displayName = candidate.displayName?.trim();
+  return displayName || candidate.name || candidate.email;
 }
 
 function getPlanComparisonRows(plan: {
@@ -283,6 +356,9 @@ export default function BillingSettingsPage() {
   const searchParams = useSearchParams();
   const hasTriggeredStripeReturnSyncRef = useRef(false);
   const [hoveredCard, setHoveredCard] = useState<BillingPlanKey | null>(null);
+  const [billingInterval, setBillingInterval] =
+    useState<BillingInterval>("annual");
+  const [cancelFlowOpen, setCancelFlowOpen] = useState(false);
 
   const billingStateQuery = useQuery(
     trpcOptions.billing.getState.queryOptions()
@@ -317,16 +393,19 @@ export default function BillingSettingsPage() {
   const [appliedAffiliate, setAppliedAffiliate] =
     useState<ResolvedAffiliateProfile | null>(null);
   const [staffAccessIdentifier, setStaffAccessIdentifier] = useState("");
+  const [staffAccessSearchTerm, setStaffAccessSearchTerm] = useState("");
   const [staffAccessPlanKey, setStaffAccessPlanKey] =
     useState<Extract<BillingPlanKey, "professional" | "institutional">>(
       "professional"
     );
-  const [staffAccessPresetKey, setStaffAccessPresetKey] = useState<
-    (typeof STAFF_ACCESS_PRESETS)[number]["key"]
-  >("ambassador");
+  const [staffAccessPresetKey, setStaffAccessPresetKey] =
+    useState<(typeof STAFF_ACCESS_PRESETS)[number]["key"]>("ambassador");
   const [staffAccessDurationDays, setStaffAccessDurationDays] = useState("365");
   const [staffAccessReason, setStaffAccessReason] = useState("");
   const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const staffAccessSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const latestAffiliateCodeRequestRef = useRef<string | null>(null);
   const plans = billingConfigQuery.data?.plans ?? [];
   const billingData = billingStateQuery.data?.billing as
@@ -343,15 +422,74 @@ export default function BillingSettingsPage() {
     ...trpcOptions.billing.listStaffAccessOverrides.queryOptions(),
     enabled: isAdmin,
   });
+  const staffAccessCandidatesQuery = useQuery({
+    queryKey: ["billing", "staff-access-candidates", staffAccessSearchTerm],
+    queryFn: async () => {
+      const results = await (trpcClient.billing as any).searchStaffAccessCandidates.query(
+        {
+          query: staffAccessSearchTerm,
+        }
+      );
+
+      return (results ?? []) as StaffAccessCandidate[];
+    },
+    enabled: isAdmin && staffAccessSearchTerm.length > 0,
+    staleTime: 30_000,
+  });
   const canManageSubscription = Boolean(
     billingData?.customer?.stripeCustomerId &&
       billingData?.subscription?.provider === "stripe"
   );
+  const currentBillingInterval: BillingInterval =
+    subscription?.recurringInterval === "year" ? "annual" : "monthly";
   const cancellationScheduled = Boolean(subscription?.cancelAtPeriodEnd);
   const canMoveToFreeTier =
-    activePlanKey !== "student" && canManageSubscription && !cancellationScheduled;
+    activePlanKey !== "student" &&
+    canManageSubscription &&
+    !cancellationScheduled;
   const returnedFromStripeCheckout =
     searchParams?.get("checkout") === "success";
+  const normalizedStaffAccessIdentifier = staffAccessIdentifier.trim().toLowerCase();
+  const staffAccessCandidates = staffAccessCandidatesQuery.data ?? [];
+  const hasExactStaffAccessCandidateMatch = staffAccessCandidates.some(
+    (candidate) => {
+      const candidateIdentifier = getStaffAccessCandidateIdentifier(candidate);
+      return candidateIdentifier.toLowerCase() === normalizedStaffAccessIdentifier;
+    }
+  );
+  const shouldShowStaffAccessSuggestions =
+    staffAccessIdentifier.trim().length > 0 && !hasExactStaffAccessCandidateMatch;
+
+  useEffect(() => {
+    const configuredDefaultInterval = billingConfigQuery.data
+      ?.defaultBillingInterval as BillingInterval | undefined;
+    if (configuredDefaultInterval) {
+      setBillingInterval(configuredDefaultInterval);
+    }
+  }, [billingConfigQuery.data?.defaultBillingInterval]);
+
+  useEffect(() => {
+    if (staffAccessSearchTimerRef.current) {
+      clearTimeout(staffAccessSearchTimerRef.current);
+    }
+
+    const trimmed = staffAccessIdentifier.trim();
+    if (!trimmed) {
+      setStaffAccessSearchTerm("");
+      return;
+    }
+
+    staffAccessSearchTimerRef.current = setTimeout(() => {
+      setStaffAccessSearchTerm(trimmed);
+    }, STAFF_ACCESS_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (staffAccessSearchTimerRef.current) {
+        clearTimeout(staffAccessSearchTimerRef.current);
+      }
+    };
+  }, [staffAccessIdentifier]);
+
   const refreshAdminAccessState = async () => {
     await Promise.all([
       billingStateQuery.refetch(),
@@ -497,6 +635,7 @@ export default function BillingSettingsPage() {
     try {
       const result = await createCheckout.mutateAsync({
         planKey,
+        billingInterval,
         returnPath: "/dashboard/settings/billing",
         affiliateOfferCode: affiliateOfferCode.trim() || undefined,
       });
@@ -518,18 +657,26 @@ export default function BillingSettingsPage() {
     }
   };
 
-  const handleMoveToFreeTier = async () => {
+  const handleChangeSubscriptionPlan = async (
+    planKey: Extract<BillingPlanKey, "professional" | "institutional">
+  ) => {
     try {
       const result = await createCustomerPortalSession.mutateAsync({
         returnPath: "/dashboard/settings/billing",
-        flow: "cancel",
+        flow: "update",
+        planKey,
+        billingInterval,
       });
       window.location.assign(result.url);
     } catch (e) {
       toast.error(
-        e instanceof Error ? e.message : "Unable to start cancellation"
+        e instanceof Error ? e.message : "Unable to open plan change flow"
       );
     }
+  };
+
+  const handleMoveToFreeTier = async () => {
+    setCancelFlowOpen(true);
   };
 
   const handleGrantStaffAccess = async () => {
@@ -538,35 +685,52 @@ export default function BillingSettingsPage() {
       (preset) => preset.key === staffAccessPresetKey
     );
     const durationDays =
-      selectedPreset?.durationDays ?? Number.parseInt(staffAccessDurationDays, 10);
+      selectedPreset?.durationDays ??
+      Number.parseInt(staffAccessDurationDays, 10);
 
     if (!normalizedIdentifier) {
       toast.error("Enter an email or @username first");
       return;
     }
 
-    if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650) {
+    if (
+      !Number.isInteger(durationDays) ||
+      durationDays < 1 ||
+      durationDays > 3650
+    ) {
       toast.error("Duration must be between 1 and 3650 days");
       return;
     }
 
-    await grantStaffAccess.mutateAsync({
-      userIdentifier: normalizedIdentifier,
-      planKey: staffAccessPlanKey,
-      presetKey: staffAccessPresetKey,
-      durationDays,
-      reason: staffAccessReason.trim() || undefined,
-    });
+    try {
+      await grantStaffAccess.mutateAsync({
+        userIdentifier: normalizedIdentifier,
+        planKey: staffAccessPlanKey,
+        presetKey: staffAccessPresetKey,
+        durationDays,
+        reason: staffAccessReason.trim() || undefined,
+      });
+    } catch {
+      return;
+    }
   };
 
   const handleRevokeStaffAccess = async (
     userIdentifier: string,
     reason?: string | null
   ) => {
-    await revokeStaffAccess.mutateAsync({
-      userIdentifier,
-      reason: reason ?? "Manual revocation",
-    });
+    try {
+      await revokeStaffAccess.mutateAsync({
+        userIdentifier,
+        reason: reason ?? "Manual revocation",
+      });
+    } catch {
+      return;
+    }
+  };
+
+  const handleSelectStaffAccessCandidate = (candidate: StaffAccessCandidate) => {
+    setStaffAccessIdentifier(getStaffAccessCandidateIdentifier(candidate));
   };
 
   useEffect(() => {
@@ -585,6 +749,10 @@ export default function BillingSettingsPage() {
     return () => {
       if (resolveTimerRef.current) {
         clearTimeout(resolveTimerRef.current);
+      }
+
+      if (staffAccessSearchTimerRef.current) {
+        clearTimeout(staffAccessSearchTimerRef.current);
       }
     };
   }, []);
@@ -639,7 +807,7 @@ export default function BillingSettingsPage() {
 
         <div className="w-full max-w-[560px] min-w-0 lg:justify-self-end">
           <WalletHero
-            planTitle={activePlan?.title ?? "Student"}
+            planTitle={activePlan?.title ?? "Explorer"}
             priceLabel={activePlan?.priceLabel ?? "Free"}
             remainingEdgeCredits={creditState?.remainingCredits ?? 0}
             allowanceEdgeCredits={
@@ -661,26 +829,60 @@ export default function BillingSettingsPage() {
           <div className="flex items-center justify-between">
             <SectionLabel>Plans</SectionLabel>
           </div>
+          <div className="flex h-max w-max items-center gap-1 rounded-md bg-white p-[3px] ring ring-white/5 dark:bg-muted/15">
+            {(["monthly", "annual"] as const).map((interval) => (
+              <Button
+                key={interval}
+                type="button"
+                onClick={() => setBillingInterval(interval)}
+                className={segmentedBillingToggleButtonClassName(
+                  billingInterval === interval
+                )}
+              >
+                {interval === "monthly" ? "Monthly" : "Annual"}
+              </Button>
+            ))}
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
           {plans.map((plan) => {
-            const isActive = plan.key === activePlanKey;
+            const isActivePlan = plan.key === activePlanKey;
             const planKey = plan.key as BillingPlanKey;
             const activePlanTier = BILLING_PLAN_TIER[activePlanKey] ?? 0;
             const planTier = BILLING_PLAN_TIER[planKey] ?? 0;
             const isHigherTierThanActive = planTier > activePlanTier;
             const isLowerPaidTierThanActive =
               !plan.isFree && planTier < activePlanTier;
+            const hasSelectedIntervalConfigured = plan.isFree
+              ? true
+              : billingInterval === "annual"
+                ? Boolean(plan.pricing?.annual?.isConfigured)
+                : Boolean(plan.pricing?.monthly?.isConfigured);
+            const isCurrentPlanSelection =
+              isActivePlan &&
+              (plan.isFree ||
+                !canManageSubscription ||
+                currentBillingInterval === billingInterval);
+            const canChangeExistingSubscription =
+              canManageSubscription &&
+              !plan.isFree &&
+              hasSelectedIntervalConfigured &&
+              !isCurrentPlanSelection;
             const isProfessional = plan.key === "professional";
             const isInstitutional = plan.key === "institutional";
-            const canCheckout = !plan.isFree && isHigherTierThanActive;
+            const canCheckout =
+              !plan.isFree &&
+              hasSelectedIntervalConfigured &&
+              !canChangeExistingSubscription &&
+              isHigherTierThanActive &&
+              !canManageSubscription;
             const showsMoveToFreeTier =
-              plan.isFree && activePlanKey !== "student" && canManageSubscription;
-            const meta =
-              PLAN_CARD_META[planKey] ??
-              PLAN_CARD_META.student;
-            const price = splitPriceLabel(plan.priceLabel);
+              plan.isFree &&
+              activePlanKey !== "student" &&
+              canManageSubscription;
+            const meta = PLAN_CARD_META[planKey] ?? PLAN_CARD_META.student;
+            const price = getDisplayedPricing(plan, billingInterval);
             const featureLines = getPlanFeatureLines(plan);
 
             const outerCn = isProfessional
@@ -783,7 +985,7 @@ export default function BillingSettingsPage() {
                         >
                           {plan.title}
                         </p>
-                        {isActive && (
+                        {isCurrentPlanSelection && (
                           <Badge className={cn("text-[11px]", currentBadgeCn)}>
                             Current
                           </Badge>
@@ -799,15 +1001,24 @@ export default function BillingSettingsPage() {
 
                     {/* Price + highlight badge */}
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xl font-bold text-white">
-                        {price.amount}
-                        {price.interval && (
-                          <span className="ml-1 text-sm font-normal text-white/35">
-                            {price.interval}
-                          </span>
-                        )}
-                      </p>
-                      {plan.highlight ? (
+                      <div>
+                        <p className="text-xl font-bold text-white">
+                          {price.amount}
+                          {price.interval && (
+                            <span className="ml-1 text-sm font-normal text-white/35">
+                              {price.interval}
+                            </span>
+                          )}
+                        </p>
+                        {price.detail ? (
+                          <p className="text-xs text-white/35">{price.detail}</p>
+                        ) : null}
+                      </div>
+                      {price.savings ? (
+                        <span className="rounded px-3 py-1 text-[10px] font-semibold ring ring-teal-400/20 bg-teal-500/10 text-teal-300">
+                          {price.savings}
+                        </span>
+                      ) : plan.highlight ? (
                         <span
                           className={cn(
                             "rounded px-3 py-1 text-[10px] font-semibold",
@@ -862,7 +1073,7 @@ export default function BillingSettingsPage() {
 
                     {/* CTA */}
                     <div className="mt-auto pt-1">
-                      {isActive ? (
+                      {isCurrentPlanSelection ? (
                         <div
                           className={cn(
                             "flex h-9 w-full items-center justify-center rounded-sm text-xs",
@@ -871,6 +1082,32 @@ export default function BillingSettingsPage() {
                         >
                           Current plan
                         </div>
+                      ) : canChangeExistingSubscription ? (
+                        <Button
+                          variant="ghost"
+                          onClick={() =>
+                            handleChangeSubscriptionPlan(
+                              plan.key as Extract<
+                                BillingPlanKey,
+                                "professional" | "institutional"
+                              >
+                            )
+                          }
+                          disabled={createCustomerPortalSession.isPending}
+                          className={cn(
+                            "h-9 w-full cursor-pointer rounded-sm text-xs font-medium shadow-sidebar-button transition-all duration-250 active:scale-95",
+                            ctaButtonCn
+                          )}
+                        >
+                          <ExternalLink className="size-3" />
+                          {createCustomerPortalSession.isPending
+                            ? "Opening..."
+                            : isLowerPaidTierThanActive
+                              ? `Downgrade to ${plan.title} ${billingInterval}`
+                              : isActivePlan
+                                ? `Switch to ${billingInterval}`
+                                : `Change to ${plan.title} ${billingInterval}`}
+                        </Button>
                       ) : canCheckout ? (
                         <Button
                           variant="ghost"
@@ -891,24 +1128,21 @@ export default function BillingSettingsPage() {
                           <Sparkles className="size-3" />
                           {createCheckout.isPending
                             ? "Redirecting..."
+                            : billingInterval === "annual"
+                            ? `Switch to ${plan.title} annual`
                             : `Upgrade to ${plan.title}`}
                         </Button>
                       ) : showsMoveToFreeTier ? (
                         <Button
                           variant="ghost"
                           onClick={handleMoveToFreeTier}
-                          disabled={
-                            createCustomerPortalSession.isPending ||
-                            !canMoveToFreeTier
-                          }
+                          disabled={!canMoveToFreeTier}
                           className="h-9 w-full cursor-pointer rounded-sm text-xs font-medium shadow-sidebar-button ring ring-white/10 bg-white/5 text-white transition-all duration-250 active:scale-95 hover:bg-white/10 hover:text-white disabled:cursor-default disabled:opacity-70"
                         >
                           <ExternalLink className="size-3" />
-                          {createCustomerPortalSession.isPending
-                            ? "Opening..."
-                            : cancellationScheduled
+                          {cancellationScheduled
                             ? "Cancellation scheduled"
-                            : "Move to free tier"}
+                            : "Pause or cancel"}
                         </Button>
                       ) : (
                         <div
@@ -919,9 +1153,11 @@ export default function BillingSettingsPage() {
                         >
                           {plan.isFree
                             ? "Free forever"
+                            : !hasSelectedIntervalConfigured
+                              ? `${billingInterval} not configured`
                             : isLowerPaidTierThanActive
-                            ? "You don't need this!"
-                            : "Unavailable"}
+                              ? "You don't need this!"
+                              : "Unavailable"}
                         </div>
                       )}
                     </div>
@@ -1035,6 +1271,21 @@ export default function BillingSettingsPage() {
         </DialogContent>
       </Dialog>
 
+      {activePlanKey !== "student" ? (
+        <CancelFlow
+          open={cancelFlowOpen}
+          onOpenChange={setCancelFlowOpen}
+          activePlanKey={
+            activePlanKey as Extract<
+              BillingPlanKey,
+              "professional" | "institutional"
+            >
+          }
+          annualMonthlyPriceCents={activePlan?.annualMonthlyPriceCents ?? null}
+          annualDiscountPercent={activePlan?.annualDiscountPercent ?? null}
+        />
+      ) : null}
+
       {isAdmin ? (
         <>
           <Separator />
@@ -1047,7 +1298,8 @@ export default function BillingSettingsPage() {
               <div>
                 <SectionLabel>Admin access overrides</SectionLabel>
                 <p className="mt-1 text-xs text-white/35">
-                  Grant full app access without Stripe checkout for staff, ambassadors, and partners.
+                  Grant full app access without Stripe checkout for staff,
+                  ambassadors, and partners.
                 </p>
               </div>
             </div>
@@ -1059,10 +1311,64 @@ export default function BillingSettingsPage() {
                     <SectionLabel>User</SectionLabel>
                     <Input
                       value={staffAccessIdentifier}
-                      onChange={(event) => setStaffAccessIdentifier(event.target.value)}
+                      onChange={(event) =>
+                        setStaffAccessIdentifier(event.target.value)
+                      }
+                      autoComplete="off"
                       placeholder="name@profitabledge.com or @username"
                       className="h-11 border-white/10 bg-sidebar text-sm text-white placeholder:text-white/28"
                     />
+                    {shouldShowStaffAccessSuggestions ? (
+                      <div className="overflow-hidden rounded-sm border border-white/10 bg-sidebar/70">
+                        {staffAccessCandidatesQuery.isFetching ? (
+                          <div className="px-3 py-2 text-xs text-white/35">
+                            Searching usernames...
+                          </div>
+                        ) : staffAccessCandidates.length ? (
+                          <div className="max-h-56 overflow-y-auto p-1">
+                            {staffAccessCandidates.map((candidate) => {
+                              const candidateIdentifier =
+                                getStaffAccessCandidateIdentifier(candidate);
+                              const candidateLabel =
+                                getStaffAccessCandidateLabel(candidate);
+
+                              return (
+                                <button
+                                  key={candidate.id}
+                                  type="button"
+                                  onClick={() =>
+                                    handleSelectStaffAccessCandidate(candidate)
+                                  }
+                                  className="flex w-full items-center justify-between rounded-sm px-3 py-2 text-left transition-colors hover:bg-white/5"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-medium text-white">
+                                      {candidateLabel}
+                                    </p>
+                                    <p className="truncate text-xs text-white/38">
+                                      {candidateIdentifier}
+                                      {candidate.email !== candidateIdentifier
+                                        ? ` • ${candidate.email}`
+                                        : ""}
+                                    </p>
+                                  </div>
+                                  <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.14em] text-white/28">
+                                    Select
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="px-3 py-2 text-xs text-white/35">
+                            No matching users found.
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                    <p className="text-[11px] text-white/30">
+                      Start typing a username or email to pick a user.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -1074,10 +1380,13 @@ export default function BillingSettingsPage() {
                           (entry) => entry.key === event.target.value
                         );
                         setStaffAccessPresetKey(
-                          event.target.value as (typeof STAFF_ACCESS_PRESETS)[number]["key"]
+                          event.target
+                            .value as (typeof STAFF_ACCESS_PRESETS)[number]["key"]
                         );
                         if (preset?.durationDays) {
-                          setStaffAccessDurationDays(String(preset.durationDays));
+                          setStaffAccessDurationDays(
+                            String(preset.durationDays)
+                          );
                         }
                       }}
                       className="flex h-11 w-full rounded-sm border border-white/10 bg-sidebar px-3 text-sm text-white outline-none transition-colors focus:border-white/20"
@@ -1104,8 +1413,8 @@ export default function BillingSettingsPage() {
                       }
                       className="flex h-11 w-full rounded-sm border border-white/10 bg-sidebar px-3 text-sm text-white outline-none transition-colors focus:border-white/20"
                     >
-                      <option value="professional">Professional</option>
-                      <option value="institutional">Institutional</option>
+                      <option value="professional">Trader</option>
+                      <option value="institutional">Elite</option>
                     </select>
                   </div>
 
@@ -1126,10 +1435,15 @@ export default function BillingSettingsPage() {
                   <Button
                     type="button"
                     onClick={handleGrantStaffAccess}
-                    disabled={grantStaffAccess.isPending}
+                    disabled={
+                      grantStaffAccess.isPending ||
+                      staffAccessIdentifier.trim().length === 0
+                    }
                     className="h-11 rounded-sm bg-white text-sm font-medium text-black hover:bg-white/90"
                   >
-                    {grantStaffAccess.isPending ? "Granting..." : "Grant access"}
+                    {grantStaffAccess.isPending
+                      ? "Granting..."
+                      : "Grant access"}
                   </Button>
                 </div>
 
@@ -1137,14 +1451,18 @@ export default function BillingSettingsPage() {
                   <SectionLabel>Reason</SectionLabel>
                   <Input
                     value={staffAccessReason}
-                    onChange={(event) => setStaffAccessReason(event.target.value)}
+                    onChange={(event) =>
+                      setStaffAccessReason(event.target.value)
+                    }
                     placeholder="Admin comp, ambassador access, partner onboarding..."
                     className="h-11 border-white/10 bg-sidebar text-sm text-white placeholder:text-white/28"
                   />
                 </div>
 
                 <p className="mt-3 text-xs text-white/30">
-                  This creates an app-level entitlement override. Use it for internal comps and ambassador access without charging the user.
+                  This creates an app-level entitlement override. Use it for
+                  internal comps and ambassador access without charging the
+                  user.
                 </p>
 
                 <Separator className="my-4 opacity-15" />
@@ -1153,13 +1471,17 @@ export default function BillingSettingsPage() {
                   <div className="flex items-center justify-between gap-3">
                     <SectionLabel>Active manual access</SectionLabel>
                     {staffOverridesQuery.isFetching ? (
-                      <span className="text-xs text-white/30">Refreshing...</span>
+                      <span className="text-xs text-white/30">
+                        Refreshing...
+                      </span>
                     ) : null}
                   </div>
 
                   {staffOverridesQuery.data?.length ? (
                     <div className="space-y-2">
-                      {(staffOverridesQuery.data as StaffAccessOverrideRow[]).map((override) => (
+                      {(
+                        staffOverridesQuery.data as StaffAccessOverrideRow[]
+                      ).map((override) => (
                         <div
                           key={override.id}
                           className="flex flex-col gap-3 rounded-sm border border-white/8 bg-sidebar px-3 py-3 text-sm text-white/72 sm:flex-row sm:items-center sm:justify-between"
@@ -1168,13 +1490,15 @@ export default function BillingSettingsPage() {
                             <p className="font-medium text-white">
                               {override.name}
                               <span className="ml-2 text-white/35">
-                                {override.username ? `@${override.username}` : override.email}
+                                {override.username
+                                  ? `@${override.username}`
+                                  : override.email}
                               </span>
                             </p>
                             <p className="mt-1 text-xs text-white/38">
                               {override.planKey === "institutional"
-                                ? "Institutional"
-                                : "Professional"}{" "}
+                                ? "Elite"
+                                : "Trader"}{" "}
                               access until {formatDate(override.endsAt)}
                             </p>
                             <p className="mt-1 text-[11px] text-white/30">

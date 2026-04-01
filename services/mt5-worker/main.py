@@ -12,6 +12,7 @@ from client import ControlPlaneClient, is_retryable_control_plane_error
 from config import WorkerConfig, load_config
 from adapters.mock import MockMtAdapter
 from adapters.meta_trader5 import MetaTrader5Adapter
+from adapters.rithmic import RithmicAdapter
 from hosting_policy import build_worker_host_policy_meta, validate_connection_host_policy
 from runtime import to_api_timestamp
 from status_files import WorkerStatusWriter
@@ -152,6 +153,12 @@ def build_adapter(config: WorkerConfig):
             tick_replay_seconds=config.tick_replay_seconds,
             full_reconcile_minutes=config.full_reconcile_minutes,
             post_exit_tracking_seconds=config.post_exit_tracking_seconds,
+        )
+    if mode == "rithmic":
+        return RithmicAdapter(
+            gateway_url=config.rithmic_gateway_url,
+            app_name=config.rithmic_app_name,
+            app_version=config.rithmic_app_version,
         )
     raise RuntimeError(f"Unsupported MT5 worker mode: {mode}")
 

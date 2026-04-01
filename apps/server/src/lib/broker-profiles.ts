@@ -148,6 +148,222 @@ export const BROKER_PROFILES: Record<string, BrokerProfile> = {
     dataSourceRecommendation: 'dukascopy',
   },
 
+  exness: {
+    name: 'exness',
+    displayName: 'Exness',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.8,
+      GBPUSD: 1.1,
+      USDJPY: 0.9,
+      USDCHF: 1.0,
+      AUDUSD: 0.9,
+      USDCAD: 1.1,
+      XAUUSD: 16.0,
+    },
+    spreadAdjustment: 0.95,
+    timezone: 'GMT+0',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  vantage: {
+    name: 'vantage',
+    displayName: 'Vantage',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.9,
+      GBPUSD: 1.2,
+      USDJPY: 1.0,
+      USDCHF: 1.1,
+      AUDUSD: 1.0,
+      USDCAD: 1.2,
+      XAUUSD: 18.0,
+    },
+    spreadAdjustment: 1.0,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  fpmarkets: {
+    name: 'fpmarkets',
+    displayName: 'FP Markets',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.7,
+      GBPUSD: 1.0,
+      USDJPY: 0.8,
+      USDCHF: 0.9,
+      AUDUSD: 0.9,
+      USDCAD: 1.1,
+      XAUUSD: 15.0,
+    },
+    spreadAdjustment: 0.9,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  blackbullmarkets: {
+    name: 'blackbullmarkets',
+    displayName: 'BlackBull Markets',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.8,
+      GBPUSD: 1.1,
+      USDJPY: 0.9,
+      USDCHF: 1.0,
+      AUDUSD: 0.9,
+      USDCAD: 1.2,
+      XAUUSD: 16.0,
+    },
+    spreadAdjustment: 0.95,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  eightcap: {
+    name: 'eightcap',
+    displayName: 'Eightcap',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.9,
+      GBPUSD: 1.2,
+      USDJPY: 1.0,
+      USDCHF: 1.1,
+      AUDUSD: 1.0,
+      USDCAD: 1.2,
+      XAUUSD: 17.0,
+    },
+    spreadAdjustment: 1.0,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  thinkmarkets: {
+    name: 'thinkmarkets',
+    displayName: 'ThinkMarkets',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.9,
+      GBPUSD: 1.3,
+      USDJPY: 1.0,
+      USDCHF: 1.1,
+      AUDUSD: 1.0,
+      USDCAD: 1.2,
+      XAUUSD: 18.0,
+    },
+    spreadAdjustment: 1.0,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  tickmill: {
+    name: 'tickmill',
+    displayName: 'Tickmill',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 0.6,
+      GBPUSD: 0.9,
+      USDJPY: 0.8,
+      USDCHF: 0.9,
+      AUDUSD: 0.8,
+      USDCAD: 1.0,
+      XAUUSD: 14.0,
+    },
+    spreadAdjustment: 0.88,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  axi: {
+    name: 'axi',
+    displayName: 'Axi',
+    type: 'mt4',
+    averageSpreads: {
+      EURUSD: 0.9,
+      GBPUSD: 1.3,
+      USDJPY: 1.0,
+      USDCHF: 1.1,
+      AUDUSD: 1.0,
+      USDCAD: 1.2,
+      XAUUSD: 18.0,
+    },
+    spreadAdjustment: 1.0,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  avatrade: {
+    name: 'avatrade',
+    displayName: 'AvaTrade',
+    type: 'mt5',
+    averageSpreads: {
+      EURUSD: 1.0,
+      GBPUSD: 1.4,
+      USDJPY: 1.1,
+      USDCHF: 1.3,
+      AUDUSD: 1.1,
+      USDCAD: 1.4,
+      XAUUSD: 22.0,
+    },
+    spreadAdjustment: 1.1,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  xtb: {
+    name: 'xtb',
+    displayName: 'XTB',
+    type: 'proprietary',
+    averageSpreads: {
+      EURUSD: 1.0,
+      GBPUSD: 1.4,
+      USDJPY: 1.1,
+      USDCHF: 1.3,
+      AUDUSD: 1.2,
+      USDCAD: 1.4,
+      XAUUSD: 24.0,
+    },
+    spreadAdjustment: 1.1,
+    timezone: 'GMT+1',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  capitalcom: {
+    name: 'capitalcom',
+    displayName: 'Capital.com',
+    type: 'proprietary',
+    averageSpreads: {
+      EURUSD: 0.9,
+      GBPUSD: 1.3,
+      USDJPY: 1.0,
+      USDCHF: 1.2,
+      AUDUSD: 1.0,
+      USDCAD: 1.3,
+      XAUUSD: 20.0,
+    },
+    spreadAdjustment: 1.0,
+    timezone: 'GMT+2',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
+  plus500: {
+    name: 'plus500',
+    displayName: 'Plus500',
+    type: 'proprietary',
+    averageSpreads: {
+      EURUSD: 1.1,
+      GBPUSD: 1.5,
+      USDJPY: 1.2,
+      USDCHF: 1.4,
+      AUDUSD: 1.2,
+      USDCAD: 1.5,
+      XAUUSD: 25.0,
+    },
+    spreadAdjustment: 1.15,
+    timezone: 'GMT+0',
+    dataSourceRecommendation: 'dukascopy',
+  },
+
   // Default/Unknown broker (conservative estimates)
   default: {
     name: 'default',
@@ -167,15 +383,26 @@ export function getBrokerProfile(brokerName: string | null | undefined): BrokerP
   if (!brokerName) return BROKER_PROFILES.default;
 
   const normalized = brokerName.toLowerCase().trim();
+  const compactNormalized = normalized.replace(/[^a-z0-9]/g, '');
 
   // Direct match
   if (BROKER_PROFILES[normalized]) {
     return BROKER_PROFILES[normalized];
   }
 
+  if (BROKER_PROFILES[compactNormalized]) {
+    return BROKER_PROFILES[compactNormalized];
+  }
+
   // Fuzzy match (e.g., "FTMO Challenge" -> "ftmo")
   for (const [key, profile] of Object.entries(BROKER_PROFILES)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
+    const compactKey = key.replace(/[^a-z0-9]/g, '');
+    if (
+      normalized.includes(key) ||
+      key.includes(normalized) ||
+      compactNormalized.includes(compactKey) ||
+      compactKey.includes(compactNormalized)
+    ) {
       return profile;
     }
   }

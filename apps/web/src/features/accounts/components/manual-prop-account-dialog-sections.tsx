@@ -2,7 +2,13 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectSeparator,
+  SelectTrigger,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Minus, Plus } from "lucide-react";
 
@@ -34,12 +40,18 @@ import { cn } from "@/lib/utils";
 
 type BuilderState = {
   customPropFirmName: string;
-  customChallengePhases: React.ComponentProps<typeof ManualPropFlowBuilder>["customChallengePhases"];
-  customFundedPhase: React.ComponentProps<typeof ManualPropFlowBuilder>["customFundedPhase"];
+  customChallengePhases: React.ComponentProps<
+    typeof ManualPropFlowBuilder
+  >["customChallengePhases"];
+  customFundedPhase: React.ComponentProps<
+    typeof ManualPropFlowBuilder
+  >["customFundedPhase"];
   applySharedMaxLoss: boolean;
   sharedMaxLoss: string;
   applySharedMinTradingDays: boolean;
   sharedMinTradingDays: string;
+  metricMode: "percentage" | "absolute";
+  maxLossType: "absolute" | "trailing";
 };
 
 export function PropFirmSelectOptionContent({
@@ -75,13 +87,31 @@ export function ChallengeRuleSelectOptionContent({
 }: {
   rule: PropChallengeRuleOption;
 }) {
+  const summary = formatChallengeRuleRequirements(rule);
+  const isCustom = Boolean(rule.createdByUserId);
+
   return (
-    <div className="min-w-0">
-      <p className="text-sm font-semibold leading-5 text-white">
-        {rule.displayName || "Challenge rule"}
-      </p>
+    <div className="min-w-full w-full">
+      <div className="flex items-center justify-between gap-2 w-full">
+        <p className=" truncate text-xs font-semibold leading-5 text-white">
+          {rule.displayName || "Challenge rule"}
+        </p>
+        <Badge
+          variant="outline"
+          className={cn(
+            HEADER_BADGE_CLASS,
+            isCustom
+              ? "ring-teal-400/20 bg-teal-400/10 text-teal-100/80"
+              : "ring-white/10 bg-transparent text-white/55"
+          )}
+        >
+          {isCustom ? "Custom" : "Standard"}
+        </Badge>
+      </div>
       <p className="mt-0.5 whitespace-normal break-words text-[11px] leading-relaxed text-white/45">
-        {formatChallengeRuleRequirements(rule)}
+        {rule.createdByUserId
+          ? `Custom template${summary ? ` • ${summary}` : ""}`
+          : summary}
       </p>
     </div>
   );
@@ -167,7 +197,8 @@ export function ManualPropAssignmentModeSection({
           </p>
         </button>
       </div>
-      {assignmentMode === "continue" && continuableChallengeOptions.length === 0 ? (
+      {assignmentMode === "continue" &&
+      continuableChallengeOptions.length === 0 ? (
         <p className="text-xs text-white/35">
           No active or passed challenges are available yet. Start a new
           challenge first.
@@ -252,7 +283,9 @@ export function ManualPropContinuableChallenges({
 
 export function ManualPropFlowSelectionSection({
   showCustomFlowBuilder,
-  onToggleBuilder,
+  customFlowMode,
+  onToggleSelectedFirmBuilder,
+  onTogglePrivateFirmBuilder,
   builderState,
   onBuilderStateChange,
   onAddPhase,
@@ -270,7 +303,9 @@ export function ManualPropFlowSelectionSection({
   onSelectChallengeRule,
 }: {
   showCustomFlowBuilder: boolean;
-  onToggleBuilder: () => void;
+  customFlowMode: "selected-firm" | "private-firm";
+  onToggleSelectedFirmBuilder: () => void;
+  onTogglePrivateFirmBuilder: () => void;
   builderState: BuilderState;
   onBuilderStateChange: {
     setCustomPropFirmName: (value: string) => void;
@@ -285,6 +320,8 @@ export function ManualPropFlowSelectionSection({
     ) => void;
     setSharedMaxLoss: (value: string) => void;
     setSharedMinTradingDays: (value: string) => void;
+    setMetricMode: (value: "percentage" | "absolute") => void;
+    setMaxLossType: (value: "absolute" | "trailing") => void;
     toggleSharedMaxLoss: (checked: boolean) => void;
     toggleSharedMinTradingDays: (checked: boolean) => void;
   };
@@ -318,31 +355,62 @@ export function ManualPropFlowSelectionSection({
         <div className="space-y-3.5">
           <div>
             <p className="text-xs font-semibold tracking-wide text-white/70">
-              Custom prop flow
+              Custom challenge template
             </p>
           </div>
           <Separator className="-mx-6" />
-          <div className="flex items-center justify-between gap-3">
+          <div className="space-y-3">
             <p className="max-w-full text-xs leading-relaxed text-white/40">
-              Create a private multi-step challenge template and assign it to
-              this account.
+              Save your own rule template under the selected prop firm, or make
+              a completely private prop firm flow.
             </p>
-            <Button
-              type="button"
-              className={getPropAssignActionButtonClassName({
-                tone: showCustomFlowBuilder ? "neutral" : "teal",
-                size: "sm",
-                className: "gap-1",
-              })}
-              onClick={onToggleBuilder}
-            >
-              {showCustomFlowBuilder ? (
-                <Minus className="size-3" />
-              ) : (
-                <Plus className="size-3" />
-              )}
-              {showCustomFlowBuilder ? "Hide builder" : "Create flow"}
-            </Button>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                disabled={!selectedPropFirmId}
+                className={getPropAssignActionButtonClassName({
+                  tone:
+                    showCustomFlowBuilder && customFlowMode === "selected-firm"
+                      ? "neutral"
+                      : "teal",
+                  size: "sm",
+                  className: "gap-1",
+                })}
+                onClick={onToggleSelectedFirmBuilder}
+              >
+                {showCustomFlowBuilder && customFlowMode === "selected-firm" ? (
+                  <Minus className="size-3" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {showCustomFlowBuilder && customFlowMode === "selected-firm"
+                  ? "Hide template builder"
+                  : "Custom template for selected firm"}
+              </Button>
+
+              <Button
+                type="button"
+                className={getPropAssignActionButtonClassName({
+                  tone:
+                    showCustomFlowBuilder && customFlowMode === "private-firm"
+                      ? "neutral"
+                      : "neutral",
+                  size: "sm",
+                  className: "gap-1",
+                })}
+                onClick={onTogglePrivateFirmBuilder}
+              >
+                {showCustomFlowBuilder && customFlowMode === "private-firm" ? (
+                  <Minus className="size-3" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {showCustomFlowBuilder && customFlowMode === "private-firm"
+                  ? "Hide private flow builder"
+                  : "Private custom firm"}
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -358,6 +426,8 @@ export function ManualPropFlowSelectionSection({
             sharedMaxLoss={sharedMaxLoss}
             applySharedMinTradingDays={applySharedMinTradingDays}
             sharedMinTradingDays={sharedMinTradingDays}
+            metricMode={builderState.metricMode}
+            maxLossType={builderState.maxLossType}
             onAddPhase={onAddPhase}
             onCustomChallengePhaseChange={
               onBuilderStateChange.updateCustomChallengePhase
@@ -376,9 +446,16 @@ export function ManualPropFlowSelectionSection({
             onSharedMinTradingDaysChange={
               onBuilderStateChange.setSharedMinTradingDays
             }
+            onMetricModeChange={onBuilderStateChange.setMetricMode}
+            onMaxLossTypeChange={onBuilderStateChange.setMaxLossType}
             onReset={onResetBuilder}
             onSave={onSaveCustomFlow}
             isSaving={isSavingCustomFlow}
+            propFirmNameLocked={
+              customFlowMode === "selected-firm"
+                ? selectedPropFirm?.displayName || selectedPropFirm?.id || null
+                : null
+            }
           />
         ) : null}
       </div>
@@ -394,9 +471,14 @@ export function ManualPropFlowSelectionSection({
             <Separator className="-mx-6" />
             <div className="space-y-3">
               <p className="text-xs text-white/50">Prop firm</p>
-              <Select value={selectedPropFirmId} onValueChange={onSelectPropFirm}>
+              <Select
+                value={selectedPropFirmId}
+                onValueChange={onSelectPropFirm}
+              >
                 <SelectTrigger
-                  className={getPropAssignSelectTriggerClassName("min-h-[85px]")}
+                  className={getPropAssignSelectTriggerClassName(
+                    "min-h-[85px]"
+                  )}
                 >
                   {selectedPropFirm ? (
                     <div className="flex w-full min-w-0 flex-1 items-center gap-3 pr-6">
@@ -414,7 +496,9 @@ export function ManualPropFlowSelectionSection({
                   position="popper"
                   className={PROP_ASSIGN_SELECT_CONTENT_CLASS}
                 >
-                  <div className={PROP_ASSIGN_SELECT_LABEL_CLASS}>Prop firms</div>
+                  <div className={PROP_ASSIGN_SELECT_LABEL_CLASS}>
+                    Prop firms
+                  </div>
                   <SelectSeparator
                     className={PROP_ASSIGN_SELECT_SEPARATOR_CLASS}
                   />
@@ -481,9 +565,7 @@ export function ManualPropFlowSelectionSection({
             </div>
 
             {!selectedPropFirmId ? (
-              <p className="text-xs text-white/35">
-                Select a prop firm first.
-              </p>
+              <p className="text-xs text-white/35">Select a prop firm first.</p>
             ) : null}
             {selectedPropFirmId && challengeRuleOptions.length === 0 ? (
               <p className="text-xs text-white/35">

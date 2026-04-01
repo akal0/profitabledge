@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import {
@@ -37,7 +37,6 @@ const HERO_SLIDES: AuthHeroSlide[] = [
 ];
 
 export default function TwoFactorLoginPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
   const postLoginPath = buildPostLoginPath(requestedReturnTo);
@@ -79,7 +78,7 @@ export default function TwoFactorLoginPage() {
       });
       await waitForConfirmedSession();
       markLoginOnboardingBypass();
-      router.replace(postLoginPath);
+      window.location.replace(postLoginPath);
     } finally {
       setIsSubmitting(false);
     }

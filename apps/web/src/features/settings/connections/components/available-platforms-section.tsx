@@ -17,6 +17,12 @@ export function AvailablePlatformsSection({
   onProviderClick: (provider: ConnectionProviderDefinition) => void;
   mt5IngestionEnabled: boolean;
 }) {
+  const getStatusLabel = (provider: ConnectionProviderDefinition) => {
+    if (provider.status === "coming_soon") return "Coming soon";
+    if (provider.status === "not_applicable") return "Use broker";
+    return "Alpha";
+  };
+
   return (
     <>
       <Separator />
@@ -50,7 +56,7 @@ export function AvailablePlatformsSection({
                   variant="secondary"
                   className="px-2 py-0.5 bg-sidebar-accent ring ring-white/5 text-[9px]"
                 >
-                  {provider.status === "coming_soon" ? "Coming soon" : "Alpha"}
+                  {getStatusLabel(provider)}
                 </Badge>
               </div>
             </div>
@@ -62,6 +68,9 @@ export function AvailablePlatformsSection({
                   <p className="text-[11px] text-amber-200/80">
                     {provider.betaNote}
                   </p>
+                ) : null}
+                {provider.note ? (
+                  <p className="text-[11px] text-sky-200/80">{provider.note}</p>
                 ) : null}
                 <div className="flex flex-wrap gap-1">
                   {provider.firms.map((firm) => (
@@ -77,10 +86,13 @@ export function AvailablePlatformsSection({
 
               <Button
                 onClick={() => onProviderClick(provider)}
+                disabled={provider.status === "not_applicable"}
                 className={cn(
                   "h-[32px] shrink-0 cursor-pointer px-4 text-xs transition-all duration-250 active:scale-95",
                   provider.status === "coming_soon"
                     ? "ring ring-white/10 bg-white/5 text-white/45 hover:bg-white/5"
+                    : provider.status === "not_applicable"
+                      ? "ring ring-sky-400/20 bg-sky-500/10 text-sky-200 hover:bg-sky-500/10"
                     : "ring ring-teal-500/50 bg-teal-600/25 text-teal-300 hover:bg-teal-600/35"
                 )}
               >
@@ -88,7 +100,11 @@ export function AvailablePlatformsSection({
                 provider.authType === "oauth" ? (
                   <ExternalLink className=" size-3" />
                 ) : null}
-                {provider.status === "coming_soon" ? "Coming soon" : "Connect"}
+                {provider.status === "coming_soon"
+                  ? "Coming soon"
+                  : provider.status === "not_applicable"
+                    ? "Use broker"
+                    : "Connect"}
               </Button>
             </div>
           </div>

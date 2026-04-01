@@ -20,9 +20,15 @@ export type InlineTradeUpdateInput = {
   commissions?: number;
   swap?: number;
   sessionTag?: string | null;
+  protocolAlignment?: "aligned" | "against" | "discretionary" | null;
   modelTag?: string | null;
   customTags?: string[];
 };
+
+export type InlineTradeUpdateField = Exclude<
+  keyof InlineTradeUpdateInput,
+  "tradeId"
+>;
 
 export type TradeStreakMeta = {
   count: number;
@@ -40,6 +46,7 @@ export type TradeTableMeta = {
   customTags?: string[];
   drawdownByTradeId?: TradeDrawdownMap;
   drawdownLoading?: boolean;
+  isCellSaving?: (tradeId: string, field: InlineTradeUpdateField) => boolean;
   updateTrade?: (input: InlineTradeUpdateInput) => Promise<void>;
 };
 

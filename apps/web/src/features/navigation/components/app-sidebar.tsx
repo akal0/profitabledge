@@ -29,6 +29,7 @@ import {
   meetsRequirement,
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
+import { getBillingPlanTitle } from "@/features/settings/billing/lib/plan-labels";
 import {
   Tooltip,
   TooltipContent,
@@ -149,7 +150,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
-  const canViewGrowthOverview = billingState?.admin?.isAdmin === true;
+  const canViewGrowthOverview = Boolean(billingState);
   const settingsActive =
     pathname === "/dashboard/settings" ||
     pathname?.startsWith("/dashboard/settings/");
@@ -251,8 +252,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   !publicAlphaFlags[item.featureFlag];
                 const locked = isLocked(item.planRequirement);
                 const planLabel = item.planRequirement
-                  ? item.planRequirement.charAt(0).toUpperCase() +
-                    item.planRequirement.slice(1)
+                  ? getBillingPlanTitle(item.planRequirement as PlanKey)
                   : null;
 
                 const itemContent = (

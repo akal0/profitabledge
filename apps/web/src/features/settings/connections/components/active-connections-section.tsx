@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { Label } from "@/components/ui/label";
+import { UsageMeter } from "@/components/usage-meter";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { SYNC_INTERVALS } from "@/features/settings/connections/lib/connection-catalog";
 import {
   isTerminalProvider,
+  isWorkerManagedProvider,
   STATUS_STYLES,
 } from "@/features/settings/connections/lib/connection-status";
 import type {
@@ -167,13 +169,18 @@ export function ActiveConnectionsSection({
         </div>
         <p className="mt-0.5 text-xs text-white/40">
           {liveSyncSlotsIncluded > 0
-            ? `${liveSyncSlotsUsed} connection${liveSyncSlotsUsed === 1 ? "" : "s"} linked. ${liveSyncSlotsRemaining} live sync slot${liveSyncSlotsRemaining === 1 ? "" : "s"} remaining on ${activePlanTitle}.`
+            ? `${liveSyncSlotsUsed} connection${
+                liveSyncSlotsUsed === 1 ? "" : "s"
+              } linked. ${liveSyncSlotsRemaining} live sync slot${
+                liveSyncSlotsRemaining === 1 ? "" : "s"
+              } remaining on ${activePlanTitle}.`
             : `${activePlanTitle} does not include live sync slots.`}
         </p>
+
         {syncRuntimeStatus ? (
           <p className="mt-1 text-xs text-white/35">
-            {schedulerLabel}. {syncRuntimeStatus.summary.scheduledCount} scheduled
-            connection
+            {schedulerLabel}. {syncRuntimeStatus.summary.scheduledCount}{" "}
+            scheduled connection
             {syncRuntimeStatus.summary.scheduledCount === 1 ? "" : "s"},{" "}
             {syncRuntimeStatus.summary.dueNowCount} due now
             {lastSweepLabel ? `, last sweep ${lastSweepLabel}` : ""}.
@@ -193,6 +200,10 @@ export function ActiveConnectionsSection({
           const syncInterval = getResolvedSyncIntervalOption(
             conn.syncIntervalMinutes
           );
+          const isSavedCredentialConnection =
+            conn.meta &&
+            typeof conn.meta === "object" &&
+            conn.meta.connectionMode === "saved-credential";
 
           return (
             <div key={conn.id}>
@@ -230,13 +241,18 @@ export function ActiveConnectionsSection({
                     ) : null}
                   </div>
 
-                  {!conn.accountId ? (
-                    isTerminalProvider(conn.provider) ? (
+                  {isSavedCredentialConnection ? (
+                    <div className="flex items-center gap-1 text-xs text-white/45">
+                      <Loader2 className="size-3" />
+                      Credential saved. Live sync will unlock when this provider is promoted from coming soon.
+                    </div>
+                  ) : !conn.accountId ? (
+                    isWorkerManagedProvider(conn.provider) ? (
                       <div className="flex items-center gap-1 text-xs text-white/45">
                         <Loader2 className="size-3" />
                         {mt5IngestionEnabled
                           ? "Trading account will be created automatically after the first worker sync"
-                          : "Terminal-worker account creation is unavailable in this beta"}
+                          : "Broker-worker account creation is unavailable in this beta"}
                       </div>
                     ) : (
                       <button
@@ -300,8 +316,9 @@ export function ActiveConnectionsSection({
                       })}
                       onClick={() => onSync(conn.id)}
                       disabled={
+                        isSavedCredentialConnection ||
                         isSyncing ||
-                        (isTerminalProvider(conn.provider) &&
+                        (isWorkerManagedProvider(conn.provider) &&
                           !mt5IngestionEnabled)
                       }
                     >

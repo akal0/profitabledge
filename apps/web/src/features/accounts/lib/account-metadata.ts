@@ -1,9 +1,30 @@
+import {
+  ACTIVE_BROKER_CATALOG,
+  ACTIVE_PROP_FIRM_CATALOG,
+  PLATFORM_CATALOG,
+  POPULAR_BROKER_IDS,
+  POPULAR_PROP_FIRM_IDS,
+  normalizeTradingCatalogKey,
+} from "@profitabledge/contracts/trading-catalog";
 import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
 
 export type BrokerOption = {
   value: string;
   label: string;
   image: string;
+  type: "broker" | "prop-firm" | "platform";
+  category:
+    | "popular"
+    | "prop-cfd"
+    | "prop-futures"
+    | "prop-stocks"
+    | "broker-cfd"
+    | "broker-futures"
+    | "broker-crypto"
+    | "platform";
+  aliases: string[];
+  serverPatterns?: string[];
+  popular?: boolean;
   supportsMultiCsvImport?: boolean;
   supplementalCsvReports?: string[];
 };
@@ -38,34 +59,105 @@ type DemoWorkspaceAccountLike = {
   accountNumber?: string | number | null;
 };
 
-export const BROKER_OPTIONS: BrokerOption[] = [
-  { value: "ftmo", label: "FTMO", image: "/brokers/FTMO.png" },
-  { value: "fundingpips", label: "FundingPips", image: "/brokers/FTMO.png" },
-  {
-    value: "tradovate",
-    label: "Tradovate",
-    image: "/brokers/tradovate.png",
-    supportsMultiCsvImport: true,
-    supplementalCsvReports: [
-      "Performance",
-      "Position History",
-      "Fills",
-      "Orders",
-      "Cash History",
-      "Account Balance History",
-    ],
-  },
-  {
-    value: "alphacapitalgroup",
-    label: "AlphaCapitalGroup",
-    image: "/brokers/FTMO.png",
-  },
-  {
-    value: "seacrestfunded",
-    label: "SeacrestFunded",
-    image: "/brokers/FTMO.png",
-  },
+const TRADOVATE_SUPPLEMENTAL_REPORTS = [
+  "Performance",
+  "Position History",
+  "Fills",
+  "Orders",
+  "Cash History",
+  "Account Balance History",
 ];
+
+function optionCategoryFromPropFirm(category: string): BrokerOption["category"] {
+  switch (category) {
+    case "futures":
+      return "prop-futures";
+    case "stocks":
+      return "prop-stocks";
+    default:
+      return "prop-cfd";
+  }
+}
+
+function optionCategoryFromBroker(category: string): BrokerOption["category"] {
+  switch (category) {
+    case "futures":
+      return "broker-futures";
+    case "crypto":
+      return "broker-crypto";
+    default:
+      return "broker-cfd";
+  }
+}
+
+const PLATFORM_OPTION_BLACKLIST = new Set(["tradovate", "ninjatrader", "oanda", "ib"]);
+
+function sortBrokerOptions(options: BrokerOption[]) {
+  return [...options].sort((left, right) => left.label.localeCompare(right.label));
+}
+
+const POPULAR_OPTION_IDS = new Set([...POPULAR_PROP_FIRM_IDS, ...POPULAR_BROKER_IDS]);
+
+const PROP_FIRM_OPTIONS: BrokerOption[] = sortBrokerOptions(
+  ACTIVE_PROP_FIRM_CATALOG.map((firm) => ({
+    value: firm.id,
+    label: firm.displayName,
+    image: firm.logo,
+    type: "prop-firm",
+    category: optionCategoryFromPropFirm(firm.category),
+    aliases: firm.aliases,
+    serverPatterns: firm.brokerDetectionPatterns,
+    popular: POPULAR_OPTION_IDS.has(firm.id),
+  }))
+);
+
+const BROKER_ONLY_OPTIONS: BrokerOption[] = sortBrokerOptions(
+  ACTIVE_BROKER_CATALOG.map((broker) => ({
+    value: broker.id,
+    label: broker.displayName,
+    image: broker.logo,
+    type: "broker",
+    category: optionCategoryFromBroker(broker.category),
+    aliases: broker.aliases,
+    serverPatterns: broker.serverPatterns,
+    popular: POPULAR_OPTION_IDS.has(broker.id),
+    supportsMultiCsvImport: broker.id === "tradovate",
+    supplementalCsvReports:
+      broker.id === "tradovate" ? TRADOVATE_SUPPLEMENTAL_REPORTS : undefined,
+  }))
+);
+
+const PLATFORM_OPTIONS: BrokerOption[] = sortBrokerOptions(
+  PLATFORM_CATALOG.filter((platform) => !PLATFORM_OPTION_BLACKLIST.has(platform.id)).map(
+    (platform) => ({
+      value: platform.id,
+      label: platform.displayName,
+      image: platform.logo,
+      type: "platform",
+      category: "platform",
+      aliases: platform.aliases,
+      serverPatterns: [],
+    })
+  )
+);
+
+export const BROKER_OPTIONS: BrokerOption[] = [
+  ...PROP_FIRM_OPTIONS,
+  ...BROKER_ONLY_OPTIONS,
+  ...PLATFORM_OPTIONS,
+];
+
+export const SELECTABLE_BROKER_OPTIONS = BROKER_OPTIONS.filter(
+  (option) => option.type !== "platform"
+);
+
+const BROKER_OPTIONS_BY_VALUE = new Map(
+  BROKER_OPTIONS.map((option) => [option.value, option])
+);
+
+const PLATFORM_LOGOS = Object.fromEntries(
+  PLATFORM_CATALOG.map((platform) => [platform.id, platform.logo])
+) as Record<string, string>;
 
 const DEMO_ACCOUNT_NAMES = new Set(["Profitabledge demo", "Demo account"]);
 const DEMO_BROKERS = new Set(["Demo broker", "Profitabledge"]);
@@ -80,11 +172,17 @@ const BROKER_TYPE_LABELS: Record<string, string> = {
   mt5: "MetaTrader 5",
   ctrader: "cTrader",
   ib: "Interactive Brokers",
+  "match-trader": "Match-Trader",
   oanda: "OANDA",
+  dxtrade: "DXtrade",
+  tradelocker: "TradeLocker",
   tradovate: "Tradovate",
   topstepx: "TopstepX",
   rithmic: "Rithmic",
   ninjatrader: "NinjaTrader",
+  cqg: "CQG",
+  tt: "Trading Technologies",
+  tradingview: "TradingView",
   other: "Other",
 };
 
@@ -95,26 +193,93 @@ const DATA_SOURCE_LABELS: Record<string, string> = {
   broker: "Broker",
 };
 
-export function getBrokerImage(broker?: string | null): string {
-  switch (broker?.toLowerCase()) {
-    case "ftmo":
-      return "/brokers/FTMO.png";
-    case "metaquotes":
-    case "mt5":
-      return "/brokers/mt5.png";
-    case "tradovate":
-    case "topstepx":
-    case "rithmic":
-    case "ninjatrader":
-      return "/brokers/tradovate.png";
-    default:
-      return "/brokers/FTMO.png";
+function getNormalizedOptionKeys(option: BrokerOption) {
+  return [
+    option.value,
+    option.label,
+    ...option.aliases,
+    ...(option.serverPatterns ?? []),
+  ].map((value) => normalizeTradingCatalogKey(value));
+}
+
+export function findBrokerOption(
+  value?: string | null,
+  { includePlatforms = true }: { includePlatforms?: boolean } = {}
+): BrokerOption | null {
+  const normalized = normalizeTradingCatalogKey(value);
+  if (!normalized) return null;
+
+  const direct = BROKER_OPTIONS_BY_VALUE.get(String(value || "").trim().toLowerCase());
+  if (direct && (includePlatforms || direct.type !== "platform")) {
+    return direct;
   }
+
+  for (const option of BROKER_OPTIONS) {
+    if (!includePlatforms && option.type === "platform") continue;
+    if (getNormalizedOptionKeys(option).includes(normalized)) {
+      return option;
+    }
+  }
+
+  return null;
+}
+
+export function findBrokerByServerPattern(
+  value?: string | null,
+  { includePlatforms = false }: { includePlatforms?: boolean } = {}
+): BrokerOption | null {
+  const normalized = normalizeTradingCatalogKey(value);
+  if (!normalized) return null;
+
+  let bestMatch: BrokerOption | null = null;
+  let bestScore = 0;
+
+  for (const option of BROKER_OPTIONS) {
+    if (!includePlatforms && option.type === "platform") continue;
+    for (const pattern of option.serverPatterns ?? []) {
+      const normalizedPattern = normalizeTradingCatalogKey(pattern);
+      if (!normalizedPattern) continue;
+      if (!normalized.includes(normalizedPattern)) continue;
+
+      const score = normalizedPattern.length;
+      if (score > bestScore) {
+        bestMatch = option;
+        bestScore = score;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
+export function getBrokerImage(
+  broker?: string | null,
+  brokerType?: string | null,
+  brokerServer?: string | null
+): string {
+  const exact = findBrokerOption(broker);
+  if (exact) return exact.image;
+
+  const serverMatch = findBrokerByServerPattern(brokerServer || broker);
+  if (serverMatch) return serverMatch.image;
+
+  const platformMatch = findBrokerOption(brokerType);
+  if (platformMatch?.type === "platform") {
+    return platformMatch.image;
+  }
+
+  const normalizedBrokerType = normalizeTradingCatalogKey(brokerType);
+  if (normalizedBrokerType && PLATFORM_LOGOS[normalizedBrokerType]) {
+    return PLATFORM_LOGOS[normalizedBrokerType];
+  }
+
+  return PROFITABLEDGE_FAVICON_PATH;
 }
 
 type AccountImageLike = {
   broker?: string | null;
   brokerType?: string | null;
+  brokerServer?: string | null;
   verificationLevel?: string | null;
 };
 
@@ -127,30 +292,19 @@ type AccountImageLike = {
 export function getAccountImage(account?: AccountImageLike | null): string {
   if (!account) return PROFITABLEDGE_FAVICON_PATH;
 
-  const broker = account.broker?.toLowerCase() ?? "";
-
-  // 1. Broker name match
-  if (broker === "demo broker") return PROFITABLEDGE_FAVICON_PATH;
-  if (broker.includes("ftmo")) return "/brokers/FTMO.png";
-  if (broker.includes("metaquotes")) return "/brokers/mt5.png";
-  if (broker.includes("tradovate")) return "/brokers/tradovate.png";
-
-  // 2. Broker type / connection method
-  if (account.brokerType === "mt5") return "/brokers/mt5.png";
-  if (
-    account.brokerType === "tradovate" ||
-    account.brokerType === "topstepx" ||
-    account.brokerType === "rithmic" ||
-    account.brokerType === "ninjatrader"
-  ) {
-    return "/brokers/tradovate.png";
+  if (normalizeTradingCatalogKey(account.broker) === "demo broker") {
+    return PROFITABLEDGE_FAVICON_PATH;
   }
 
-  return PROFITABLEDGE_FAVICON_PATH;
+  return getBrokerImage(
+    account.broker,
+    account.brokerType,
+    account.brokerServer
+  );
 }
 
 export function brokerSupportsMultiCsvImport(broker?: string | null): boolean {
-  return BROKER_OPTIONS.find((option) => option.value === broker)
+  return findBrokerOption(broker, { includePlatforms: false })
     ?.supportsMultiCsvImport
     ? true
     : false;
@@ -158,7 +312,7 @@ export function brokerSupportsMultiCsvImport(broker?: string | null): boolean {
 
 export function getBrokerLabel(broker?: string | null): string {
   return (
-    BROKER_OPTIONS.find((option) => option.value === broker)?.label ??
+    findBrokerOption(broker, { includePlatforms: false })?.label ??
     broker ??
     "Broker"
   );
@@ -168,7 +322,7 @@ export function getBrokerSupplementalCsvReports(
   broker?: string | null
 ): string[] {
   return (
-    BROKER_OPTIONS.find((option) => option.value === broker)
+    findBrokerOption(broker, { includePlatforms: false })
       ?.supplementalCsvReports ?? []
   );
 }

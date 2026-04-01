@@ -1,5 +1,11 @@
 import type { CustomGoalCriteria } from "@/components/goals/custom-goal-builder";
-import type { AnalysisBlock, VizSpec } from "@/types/assistant-stream";
+import type {
+  AnalysisBlock,
+  ConversationContext,
+  RenderedWidget,
+  AssistantToolCall,
+  VizSpec,
+} from "@/types/assistant-stream";
 
 export interface ChatMessage {
   id: string;
@@ -9,6 +15,9 @@ export interface ChatMessage {
   createdAt: Date;
   visualization?: VizSpec;
   analysisBlocks?: AnalysisBlock[];
+  widgets?: RenderedWidget[];
+  toolCalls?: AssistantToolCall[];
+  context?: ConversationContext | null;
 }
 
 export const TRADING_SUGGESTIONS = [
@@ -17,10 +26,10 @@ export const TRADING_SUGGESTIONS = [
   "Where do I lose the most money across columns and intersections?",
   "Which mistakes or habits are hurting performance the most?",
   "What is my edge?",
-  "What should I focus on next?",
   "What is actually driving my profitability?",
   "Which conditions improve or weaken my edge?",
   "Which trade attributes correlate most with strong expectancy?",
+  "Which edge works best for me?",
 ];
 
 export function normalizeGoalTargetType(metric: CustomGoalCriteria["metric"]) {

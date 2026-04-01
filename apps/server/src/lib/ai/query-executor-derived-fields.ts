@@ -16,7 +16,7 @@ export const DERIVED_FIELDS: Record<
 > = {
   weekday: {
     getSelectSQL: () =>
-      sql<string>`TRIM(TRAILING 'day' FROM TO_CHAR(${trade.openTime}, 'Day'))`,
+      sql<string>`TO_CHAR(${trade.openTime}, 'FMDay')`,
     getFilterSQL: (op: string, value: any) => {
       const dayMap: Record<string, number> = {
         sunday: 0,

@@ -10,3 +10,4 @@ export * from './connections';
 export * from './mt5-sync';
 export * from './trader-brain';
 export * from './coaching';
+export * from './assistant';

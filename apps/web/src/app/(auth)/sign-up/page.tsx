@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -30,9 +30,14 @@ import { startDesktopSocialAuth } from "@/lib/desktop-social-auth";
 import { getErrorMessage } from "@/lib/error-message";
 import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
 import {
+  storeGrowthIntent,
   storeAffiliateIntent,
   storeReferralIntent,
 } from "@/features/growth/lib/access-intent";
+import {
+  GROWTH_VISITOR_COOKIE,
+  readCookie,
+} from "@/features/growth/lib/growth-attribution";
 import {
   buildLoginPath,
   buildPostAuthContinuePath,
@@ -106,7 +111,6 @@ function deriveSignupName(email: string) {
 }
 
 const SignupPage = () => {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
   const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
@@ -122,19 +126,59 @@ const SignupPage = () => {
   const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestAffiliateCodeRequestRef = useRef<string | null>(null);
 
+  const captureAffiliateTouch = useCallback(
+    async (input: {
+      code?: string | null;
+      offerCode?: string | null;
+      channel?: string | null;
+      trackingLinkSlug?: string | null;
+      affiliateGroupSlug?: string | null;
+    }) => {
+      try {
+        await trpcClient.billing.captureGrowthTouch.mutate({
+          type: "affiliate",
+          code: input.code?.trim() || undefined,
+          offerCode: input.offerCode?.trim() || undefined,
+          channel: input.channel?.trim() || undefined,
+          trackingLinkSlug: input.trackingLinkSlug?.trim() || undefined,
+          affiliateGroupSlug: input.affiliateGroupSlug?.trim() || undefined,
+          landingPath: window.location.pathname,
+          query: window.location.search.replace(/^\?/, "") || undefined,
+          visitorToken: readCookie(GROWTH_VISITOR_COOKIE) ?? undefined,
+        } as any);
+      } catch {
+        // Best-effort capture only.
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     clearLoginOnboardingBypass();
 
     const params = new URLSearchParams(window.location.search);
     const referralCode = params.get("ref");
     const affiliateCode = params.get("aff");
+    const offerCode = params.get("offer") ?? params.get("code");
+    const channel = params.get("channel");
+    const trackingLinkSlug = params.get("link");
+    const affiliateGroupSlug = params.get("group");
+    const visitorToken = readCookie(GROWTH_VISITOR_COOKIE);
 
-    if (affiliateCode) {
+    if (affiliateCode || offerCode) {
       setCameFromLink(true);
-      storeAffiliateIntent(affiliateCode);
+      storeGrowthIntent({
+        type: "affiliate",
+        code: affiliateCode,
+        offerCode,
+        channel,
+        trackingLinkSlug,
+        affiliateGroupSlug,
+        visitorToken,
+      });
 
       trpcClient.billing.getAffiliatePublicProfile
-        .query({ code: affiliateCode })
+        .query({ code: affiliateCode || offerCode || "" })
         .then((profile) => {
           if (profile) {
             setAffiliate(profile);
@@ -143,10 +187,17 @@ const SignupPage = () => {
         .catch(() => {
           // Silently ignore — affiliate badge is optional
         });
+      void captureAffiliateTouch({
+        code: affiliateCode,
+        offerCode,
+        channel,
+        trackingLinkSlug,
+        affiliateGroupSlug,
+      });
     } else if (referralCode) {
-      storeReferralIntent(referralCode);
+      storeReferralIntent(referralCode, { visitorToken });
     }
-  }, []);
+  }, [captureAffiliateTouch]);
 
   const resolveAffiliateCode = useCallback((code: string) => {
     const trimmed = code.trim();
@@ -169,7 +220,10 @@ const SignupPage = () => {
         }
 
         if (profile) {
-          storeAffiliateIntent(trimmed);
+          storeAffiliateIntent(trimmed, null, {
+            visitorToken: readCookie(GROWTH_VISITOR_COOKIE),
+          });
+          void captureAffiliateTouch({ code: trimmed });
           setAffiliate(profile);
           setAffiliateCodeResolved(true);
           toast.success("Affiliate code will be applied at checkout.", {
@@ -196,7 +250,7 @@ const SignupPage = () => {
           id: AFFILIATE_CODE_TOAST_ID,
         });
       });
-  }, []);
+  }, [captureAffiliateTouch]);
 
   const handleAffiliateCodeChange = useCallback(
     (value: string) => {
@@ -250,7 +304,7 @@ const SignupPage = () => {
           });
 
           await waitForConfirmedSession();
-          router.push(postAuthContinuePath);
+          window.location.replace(postAuthContinuePath);
         },
         onError: (error: any) => {
           const message = getErrorMessage(

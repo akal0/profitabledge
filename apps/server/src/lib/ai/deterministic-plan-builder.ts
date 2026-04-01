@@ -72,7 +72,8 @@ const GROUP_FIELD_RULES: Array<{ field: GroupField; test: RegExp }> = [
   },
   {
     field: "weekday",
-    test: /\b(day of week|weekday|weekdays|monday|tuesday|wednesday|thursday|friday)\b/i,
+    test:
+      /\b(day of week|day of the week|weekday|weekdays|monday|tuesday|wednesday|thursday|friday)\b/i,
   },
   {
     field: "month",
@@ -156,6 +157,25 @@ function computed(field: string, as: string): Aggregate {
 }
 
 function buildMetricDefinition(lower: string): MetricDefinition {
+  if (
+    /\bexit(?:ing)?\b.*\btoo\s+(early|soon|late)\b/i.test(lower) ||
+    /\bleaving\b.*\b(money|profit)\b.*\b(table|behind)\b/i.test(lower) ||
+    /\bmoney\s+left\s+on\s+the\s+table\b/i.test(lower) ||
+    /\bhold\b.*\blonger\b/i.test(lower)
+  ) {
+    return {
+      aggregates: [
+        aggregate("avg", "exitEfficiency", "avg_exit_efficiency"),
+        aggregate("avg", "rrCaptureEfficiency", "avg_capture_efficiency"),
+        aggregate("avg", "realisedRR", "avg_realised_rr"),
+        aggregate("avg", "maxRR", "avg_max_rr"),
+      ],
+      baseTitle: "Exit timing",
+      vizType: "kpi_grid",
+      recognized: true,
+    };
+  }
+
   if (
     lower.includes("positive win rate") &&
     lower.includes("negative expectancy")
@@ -1053,12 +1073,33 @@ function buildExplanation(
   filters: Filter[]
 ): string {
   const groupLabel =
-    groupBy.length > 0 ? ` grouped by ${groupBy.join(", ")}` : "";
+    groupBy.length > 0
+      ? ` grouped by ${groupBy.map((field) => formatFieldLabel(field)).join(", ")}`
+      : "";
   const filterLabel =
     filters.length > 0
-      ? ` with ${filters.map((filter) => filter.field).join(", ")} filters`
+      ? ` with ${filters.map((filter) => formatFieldLabel(filter.field)).join(", ")} filters`
       : "";
   return `Calculate ${title.toLowerCase()}${groupLabel}${filterLabel}`.trim();
+}
+
+function formatFieldLabel(field: string): string {
+  switch (field) {
+    case "modelTag":
+    case "edgeName":
+      return "edge";
+    case "sessionTag":
+      return "session";
+    case "tradeType":
+      return "direction";
+    case "protocolAlignment":
+      return "protocol alignment";
+    default:
+      return field
+        .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+        .replace(/_/g, " ")
+        .toLowerCase();
+  }
 }
 
 function isDailyPnlQuery(lower: string): boolean {

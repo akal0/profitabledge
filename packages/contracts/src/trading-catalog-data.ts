@@ -1,0 +1,6388 @@
+// Generated from packages/contracts/src/trading-catalog.json
+// Keep this file in sync with the JSON catalog to avoid Turbopack JSON HMR issues.
+
+const tradingCatalogData = {
+  "generatedAt": "2026-04-01T06:32:17.327Z",
+  "brokers": [
+    {
+      "id": "activtrades",
+      "name": "ActivTrades",
+      "displayName": "ActivTrades",
+      "website": "https://www.activtrades.com",
+      "logo": "/brokers/activtrades.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CMVM",
+        "SCB",
+        "CVM"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "etfs",
+        "bonds"
+      ],
+      "serverPatterns": [
+        "ActivTrades-",
+        "ActivTrader",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "activtrades"
+      ],
+      "popular": false,
+      "note": "Entity and product access vary across UK, EU, Brazil, and offshore clients."
+    },
+    {
+      "id": "adm-investor-services",
+      "name": "ADM Investor Services",
+      "displayName": "ADM Investor Services",
+      "website": "https://www.admis.com",
+      "logo": "/brokers/adm-investor-services.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "SEC",
+        "FINRA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "forex",
+        "securities"
+      ],
+      "serverPatterns": [
+        "admis",
+        "adm investor services",
+        "cqg",
+        "tt"
+      ],
+      "aliases": [
+        "adm-investor-services",
+        "adminvestorservices",
+        "adm investor services"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "admirals",
+      "name": "Admirals",
+      "displayName": "Admirals",
+      "website": "https://admiralmarkets.com",
+      "logo": "/brokers/admirals.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "CySEC",
+        "EFSA"
+      ],
+      "headquarters": "Tallinn, Estonia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "etfs",
+        "bonds"
+      ],
+      "serverPatterns": [
+        "AdmiralMarkets-",
+        "Admirals-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "admirals"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "amp-futures",
+      "name": "AMP Futures",
+      "displayName": "AMP Futures",
+      "website": "https://www.ampfutures.com",
+      "logo": "/brokers/amp-futures.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "forex"
+      ],
+      "serverPatterns": [
+        "ampfutures",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "amp-futures",
+        "ampfutures",
+        "amp futures"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "avatrade",
+      "name": "AvaTrade",
+      "displayName": "AvaTrade",
+      "website": "https://www.avatrade.com",
+      "logo": "/brokers/avatrade.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "Central Bank of Ireland",
+        "ASIC",
+        "FSCA",
+        "FSA Japan",
+        "ADGM FSRA"
+      ],
+      "headquarters": "Dublin, Ireland",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "options",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Ava-",
+        "AvaTrade",
+        "mt4",
+        "mt5",
+        "avaoptions"
+      ],
+      "aliases": [
+        "avatrade"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "axi",
+      "name": "Axi",
+      "displayName": "Axi",
+      "website": "https://www.axi.com",
+      "logo": "/brokers/axi.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "ASIC",
+        "FCA",
+        "DFSA",
+        "FMA"
+      ],
+      "headquarters": "Sydney, Australia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Axi-",
+        "AxiTrader-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "axi"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "backpack-exchange",
+      "name": "Backpack Exchange",
+      "displayName": "Backpack Exchange",
+      "website": "https://backpack.exchange",
+      "logo": "/brokers/backpack-exchange.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "VARA"
+      ],
+      "headquarters": "Dubai, United Arab Emirates",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "backpack",
+        "backpack.exchange"
+      ],
+      "aliases": [
+        "backpack-exchange",
+        "backpackexchange",
+        "backpack exchange"
+      ],
+      "popular": false,
+      "note": "Derivatives rollout and jurisdiction coverage may still be expanding."
+    },
+    {
+      "id": "binance",
+      "name": "Binance",
+      "displayName": "Binance",
+      "website": "https://www.binance.com",
+      "logo": "/brokers/binance.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Global / no single formal HQ",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "binance",
+        "fstream",
+        "binanceusdm",
+        "binancecoinm"
+      ],
+      "aliases": [
+        "binance"
+      ],
+      "popular": true,
+      "note": "Major global venue, but derivatives access is restricted or unavailable in many jurisdictions."
+    },
+    {
+      "id": "bingx",
+      "name": "BingX",
+      "displayName": "BingX",
+      "website": "https://bingx.com",
+      "logo": "/brokers/bingx.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Singapore",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "bingx",
+        "swap"
+      ],
+      "aliases": [
+        "bingx"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "bitget",
+      "name": "Bitget",
+      "displayName": "Bitget",
+      "website": "https://www.bitget.com",
+      "logo": "/brokers/bitget.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Victoria, Seychelles",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "bitget",
+        "umcbl",
+        "dmcbl",
+        "mix"
+      ],
+      "aliases": [
+        "bitget"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "bitmex",
+      "name": "BitMEX",
+      "displayName": "BitMEX",
+      "website": "https://www.bitmex.com",
+      "logo": "/brokers/bitmex.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Seychelles",
+      "assetClasses": [
+        "crypto-perpetuals",
+        "crypto-futures"
+      ],
+      "serverPatterns": [
+        "bitmex"
+      ],
+      "aliases": [
+        "bitmex"
+      ],
+      "popular": false,
+      "note": "Still active and notable, but unavailable in many regulated jurisdictions."
+    },
+    {
+      "id": "blackbull-markets",
+      "name": "BlackBull Markets",
+      "displayName": "BlackBull Markets",
+      "website": "https://blackbull.com",
+      "logo": "/brokers/blackbull-markets.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FMA",
+        "FSA Seychelles"
+      ],
+      "headquarters": "Auckland, New Zealand",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "futures",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "BlackBull-",
+        "BlackBullMarkets-",
+        "cTrader",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "blackbull-markets",
+        "blackbullmarkets",
+        "blackbull markets"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "btcc",
+      "name": "BTCC",
+      "displayName": "BTCC",
+      "website": "https://www.btcc.com",
+      "logo": "/brokers/btcc.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "btcc"
+      ],
+      "aliases": [
+        "btcc"
+      ],
+      "popular": false,
+      "note": "Long-running brand; regulatory posture and user access vary by jurisdiction."
+    },
+    {
+      "id": "btse",
+      "name": "BTSE",
+      "displayName": "BTSE",
+      "website": "https://www.btse.com",
+      "logo": "/brokers/btse.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Dubai, United Arab Emirates",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "btse"
+      ],
+      "aliases": [
+        "btse"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "bybit",
+      "name": "Bybit",
+      "displayName": "Bybit",
+      "website": "https://www.bybit.com",
+      "logo": "/brokers/bybit.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Dubai, United Arab Emirates",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "bybit",
+        "linear",
+        "inverse"
+      ],
+      "aliases": [
+        "bybit"
+      ],
+      "popular": true,
+      "note": "Popular global venue; availability is region-limited in several regulated markets."
+    },
+    {
+      "id": "cannon-trading",
+      "name": "Cannon Trading",
+      "displayName": "Cannon Trading",
+      "website": "https://www.cannontrading.com",
+      "logo": "/brokers/cannon-trading.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Beverly Hills, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "cannontrading",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "cannon-trading",
+        "cannontrading",
+        "cannon trading"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "capital-com",
+      "name": "Capital.com",
+      "displayName": "Capital.com",
+      "website": "https://capital.com",
+      "logo": "/brokers/capital-com.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "ASIC",
+        "NBRB",
+        "SCB"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "capital.com",
+        "CapitalCom-",
+        "mt4"
+      ],
+      "aliases": [
+        "capital-com",
+        "capitalcom",
+        "capital.com"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "charles-schwab",
+      "name": "Charles Schwab",
+      "displayName": "Charles Schwab",
+      "website": "https://www.schwab.com",
+      "logo": "/brokers/charles-schwab.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Westlake, United States",
+      "assetClasses": [
+        "futures",
+        "options",
+        "stocks",
+        "etfs",
+        "mutual-funds",
+        "bonds"
+      ],
+      "serverPatterns": [
+        "thinkorswim",
+        "schwab"
+      ],
+      "aliases": [
+        "charles-schwab",
+        "charlesschwab",
+        "charles schwab"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "city-index",
+      "name": "City Index",
+      "displayName": "City Index",
+      "website": "https://www.cityindex.com",
+      "logo": "/brokers/city-index.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "MAS"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "options"
+      ],
+      "serverPatterns": [
+        "CityIndex-",
+        "cityindex",
+        "GAIN",
+        "mt4"
+      ],
+      "aliases": [
+        "city-index",
+        "cityindex",
+        "city index"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "cmc-markets",
+      "name": "CMC Markets",
+      "displayName": "CMC Markets",
+      "website": "https://www.cmcmarkets.com",
+      "logo": "/brokers/cmc-markets.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "MAS",
+        "IIROC",
+        "BaFin",
+        "FMA"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "treasuries"
+      ],
+      "serverPatterns": [
+        "cmc",
+        "next generation",
+        "cmc markets",
+        "mt4"
+      ],
+      "aliases": [
+        "cmc-markets",
+        "cmcmarkets",
+        "cmc markets"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "coinbase-derivatives",
+      "name": "Coinbase Derivatives / International Exchange",
+      "displayName": "Coinbase Derivatives / International Exchange",
+      "website": "https://www.coinbase.com/international-exchange",
+      "logo": "/brokers/coinbase-derivatives.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "Bermuda Monetary Authority"
+      ],
+      "headquarters": "New York, United States",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "coinbase",
+        "international.coinbase"
+      ],
+      "aliases": [
+        "coinbase-derivatives",
+        "coinbasederivativesinternationalexchange",
+        "coinbase derivatives / international exchange",
+        "coinbase",
+        "coinbase derivatives"
+      ],
+      "popular": false,
+      "note": "US and international derivatives offerings are split across different entities and product sets."
+    },
+    {
+      "id": "coinex",
+      "name": "CoinEx",
+      "displayName": "CoinEx",
+      "website": "https://www.coinex.com",
+      "logo": "/brokers/coinex.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Hong Kong",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "coinex",
+        "perpetual"
+      ],
+      "aliases": [
+        "coinex"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "cqg",
+      "name": "CQG",
+      "displayName": "CQG",
+      "website": "https://www.cqg.com",
+      "logo": "/brokers/cqg.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "cqg"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Denver, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "fixed-income",
+        "forex"
+      ],
+      "serverPatterns": [
+        "cqg"
+      ],
+      "aliases": [
+        "cqg"
+      ],
+      "popular": false,
+      "note": "Platform/connectivity vendor used by many futures brokers; not itself a retail broker."
+    },
+    {
+      "id": "crypto-com-exchange",
+      "name": "Crypto.com Exchange",
+      "displayName": "Crypto.com Exchange",
+      "website": "https://crypto.com/exchange",
+      "logo": "/brokers/crypto-com-exchange.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "VARA",
+        "CySEC",
+        "FCA"
+      ],
+      "headquarters": "Singapore",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "crypto.com",
+        "exchange",
+        "derivatives"
+      ],
+      "aliases": [
+        "crypto-com-exchange",
+        "cryptocomexchange",
+        "crypto.com exchange"
+      ],
+      "popular": false,
+      "note": "Derivatives access depends heavily on region and account entity."
+    },
+    {
+      "id": "daniels-trading",
+      "name": "Daniels Trading",
+      "displayName": "Daniels Trading",
+      "website": "https://www.danielstrading.com",
+      "logo": "/brokers/daniels-trading.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "danielstrading",
+        "dtpro",
+        "cqg",
+        "rithmic"
+      ],
+      "aliases": [
+        "daniels-trading",
+        "danielstrading",
+        "daniels trading"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "delta-exchange",
+      "name": "Delta Exchange",
+      "displayName": "Delta Exchange",
+      "website": "https://www.delta.exchange",
+      "logo": "/brokers/delta-exchange.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Singapore",
+      "assetClasses": [
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "delta.exchange",
+        "delta"
+      ],
+      "aliases": [
+        "delta-exchange",
+        "deltaexchange",
+        "delta exchange"
+      ],
+      "popular": false,
+      "note": "Notable in some regions, but global brand/legal setup can be jurisdiction-specific."
+    },
+    {
+      "id": "deribit",
+      "name": "Deribit",
+      "displayName": "Deribit",
+      "website": "https://www.deribit.com",
+      "logo": "/brokers/deribit.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "VARA"
+      ],
+      "headquarters": "Dubai, United Arab Emirates",
+      "assetClasses": [
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "deribit"
+      ],
+      "aliases": [
+        "deribit"
+      ],
+      "popular": false,
+      "note": "Institutional/regional structure has changed over time; retail availability varies."
+    },
+    {
+      "id": "deriv",
+      "name": "Deriv",
+      "displayName": "Deriv",
+      "website": "https://deriv.com",
+      "logo": "/brokers/deriv.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt5",
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "MFSA",
+        "Labuan FSA",
+        "BVI FSC",
+        "VFSC"
+      ],
+      "headquarters": "Birkirkara, Malta",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "synthetic-indices",
+        "crypto"
+      ],
+      "serverPatterns": [
+        "Deriv-",
+        "DerivMT5",
+        "smarttrader",
+        "synthetic"
+      ],
+      "aliases": [
+        "deriv"
+      ],
+      "popular": false,
+      "note": "Includes proprietary synthetic products; availability and legal entity depend on region."
+    },
+    {
+      "id": "discount-trading",
+      "name": "Discount Trading",
+      "displayName": "Discount Trading",
+      "website": "https://www.discounttrading.com",
+      "logo": "/brokers/discount-trading.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "discounttrading",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "discount-trading",
+        "discounttrading",
+        "discount trading"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "dorman-trading",
+      "name": "Dorman Trading",
+      "displayName": "Dorman Trading",
+      "website": "https://dormantrading.com",
+      "logo": "/brokers/dorman-trading.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "dorman",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "dorman-trading",
+        "dormantrading",
+        "dorman trading"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "dydx",
+      "name": "dYdX",
+      "displayName": "dYdX",
+      "website": "https://dydx.trade",
+      "logo": "/brokers/dydx.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Decentralized / protocol",
+      "assetClasses": [
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "dydx",
+        "indexer",
+        "v4"
+      ],
+      "aliases": [
+        "dydx"
+      ],
+      "popular": false,
+      "note": "Decentralized venue rather than a centralized regulated exchange."
+    },
+    {
+      "id": "etrade",
+      "name": "E*TRADE",
+      "displayName": "E*TRADE",
+      "website": "https://us.etrade.com",
+      "logo": "/brokers/etrade.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "New York, United States",
+      "assetClasses": [
+        "futures",
+        "options",
+        "stocks",
+        "etfs",
+        "mutual-funds",
+        "bonds"
+      ],
+      "serverPatterns": [
+        "etrade",
+        "power etrade"
+      ],
+      "aliases": [
+        "etrade",
+        "e*trade"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "easymarkets",
+      "name": "easyMarkets",
+      "displayName": "easyMarkets",
+      "website": "https://www.easymarkets.com",
+      "logo": "/brokers/easymarkets.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CySEC",
+        "ASIC",
+        "FSA Seychelles",
+        "BVI FSC"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds",
+        "options"
+      ],
+      "serverPatterns": [
+        "easyMarkets-",
+        "EasyForex-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "easymarkets"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "edge-clear",
+      "name": "Edge Clear",
+      "displayName": "Edge Clear",
+      "website": "https://edgeclear.com",
+      "logo": "/brokers/edge-clear.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic",
+        "tt",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "edgeclear",
+        "edgeprox",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "edge-clear",
+        "edgeclear",
+        "edge clear"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "eightcap",
+      "name": "Eightcap",
+      "displayName": "Eightcap",
+      "website": "https://www.eightcap.com",
+      "logo": "/brokers/eightcap.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "ASIC",
+        "FCA",
+        "SCB"
+      ],
+      "headquarters": "Melbourne, Australia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Eightcap-",
+        "EightcapEU-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "eightcap"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "etoro",
+      "name": "eToro",
+      "displayName": "eToro",
+      "website": "https://www.etoro.com",
+      "logo": "/brokers/etoro.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "ASIC",
+        "FSA Seychelles"
+      ],
+      "headquarters": "Bnei Brak, Israel",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "stocks",
+        "etfs",
+        "crypto",
+        "commodities",
+        "indices"
+      ],
+      "serverPatterns": [
+        "etoro",
+        "copytrader"
+      ],
+      "aliases": [
+        "etoro"
+      ],
+      "popular": false,
+      "note": "CFD availability is region-dependent; US offering is mostly non-CFD."
+    },
+    {
+      "id": "exness",
+      "name": "Exness",
+      "displayName": "Exness",
+      "website": "https://www.exness.com",
+      "logo": "/brokers/exness.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "FSCA",
+        "FSA Seychelles",
+        "CMA"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Exness-",
+        "Exness-MT5",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "exness"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "fbs",
+      "name": "FBS",
+      "displayName": "FBS",
+      "website": "https://fbs.com",
+      "logo": "/brokers/fbs.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CySEC",
+        "ASIC",
+        "FSC Belize"
+      ],
+      "headquarters": "Belize City, Belize",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "metals"
+      ],
+      "serverPatterns": [
+        "FBS-",
+        "FBSInc-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "fbs"
+      ],
+      "popular": false,
+      "note": "Retail product set and regional availability differ materially by entity."
+    },
+    {
+      "id": "forex-com",
+      "name": "FOREX.com",
+      "displayName": "FOREX.com",
+      "website": "https://www.forex.com",
+      "logo": "/brokers/forex-com.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "FCA",
+        "IIROC",
+        "CySEC",
+        "JFSA",
+        "MAS"
+      ],
+      "headquarters": "Bedminster, United States",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "metals"
+      ],
+      "serverPatterns": [
+        "FOREX.com-",
+        "GAIN",
+        "StoneX",
+        "mt4"
+      ],
+      "aliases": [
+        "forex-com",
+        "forexcom",
+        "forex.com",
+        "gain"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "fp-markets",
+      "name": "FP Markets",
+      "displayName": "FP Markets",
+      "website": "https://www.fpmarkets.com",
+      "logo": "/brokers/fp-markets.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "other",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "ASIC",
+        "CySEC",
+        "FSCA",
+        "FSA Seychelles"
+      ],
+      "headquarters": "Sydney, Australia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "FPMarkets-",
+        "FPMarketsSC-",
+        "cTrader",
+        "Iress",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "fp-markets",
+        "fpmarkets",
+        "fp markets"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "futures-online",
+      "name": "FuturesOnline",
+      "displayName": "FuturesOnline",
+      "website": "https://www.futuresonline.com",
+      "logo": "/brokers/futures-online.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Stuart, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "futuresonline",
+        "cqg",
+        "rithmic"
+      ],
+      "aliases": [
+        "futures-online",
+        "futuresonline"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "fxpro",
+      "name": "FxPro",
+      "displayName": "FxPro",
+      "website": "https://www.fxpro.com",
+      "logo": "/brokers/fxpro.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5",
+        "ctrader"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "FSCA",
+        "SCB"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "futures",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "FxPro-",
+        "FxProUK-",
+        "cTrader",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "fxpro"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "gate-io",
+      "name": "Gate.io",
+      "displayName": "Gate.io",
+      "website": "https://www.gate.io",
+      "logo": "/brokers/gate-io.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Global / no single formal HQ",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "gateio",
+        "gate.io",
+        "futures"
+      ],
+      "aliases": [
+        "gate-io",
+        "gateio",
+        "gate.io"
+      ],
+      "popular": false,
+      "note": "Access and compliance posture vary by region."
+    },
+    {
+      "id": "hfm",
+      "name": "HFM",
+      "displayName": "HFM",
+      "website": "https://www.hfm.com",
+      "logo": "/brokers/hfm.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "DFSA",
+        "FSCA",
+        "FSA Seychelles",
+        "CMA"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "bonds",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "HFMarkets-",
+        "HFM-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "hfm"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "htx",
+      "name": "HTX",
+      "displayName": "HTX",
+      "website": "https://www.htx.com",
+      "logo": "/brokers/htx.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Seychelles",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "htx",
+        "huobi",
+        "swap"
+      ],
+      "aliases": [
+        "htx"
+      ],
+      "popular": false,
+      "note": "Formerly Huobi; jurisdiction and product access can vary."
+    },
+    {
+      "id": "hycm",
+      "name": "HYCM",
+      "displayName": "HYCM",
+      "website": "https://www.hycm.com",
+      "logo": "/brokers/hycm.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "CIMA",
+        "DFSA"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "HYCM-",
+        "HYMarkets-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "hycm"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "hyperliquid",
+      "name": "Hyperliquid",
+      "displayName": "Hyperliquid",
+      "website": "https://hyperliquid.xyz",
+      "logo": "/brokers/hyperliquid.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Decentralized / protocol",
+      "assetClasses": [
+        "crypto-perpetuals",
+        "spot"
+      ],
+      "serverPatterns": [
+        "hyperliquid",
+        "hl"
+      ],
+      "aliases": [
+        "hyperliquid"
+      ],
+      "popular": false,
+      "note": "Decentralized venue; jurisdictional treatment is still evolving."
+    },
+    {
+      "id": "ic-markets",
+      "name": "IC Markets",
+      "displayName": "IC Markets",
+      "website": "https://www.icmarkets.com",
+      "logo": "/brokers/ic-markets.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "ASIC",
+        "CySEC",
+        "FSA Seychelles",
+        "SCB"
+      ],
+      "headquarters": "Sydney, Australia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "bonds",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "ICMarkets-",
+        "ICMarketsSC-",
+        "ICMarketsEU-",
+        "cTrader",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "ic-markets",
+        "icmarkets",
+        "ic markets"
+      ],
+      "popular": true,
+      "note": null
+    },
+    {
+      "id": "ig",
+      "name": "IG",
+      "displayName": "IG",
+      "website": "https://www.ig.com",
+      "logo": "/brokers/ig.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "CFTC",
+        "NFA",
+        "JFSA",
+        "MAS",
+        "FINMA",
+        "FSCA",
+        "DFSA"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "options",
+        "bonds"
+      ],
+      "serverPatterns": [
+        "IG-",
+        "iglive",
+        "ig demo",
+        "prorealtime",
+        "mt4"
+      ],
+      "aliases": [
+        "ig"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "interactive-brokers",
+      "name": "Interactive Brokers",
+      "displayName": "Interactive Brokers",
+      "website": "https://www.interactivebrokers.com",
+      "logo": "/brokers/interactive-brokers.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "ib"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA",
+        "FCA",
+        "IIROC",
+        "SFC",
+        "MAS"
+      ],
+      "headquarters": "Greenwich, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "stocks",
+        "options",
+        "forex",
+        "bonds",
+        "funds"
+      ],
+      "serverPatterns": [
+        "ibkr",
+        "tws",
+        "interactivebrokers"
+      ],
+      "aliases": [
+        "interactive-brokers",
+        "interactivebrokers",
+        "interactive brokers",
+        "ib",
+        "ibkr"
+      ],
+      "popular": true,
+      "note": null
+    },
+    {
+      "id": "ironbeam",
+      "name": "Ironbeam",
+      "displayName": "Ironbeam",
+      "website": "https://www.ironbeam.com",
+      "logo": "/brokers/ironbeam.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "rithmic"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "ironbeam",
+        "rithmic",
+        "tradenavigator"
+      ],
+      "aliases": [
+        "ironbeam"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "kraken-futures",
+      "name": "Kraken Futures",
+      "displayName": "Kraken Futures",
+      "website": "https://www.kraken.com/features/futures",
+      "logo": "/brokers/kraken-futures.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "FinCEN",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "San Francisco, United States",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "kraken",
+        "cryptofacilities",
+        "futures.kraken"
+      ],
+      "aliases": [
+        "kraken-futures",
+        "krakenfutures",
+        "kraken futures"
+      ],
+      "popular": false,
+      "note": "Derivatives are offered through specific entities; retail access depends on jurisdiction."
+    },
+    {
+      "id": "kucoin-futures",
+      "name": "KuCoin Futures",
+      "displayName": "KuCoin Futures",
+      "website": "https://www.kucoin.com/futures",
+      "logo": "/brokers/kucoin-futures.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Seychelles",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "kucoin",
+        "kucoinfutures"
+      ],
+      "aliases": [
+        "kucoin-futures",
+        "kucoinfutures",
+        "kucoin futures"
+      ],
+      "popular": false,
+      "note": "Regional restrictions have tightened in some countries."
+    },
+    {
+      "id": "libertex",
+      "name": "Libertex",
+      "displayName": "Libertex",
+      "website": "https://libertex.com",
+      "logo": "/brokers/libertex.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CySEC"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "etfs",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Libertex",
+        "ForexClub-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "libertex"
+      ],
+      "popular": false,
+      "note": "Brand structure is region-specific; EU CFD service is primarily via the Cyprus entity."
+    },
+    {
+      "id": "lightspeed-futures",
+      "name": "Lightspeed Futures",
+      "displayName": "Lightspeed Futures",
+      "website": "https://www.lightspeed.com",
+      "logo": "/brokers/lightspeed-futures.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "tt",
+        "rithmic"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "New York, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "stocks",
+        "options"
+      ],
+      "serverPatterns": [
+        "lightspeed",
+        "tt",
+        "rithmic"
+      ],
+      "aliases": [
+        "lightspeed-futures",
+        "lightspeedfutures",
+        "lightspeed futures"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "marex",
+      "name": "Marex",
+      "displayName": "Marex",
+      "website": "https://www.marex.com",
+      "logo": "/brokers/marex.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "tt",
+        "cqg"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "FCA",
+        "ASIC",
+        "MAS"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "commodities",
+        "forex",
+        "securities"
+      ],
+      "serverPatterns": [
+        "marex",
+        "tt",
+        "cqg"
+      ],
+      "aliases": [
+        "marex"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "markets-com",
+      "name": "Markets.com",
+      "displayName": "Markets.com",
+      "website": "https://www.markets.com",
+      "logo": "/brokers/markets-com.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "ASIC",
+        "FSCA",
+        "BVI FSC"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "etfs",
+        "bonds",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Markets.com-",
+        "Safecap",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "markets-com",
+        "marketscom",
+        "markets.com"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "mexc",
+      "name": "MEXC",
+      "displayName": "MEXC",
+      "website": "https://www.mexc.com",
+      "logo": "/brokers/mexc.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Seychelles",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "mexc",
+        "contract"
+      ],
+      "aliases": [
+        "mexc"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "motivewave",
+      "name": "MotiveWave",
+      "displayName": "MotiveWave",
+      "website": "https://www.motivewave.com",
+      "logo": "/brokers/motivewave.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Toronto, Canada",
+      "assetClasses": [
+        "futures",
+        "stocks",
+        "forex",
+        "crypto"
+      ],
+      "serverPatterns": [
+        "motivewave"
+      ],
+      "aliases": [
+        "motivewave"
+      ],
+      "popular": false,
+      "note": "Independent platform vendor, not a broker."
+    },
+    {
+      "id": "ninjatrader",
+      "name": "NinjaTrader",
+      "displayName": "NinjaTrader",
+      "website": "https://ninjatrader.com",
+      "logo": "/brokers/ninjatrader.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "ninjatrader"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "forex"
+      ],
+      "serverPatterns": [
+        "ninjatrader",
+        "nt8",
+        "continuum"
+      ],
+      "aliases": [
+        "ninjatrader"
+      ],
+      "popular": true,
+      "note": null
+    },
+    {
+      "id": "oanda",
+      "name": "OANDA",
+      "displayName": "OANDA",
+      "website": "https://www.oanda.com",
+      "logo": "/brokers/oanda.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "FCA",
+        "IIROC",
+        "ASIC",
+        "MAS",
+        "JFSA"
+      ],
+      "headquarters": "New York, United States",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "bonds",
+        "metals"
+      ],
+      "serverPatterns": [
+        "OANDA-",
+        "fxtrade",
+        "oanda",
+        "mt4"
+      ],
+      "aliases": [
+        "oanda"
+      ],
+      "popular": true,
+      "note": null
+    },
+    {
+      "id": "okx",
+      "name": "OKX",
+      "displayName": "OKX",
+      "website": "https://www.okx.com",
+      "logo": "/brokers/okx.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Seychelles",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals",
+        "options"
+      ],
+      "serverPatterns": [
+        "okx",
+        "okex"
+      ],
+      "aliases": [
+        "okx"
+      ],
+      "popular": false,
+      "note": "Strong global derivatives venue, but legal entity and product access vary by region."
+    },
+    {
+      "id": "optimus-futures",
+      "name": "Optimus Futures",
+      "displayName": "Optimus Futures",
+      "website": "https://optimusfutures.com",
+      "logo": "/brokers/optimus-futures.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Boca Raton, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "optimus",
+        "optimusflow",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "optimus-futures",
+        "optimusfutures",
+        "optimus futures"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "orbex",
+      "name": "Orbex",
+      "displayName": "Orbex",
+      "website": "https://www.orbex.com",
+      "logo": "/brokers/orbex.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CySEC",
+        "FSC Mauritius",
+        "SCB"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "energies"
+      ],
+      "serverPatterns": [
+        "Orbex-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "orbex"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "pepperstone",
+      "name": "Pepperstone",
+      "displayName": "Pepperstone",
+      "website": "https://pepperstone.com",
+      "logo": "/brokers/pepperstone.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "ASIC",
+        "FCA",
+        "CySEC",
+        "BaFin",
+        "DFSA",
+        "CMA"
+      ],
+      "headquarters": "Melbourne, Australia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Pepperstone-",
+        "PepperstoneEU-",
+        "Pepperstone-Demo",
+        "cTrader",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "pepperstone"
+      ],
+      "popular": true,
+      "note": null
+    },
+    {
+      "id": "phemex",
+      "name": "Phemex",
+      "displayName": "Phemex",
+      "website": "https://phemex.com",
+      "logo": "/brokers/phemex.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Singapore",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "phemex"
+      ],
+      "aliases": [
+        "phemex"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "phillip-capital",
+      "name": "Phillip Capital",
+      "displayName": "Phillip Capital",
+      "website": "https://www.phillipcapital.com",
+      "logo": "/brokers/phillip-capital.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "cqg",
+        "tt",
+        "rithmic"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "MAS"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "forex",
+        "securities"
+      ],
+      "serverPatterns": [
+        "phillipcapital",
+        "cqg",
+        "tt",
+        "rithmic"
+      ],
+      "aliases": [
+        "phillip-capital",
+        "phillipcapital",
+        "phillip capital"
+      ],
+      "popular": false,
+      "note": "US futures business is distinct from broader PhillipCapital group entities."
+    },
+    {
+      "id": "plus500",
+      "name": "Plus500",
+      "displayName": "Plus500",
+      "website": "https://www.plus500.com",
+      "logo": "/brokers/plus500.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "CySEC",
+        "MAS",
+        "FMA",
+        "FSCA"
+      ],
+      "headquarters": "Haifa, Israel",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "options",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "plus500",
+        "webtrader"
+      ],
+      "aliases": [
+        "plus500"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "plus500-futures",
+      "name": "Plus500 Futures",
+      "displayName": "Plus500 Futures",
+      "website": "https://futures.plus500.com",
+      "logo": "/brokers/plus500-futures.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "plus500",
+        "webtrader"
+      ],
+      "aliases": [
+        "plus500-futures",
+        "plus500futures",
+        "plus500 futures"
+      ],
+      "popular": false,
+      "note": "US-focused futures offering separate from the main CFD business."
+    },
+    {
+      "id": "rj-obrien",
+      "name": "R.J. O'Brien",
+      "displayName": "R.J. O'Brien",
+      "website": "https://www.rjobrien.com",
+      "logo": "/brokers/rj-obrien.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "tt",
+        "cqg"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "FCA",
+        "IIROC"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "clearing"
+      ],
+      "serverPatterns": [
+        "rjobrien",
+        "rjo",
+        "tt",
+        "cqg"
+      ],
+      "aliases": [
+        "rj-obrien",
+        "rjobrien",
+        "r.j. o'brien"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "rithmic",
+      "name": "Rithmic",
+      "displayName": "Rithmic",
+      "website": "https://www.rithmic.com",
+      "logo": "/brokers/rithmic.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "rithmic"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "rithmic",
+        "rtrader"
+      ],
+      "aliases": [
+        "rithmic"
+      ],
+      "popular": false,
+      "note": "Execution/connectivity stack rather than a broker."
+    },
+    {
+      "id": "saxo-bank",
+      "name": "Saxo Bank",
+      "displayName": "Saxo Bank",
+      "website": "https://www.home.saxo",
+      "logo": "/brokers/saxo-bank.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "DFSA",
+        "FCA",
+        "ASIC",
+        "MAS",
+        "FINMA",
+        "JFSA",
+        "SFC"
+      ],
+      "headquarters": "Copenhagen, Denmark",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "stocks",
+        "etfs",
+        "futures",
+        "options",
+        "bonds",
+        "funds"
+      ],
+      "serverPatterns": [
+        "saxotrader",
+        "openapi.saxo",
+        "saxo",
+        "tradingview"
+      ],
+      "aliases": [
+        "saxo-bank",
+        "saxobank",
+        "saxo bank"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "sierra-chart",
+      "name": "Sierra Chart",
+      "displayName": "Sierra Chart",
+      "website": "https://www.sierrachart.com",
+      "logo": "/brokers/sierra-chart.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Manteca, United States",
+      "assetClasses": [
+        "futures",
+        "stocks",
+        "forex",
+        "crypto"
+      ],
+      "serverPatterns": [
+        "sierrachart"
+      ],
+      "aliases": [
+        "sierra-chart",
+        "sierrachart",
+        "sierra chart"
+      ],
+      "popular": false,
+      "note": "Charting/trading platform; brokerage depends on connected service."
+    },
+    {
+      "id": "skilling",
+      "name": "Skilling",
+      "displayName": "Skilling",
+      "website": "https://skilling.com",
+      "logo": "/brokers/skilling.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "ctrader"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CySEC",
+        "FSA Seychelles"
+      ],
+      "headquarters": "Nicosia, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "Skilling-",
+        "cTrader",
+        "mt4"
+      ],
+      "aliases": [
+        "skilling"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "stage-5-trading",
+      "name": "Stage 5 Trading",
+      "displayName": "Stage 5 Trading",
+      "website": "https://stage5trading.com",
+      "logo": "/brokers/stage-5-trading.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "stage5",
+        "cqg",
+        "rithmic",
+        "tt"
+      ],
+      "aliases": [
+        "stage-5-trading",
+        "stage5trading",
+        "stage 5 trading"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "stonex",
+      "name": "StoneX",
+      "displayName": "StoneX",
+      "website": "https://www.stonex.com",
+      "logo": "/brokers/stonex.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "cqg",
+        "tt"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "SEC",
+        "FINRA",
+        "FCA",
+        "ASIC"
+      ],
+      "headquarters": "New York, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "forex",
+        "securities",
+        "commodities"
+      ],
+      "serverPatterns": [
+        "stonex",
+        "cqg",
+        "tt"
+      ],
+      "aliases": [
+        "stonex"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "swissquote",
+      "name": "Swissquote",
+      "displayName": "Swissquote",
+      "website": "https://www.swissquote.com",
+      "logo": "/brokers/swissquote.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FINMA",
+        "FCA",
+        "CySEC",
+        "DFSA",
+        "SFC",
+        "MAS"
+      ],
+      "headquarters": "Gland, Switzerland",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "stocks",
+        "etfs",
+        "funds",
+        "options",
+        "futures",
+        "bonds",
+        "crypto"
+      ],
+      "serverPatterns": [
+        "Swissquote-",
+        "SQMT4",
+        "SQMT5",
+        "advanced trader",
+        "cfxd"
+      ],
+      "aliases": [
+        "swissquote"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "tastytrade",
+      "name": "tastytrade",
+      "displayName": "tastytrade",
+      "website": "https://tastytrade.com",
+      "logo": "/brokers/tastytrade.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "options",
+        "stocks",
+        "etfs",
+        "crypto"
+      ],
+      "serverPatterns": [
+        "tastytrade",
+        "tastyworks"
+      ],
+      "aliases": [
+        "tastytrade"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "thinkmarkets",
+      "name": "ThinkMarkets",
+      "displayName": "ThinkMarkets",
+      "website": "https://www.thinkmarkets.com",
+      "logo": "/brokers/thinkmarkets.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "CySEC",
+        "FSA Seychelles",
+        "FSCA",
+        "JFSA"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "ThinkMarkets-",
+        "ThinkTrader",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "thinkmarkets"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "tickmill",
+      "name": "Tickmill",
+      "displayName": "Tickmill",
+      "website": "https://www.tickmill.com",
+      "logo": "/brokers/tickmill.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "cqg"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "FSCA",
+        "FSA Seychelles",
+        "Labuan FSA"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "bonds",
+        "futures",
+        "options"
+      ],
+      "serverPatterns": [
+        "Tickmill-",
+        "TickmillUK-",
+        "mt4",
+        "mt5",
+        "cqg"
+      ],
+      "aliases": [
+        "tickmill"
+      ],
+      "popular": false,
+      "note": "Retail offering mix varies by entity; futures access is not available in all regions."
+    },
+    {
+      "id": "trade-nation",
+      "name": "Trade Nation",
+      "displayName": "Trade Nation",
+      "website": "https://tradenation.com",
+      "logo": "/brokers/trade-nation.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other",
+        "mt4"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "ASIC",
+        "FSCA",
+        "SCB"
+      ],
+      "headquarters": "London, United Kingdom",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares"
+      ],
+      "serverPatterns": [
+        "TradeNation-",
+        "CoreTrader",
+        "mt4"
+      ],
+      "aliases": [
+        "trade-nation",
+        "tradenation",
+        "trade nation"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "tradestation",
+      "name": "TradeStation",
+      "displayName": "TradeStation",
+      "website": "https://www.tradestation.com",
+      "logo": "/brokers/tradestation.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Plantation, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "stocks",
+        "options",
+        "etfs"
+      ],
+      "serverPatterns": [
+        "tradestation"
+      ],
+      "aliases": [
+        "tradestation"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "trading-technologies",
+      "name": "Trading Technologies",
+      "displayName": "Trading Technologies",
+      "website": "https://www.tradingtechnologies.com",
+      "logo": "/brokers/trading-technologies.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "tt"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "fixed-income"
+      ],
+      "serverPatterns": [
+        "tradingtechnologies",
+        "tt"
+      ],
+      "aliases": [
+        "trading-technologies",
+        "tradingtechnologies",
+        "trading technologies"
+      ],
+      "popular": false,
+      "note": "Platform vendor/connectivity provider, not a retail broker or FCM."
+    },
+    {
+      "id": "tradovate",
+      "name": "Tradovate",
+      "displayName": "Tradovate",
+      "website": "https://www.tradovate.com",
+      "logo": "/brokers/tradovate.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "tradovate"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "Chicago, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options"
+      ],
+      "serverPatterns": [
+        "tradovate",
+        "ninjatrader"
+      ],
+      "aliases": [
+        "tradovate"
+      ],
+      "popular": true,
+      "note": "Now part of NinjaTrader Group."
+    },
+    {
+      "id": "vantage",
+      "name": "Vantage",
+      "displayName": "Vantage",
+      "website": "https://www.vantagemarkets.com",
+      "logo": "/brokers/vantage.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5",
+        "other",
+        "tradingview"
+      ],
+      "regulated": true,
+      "regulators": [
+        "ASIC",
+        "CIMA",
+        "VFSC",
+        "FSCA"
+      ],
+      "headquarters": "Sydney, Australia",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "etfs",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "VantageFX-",
+        "VantageInternational-",
+        "mt4",
+        "mt5",
+        "vantage"
+      ],
+      "aliases": [
+        "vantage"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "webull-futures",
+      "name": "Webull",
+      "displayName": "Webull",
+      "website": "https://www.webull.com",
+      "logo": "/brokers/webull-futures.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "SEC",
+        "FINRA",
+        "CFTC",
+        "NFA"
+      ],
+      "headquarters": "St. Petersburg, United States",
+      "assetClasses": [
+        "futures",
+        "stocks",
+        "options",
+        "etfs",
+        "crypto"
+      ],
+      "serverPatterns": [
+        "webull"
+      ],
+      "aliases": [
+        "webull-futures",
+        "webull"
+      ],
+      "popular": false,
+      "note": "Futures rollout has been region/account-type dependent."
+    },
+    {
+      "id": "wedbush-futures",
+      "name": "Wedbush Futures",
+      "displayName": "Wedbush Futures",
+      "website": "https://www.wedbushfutures.com",
+      "logo": "/brokers/wedbush-futures.png",
+      "type": "broker",
+      "category": "futures",
+      "status": "active",
+      "platforms": [
+        "other",
+        "tt",
+        "cqg"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CFTC",
+        "NFA",
+        "SEC",
+        "FINRA"
+      ],
+      "headquarters": "Los Angeles, United States",
+      "assetClasses": [
+        "futures",
+        "futures-options",
+        "securities"
+      ],
+      "serverPatterns": [
+        "wedbush",
+        "tt",
+        "cqg"
+      ],
+      "aliases": [
+        "wedbush-futures",
+        "wedbushfutures",
+        "wedbush futures"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "whitebit",
+      "name": "WhiteBIT",
+      "displayName": "WhiteBIT",
+      "website": "https://whitebit.com",
+      "logo": "/brokers/whitebit.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Vilnius, Lithuania",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-futures",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "whitebit"
+      ],
+      "aliases": [
+        "whitebit"
+      ],
+      "popular": false,
+      "note": "European operating structure exists, but derivatives permissions vary by country."
+    },
+    {
+      "id": "woo-x",
+      "name": "WOO X",
+      "displayName": "WOO X",
+      "website": "https://woox.io",
+      "logo": "/brokers/woo-x.png",
+      "type": "broker",
+      "category": "crypto",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": false,
+      "regulators": [],
+      "headquarters": "Taipei, Taiwan",
+      "assetClasses": [
+        "crypto-spot",
+        "crypto-perpetuals"
+      ],
+      "serverPatterns": [
+        "woox",
+        "woo"
+      ],
+      "aliases": [
+        "woo-x",
+        "woox",
+        "woo x"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "xm",
+      "name": "XM",
+      "displayName": "XM",
+      "website": "https://www.xm.com",
+      "logo": "/brokers/xm.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "mt4",
+        "mt5"
+      ],
+      "regulated": true,
+      "regulators": [
+        "CySEC",
+        "ASIC",
+        "DFSA",
+        "FSC Belize"
+      ],
+      "headquarters": "Limassol, Cyprus",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "metals",
+        "energies"
+      ],
+      "serverPatterns": [
+        "XMGlobal-",
+        "XM.COM-",
+        "XMTrading-",
+        "mt4",
+        "mt5"
+      ],
+      "aliases": [
+        "xm"
+      ],
+      "popular": false,
+      "note": null
+    },
+    {
+      "id": "xtb",
+      "name": "XTB",
+      "displayName": "XTB",
+      "website": "https://www.xtb.com",
+      "logo": "/brokers/xtb.png",
+      "type": "broker",
+      "category": "cfd",
+      "status": "active",
+      "platforms": [
+        "other"
+      ],
+      "regulated": true,
+      "regulators": [
+        "FCA",
+        "CySEC",
+        "KNF",
+        "DFSA",
+        "FSC Belize"
+      ],
+      "headquarters": "Warsaw, Poland",
+      "assetClasses": [
+        "forex",
+        "cfds",
+        "indices",
+        "commodities",
+        "shares",
+        "etfs",
+        "crypto-cfds"
+      ],
+      "serverPatterns": [
+        "xstation",
+        "xtb"
+      ],
+      "aliases": [
+        "xtb"
+      ],
+      "popular": false,
+      "note": null
+    }
+  ],
+  "propFirms": [
+    {
+      "id": "akuna-capital",
+      "name": "Akuna Capital",
+      "displayName": "Akuna Capital",
+      "website": "https://akunacapital.com",
+      "logo": "/prop-logos/akuna-capital.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Major options market-making prop firm; relevant for institutional journal support.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "akuna",
+        "akuna capital",
+        "Akuna"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "market making"
+      ],
+      "payoutSplit": "employee-comp structure",
+      "accountSizes": [],
+      "aliases": [
+        "akuna-capital",
+        "akunacapital",
+        "akuna capital"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "alpha-capital-group",
+      "name": "Alpha Capital Group",
+      "displayName": "Alpha Capital Group",
+      "website": "https://alphacapitalgroup.uk",
+      "logo": "/prop-logos/alpha-capital-group.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "UK-centered forex/CFD prop brand with standard challenge structures.",
+      "supportedPlatforms": [
+        "mt5",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "alpha capital group",
+        "alphacapitalgroup",
+        "ACG"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "alpha-capital-group",
+        "alphacapitalgroup",
+        "alpha capital group",
+        "alpha-capital",
+        "alpha capital"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "apex-trader-funding",
+      "name": "Apex Trader Funding",
+      "displayName": "Apex Trader Funding",
+      "website": "https://apextraderfunding.com",
+      "logo": "/prop-logos/apex-trader-funding.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "High-volume futures prop firm with many account sizes and resets.",
+      "supportedPlatforms": [
+        "tradovate",
+        "rithmic",
+        "ninjatrader",
+        "tradingview"
+      ],
+      "brokerDetectionPatterns": [
+        "apex",
+        "ATF",
+        "apextraderfunding"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "performance account",
+        "full account"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        75000,
+        100000,
+        150000,
+        300000
+      ],
+      "aliases": [
+        "apex-trader-funding",
+        "apextraderfunding",
+        "apex trader funding",
+        "apex-trader",
+        "apex trader"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "aquafunded",
+      "name": "AquaFunded",
+      "displayName": "AquaFunded",
+      "website": "https://aquafunded.com",
+      "logo": "/prop-logos/aquafunded.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Newer CFD prop operator with familiar retail program structure.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "aquafunded",
+        "AquaFunded",
+        "aqua funded"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "aquafunded"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "audacity-capital",
+      "name": "Audacity Capital",
+      "displayName": "Audacity Capital",
+      "website": "https://audacitycapital.co.uk",
+      "logo": "/prop-logos/audacity-capital.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Older London prop brand focused on funded trader and mentoring style programs.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5"
+      ],
+      "brokerDetectionPatterns": [
+        "audacity",
+        "audacity capital",
+        "AudaCity"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "ability",
+        "funded trader"
+      ],
+      "payoutSplit": "50-75%",
+      "accountSizes": [
+        15000,
+        30000,
+        60000,
+        120000,
+        240000
+      ],
+      "aliases": [
+        "audacity-capital",
+        "audacitycapital",
+        "audacity capital"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "axi-select",
+      "name": "Axi Select",
+      "displayName": "Axi Select",
+      "website": "https://axi.com",
+      "logo": "/prop-logos/axi-select.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Broker-backed trader allocation program rather than a classic prop challenge.",
+      "supportedPlatforms": [
+        "mt4",
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "axi",
+        "axi select",
+        "AxiTrader"
+      ],
+      "challengeTypes": [
+        "broker-backed progression",
+        "capital allocation"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        20000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "axi-select",
+        "axiselect",
+        "axi select"
+      ],
+      "popular": false,
+      "notes": "Useful to classify separately in product logic because it is broker-native."
+    },
+    {
+      "id": "blue-guardian",
+      "name": "Blue Guardian",
+      "displayName": "Blue Guardian",
+      "website": "https://blueguardian.com",
+      "logo": "/prop-logos/blue-guardian.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Retail CFD prop firm with relatively straightforward evaluation offerings.",
+      "supportedPlatforms": [
+        "mt5",
+        "dxtrade",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "blue guardian",
+        "blueguardian",
+        "BG trader"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "elite"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "blue-guardian",
+        "blueguardian",
+        "blue guardian"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "blusky",
+      "name": "BluSky",
+      "displayName": "BluSky",
+      "website": "https://blusky.pro",
+      "logo": "/prop-logos/blusky.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Futures prop firm that remains notable in comparison lists.",
+      "supportedPlatforms": [
+        "rithmic",
+        "ninjatrader",
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "blusky",
+        "BluSky",
+        "blusky funded"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "blusky"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "bright-trading",
+      "name": "Bright Trading",
+      "displayName": "Bright Trading",
+      "website": "https://brighttrading.com",
+      "logo": "/prop-logos/bright-trading.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Legacy remote equity prop firm with experienced trader brand recognition.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "bright trading",
+        "Bright",
+        "brighttrading"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "capital allocation"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "bright-trading",
+        "brighttrading",
+        "bright trading"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "brightfunded",
+      "name": "BrightFunded",
+      "displayName": "BrightFunded",
+      "website": "https://brightfunded.com",
+      "logo": "/prop-logos/brightfunded.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "CFD prop firm with clean rules and a mainstream retail audience.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "brightfunded",
+        "Bright Funded",
+        "bright"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "brightfunded",
+        "bright-funded"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "bulenox",
+      "name": "Bulenox",
+      "displayName": "Bulenox",
+      "website": "https://bulenox.com",
+      "logo": "/prop-logos/bulenox.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Active retail futures prop firm with many promo-driven account launches.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "bulenox",
+        "Bulenox",
+        "Bule"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000,
+        250000
+      ],
+      "aliases": [
+        "bulenox"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "chimera-securities",
+      "name": "Chimera Securities",
+      "displayName": "Chimera Securities",
+      "website": "https://www.chimerasecurities.com",
+      "logo": "/prop-logos/chimera-securities.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "U.S. equity prop shop and broker-dealer serving active traders.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "chimera",
+        "chimera securities",
+        "Chimera"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "desk allocation"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "chimera-securities",
+        "chimerasecurities",
+        "chimera securities"
+      ],
+      "popular": false,
+      "notes": "Public platform details are relatively sparse."
+    },
+    {
+      "id": "city-traders-imperium",
+      "name": "City Traders Imperium",
+      "displayName": "City Traders Imperium",
+      "website": "https://citytradersimperium.com",
+      "logo": "/prop-logos/city-traders-imperium.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Education-led forex prop brand with direct funding and evaluation tracks.",
+      "supportedPlatforms": [
+        "mt5",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "city traders imperium",
+        "CTI",
+        "citytradersimperium"
+      ],
+      "challengeTypes": [
+        "2-step",
+        "instant",
+        "direct funding"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        2500,
+        5000,
+        10000,
+        20000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "city-traders-imperium",
+        "citytradersimperium",
+        "city traders imperium",
+        "cti"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "daytraders-com",
+      "name": "DayTraders.com",
+      "displayName": "DayTraders.com",
+      "website": "https://daytraders.com",
+      "logo": "/prop-logos/daytraders-com.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Newer but notable futures firm with live-account messaging and multiple plan types.",
+      "supportedPlatforms": [
+        "other",
+        "rithmic",
+        "tradovate",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "daytraders.com",
+        "ONYX",
+        "daytraders funded"
+      ],
+      "challengeTypes": [
+        "trail",
+        "static",
+        "straight-to-funded",
+        "straight-to-live"
+      ],
+      "payoutSplit": "80-100%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000,
+        300000
+      ],
+      "aliases": [
+        "daytraders-com",
+        "daytraderscom",
+        "daytraders.com"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "dna-funded",
+      "name": "DNA Funded",
+      "displayName": "DNA Funded",
+      "website": "https://dnafunded.com",
+      "logo": "/prop-logos/dna-funded.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Forex/CFD prop firm with standard evaluation-based funding.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "dna funded",
+        "dnafunded",
+        "DNA"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "dna-funded",
+        "dnafunded",
+        "dna funded"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "e8-markets",
+      "name": "E8 Markets",
+      "displayName": "E8 Markets",
+      "website": "https://e8markets.com",
+      "logo": "/prop-logos/e8-markets.png",
+      "type": "prop-firm",
+      "category": "multi",
+      "status": "active",
+      "description": "Fast-growing simulation-first prop operator across forex, futures, and crypto.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "tradelocker",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "e8",
+        "e8 markets",
+        "E8X"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "e8-markets",
+        "e8markets",
+        "e8 markets",
+        "e8 funding",
+        "e8funding"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "earn2trade",
+      "name": "Earn2Trade",
+      "displayName": "Earn2Trade",
+      "website": "https://earn2trade.com",
+      "logo": "/prop-logos/earn2trade.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Longstanding futures evaluation brand with educational emphasis.",
+      "supportedPlatforms": [
+        "ninjatrader",
+        "other",
+        "rithmic"
+      ],
+      "brokerDetectionPatterns": [
+        "earn2trade",
+        "gauntlet",
+        "trader career path"
+      ],
+      "challengeTypes": [
+        "gauntlet mini",
+        "trader career path"
+      ],
+      "payoutSplit": "varies by funded path",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000,
+        200000
+      ],
+      "aliases": [
+        "earn2trade"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "elite-trader-funding",
+      "name": "Elite Trader Funding",
+      "displayName": "Elite Trader Funding",
+      "website": "https://elitetraderfunding.com",
+      "logo": "/prop-logos/elite-trader-funding.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Retail futures prop brand with many sizing variations and promo activity.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader",
+        "tradingview"
+      ],
+      "brokerDetectionPatterns": [
+        "elite trader funding",
+        "ETF",
+        "elitetraderfunding"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "fast track",
+        "eod"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        150000,
+        250000
+      ],
+      "aliases": [
+        "elite-trader-funding",
+        "elitetraderfunding",
+        "elite trader funding",
+        "elite-trader",
+        "elite trader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "fast-track-trading",
+      "name": "Fast Track Trading",
+      "displayName": "Fast Track Trading",
+      "website": "https://fasttracktrading.net",
+      "logo": "/prop-logos/fast-track-trading.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "suspended",
+      "description": "Notable futures prop firm later disrupted by compliance/regulatory issues.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "fast track trading",
+        "FTT",
+        "fasttracktrading"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000,
+        300000
+      ],
+      "aliases": [
+        "fast-track-trading",
+        "fasttracktrading",
+        "fast track trading"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "finotive-funding",
+      "name": "Finotive Funding",
+      "displayName": "Finotive Funding",
+      "website": "https://finotivefunding.com",
+      "logo": "/prop-logos/finotive-funding.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Mid-tier forex/CFD prop firm with both standard and instant products.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "tradelocker"
+      ],
+      "brokerDetectionPatterns": [
+        "finotive",
+        "finotive funding",
+        "Finotive"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 95%",
+      "accountSizes": [
+        2500,
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "finotive-funding",
+        "finotivefunding",
+        "finotive funding"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "ftmo",
+      "name": "FTMO",
+      "displayName": "FTMO",
+      "website": "https://ftmo.com",
+      "logo": "/prop-logos/ftmo.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Flagship CFD prop firm with deep journal demand and broad platform support.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "ftmo",
+        "trader.ftmo.com",
+        "FTMO"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "swing"
+      ],
+      "payoutSplit": "80-90%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "ftmo"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "funded-engineer",
+      "name": "Funded Engineer",
+      "displayName": "Funded Engineer",
+      "website": "https://fundedengineer.com",
+      "logo": "/prop-logos/funded-engineer.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "shutdown",
+      "description": "Retail CFD prop firm with common forex challenge models.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "funded engineer",
+        "fundedengineer",
+        "FE trader"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "funded-engineer",
+        "fundedengineer",
+        "funded engineer"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "funded-futures-family",
+      "name": "Funded Futures Family",
+      "displayName": "Funded Futures Family",
+      "website": "https://fundedfuturesfamily.com",
+      "logo": "/prop-logos/funded-futures-family.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Smaller futures prop firm with a community-led branding angle.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "funded futures family",
+        "FFF",
+        "fundedfuturesfamily"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "funded-futures-family",
+        "fundedfuturesfamily",
+        "funded futures family"
+      ],
+      "popular": false,
+      "notes": "Less standardized than the largest futures firms."
+    },
+    {
+      "id": "funded-futures-network",
+      "name": "Funded Futures Network",
+      "displayName": "Funded Futures Network",
+      "website": "https://fundedfuturesnetwork.com",
+      "logo": "/prop-logos/funded-futures-network.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Mid-sized futures prop firm with standard evaluation and instant-style options.",
+      "supportedPlatforms": [
+        "rithmic",
+        "ninjatrader",
+        "tradingview"
+      ],
+      "brokerDetectionPatterns": [
+        "funded futures network",
+        "FFN",
+        "fundedfuturesnetwork"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "instant funded"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "funded-futures-network",
+        "fundedfuturesnetwork",
+        "funded futures network"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "funded-trading-plus",
+      "name": "Funded Trading Plus",
+      "displayName": "Funded Trading Plus",
+      "website": "https://fundedtradingplus.com",
+      "logo": "/prop-logos/funded-trading-plus.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "High-visibility CFD prop firm with many account variants and promos.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "dxtrade",
+        "tradelocker"
+      ],
+      "brokerDetectionPatterns": [
+        "funded trading plus",
+        "FTP",
+        "fundedtradingplus"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant",
+        "master"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "funded-trading-plus",
+        "fundedtradingplus",
+        "funded trading plus"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "fundednext",
+      "name": "FundedNext",
+      "displayName": "FundedNext",
+      "website": "https://fundednext.com",
+      "logo": "/prop-logos/fundednext.png",
+      "type": "prop-firm",
+      "category": "multi",
+      "status": "active",
+      "description": "Major global prop brand with CFD core and recently launched futures.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "fundednext",
+        "FundedNext",
+        "fnmarkets"
+      ],
+      "challengeTypes": [
+        "stellar",
+        "evaluation",
+        "instant"
+      ],
+      "payoutSplit": "up to 95%",
+      "accountSizes": [
+        6000,
+        15000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "fundednext",
+        "funded-next"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "fundednext-futures",
+      "name": "FundedNext Futures",
+      "displayName": "FundedNext Futures",
+      "website": "https://fundednext.com",
+      "logo": "/prop-logos/fundednext-futures.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Recently launched futures branch from a major CFD prop brand.",
+      "supportedPlatforms": [
+        "ninjatrader",
+        "tradingview",
+        "rithmic"
+      ],
+      "brokerDetectionPatterns": [
+        "fundednext futures",
+        "bolt challenge",
+        "legacy challenge"
+      ],
+      "challengeTypes": [
+        "bolt",
+        "legacy",
+        "rapid"
+      ],
+      "payoutSplit": "up to 95%",
+      "accountSizes": [
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "fundednext-futures",
+        "fundednextfutures",
+        "fundednext futures"
+      ],
+      "popular": false,
+      "notes": "Platform routing may evolve as the futures product matures."
+    },
+    {
+      "id": "funderpro",
+      "name": "FunderPro",
+      "displayName": "FunderPro",
+      "website": "https://funderpro.com",
+      "logo": "/prop-logos/funderpro.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Retail prop firm emphasizing simple rules and mainstream CFD platforms.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "funderpro",
+        "FunderPro",
+        "FPRO"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "funderpro"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "funding-pips",
+      "name": "Funding Pips",
+      "displayName": "Funding Pips",
+      "website": "https://fundingpips.com",
+      "logo": "/prop-logos/funding-pips.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Large retail forex/CFD prop brand known for aggressive promos and broad appeal.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "fundingpips",
+        "FundingPips",
+        "fp trader"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "funding-pips",
+        "fundingpips",
+        "funding pips"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "funding-talent",
+      "name": "Funding Talent",
+      "displayName": "Funding Talent",
+      "website": "https://fundingtalent.com",
+      "logo": "/prop-logos/funding-talent.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "shutdown",
+      "description": "Earlier-generation CFD prop firm that is no longer operating.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "funding talent",
+        "fundingtalent",
+        "FTalent"
+      ],
+      "challengeTypes": [
+        "aggressive",
+        "standard"
+      ],
+      "payoutSplit": "up to 80%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "funding-talent",
+        "fundingtalent",
+        "funding talent"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "futures-elite",
+      "name": "Futures Elite",
+      "displayName": "Futures Elite",
+      "website": "https://futureselite.com",
+      "logo": "/prop-logos/futures-elite.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Smaller futures funding brand with standard retail account ladders.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "futures elite",
+        "futureselite",
+        "FE futures"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "instant funded"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "futures-elite",
+        "futureselite",
+        "futures elite"
+      ],
+      "popular": false,
+      "notes": "Program details and platform list appear to change frequently."
+    },
+    {
+      "id": "fxify",
+      "name": "FXify",
+      "displayName": "FXify",
+      "website": "https://fxify.com",
+      "logo": "/prop-logos/fxify.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Popular CFD prop firm with standard retail challenge formats.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "fxify",
+        "FXIFY"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "fxify"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "goat-funded-trader",
+      "name": "Goat Funded Trader",
+      "displayName": "Goat Funded Trader",
+      "website": "https://goatfundedtrader.com",
+      "logo": "/prop-logos/goat-funded-trader.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Retail forex prop firm with aggressive growth marketing and standard challenge options.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "goat funded trader",
+        "GFT",
+        "goatfundedtrader"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 95%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "goat-funded-trader",
+        "goatfundedtrader",
+        "goat funded trader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "hantec-trader",
+      "name": "Hantec Trader",
+      "displayName": "Hantec Trader",
+      "website": "https://hantectrader.com",
+      "logo": "/prop-logos/hantec-trader.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Broker-backed prop program tied to the Hantec trading ecosystem.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5"
+      ],
+      "brokerDetectionPatterns": [
+        "hantec trader",
+        "Hantec",
+        "hantectrader"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "hantec-trader",
+        "hantectrader",
+        "hantec trader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "hola-prime",
+      "name": "Hola Prime",
+      "displayName": "Hola Prime",
+      "website": "https://holaprime.com",
+      "logo": "/prop-logos/hola-prime.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Newer retail CFD prop firm with broad marketing reach.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "hola prime",
+        "holaprime",
+        "HPrime"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 95%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "hola-prime",
+        "holaprime",
+        "hola prime"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "hold-brothers",
+      "name": "Hold Brothers",
+      "displayName": "Hold Brothers",
+      "website": "https://holdbrothers.com",
+      "logo": "/prop-logos/hold-brothers.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Legacy broker-dealer and prop environment still relevant in equities.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "hold brothers",
+        "holdbrothers",
+        "Hold"
+      ],
+      "challengeTypes": [
+        "application",
+        "desk allocation"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "hold-brothers",
+        "holdbrothers",
+        "hold brothers"
+      ],
+      "popular": false,
+      "notes": "Program availability may vary by location and trader background."
+    },
+    {
+      "id": "instant-funding",
+      "name": "Instant Funding",
+      "displayName": "Instant Funding",
+      "website": "https://instantfunding.com",
+      "logo": "/prop-logos/instant-funding.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Known for instant-style funded products and standard CFD execution stack.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "instant funding",
+        "instantfunding",
+        "IF trader"
+      ],
+      "challengeTypes": [
+        "instant",
+        "1-step",
+        "2-step"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "instant-funding",
+        "instantfunding",
+        "instant funding"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "kershner-trading-group",
+      "name": "Kershner Trading Group",
+      "displayName": "Kershner Trading Group",
+      "website": "https://kershnertrading.com",
+      "logo": "/prop-logos/kershner-trading-group.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Smaller equities prop firm with ongoing training and trader development.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "kershner",
+        "kershner trading",
+        "KTG"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "desk allocation"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "kershner-trading-group",
+        "kershnertradinggroup",
+        "kershner trading group"
+      ],
+      "popular": false,
+      "notes": "Current remote platform stack is less public than larger U.S. desks."
+    },
+    {
+      "id": "leeloo-trading",
+      "name": "Leeloo Trading",
+      "displayName": "Leeloo Trading",
+      "website": "https://leelootrading.com",
+      "logo": "/prop-logos/leeloo-trading.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Older futures prop firm still notable in the retail funded futures market.",
+      "supportedPlatforms": [
+        "rithmic",
+        "ninjatrader",
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "leeloo",
+        "leeloo trading",
+        "LeeLoo"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 80%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "leeloo-trading",
+        "leelootrading",
+        "leeloo trading"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "lux-trading-firm",
+      "name": "Lux Trading Firm",
+      "displayName": "Lux Trading Firm",
+      "website": "https://luxtradingfirm.com",
+      "logo": "/prop-logos/lux-trading-firm.png",
+      "type": "prop-firm",
+      "category": "multi",
+      "status": "active",
+      "description": "Multi-asset prop firm with higher-ticket programs and longer-term positioning.",
+      "supportedPlatforms": [
+        "mt5",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "lux trading",
+        "luxtradingfirm",
+        "LTF"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "direct funding"
+      ],
+      "payoutSplit": "up to 75%",
+      "accountSizes": [
+        50000,
+        100000,
+        200000,
+        500000
+      ],
+      "aliases": [
+        "lux-trading-firm",
+        "luxtradingfirm",
+        "lux trading firm"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "maven-trading",
+      "name": "Maven Trading",
+      "displayName": "Maven Trading",
+      "website": "https://maventrading.com",
+      "logo": "/prop-logos/maven-trading.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Retail CFD prop firm with common challenge formats and lower entry sizes.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "maven trading",
+        "maventrading",
+        "Maven"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        2000,
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "maven-trading",
+        "maventrading",
+        "maven trading"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "maverick-trading",
+      "name": "Maverick Trading",
+      "displayName": "Maverick Trading",
+      "website": "https://mavericktrading.com",
+      "logo": "/prop-logos/maverick-trading.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Long-running remote prop firm focused heavily on options and discretionary trading.",
+      "supportedPlatforms": [
+        "other",
+        "ib",
+        "tt"
+      ],
+      "brokerDetectionPatterns": [
+        "maverick trading",
+        "Maverick",
+        "mavericktrading"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "capital access"
+      ],
+      "payoutSplit": "65-90%",
+      "accountSizes": [],
+      "aliases": [
+        "maverick-trading",
+        "mavericktrading",
+        "maverick trading"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "my-forex-funds",
+      "name": "My Forex Funds",
+      "displayName": "My Forex Funds",
+      "website": "https://myforexfunds.com",
+      "logo": "/prop-logos/my-forex-funds.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "shutdown",
+      "description": "Former top-tier forex prop firm shut down after regulatory action.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "my forex funds",
+        "MFF",
+        "myforexfunds"
+      ],
+      "challengeTypes": [
+        "rapid",
+        "evaluation",
+        "accelerated"
+      ],
+      "payoutSplit": "up to 85%",
+      "accountSizes": [
+        5000,
+        10000,
+        20000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "my-forex-funds",
+        "myforexfunds",
+        "my forex funds",
+        "mff"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "my-funded-futures",
+      "name": "MyFundedFutures",
+      "displayName": "MyFundedFutures",
+      "website": "https://myfundedfutures.com",
+      "logo": "/prop-logos/my-funded-futures.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Large retail futures prop firm with frequent payout and plan variations.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader",
+        "tradingview"
+      ],
+      "brokerDetectionPatterns": [
+        "myfundedfutures",
+        "MFFU",
+        "my funded futures"
+      ],
+      "challengeTypes": [
+        "starter",
+        "expert",
+        "milestone",
+        "rapid"
+      ],
+      "payoutSplit": "up to 80%",
+      "accountSizes": [
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "my-funded-futures",
+        "myfundedfutures",
+        "myfunded-futures"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "ofp-funding",
+      "name": "OFP Funding",
+      "displayName": "OFP Funding",
+      "website": "https://ofpfunding.com",
+      "logo": "/prop-logos/ofp-funding.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "CFD prop firm with broad retail distribution and familiar account formats.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "ofp funding",
+        "OFP",
+        "ofpfunding"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 95%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "ofp-funding",
+        "ofpfunding",
+        "ofp funding"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "oneup-trader",
+      "name": "OneUp Trader",
+      "displayName": "OneUp Trader",
+      "website": "https://oneuptrader.com",
+      "logo": "/prop-logos/oneup-trader.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Long-running futures evaluation firm with mainstream third-party platform support.",
+      "supportedPlatforms": [
+        "rithmic",
+        "ninjatrader",
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "oneup",
+        "oneup trader",
+        "OneUp"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded trader program"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000,
+        250000
+      ],
+      "aliases": [
+        "oneup-trader",
+        "oneuptrader",
+        "oneup trader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "optiver",
+      "name": "Optiver",
+      "displayName": "Optiver",
+      "website": "https://optiver.com",
+      "logo": "/prop-logos/optiver.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Global market-making prop firm relevant for advanced stock/options journaling.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "optiver",
+        "Optiver",
+        "optiver trader"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "market making"
+      ],
+      "payoutSplit": "employee-comp structure",
+      "accountSizes": [],
+      "aliases": [
+        "optiver"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "pipfarm",
+      "name": "PipFarm",
+      "displayName": "PipFarm",
+      "website": "https://pipfarm.com",
+      "logo": "/prop-logos/pipfarm.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Smaller but notable forex prop firm with standard retail challenge designs.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "pipfarm",
+        "PipFarm",
+        "pip farm"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "pipfarm"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "rebelsfunding",
+      "name": "RebelsFunding",
+      "displayName": "RebelsFunding",
+      "website": "https://rebelsfunding.com",
+      "logo": "/prop-logos/rebelsfunding.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "European retail prop brand focused on forex and CFD evaluations.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "rebelsfunding",
+        "RebelsFunding",
+        "rebels funding"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "rebelsfunding",
+        "rebels funding",
+        "rebels-funding"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "sabio-trade",
+      "name": "SabioTrade",
+      "displayName": "SabioTrade",
+      "website": "https://sabiotrade.com",
+      "logo": "/prop-logos/sabio-trade.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Modern retail prop brand leaning on web-first platform infrastructure.",
+      "supportedPlatforms": [
+        "match-trader",
+        "tradelocker"
+      ],
+      "brokerDetectionPatterns": [
+        "sabiotrade",
+        "SabioTrade",
+        "sabio"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        2000,
+        5000,
+        10000,
+        20000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "sabio-trade",
+        "sabiotrade"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "seven-points-capital",
+      "name": "Seven Points Capital",
+      "displayName": "Seven Points Capital",
+      "website": "https://sevenpointscapital.com",
+      "logo": "/prop-logos/seven-points-capital.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Active equity prop and broker-dealer environment for professional traders.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "seven points capital",
+        "7 points",
+        "sevenpointscapital"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "desk allocation"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "seven-points-capital",
+        "sevenpointscapital",
+        "seven points capital"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "smart-prop-trader",
+      "name": "Smart Prop Trader",
+      "displayName": "Smart Prop Trader",
+      "website": "https://smartproptrader.com",
+      "logo": "/prop-logos/smart-prop-trader.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Known retail forex prop brand with mainstream challenge sizing.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "smart prop trader",
+        "SPT",
+        "smartproptrader"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "smart-prop-trader",
+        "smartproptrader",
+        "smart prop trader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "smb-capital",
+      "name": "SMB Capital",
+      "displayName": "SMB Capital",
+      "website": "https://www.smbtraining.com",
+      "logo": "/prop-logos/smb-capital.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Highly recognizable equities/options trading desk with strong training brand.",
+      "supportedPlatforms": [
+        "other",
+        "ib"
+      ],
+      "brokerDetectionPatterns": [
+        "smb capital",
+        "SMB",
+        "smbtraining"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "desk seat"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "smb-capital",
+        "smbcapital",
+        "smb capital"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "surgetrader",
+      "name": "SurgeTrader",
+      "displayName": "SurgeTrader",
+      "website": "https://surgetrader.com",
+      "logo": "/prop-logos/surgetrader.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "shutdown",
+      "description": "Notable one-step prop firm that later shut down.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "match-trader"
+      ],
+      "brokerDetectionPatterns": [
+        "surgetrader",
+        "SurgeTrader",
+        "surge"
+      ],
+      "challengeTypes": [
+        "one-step audition"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        250000,
+        500000
+      ],
+      "aliases": [
+        "surgetrader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "susquehanna",
+      "name": "Susquehanna",
+      "displayName": "Susquehanna",
+      "website": "https://sig.com",
+      "logo": "/prop-logos/susquehanna.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Top-tier institutional options and equities prop firm.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "SIG",
+        "susquehanna",
+        "susquehanna international group"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "market making"
+      ],
+      "payoutSplit": "employee-comp structure",
+      "accountSizes": [],
+      "aliases": [
+        "susquehanna"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "t3-trading-group",
+      "name": "T3 Trading Group",
+      "displayName": "T3 Trading Group",
+      "website": "https://t3trading.com",
+      "logo": "/prop-logos/t3-trading-group.png",
+      "type": "prop-firm",
+      "category": "multi",
+      "status": "active",
+      "description": "Established broker-dealer prop environment for equities, options, and futures.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "t3 trading",
+        "t3trading",
+        "T3"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "desk allocation"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "t3-trading-group",
+        "t3tradinggroup",
+        "t3 trading group"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "take-profit-trader",
+      "name": "Take Profit Trader",
+      "displayName": "Take Profit Trader",
+      "website": "https://takeprofittrader.com",
+      "logo": "/prop-logos/take-profit-trader.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "One-step futures prop firm known for fast payout messaging.",
+      "supportedPlatforms": [
+        "tradovate",
+        "rithmic",
+        "ninjatrader",
+        "tradingview"
+      ],
+      "brokerDetectionPatterns": [
+        "take profit trader",
+        "TPT",
+        "takeprofittrader"
+      ],
+      "challengeTypes": [
+        "one-step test",
+        "PRO",
+        "PRO+"
+      ],
+      "payoutSplit": "80-90%",
+      "accountSizes": [
+        25000,
+        50000,
+        75000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "take-profit-trader",
+        "takeprofittrader",
+        "take profit trader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "the-trading-pit",
+      "name": "The Trading Pit",
+      "displayName": "The Trading Pit",
+      "website": "https://thetradingpit.com",
+      "logo": "/prop-logos/the-trading-pit.png",
+      "type": "prop-firm",
+      "category": "multi",
+      "status": "active",
+      "description": "Multi-asset prop firm with separate CFD, futures, and stock products.",
+      "supportedPlatforms": [
+        "mt5",
+        "ctrader",
+        "other",
+        "rithmic"
+      ],
+      "brokerDetectionPatterns": [
+        "the trading pit",
+        "TTP",
+        "thetradingpit"
+      ],
+      "challengeTypes": [
+        "cfd challenge",
+        "futures challenge",
+        "stocks challenge"
+      ],
+      "payoutSplit": "up to 80%",
+      "accountSizes": [
+        10000,
+        20000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "the-trading-pit",
+        "thetradingpit",
+        "the trading pit"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "the5ers",
+      "name": "The5ers",
+      "displayName": "The5ers",
+      "website": "https://the5ers.com",
+      "logo": "/prop-logos/the5ers.png",
+      "type": "prop-firm",
+      "category": "multi",
+      "status": "active",
+      "description": "Long-running prop firm spanning CFD and newer futures/stock products.",
+      "supportedPlatforms": [
+        "mt5",
+        "tradelocker",
+        "dxtrade"
+      ],
+      "brokerDetectionPatterns": [
+        "the5ers",
+        "5ers",
+        "Five Percent Online"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "3-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 100%",
+      "accountSizes": [
+        5000,
+        10000,
+        20000,
+        60000,
+        100000
+      ],
+      "aliases": [
+        "the5ers",
+        "the5%ers",
+        "the 5ers",
+        "the fiveers"
+      ],
+      "popular": true,
+      "notes": "Current platform mix changes by region and program."
+    },
+    {
+      "id": "thinkcapital",
+      "name": "ThinkCapital",
+      "displayName": "ThinkCapital",
+      "website": "https://thinkcapital.com",
+      "logo": "/prop-logos/thinkcapital.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "active",
+      "description": "Retail CFD prop firm with broad marketing visibility.",
+      "supportedPlatforms": [
+        "mt5",
+        "match-trader",
+        "tradelocker"
+      ],
+      "brokerDetectionPatterns": [
+        "thinkcapital",
+        "ThinkCapital",
+        "think capital"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        5000,
+        10000,
+        25000,
+        50000,
+        100000
+      ],
+      "aliases": [
+        "thinkcapital",
+        "think capital"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "tickticktrader",
+      "name": "TickTickTrader",
+      "displayName": "TickTickTrader",
+      "website": "https://tickticktrader.com",
+      "logo": "/prop-logos/tickticktrader.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Futures prop firm with a sizable trader base and classic evaluation flow.",
+      "supportedPlatforms": [
+        "rithmic",
+        "ninjatrader",
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "tickticktrader",
+        "TTT",
+        "tick tick trader"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        25000,
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "tickticktrader"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "topstep",
+      "name": "Topstep",
+      "displayName": "Topstep",
+      "website": "https://topstep.com",
+      "logo": "/prop-logos/topstep.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Most established futures prop brand and a core catalog entry.",
+      "supportedPlatforms": [
+        "topstepx",
+        "tradovate",
+        "tradingview",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "topstep",
+        "TopstepX",
+        "trading combine"
+      ],
+      "challengeTypes": [
+        "trading combine",
+        "express funded",
+        "live funded"
+      ],
+      "payoutSplit": "100% first threshold then 90%",
+      "accountSizes": [
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "topstep"
+      ],
+      "popular": true,
+      "notes": null
+    },
+    {
+      "id": "trade-the-pool",
+      "name": "Trade The Pool",
+      "displayName": "Trade The Pool",
+      "website": "https://tradethepool.com",
+      "logo": "/prop-logos/trade-the-pool.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Most visible retail stock prop challenge brand.",
+      "supportedPlatforms": [
+        "other",
+        "tradingview"
+      ],
+      "brokerDetectionPatterns": [
+        "trade the pool",
+        "TTP",
+        "tradethepool"
+      ],
+      "challengeTypes": [
+        "flex evaluation",
+        "max evaluation",
+        "swing"
+      ],
+      "payoutSplit": "up to 80%",
+      "accountSizes": [
+        5000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "trade-the-pool",
+        "tradethepool",
+        "trade the pool"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "tradeday",
+      "name": "TradeDay",
+      "displayName": "TradeDay",
+      "website": "https://tradeday.com",
+      "logo": "/prop-logos/tradeday.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Coaching-heavy futures prop firm with a clear path to live funding.",
+      "supportedPlatforms": [
+        "other",
+        "tradingview",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "tradeday",
+        "TradeDay",
+        "TD funded"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "100% first 10k then 90-95%",
+      "accountSizes": [
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "tradeday"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "tradeify",
+      "name": "Tradeify",
+      "displayName": "Tradeify",
+      "website": "https://tradeify.co",
+      "logo": "/prop-logos/tradeify.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Fast-growing futures prop firm with instant-funded and journal-heavy positioning.",
+      "supportedPlatforms": [
+        "tradovate",
+        "rithmic",
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "tradeify",
+        "Tradeify",
+        "lightning funded"
+      ],
+      "challengeTypes": [
+        "growth",
+        "select",
+        "lightning funded"
+      ],
+      "payoutSplit": "90% after threshold",
+      "accountSizes": [
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "tradeify"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "trillium-trading",
+      "name": "Trillium Trading",
+      "displayName": "Trillium Trading",
+      "website": "https://trilliumtrading.com",
+      "logo": "/prop-logos/trillium-trading.png",
+      "type": "prop-firm",
+      "category": "stocks",
+      "status": "active",
+      "description": "Well-known U.S. equities prop shop with strong internal tooling.",
+      "supportedPlatforms": [
+        "other"
+      ],
+      "brokerDetectionPatterns": [
+        "trillium",
+        "trillium trading",
+        "TrAC"
+      ],
+      "challengeTypes": [
+        "application",
+        "training",
+        "desk seat"
+      ],
+      "payoutSplit": "desk-dependent",
+      "accountSizes": [],
+      "aliases": [
+        "trillium-trading",
+        "trilliumtrading",
+        "trillium trading"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "true-forex-funds",
+      "name": "True Forex Funds",
+      "displayName": "True Forex Funds",
+      "website": "https://trueforexfunds.com",
+      "logo": "/prop-logos/true-forex-funds.png",
+      "type": "prop-firm",
+      "category": "cfd",
+      "status": "shutdown",
+      "description": "Popular CFD prop brand that ceased operations after platform and payment issues.",
+      "supportedPlatforms": [
+        "mt4",
+        "mt5",
+        "ctrader"
+      ],
+      "brokerDetectionPatterns": [
+        "true forex funds",
+        "TFF",
+        "trueforexfunds"
+      ],
+      "challengeTypes": [
+        "1-step",
+        "2-step",
+        "instant"
+      ],
+      "payoutSplit": "up to 90%",
+      "accountSizes": [
+        10000,
+        25000,
+        50000,
+        100000,
+        200000
+      ],
+      "aliases": [
+        "true-forex-funds",
+        "trueforexfunds",
+        "true forex funds",
+        "tff"
+      ],
+      "popular": false,
+      "notes": null
+    },
+    {
+      "id": "uprofit-trader",
+      "name": "UProfit Trader",
+      "displayName": "UProfit Trader",
+      "website": "https://uprofit.com",
+      "logo": "/prop-logos/uprofit-trader.png",
+      "type": "prop-firm",
+      "category": "futures",
+      "status": "active",
+      "description": "Established futures prop brand with familiar evaluation parameters.",
+      "supportedPlatforms": [
+        "rithmic",
+        "tradovate",
+        "ninjatrader"
+      ],
+      "brokerDetectionPatterns": [
+        "uprofit",
+        "uprofit trader",
+        "UProfit"
+      ],
+      "challengeTypes": [
+        "evaluation",
+        "funded account"
+      ],
+      "payoutSplit": "up to 80%",
+      "accountSizes": [
+        50000,
+        100000,
+        150000
+      ],
+      "aliases": [
+        "uprofit-trader",
+        "uprofittrader",
+        "uprofit trader",
+        "uprofit"
+      ],
+      "popular": false,
+      "notes": null
+    }
+  ],
+  "platforms": [
+    {
+      "id": "mt4",
+      "displayName": "MetaTrader 4",
+      "aliases": [
+        "metatrader 4",
+        "mt4"
+      ],
+      "website": "https://www.metatrader4.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "MetaTrader 4",
+      "logo": "/platforms/mt4.png"
+    },
+    {
+      "id": "mt5",
+      "displayName": "MetaTrader 5",
+      "aliases": [
+        "metatrader 5",
+        "mt5",
+        "metaquotes"
+      ],
+      "website": "https://www.metatrader5.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "MetaTrader 5",
+      "logo": "/platforms/mt5.png"
+    },
+    {
+      "id": "ctrader",
+      "displayName": "cTrader",
+      "aliases": [
+        "ctrader"
+      ],
+      "website": "https://ctrader.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "cTrader",
+      "logo": "/platforms/ctrader.png"
+    },
+    {
+      "id": "tradovate",
+      "displayName": "Tradovate",
+      "aliases": [
+        "tradovate"
+      ],
+      "website": "https://www.tradovate.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "Tradovate",
+      "logo": "/platforms/tradovate.png"
+    },
+    {
+      "id": "tradelocker",
+      "displayName": "TradeLocker",
+      "aliases": [
+        "tradelocker",
+        "trade locker"
+      ],
+      "website": "https://tradelocker.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "TradeLocker",
+      "logo": "/platforms/tradelocker.png"
+    },
+    {
+      "id": "match-trader",
+      "displayName": "Match-Trader",
+      "aliases": [
+        "match-trader",
+        "match trader"
+      ],
+      "website": "https://match-trader.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "Match-Trader",
+      "logo": "/platforms/match-trader.png"
+    },
+    {
+      "id": "dxtrade",
+      "displayName": "DXtrade",
+      "aliases": [
+        "dxtrade",
+        "dx trade"
+      ],
+      "website": "https://devexperts.com/dxtrade",
+      "category": "platform",
+      "type": "platform",
+      "name": "DXtrade",
+      "logo": "/platforms/dxtrade.png"
+    },
+    {
+      "id": "rithmic",
+      "displayName": "Rithmic",
+      "aliases": [
+        "rithmic"
+      ],
+      "website": "https://www.rithmic.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "Rithmic",
+      "logo": "/platforms/rithmic.png"
+    },
+    {
+      "id": "ninjatrader",
+      "displayName": "NinjaTrader",
+      "aliases": [
+        "ninjatrader",
+        "ninja trader"
+      ],
+      "website": "https://ninjatrader.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "NinjaTrader",
+      "logo": "/platforms/ninjatrader.png"
+    },
+    {
+      "id": "cqg",
+      "displayName": "CQG",
+      "aliases": [
+        "cqg"
+      ],
+      "website": "https://www.cqg.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "CQG",
+      "logo": "/platforms/cqg.png"
+    },
+    {
+      "id": "tt",
+      "displayName": "Trading Technologies",
+      "aliases": [
+        "tt",
+        "trading technologies"
+      ],
+      "website": "https://www.tradingtechnologies.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "Trading Technologies",
+      "logo": "/platforms/tt.png"
+    },
+    {
+      "id": "topstepx",
+      "displayName": "TopstepX",
+      "aliases": [
+        "topstepx",
+        "topstep x"
+      ],
+      "website": "https://topstep.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "TopstepX",
+      "logo": "/platforms/topstepx.png"
+    },
+    {
+      "id": "tradingview",
+      "displayName": "TradingView",
+      "aliases": [
+        "tradingview",
+        "tv"
+      ],
+      "website": "https://www.tradingview.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "TradingView",
+      "logo": "/platforms/tradingview.png"
+    },
+    {
+      "id": "ib",
+      "displayName": "Interactive Brokers",
+      "aliases": [
+        "ib",
+        "ibkr",
+        "interactive brokers"
+      ],
+      "website": "https://www.interactivebrokers.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "Interactive Brokers",
+      "logo": "/platforms/ib.png"
+    },
+    {
+      "id": "oanda",
+      "displayName": "OANDA",
+      "aliases": [
+        "oanda"
+      ],
+      "website": "https://www.oanda.com",
+      "category": "platform",
+      "type": "platform",
+      "name": "OANDA",
+      "logo": "/platforms/oanda.png"
+    },
+    {
+      "id": "other",
+      "displayName": "Other",
+      "aliases": [
+        "other",
+        "custom"
+      ],
+      "website": "",
+      "category": "platform",
+      "type": "platform",
+      "name": "Other",
+      "logo": "/icon.svg"
+    }
+  ],
+  "popularBrokerIds": [
+    "ic-markets",
+    "pepperstone",
+    "oanda",
+    "tradovate",
+    "ninjatrader",
+    "interactive-brokers",
+    "binance",
+    "bybit"
+  ],
+  "popularPropFirmIds": [
+    "ftmo",
+    "funding-pips",
+    "fundednext",
+    "e8-markets",
+    "the5ers",
+    "topstep",
+    "apex-trader-funding",
+    "fxify"
+  ]
+};
+
+export default tradingCatalogData;

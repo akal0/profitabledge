@@ -14,12 +14,31 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
+type BillingInterval = "monthly" | "annual";
 
 type BillingPlan = BillingPlanCopySource & {
   key: BillingPlanKey;
   title: string;
+  tagline?: string;
   summary: string;
   priceLabel: string;
+  monthlyPriceCents: number;
+  annualPriceCents?: number | null;
+  annualMonthlyPriceCents?: number | null;
+  annualDiscountPercent?: number | null;
+  defaultTrialDays?: number;
+  pricing?: {
+    monthly?: {
+      priceCents: number;
+      isConfigured: boolean;
+    };
+    annual?: {
+      priceCents: number;
+      monthlyEquivalentCents?: number | null;
+      discountPercent?: number | null;
+      isConfigured: boolean;
+    } | null;
+  };
   highlight: string | null;
   ctaLabel: string;
   isFree: boolean;
@@ -31,6 +50,8 @@ type PlansProps = {
   activePlanKey: BillingPlanKey;
   selectedPlanKey: BillingPlanKey;
   pendingPlanKey: BillingPlanKey | null;
+  billingInterval: BillingInterval;
+  onBillingIntervalChange: (billingInterval: BillingInterval) => void;
   onSelectPlan: (planKey: BillingPlanKey) => void;
 };
 
@@ -70,17 +91,66 @@ function splitPriceLabel(priceLabel: string) {
   };
 }
 
+function getDisplayedPricing(plan: BillingPlan, billingInterval: BillingInterval) {
+  if (plan.isFree) {
+    return {
+      amount: "Free",
+      interval: null,
+      savings: null,
+    };
+  }
+
+  const annualPricing = plan.pricing?.annual;
+  if (billingInterval === "annual" && annualPricing?.isConfigured) {
+    return {
+      amount: `£${((annualPricing.monthlyEquivalentCents ?? annualPricing.priceCents) / 100).toFixed(0)}`,
+      interval: "/ mo billed annually",
+      savings:
+        typeof annualPricing.discountPercent === "number"
+          ? `Save ${annualPricing.discountPercent}%`
+          : null,
+    };
+  }
+
+  const fallback = splitPriceLabel(plan.priceLabel);
+  return {
+    amount: fallback.amount,
+    interval: fallback.interval,
+    savings: null,
+  };
+}
+
 const Plans = ({
   plans,
   activePlanKey,
   selectedPlanKey,
   pendingPlanKey,
+  billingInterval,
+  onBillingIntervalChange,
   onSelectPlan,
 }: PlansProps) => {
   const [hoveredCard, setHoveredCard] = useState<BillingPlanKey | null>(null);
 
   return (
     <div className="flex flex-col w-full items-center justify-center antialiased">
+      <div className="mb-6 flex w-full max-w-md items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-1">
+        {(["monthly", "annual"] as const).map((interval) => (
+          <button
+            key={interval}
+            type="button"
+            onClick={() => onBillingIntervalChange(interval)}
+            className={cn(
+              "flex-1 rounded-full px-4 py-2 text-sm transition-colors",
+              billingInterval === interval
+                ? "bg-white text-black"
+                : "text-white/60 hover:text-white"
+            )}
+          >
+            {interval === "monthly" ? "Monthly" : "Annual"}
+          </button>
+        ))}
+      </div>
+
       <div className="grid w-full gap-6 group/container xl:grid-cols-3">
         {plans.map((plan) => {
           const meta = CARD_META[plan.key];
@@ -103,9 +173,13 @@ const Plans = ({
             !plan.isConfigured;
           const isProfessional = plan.key === "professional";
           const isInstitutional = plan.key === "institutional";
-          const price = splitPriceLabel(plan.priceLabel);
+          const price = getDisplayedPricing(plan, billingInterval);
           const featureLines = getPlanFeatureLines(plan);
-          const canCheckout = !plan.isFree && plan.isConfigured;
+          const canCheckout =
+            !plan.isFree &&
+            (billingInterval === "annual"
+              ? Boolean(plan.pricing?.annual?.isConfigured || plan.pricing?.monthly?.isConfigured)
+              : Boolean(plan.pricing?.monthly?.isConfigured));
           const outerCn = isProfessional
             ? "bg-blue-500/10 ring-blue-500/25"
             : isInstitutional
@@ -207,11 +281,11 @@ const Plans = ({
 
                   <Separator className="-mx-5 w-auto opacity-15" />
 
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xl font-bold text-white">
-                      {price.amount}
-                      {price.interval ? (
-                        <span className="ml-1 text-sm font-normal text-white/35">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xl font-bold text-white">
+                        {price.amount}
+                        {price.interval ? (
+                          <span className="ml-1 text-sm font-normal text-white/35">
                           {price.interval}
                         </span>
                       ) : null}
@@ -227,6 +301,12 @@ const Plans = ({
                       </span>
                     ) : null}
                   </div>
+
+                  {price.savings ? (
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-teal-300">
+                      {price.savings}
+                    </p>
+                  ) : null}
 
                   <Separator className="-mx-5 w-auto opacity-15" />
 

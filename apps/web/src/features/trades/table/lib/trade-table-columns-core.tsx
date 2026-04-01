@@ -82,7 +82,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "symbol",
     header: () => withTradeTableHeaderTooltip("symbol", "Symbol"),
     cell: ({ getValue, row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
       const value = getValue<string>();
 
       if (!updateTrade) {
@@ -103,6 +104,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "symbol")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, symbol: nextValue })
           }
@@ -114,7 +116,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "tradeDirection",
     header: () => withTradeTableHeaderTooltip("tradeDirection", "Direction"),
     cell: ({ getValue, row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
       const value = getValue<"long" | "short">();
 
       if (!updateTrade) {
@@ -127,6 +130,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "tradeType")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, tradeType: nextValue })
           }
@@ -333,7 +337,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "tp",
     header: () => withTradeTableHeaderTooltip("tp", "Take profit"),
     cell: ({ row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
 
       if (!updateTrade) {
         return renderNullableTradePrice(row.original.tp);
@@ -348,6 +353,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "tp")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, tp: nextValue })
           }
@@ -359,7 +365,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "sl",
     header: () => withTradeTableHeaderTooltip("sl", "Stop loss"),
     cell: ({ row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
 
       if (!updateTrade) {
         return renderNullableTradePrice(row.original.sl);
@@ -374,6 +381,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "sl")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, sl: nextValue })
           }
@@ -385,7 +393,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "open",
     header: () => withTradeTableHeaderTooltip("open", "Open"),
     cell: ({ getValue, row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
       const value = getValue<string>();
       const displayValue = (
         <p className="font-medium tracking-wide text-white">
@@ -406,6 +415,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "openTime")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, openTime: nextValue })
           }
@@ -417,7 +427,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "close",
     header: () => withTradeTableHeaderTooltip("close", "Close"),
     cell: ({ getValue, row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
       const value = getValue<string>();
       const displayValue = (
         <p className="font-medium tracking-wide text-white">
@@ -438,6 +449,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "closeTime")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, closeTime: nextValue })
           }
@@ -458,7 +470,8 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
     accessorKey: "volume",
     header: () => withTradeTableHeaderTooltip("volume", "Volume"),
     cell: ({ getValue, row, table }) => {
-      const updateTrade = getTradeTableMeta(table.options.meta).updateTrade;
+      const meta = getTradeTableMeta(table.options.meta);
+      const updateTrade = meta.updateTrade;
       const value = Number(getValue<number>() || 0);
       const displayValue = (
         <span className="font-medium tracking-wide text-white">
@@ -480,6 +493,7 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={meta.isCellSaving?.(row.original.id, "volume")}
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, volume: nextValue ?? 0 })
           }
@@ -517,6 +531,12 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           placeholder="Profit"
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
+          }
+          isSaving={
+            getTradeTableMeta(table.options.meta).isCellSaving?.(
+              row.original.id,
+              "profit"
+            )
           }
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, profit: nextValue ?? 0 })
@@ -559,6 +579,12 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
           }
+          isSaving={
+            getTradeTableMeta(table.options.meta).isCellSaving?.(
+              row.original.id,
+              "commissions"
+            )
+          }
           onSave={(nextValue) =>
             updateTrade({
               tradeId: row.original.id,
@@ -599,6 +625,12 @@ export const tradeTableCoreColumns: ColumnDef<TradeRow>[] = [
           placeholder="Swap"
           blockedReason={
             row.original.isLive ? LIVE_TRADE_EDIT_BLOCK_MESSAGE : undefined
+          }
+          isSaving={
+            getTradeTableMeta(table.options.meta).isCellSaving?.(
+              row.original.id,
+              "swap"
+            )
           }
           onSave={(nextValue) =>
             updateTrade({ tradeId: row.original.id, swap: nextValue ?? 0 })

@@ -1,6 +1,5 @@
 import { db } from "../../db";
 import { platformConnection } from "../../db/schema/connections";
-import { sanitizeConnectionMeta } from "./sanitize-meta";
 import { encryptCredentials } from "../providers/credential-cipher";
 import { getProvider } from "../providers/registry";
 import type {
@@ -9,6 +8,7 @@ import type {
 } from "../providers/types";
 import { resolveUniqueConnectionDisplayName } from "./display-name";
 import { getServerEnv } from "../env";
+import { buildDiscoveredAccountsMeta } from "./discovered-accounts";
 
 export type SupportedOAuthConnectionProvider = "ctrader" | "tradovate";
 
@@ -87,40 +87,10 @@ function buildOAuthConnectionMeta(input: {
   discoveredAccounts: ProviderAuthorizedAccount[];
   credentials: ProviderCredentials;
 }) {
-  const baseMeta = sanitizeConnectionMeta(input.meta);
-  const discoveredAccounts = input.discoveredAccounts.map((account) => ({
-    providerAccountId: account.providerAccountId,
-    accountNumber: account.accountNumber,
-    label: account.label,
-    brokerName: account.brokerName,
-    currency: account.currency,
-    environment: account.environment,
-    metadata: account.metadata ?? null,
-  }));
-
-  const nextMeta: Record<string, unknown> = {
-    ...baseMeta,
-    ...(discoveredAccounts.length > 0 ? { discoveredAccounts } : {}),
-  };
-
-  const singleAccount =
-    discoveredAccounts.length === 1 ? discoveredAccounts[0] : null;
-
-  if (singleAccount && input.provider === "ctrader") {
-    nextMeta.ctraderAccountId = singleAccount.providerAccountId;
-    nextMeta.brokerName = singleAccount.brokerName;
-    nextMeta.currency = singleAccount.currency;
-  }
-
-  if (singleAccount && input.provider === "tradovate") {
-    nextMeta.tradovateAccountId = singleAccount.providerAccountId;
-    nextMeta.brokerName = singleAccount.brokerName;
-    nextMeta.currency = singleAccount.currency;
-  }
-
-  if (input.provider === "tradovate" && input.credentials.userId) {
-    nextMeta.tradovateUserId = input.credentials.userId;
-  }
-
-  return nextMeta;
+  return buildDiscoveredAccountsMeta({
+    provider: input.provider,
+    meta: input.meta,
+    discoveredAccounts: input.discoveredAccounts,
+    credentials: input.credentials,
+  });
 }

@@ -206,21 +206,23 @@ function CoverageBlock({
   const isLimited = confidence === "exploratory";
 
   return (
-    <div className="bg-sidebar h-full w-full ring ring-white/5 p-1 flex flex-col group rounded-lg">
-      <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
-        <h2 className="text-sm font-medium text-white/50">
-          <span className="normal-case">{sentenceCase(block.title)}</span>
-        </h2>
-      </div>
-      <div
-        className={cn(
-          "transition-all duration-250 flex flex-col h-full w-full rounded-sm ring ring-white/5",
-          isLimited
-            ? "bg-yellow-500/5"
-            : "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120"
-        )}
-      >
-        <div className="flex flex-col p-3.5 h-full">
+    <WidgetWrapper
+      className="h-max self-start rounded-lg"
+      header={
+        <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
+          <h2 className="text-sm font-medium text-white/50">
+            <span className="normal-case">{sentenceCase(block.title)}</span>
+          </h2>
+        </div>
+      }
+      contentClassName={cn(
+        "flex h-max min-h-0 w-full flex-col rounded-sm ring ring-white/5",
+        isLimited
+          ? "bg-yellow-500/5"
+          : "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120"
+      )}
+    >
+      <div className="flex h-max w-full flex-col p-3.5">
           <div className="space-y-3">
             <div className="flex items-baseline gap-1">
               <span
@@ -254,8 +256,7 @@ function CoverageBlock({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </WidgetWrapper>
   );
 }
 
@@ -508,20 +509,22 @@ function CalloutBlock({
   const Icon = icons[block.tone];
 
   return (
-    <div className="bg-sidebar h-full w-full ring ring-white/5 p-1 flex flex-col group rounded-lg">
-      <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
-        <h2 className="text-sm font-medium text-white/50">
-          <span className="normal-case">{sentenceCase(block.title)}</span>
-        </h2>
-      </div>
-      <div
-        className={cn(
-          "transition-all duration-250 flex flex-col h-full w-full rounded-sm ring ring-white/5",
-          contentBg[block.tone],
-          borderColor[block.tone]
-        )}
-      >
-        <div className="flex flex-col p-3.5 h-full">
+    <WidgetWrapper
+      className="h-max self-start rounded-lg"
+      header={
+        <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
+          <h2 className="text-sm font-medium text-white/50">
+            <span className="normal-case">{sentenceCase(block.title)}</span>
+          </h2>
+        </div>
+      }
+      contentClassName={cn(
+        "flex h-max min-h-0 w-full flex-col rounded-sm ring ring-white/5",
+        contentBg[block.tone],
+        borderColor[block.tone]
+      )}
+    >
+      <div className="flex h-max w-full flex-col p-3.5">
           <div className={cn("flex gap-3", textColor[block.tone])}>
             <Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -529,8 +532,7 @@ function CalloutBlock({
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </WidgetWrapper>
   );
 }
 
@@ -545,7 +547,7 @@ function AnalysisShellBlockShell({
 }) {
   return (
     <WidgetWrapper
-      className="h-full rounded-lg"
+      className="h-max self-start rounded-lg"
       header={
         <div className="widget-header flex min-h-[48px] w-full items-center justify-between gap-3 px-3.5">
           <h2 className="min-w-0 flex-1 text-xs font-medium text-white/50 transition-all duration-250 group-hover:text-white">
@@ -554,9 +556,9 @@ function AnalysisShellBlockShell({
           {actions ? <div className="shrink-0">{actions}</div> : null}
         </div>
       }
-      contentClassName="flex h-full min-h-0 w-full flex-col rounded-sm ring ring-white/5"
+      contentClassName="flex h-max min-h-0 w-full flex-col rounded-sm ring ring-white/5"
     >
-      <div className="flex min-h-0 flex-1 flex-col p-3.5">{children}</div>
+      <div className="flex h-max min-h-0 w-full flex-col p-3.5">{children}</div>
     </WidgetWrapper>
   );
 }

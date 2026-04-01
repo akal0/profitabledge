@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Sheet,
   SheetContent,
@@ -37,12 +37,13 @@ import {
   TRADE_SURFACE_CARD_CLASS,
 } from "@/components/trades/trade-identifier-pill";
 import {
-  BROKER_OPTIONS,
   brokerSupportsMultiCsvImport,
+  findBrokerByServerPattern,
   getAccountImage,
   getBrokerSupplementalCsvReports,
   isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
+import { BrokerOptionSelector } from "@/features/accounts/components/broker-option-selector";
 import { showAppNotificationToast } from "@/components/notifications/notification-toast";
 import { getCsvImportFeedbackMessage } from "@/features/accounts/lib/csv-import-feedback";
 import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
@@ -189,6 +190,9 @@ export function AddAccountSheet({
   const [pendingCsvImportResolution, setPendingCsvImportResolution] =
     useState<PendingCsvImportResolution | null>(null);
   const { accounts } = useAccountCatalog();
+  const { data: propFirms = [] } = useQuery(
+    trpcOptions.propFirms.list.queryOptions()
+  );
   const demoCreated = useTourStore((s) => s.demoCreated);
   const setDemoCreated = useTourStore((s) => s.setDemoCreated);
   const addAccountSheetCompleted = useTourStore(
@@ -216,6 +220,52 @@ export function AddAccountSheet({
     () => normalizeBalanceInput(form.initialBalance),
     [form.initialBalance]
   );
+  const selectedManualPropFirmId = useMemo(() => {
+    if (form.method !== "manual") return null;
+    const normalizedBroker = form.broker.trim().toLowerCase();
+    const matched = (propFirms as Array<{ id: string; displayName?: string | null }>).find(
+      (firm) =>
+        firm.id.toLowerCase() === normalizedBroker ||
+        String(firm.displayName || "").trim().toLowerCase() === normalizedBroker
+    );
+    return matched?.id ?? null;
+  }, [form.broker, form.method, propFirms]);
+  const { data: selectedManualPropFirmRules = [] } = useQuery({
+    ...trpcOptions.propFirms.getChallengeRules.queryOptions({
+      propFirmId: selectedManualPropFirmId || "",
+    }),
+    enabled: Boolean(selectedManualPropFirmId),
+  });
+  const selectedManualPropFirmAccountSizes = useMemo(() => {
+    const sizes = new Set<number>();
+
+    for (const rule of selectedManualPropFirmRules as Array<{ phases?: any[] | null }>) {
+      for (const phase of Array.isArray(rule.phases) ? rule.phases : []) {
+        const phaseSizes = Array.isArray(phase?.customRules?.challengeAccountSizes)
+          ? phase.customRules.challengeAccountSizes
+          : [];
+
+        for (const size of phaseSizes) {
+          const parsed = Number(size);
+          if (Number.isFinite(parsed) && parsed > 0) {
+            sizes.add(parsed);
+          }
+        }
+      }
+    }
+
+    return Array.from(sizes).sort((left, right) => left - right);
+  }, [selectedManualPropFirmRules]);
+  const manualPropInitialBalanceMismatch = useMemo(() => {
+    if (!selectedManualPropFirmId || normalizedInitialBalance == null) return false;
+    if (selectedManualPropFirmAccountSizes.length === 0) return false;
+
+    return !selectedManualPropFirmAccountSizes.includes(normalizedInitialBalance);
+  }, [
+    normalizedInitialBalance,
+    selectedManualPropFirmAccountSizes,
+    selectedManualPropFirmId,
+  ]);
 
   const canSubmit = useMemo(() => {
     if (form.method === "csv") {
@@ -224,15 +274,16 @@ export function AddAccountSheet({
       );
     }
     if (form.method === "manual") {
-      return Boolean(
-        form.name.trim() &&
-          form.broker.trim() &&
-          form.brokerType &&
-          normalizedInitialBalance !== undefined
-      );
-    }
-    return false;
-  }, [form, normalizedInitialBalance]);
+        return Boolean(
+          form.name.trim() &&
+            form.broker.trim() &&
+            form.brokerType &&
+            normalizedInitialBalance !== undefined &&
+            !manualPropInitialBalanceMismatch
+        );
+      }
+      return false;
+  }, [form, manualPropInitialBalanceMismatch, normalizedInitialBalance]);
 
   const selectedBrokerSupportsMultiCsv = useMemo(
     () => brokerSupportsMultiCsvImport(form.broker),
@@ -246,6 +297,24 @@ export function AddAccountSheet({
     () => getBrokerSupplementalCsvReports(form.broker),
     [form.broker]
   );
+
+  const detectedBrokerOption = useMemo(() => {
+    if (form.brokerType !== "mt4" && form.brokerType !== "mt5") return null;
+    return findBrokerByServerPattern(form.brokerServer);
+  }, [form.brokerServer, form.brokerType]);
+
+  const handleCsvBrokerChange = useCallback((value: string) => {
+    setPendingCsvImportResolution(null);
+    setForm((f) => ({
+      ...f,
+      broker: value,
+      files: brokerSupportsMultiCsvImport(value) ? f.files : f.files.slice(0, 1),
+    }));
+  }, []);
+
+  const handleManualBrokerChange = useCallback((value: string) => {
+    setForm((f) => ({ ...f, broker: value }));
+  }, []);
 
   const resetAll = useCallback(() => {
     setStep(1);
@@ -1067,42 +1136,11 @@ export function AddAccountSheet({
 
                   <div className="grid gap-2">
                     <Label className={fieldLabelClass}>Broker</Label>
-                    <Select
+                    <BrokerOptionSelector
                       value={form.broker}
-                      onValueChange={(v) => {
-                        setPendingCsvImportResolution(null);
-                        setForm((f) => ({
-                          ...f,
-                          broker: v,
-                          files: brokerSupportsMultiCsvImport(v)
-                            ? f.files
-                            : f.files.slice(0, 1),
-                        }));
-                      }}
-                    >
-                      <SelectTrigger className={fieldSelectTriggerClass}>
-                        <SelectValue placeholder="Select a broker" />
-                      </SelectTrigger>
-
-                      <SelectContent className={fieldSelectContentClass}>
-                        {BROKER_OPTIONS.map((b) => (
-                          <SelectItem
-                            key={b.value}
-                            value={b.value}
-                            className={fieldSelectItemClass}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <img
-                                src={b.image}
-                                alt={b.label}
-                                className="h-4 w-4 object-contain"
-                              />
-                              {b.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      onValueChange={handleCsvBrokerChange}
+                      className={fieldSelectTriggerClass}
+                    />
                     {form.broker === "tradovate" ? (
                       <p className="text-xs leading-relaxed text-white/40">
                         Tradovate CSV import currently supports bundle uploads.
@@ -1172,6 +1210,11 @@ export function AddAccountSheet({
                         }
                       />
                     </div>
+                    {manualPropInitialBalanceMismatch ? (
+                      <p className="text-xs leading-relaxed text-amber-200/80">
+                        This balance does not match the published challenge sizes for this prop firm. Use one of: {selectedManualPropFirmAccountSizes.map((size) => size.toLocaleString()).join(", ")}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1306,13 +1349,11 @@ export function AddAccountSheet({
                     <Label className={fieldLabelClass}>
                       Broker or prop firm
                     </Label>
-                    <Input
-                      placeholder="e.g. FTMO, IC Markets, Tradovate"
-                      className={fieldInputClass}
+                    <BrokerOptionSelector
                       value={form.broker}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, broker: e.target.value }))
-                      }
+                      onValueChange={handleManualBrokerChange}
+                      allowCustom
+                      className={fieldSelectTriggerClass}
                     />
                   </div>
 
@@ -1362,6 +1403,18 @@ export function AddAccountSheet({
                           }))
                         }
                       />
+                      {detectedBrokerOption ? (
+                        <div className="flex items-center gap-2 rounded-md border border-teal-400/15 bg-teal-500/5 px-3 py-2 text-xs text-teal-100/85">
+                          <img
+                            src={detectedBrokerOption.image}
+                            alt={detectedBrokerOption.label}
+                            className="h-4 w-4 object-contain"
+                          />
+                          <span>
+                            Detected: {detectedBrokerOption.label} (high confidence)
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   )}
 

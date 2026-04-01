@@ -39,6 +39,7 @@ import {
   EMPTY_PROP_FIRMS,
   getChallengeRuleOptions,
   getContinuableChallengeAccountName,
+  getOrderedChallengePhases,
   getNextChallengePhaseForContinuation,
   getPropFirmOptions,
   getSortedContinuableChallenges,
@@ -56,8 +57,20 @@ function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-export function ManualPropAccountDialog({ account }: { account: AccountRecord }) {
-  const [open, setOpen] = useState(false);
+export function ManualPropAccountDialog({
+  account,
+  open: controlledOpen,
+  onOpenChange,
+  hideTrigger = false,
+}: {
+  account: AccountRecord;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
+}) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = onOpenChange ?? setUncontrolledOpen;
   const [assignmentMode, setAssignmentMode] = useState<"new" | "continue">(
     "new"
   );
@@ -66,12 +79,21 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
   const [selectedChallengeInstanceId, setSelectedChallengeInstanceId] =
     useState("");
   const [showCustomFlowBuilder, setShowCustomFlowBuilder] = useState(false);
+  const [customFlowMode, setCustomFlowMode] = useState<
+    "selected-firm" | "private-firm"
+  >("selected-firm");
   const [customPropFirmName, setCustomPropFirmName] = useState("");
   const [customChallengePhases, setCustomChallengePhases] = useState<
     CustomChallengePhaseDraft[]
   >([createCustomChallengePhaseDraft(), createCustomChallengePhaseDraft()]);
   const [customFundedPhase, setCustomFundedPhase] =
     useState<CustomFundedPhaseDraft>(createCustomFundedPhaseDraft());
+  const [customMetricMode, setCustomMetricMode] = useState<
+    "percentage" | "absolute"
+  >("percentage");
+  const [customMaxLossType, setCustomMaxLossType] = useState<
+    "absolute" | "trailing"
+  >("absolute");
   const [applySharedMaxLoss, setApplySharedMaxLoss] = useState(false);
   const [sharedMaxLoss, setSharedMaxLoss] = useState("");
   const [applySharedMinTradingDays, setApplySharedMinTradingDays] =
@@ -156,16 +178,103 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
 
   const resetCustomFlowBuilder = () => {
     setShowCustomFlowBuilder(false);
+    setCustomFlowMode("selected-firm");
     setCustomPropFirmName("");
     setCustomChallengePhases([
       createCustomChallengePhaseDraft(),
       createCustomChallengePhaseDraft(),
     ]);
     setCustomFundedPhase(createCustomFundedPhaseDraft());
+    setCustomMetricMode("percentage");
+    setCustomMaxLossType("absolute");
     setApplySharedMaxLoss(false);
     setSharedMaxLoss("");
     setApplySharedMinTradingDays(false);
     setSharedMinTradingDays("0");
+  };
+
+  const hydrateCustomBuilderFromRule = (
+    rule: PropChallengeRuleOption | null | undefined
+  ) => {
+    const orderedPhases = getOrderedChallengePhases(rule?.phases);
+    const evaluationPhases = orderedPhases.filter(
+      (phase) => Number(phase?.order) > 0
+    );
+    const fundedPhase =
+      orderedPhases.find((phase) => Number(phase?.order) === 0) ?? null;
+    const primaryPhase = evaluationPhases[0] ?? fundedPhase ?? null;
+
+    setCustomMetricMode(
+      primaryPhase?.profitTargetType === "absolute" ? "absolute" : "percentage"
+    );
+    setCustomMaxLossType(
+      primaryPhase?.maxLossType === "trailing" ? "trailing" : "absolute"
+    );
+
+    setCustomChallengePhases(
+      evaluationPhases.length
+        ? evaluationPhases.map((phase) => ({
+            profitTarget:
+              phase?.profitTarget == null ? "" : String(phase.profitTarget),
+            dailyLossLimit:
+              phase?.dailyLossLimit == null ? "" : String(phase.dailyLossLimit),
+            maxLoss: phase?.maxLoss == null ? "" : String(phase.maxLoss),
+            timeLimitDays:
+              phase?.timeLimitDays == null ? "" : String(phase.timeLimitDays),
+            minTradingDays:
+              phase?.minTradingDays == null ? "0" : String(phase.minTradingDays),
+          }))
+        : [createCustomChallengePhaseDraft(), createCustomChallengePhaseDraft()]
+    );
+
+    setCustomFundedPhase({
+      dailyLossLimit:
+        fundedPhase?.dailyLossLimit == null ? "" : String(fundedPhase.dailyLossLimit),
+      maxLoss: fundedPhase?.maxLoss == null ? "" : String(fundedPhase.maxLoss),
+      timeLimitDays:
+        fundedPhase?.timeLimitDays == null ? "" : String(fundedPhase.timeLimitDays),
+      minTradingDays:
+        fundedPhase?.minTradingDays == null ? "0" : String(fundedPhase.minTradingDays),
+    });
+
+    setApplySharedMaxLoss(false);
+    setSharedMaxLoss("");
+    setApplySharedMinTradingDays(false);
+    setSharedMinTradingDays("0");
+  };
+
+  const openCustomTemplateForSelectedFirm = () => {
+    if (showCustomFlowBuilder && customFlowMode === "selected-firm") {
+      setShowCustomFlowBuilder(false);
+      return;
+    }
+
+    setCustomFlowMode("selected-firm");
+    hydrateCustomBuilderFromRule(selectedChallengeRule);
+    setCustomPropFirmName(selectedPropFirm?.displayName || "");
+    setShowCustomFlowBuilder(true);
+  };
+
+  const openPrivateCustomFirmBuilder = () => {
+    if (showCustomFlowBuilder && customFlowMode === "private-firm") {
+      setShowCustomFlowBuilder(false);
+      return;
+    }
+
+    setCustomFlowMode("private-firm");
+    setCustomPropFirmName("");
+    setCustomChallengePhases([
+      createCustomChallengePhaseDraft(),
+      createCustomChallengePhaseDraft(),
+    ]);
+    setCustomFundedPhase(createCustomFundedPhaseDraft());
+    setCustomMetricMode("percentage");
+    setCustomMaxLossType("absolute");
+    setApplySharedMaxLoss(false);
+    setSharedMaxLoss("");
+    setApplySharedMinTradingDays(false);
+    setSharedMinTradingDays("0");
+    setShowCustomFlowBuilder(true);
   };
 
   useEffect(() => {
@@ -244,8 +353,11 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
 
   const createCustomFlowMutation = useMutation({
     mutationFn: (input: {
-      propFirmName: string;
+      propFirmId?: string;
+      propFirmName?: string;
       challengeDisplayName: string;
+      metricMode: "percentage" | "absolute";
+      maxLossType: "absolute" | "trailing";
       challengePhases: Array<{
         profitTarget: number;
         dailyLossLimit: number;
@@ -283,21 +395,32 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
   const handleCreateCustomFlow = () => {
     try {
       const propFirmName = customPropFirmName.trim();
-      if (!propFirmName) {
+      if (customFlowMode === "private-firm" && !propFirmName) {
         throw new Error("Prop firm name is required");
       }
 
+      if (customFlowMode === "selected-firm" && !selectedPropFirmId) {
+        throw new Error("Select a prop firm first");
+      }
+
+      const labelPrefix =
+        customFlowMode === "selected-firm"
+          ? selectedPropFirm?.displayName || selectedPropFirm?.id || "Custom"
+          : propFirmName;
+      const metricLabel =
+        customMetricMode === "absolute" ? "value" : "percentage";
+
       const challengePhases = customChallengePhases.map((phase, index) => ({
         profitTarget: parsePositiveNumberField(
-          `Phase ${index + 1} target`,
+          `Phase ${index + 1} target ${metricLabel}`,
           phase.profitTarget
         ),
         dailyLossLimit: parsePositiveNumberField(
-          `Phase ${index + 1} daily DD`,
+          `Phase ${index + 1} daily loss ${metricLabel}`,
           phase.dailyLossLimit
         ),
         maxLoss: parsePositiveNumberField(
-          `Phase ${index + 1} max DD`,
+          `Phase ${index + 1} max loss`,
           phase.maxLoss
         ),
         timeLimitDays: parseOptionalPositiveInteger(phase.timeLimitDays),
@@ -309,11 +432,11 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
 
       const fundedPhase = {
         dailyLossLimit: parsePositiveNumberField(
-          "Funded daily DD",
+          `Funded daily loss ${metricLabel}`,
           customFundedPhase.dailyLossLimit
         ),
         maxLoss: parsePositiveNumberField(
-          "Funded max DD",
+          "Funded max loss",
           customFundedPhase.maxLoss
         ),
         timeLimitDays: parseOptionalPositiveInteger(
@@ -326,8 +449,13 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
       };
 
       createCustomFlowMutation.mutate({
-        propFirmName,
-        challengeDisplayName: `${propFirmName} ${challengePhases.length}-Step Flow`,
+        propFirmId:
+          customFlowMode === "selected-firm" ? selectedPropFirmId : undefined,
+        propFirmName:
+          customFlowMode === "private-firm" ? propFirmName : undefined,
+        challengeDisplayName: `${labelPrefix} ${challengePhases.length}-Phase Custom`,
+        metricMode: customMetricMode,
+        maxLossType: customMaxLossType,
         challengePhases,
         fundedPhase,
       });
@@ -409,16 +537,18 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button
-          className={getPropAssignActionButtonClassName({
-            tone: "neutral",
-            className: `${HEADER_CONTROL_HEIGHT} px-2.5 text-[10px]`,
-          })}
-        >
-          Change to prop firm account
-        </Button>
-      </SheetTrigger>
+      {!hideTrigger ? (
+        <SheetTrigger asChild>
+          <Button
+            className={getPropAssignActionButtonClassName({
+              tone: "neutral",
+              className: `${HEADER_CONTROL_HEIGHT} px-2.5 text-[10px]`,
+            })}
+          >
+            Change to prop firm account
+          </Button>
+        </SheetTrigger>
+      ) : null}
 
       <SheetContent className="w-full overflow-y-auto rounded-md p-0 sm:max-w-xl md:max-w-2xl lg:max-w-3xl">
         <div className="px-6 py-5 pb-0">
@@ -475,9 +605,9 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
             ) : (
               <ManualPropFlowSelectionSection
                 showCustomFlowBuilder={showCustomFlowBuilder}
-                onToggleBuilder={() =>
-                  setShowCustomFlowBuilder((current) => !current)
-                }
+                customFlowMode={customFlowMode}
+                onToggleSelectedFirmBuilder={openCustomTemplateForSelectedFirm}
+                onTogglePrivateFirmBuilder={openPrivateCustomFirmBuilder}
                 builderState={{
                   customPropFirmName,
                   customChallengePhases,
@@ -486,6 +616,8 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
                   sharedMaxLoss,
                   applySharedMinTradingDays,
                   sharedMinTradingDays,
+                  metricMode: customMetricMode,
+                  maxLossType: customMaxLossType,
                 }}
                 onBuilderStateChange={{
                   setCustomPropFirmName,
@@ -506,6 +638,8 @@ export function ManualPropAccountDialog({ account }: { account: AccountRecord })
                       );
                     }
                   },
+                  setMetricMode: setCustomMetricMode,
+                  setMaxLossType: setCustomMaxLossType,
                   toggleSharedMaxLoss: handleSharedMaxLossToggle,
                   toggleSharedMinTradingDays:
                     handleSharedMinTradingDaysToggle,

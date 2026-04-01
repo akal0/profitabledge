@@ -168,12 +168,20 @@ function assembleAggregateAnswer(
   userMessage?: string
 ): FormattedAnswer {
   const meta = result.meta!;
+  const aggregates = result.meta?.aggregates || {};
+
+  if (userMessage && isExitTimingQuestion(userMessage) && Object.keys(aggregates).length > 0) {
+    const exitTimingAnswer = buildExitTimingAnswer(result, plan, userMessage);
+    if (exitTimingAnswer) {
+      return exitTimingAnswer;
+    }
+  }
+
   let markdown = `### ${trimTitlePunctuation(sentenceCase(plan.explanation))}\n\n`;
   let hasPrimaryContent = false;
 
   // Main results
   if (plan.vizType === "win_rate_card" && result.meta?.aggregates) {
-    const aggregates = result.meta.aggregates;
     const winRate = aggregates.win_rate ?? aggregates.winrate;
     if (winRate !== undefined) {
       markdown += `${formatAggregateValue("win_rate", winRate)}\n\n`;
@@ -377,6 +385,10 @@ function assembleAggregateAnswer(
 }
 
 function formatFieldLabel(key: string): string {
+  if (key === "modelTag" || key === "edgeName") {
+    return "Edge";
+  }
+
   const cleaned = key
     .replace(/_/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -561,11 +573,181 @@ function formatDurationSeconds(value: number): string {
 function formatWeekdayLabel(value: any): string {
   if (value === null || value === undefined) return "Unknown";
   const raw = String(value);
+  const weekdayMap: Record<string, string> = {
+    sun: "Sunday",
+    sunday: "Sunday",
+    mon: "Monday",
+    monday: "Monday",
+    tue: "Tuesday",
+    tues: "Tuesday",
+    tuesday: "Tuesday",
+    wed: "Wednesday",
+    wednesday: "Wednesday",
+    thu: "Thursday",
+    thur: "Thursday",
+    thurs: "Thursday",
+    thursday: "Thursday",
+    fri: "Friday",
+    friday: "Friday",
+    sat: "Saturday",
+    saturday: "Saturday",
+  };
+  const normalized = raw.trim().toLowerCase();
+  if (weekdayMap[normalized]) {
+    return weekdayMap[normalized];
+  }
   const date = new Date(raw);
   if (!Number.isNaN(date.getTime())) {
-    return date.toLocaleDateString("en-US", { weekday: "short" });
+    return date.toLocaleDateString("en-US", { weekday: "long" });
   }
   return raw;
+}
+
+function isExitTimingQuestion(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    /\bexit(?:ing)?\b.*\btoo\s+(early|soon|late)\b/i.test(lower) ||
+    /\bleaving\b.*\b(money|profit)\b.*\b(table|behind)\b/i.test(lower) ||
+    /\bmoney\s+left\s+on\s+the\s+table\b/i.test(lower) ||
+    /\bhold\b.*\blonger\b/i.test(lower)
+  );
+}
+
+function buildExitTimingAnswer(
+  result: ExecutionResult,
+  _plan: TradeQueryPlan,
+  _userMessage: string
+): FormattedAnswer | null {
+  const aggregates = result.meta?.aggregates || {};
+  const exitEfficiency = findAggregateValueByMatch(aggregates, [
+    "exit_efficiency",
+    "exitefficiency",
+  ]);
+  const captureEfficiency = findAggregateValueByMatch(aggregates, [
+    "capture_efficiency",
+    "rr_capture_efficiency",
+    "captureefficiency",
+    "rrcaptureefficiency",
+  ]);
+  const realisedRR = findAggregateValueByMatch(aggregates, [
+    "realised_rr",
+    "realized_rr",
+    "realisedrr",
+    "realizedrr",
+  ]);
+  const maxRR = findAggregateValueByMatch(aggregates, ["max_rr", "maxrr"]);
+
+  if (exitEfficiency === null && captureEfficiency === null) {
+    return null;
+  }
+
+  const sampleSize = result.meta?.rowCount ?? 0;
+  const rrGap =
+    realisedRR !== null && maxRR !== null ? Number(maxRR) - Number(realisedRR) : null;
+  const likelyTooEarly =
+    (exitEfficiency !== null && exitEfficiency < 60) ||
+    (captureEfficiency !== null && captureEfficiency < 50) ||
+    (rrGap !== null && rrGap > 0.5);
+  const lowCapture = captureEfficiency !== null && captureEfficiency < 50;
+  const lowExitTiming = exitEfficiency !== null && exitEfficiency < 60;
+
+  let markdown = `### Exit timing\n\n`;
+
+  if (sampleSize < 5) {
+    markdown += `There isn't enough exit data yet to answer confidently. `;
+  } else if (lowCapture && rrGap !== null && rrGap > 0.5) {
+    markdown += `Yes — mainly because you're only capturing ${formatAggregateValue(
+      "rrCaptureEfficiency",
+      captureEfficiency
+    )} of the available move and leaving ${formatAggregateValue(
+      "maxRR",
+      rrGap
+    )} on the table per trade on average. `;
+  } else if (lowCapture) {
+    markdown += `Yes — mainly because your RR capture efficiency is only ${formatAggregateValue(
+      "rrCaptureEfficiency",
+      captureEfficiency
+    )}. `;
+  } else if (lowExitTiming) {
+    markdown += `Yes — mainly because your exit efficiency is only ${formatAggregateValue(
+      "exitEfficiency",
+      exitEfficiency
+    )}, which is below the 60% healthy range. `;
+  } else if (likelyTooEarly) {
+    markdown += `Yes — your data points to early exits. `;
+  } else {
+    markdown += `Not clearly — your exit stats look reasonably healthy. `;
+  }
+
+  const summaryParts: string[] = [];
+  if (exitEfficiency !== null) {
+    summaryParts.push(
+      `Exit efficiency averages ${formatAggregateValue(
+        "exitEfficiency",
+        exitEfficiency
+      )}`
+    );
+  }
+  if (captureEfficiency !== null) {
+    summaryParts.push(
+      `RR capture efficiency averages ${formatAggregateValue(
+        "rrCaptureEfficiency",
+        captureEfficiency
+      )}`
+    );
+  }
+  if (realisedRR !== null && maxRR !== null) {
+    summaryParts.push(
+      `you realise ${formatAggregateValue(
+        "realisedRR",
+        realisedRR
+      )} on average versus ${formatAggregateValue("maxRR", maxRR)} available`
+    );
+  }
+
+  markdown += `${summaryParts.join(", ")} across ${formatCount(sampleSize)} trades.\n\n`;
+
+  if (exitEfficiency !== null && exitEfficiency >= 60 && lowCapture) {
+    markdown += `Your raw exit efficiency is not the problem — the bigger issue is that you're still capturing too little of the total available R before getting out.\n\n`;
+  }
+
+  markdown += `### Metrics\n\n`;
+  if (exitEfficiency !== null) {
+    markdown += `- Exit efficiency: ${formatAggregateValue(
+      "exitEfficiency",
+      exitEfficiency
+    )} (${exitEfficiency >= 60 ? "good" : "below the 60% healthy range"})\n`;
+  }
+  if (captureEfficiency !== null) {
+    markdown += `- RR capture efficiency: ${formatAggregateValue(
+      "rrCaptureEfficiency",
+      captureEfficiency
+    )} (${captureEfficiency >= 50 ? "good" : "below the 50% healthy range"})\n`;
+  }
+  if (realisedRR !== null) {
+    markdown += `- Realised R:R: ${formatAggregateValue(
+      "realisedRR",
+      realisedRR
+    )}\n`;
+  }
+  if (maxRR !== null) {
+    markdown += `- Max R:R available: ${formatAggregateValue("maxRR", maxRR)}\n`;
+  }
+  if (rrGap !== null) {
+    markdown += `- Average R left on table: ${formatAggregateValue("maxRR", rrGap)}\n`;
+  }
+  markdown += "\n";
+
+  markdown += `### Sample size\n\n${formatCount(sampleSize)} trades\n\n`;
+
+  if (result.meta?.timeframe) {
+    markdown += `### Timeframe\n\n${result.meta.timeframe}\n\n`;
+  }
+
+  return {
+    markdown,
+    data: result.data,
+  };
 }
 
 function trimTitlePunctuation(value: string): string {

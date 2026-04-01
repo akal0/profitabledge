@@ -1,3 +1,21 @@
+export function downloadTextFile(
+  content: string,
+  fileName: string,
+  mimeType = "text/plain;charset=utf-8;"
+) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.style.visibility = "hidden";
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export function exportTradesToCSV(
   trades: any[],
   visibleColumns: string[],
@@ -52,19 +70,8 @@ export function exportTradesToCSV(
     ...rows.map((row) => row.join(",")),
   ].join("\n");
 
-  // Create and trigger download
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-
   const timestamp = new Date().toISOString().split("T")[0];
-  link.setAttribute("href", url);
-  link.setAttribute("download", `trades-export-${timestamp}.csv`);
-  link.style.visibility = "hidden";
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  downloadTextFile(csvContent, `trades-export-${timestamp}.csv`, "text/csv;charset=utf-8;");
 }
 
 export function exportTradesToExcel(
@@ -166,19 +173,8 @@ export function exportTradesToExcel(
     summaryRow.join(","),
   ].join("\n");
 
-  // Create and trigger download
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-
   const timestamp = new Date().toISOString().split("T")[0];
-  link.setAttribute("href", url);
-  link.setAttribute("download", `trades-export-${timestamp}.csv`);
-  link.style.visibility = "hidden";
-
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  downloadTextFile(csvContent, `trades-export-${timestamp}.csv`, "text/csv;charset=utf-8;");
 }
 
 export function copyTradesToClipboard(

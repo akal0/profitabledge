@@ -60,7 +60,12 @@ export function getNavSections(
       label: "Analysis",
       items: [
         { title: "Dashboard", url: "/dashboard", icon: DashboardIcon },
-        { title: "Reports", url: "/dashboard/reports", icon: BarChart3 },
+        {
+          title: "Reports",
+          url: "/dashboard/reports",
+          icon: BarChart3,
+          planRequirement: "professional",
+        },
         { title: "Trades", url: "/dashboard/trades", icon: CalendarIcon },
         { title: "Journal", url: "/dashboard/journal", icon: JournalIcon },
         { title: "Edges", url: "/dashboard/edges", icon: Layers3 },

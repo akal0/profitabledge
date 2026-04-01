@@ -78,7 +78,7 @@ export function createScaffoldCapabilities(
 export function createProviderScaffoldMetadata(input: {
   name: string;
   description: string;
-  authType: "oauth" | "credentials";
+  authType: "oauth" | "credentials" | "api_key";
   fields: string[];
   status: "active" | "coming_soon";
   capabilityNotes?: Partial<Record<ProviderMethodName, string>>;

@@ -3,7 +3,9 @@ import { TRPCError } from "@trpc/server";
 
 import { getServerEnv } from "../env";
 import {
+  DEFAULT_BILLING_INTERVAL,
   getBillingPlanDefinition,
+  type BillingInterval,
   type BillingPlanKey,
 } from "./config";
 
@@ -64,16 +66,24 @@ export function clampStripeDisplayString(value: string, maxLength = 40) {
   return normalized.slice(0, maxLength).trimEnd();
 }
 
-export function getStripePriceIdForPlan(planKey: BillingPlanKey) {
+export function getStripePriceIdForPlan(
+  planKey: BillingPlanKey,
+  billingInterval: BillingInterval = DEFAULT_BILLING_INTERVAL
+) {
   const plan = getBillingPlanDefinition(planKey);
-  if (!plan?.stripePriceId) {
+  const priceId =
+    billingInterval === "annual"
+      ? plan?.stripeAnnualPriceId
+      : plan?.stripePriceId;
+
+  if (!priceId) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: `Plan ${planKey} is not configured in Stripe`,
+      message: `Plan ${planKey} is not configured in Stripe for ${billingInterval} billing`,
     });
   }
 
-  return plan.stripePriceId;
+  return priceId;
 }
 
 export async function createStripeCustomer(input: {
@@ -102,12 +112,15 @@ export async function createStripeCheckoutSession(input: {
   customerName?: string | null;
   clientReferenceId: string;
   planKey: BillingPlanKey;
+  billingInterval?: BillingInterval;
   successUrl: string;
   cancelUrl: string;
   couponId?: string | null;
+  trialPeriodDays?: number | null;
   metadata?: Record<string, string>;
 }) {
   const stripe = getStripeClient();
+  const billingInterval = input.billingInterval ?? DEFAULT_BILLING_INTERVAL;
   return stripe.checkout.sessions.create({
     mode: "subscription",
     customer: input.customerId ?? undefined,
@@ -117,13 +130,17 @@ export async function createStripeCheckoutSession(input: {
     cancel_url: input.cancelUrl,
     line_items: [
       {
-        price: getStripePriceIdForPlan(input.planKey),
+        price: getStripePriceIdForPlan(input.planKey, billingInterval),
         quantity: 1,
       },
     ],
     metadata: input.metadata,
     subscription_data: {
       metadata: input.metadata,
+      trial_period_days:
+        input.trialPeriodDays && input.trialPeriodDays > 0
+          ? input.trialPeriodDays
+          : undefined,
     },
     discounts: input.couponId
       ? [
@@ -144,26 +161,48 @@ export async function createStripeCheckoutSession(input: {
 export async function createStripeBillingPortalSession(input: {
   customerId: string;
   returnUrl: string;
-  flow?: "manage" | "cancel";
+  flow?: "manage" | "cancel" | "update_confirm";
   subscriptionId?: string | null;
+  subscriptionItemId?: string | null;
+  subscriptionItemQuantity?: number | null;
+  priceId?: string | null;
 }) {
   const stripe = getStripeClient();
   const configuration = getStripeBillingPortalConfigurationId();
+  const afterCompletion = {
+    type: "redirect" as const,
+    redirect: {
+      return_url: input.returnUrl,
+    },
+  };
   const flowData =
     input.flow === "cancel" && input.subscriptionId
       ? {
           type: "subscription_cancel" as const,
-          after_completion: {
-            type: "redirect" as const,
-            redirect: {
-              return_url: input.returnUrl,
-            },
-          },
+          after_completion: afterCompletion,
           subscription_cancel: {
             subscription: input.subscriptionId,
           },
         }
-      : undefined;
+      : input.flow === "update_confirm" &&
+          input.subscriptionId &&
+          input.subscriptionItemId &&
+          input.priceId
+        ? {
+            type: "subscription_update_confirm" as const,
+            after_completion: afterCompletion,
+            subscription_update_confirm: {
+              subscription: input.subscriptionId,
+              items: [
+                {
+                  id: input.subscriptionItemId,
+                  price: input.priceId,
+                  quantity: input.subscriptionItemQuantity ?? 1,
+                },
+              ],
+            },
+          }
+        : undefined;
 
   const createSession = (configurationId?: string | null) =>
     stripe.billingPortal.sessions.create({

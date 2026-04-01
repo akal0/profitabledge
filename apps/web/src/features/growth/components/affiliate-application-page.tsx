@@ -409,6 +409,41 @@ export function AffiliateApplicationPage() {
           </div>
         </div>
 
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-sm bg-sidebar p-4 text-left ring ring-white/8">
+            <p className="text-[10px] text-white/25">Partner tier</p>
+            <p className="mt-2 text-sm font-medium text-white">20% recurring split</p>
+            <p className="mt-1 text-xs leading-5 text-white/40">
+              Unlock tracked links, offer codes, withdrawals, and premium access.
+            </p>
+          </div>
+          <div className="rounded-sm bg-sidebar p-4 text-left ring ring-white/8">
+            <p className="text-[10px] text-white/25">Pro tier</p>
+            <p className="mt-2 text-sm font-medium text-white">25% split at $2.5k revenue</p>
+            <p className="mt-1 text-xs leading-5 text-white/40">
+              Level up into creator-kit perks, featured proof treatment, and priority support.
+            </p>
+          </div>
+          <div className="rounded-sm bg-sidebar p-4 text-left ring ring-white/8">
+            <p className="text-[10px] text-white/25">Review timeline</p>
+            <p className="mt-2 text-sm font-medium text-white">Usually 24-72 hours</p>
+            <p className="mt-1 text-xs leading-5 text-white/40">
+              We review your referral traction, promotion plan, and audience fit before approval.
+            </p>
+          </div>
+        </div>
+
+        {applicationStatus === "rejected" ? (
+          <div className="rounded-sm border border-rose-500/20 bg-rose-500/10 p-4 text-left">
+            <p className="text-sm font-medium text-rose-100">
+              This application was rejected, but you can update the form and resubmit.
+            </p>
+            <p className="mt-1 text-xs leading-5 text-rose-100/70">
+              Strengthen your promotion plan, add clearer audience details, and include the channels where you already have traction.
+            </p>
+          </div>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-sm bg-sidebar p-4 text-left ring ring-white/8">
             <div className="flex items-center gap-2 text-white/45">

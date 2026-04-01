@@ -1,4 +1,6 @@
 export type BillingPlanCopySource = {
+  title?: string;
+  features?: string[];
   accountAllowanceLabel: string;
   includedAiCredits: number;
   includedLiveSyncSlots: number;
@@ -11,6 +13,17 @@ export function formatLiveSyncSlots(slots: number) {
 }
 
 export function getPlanFeatureLines(plan: BillingPlanCopySource) {
+  if (plan.features && plan.features.length > 0) {
+    return plan.features.map((feature, index) => ({
+      key: `${plan.title ?? "plan"}-${index}`,
+      prefix: "",
+      accent: "",
+      suffix: feature,
+      tone: "positive" as const,
+      accentTone: "default" as const,
+    }));
+  }
+
   const accountLine =
     plan.accountAllowanceLabel === "Unlimited"
       ? {
@@ -26,7 +39,7 @@ export function getPlanFeatureLines(plan: BillingPlanCopySource) {
         }
       : {
           prefix: "",
-          accent: "1 manual or CSV account",
+          accent: "1 account",
           suffix: "",
         };
 

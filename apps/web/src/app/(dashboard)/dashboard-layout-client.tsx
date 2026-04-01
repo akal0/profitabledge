@@ -43,7 +43,6 @@ import {
   isDemoWorkspaceAccount,
 } from "@/features/accounts/lib/account-metadata";
 import {
-  meetsRequirement,
   type PlanKey,
 } from "@/features/navigation/config/nav-sections";
 import { isHeldBackDashboardRoute } from "@/features/navigation/lib/held-back-routes";
@@ -479,11 +478,6 @@ function DashboardContentStage({
   );
 }
 
-const PLAN_REQUIRED_ROUTES: Array<{ prefix: string; plan: PlanKey }> = [
-  { prefix: "/dashboard/prop-tracker", plan: "professional" },
-  { prefix: "/assistant", plan: "professional" },
-];
-
 const MT5_LIVE_LEASE_SLOTS: Record<PlanKey, number> = {
   student: 0,
   professional: 1,
@@ -776,16 +770,6 @@ export default function DashboardLayoutClient({
   );
   const hasBlockedCommunityAccess = isHeldBackDashboardRoute(safePathname);
 
-  const hasBlockedPlanAccess = Boolean(
-    activePlanKey &&
-      safePathname &&
-      PLAN_REQUIRED_ROUTES.some(
-        (r) =>
-          safePathname.startsWith(r.prefix) &&
-          !meetsRequirement(activePlanKey, r.plan)
-      )
-  );
-
   useAlphaPageTracking(
     "dashboard",
     hasConfirmedSession && !isRecoveringSession
@@ -813,8 +797,6 @@ export default function DashboardLayoutClient({
       router.replace("/dashboard/referrals");
     } else if (hasBlockedAffiliateAccess) {
       router.replace("/dashboard/referrals");
-    } else if (hasBlockedPlanAccess) {
-      router.replace("/dashboard/settings/billing");
     }
   }, [
     currentDashboardPath,
@@ -823,7 +805,6 @@ export default function DashboardLayoutClient({
     hasBlockedGrowthOverview,
     hasBlockedAdminAccess,
     hasBlockedAffiliateAccess,
-    hasBlockedPlanAccess,
     router,
     safePathname,
   ]);
@@ -925,8 +906,7 @@ export default function DashboardLayoutClient({
   if (
     hasBlockedCommunityAccess ||
     hasBlockedAdminAccess ||
-    hasBlockedAffiliateAccess ||
-    hasBlockedPlanAccess
+    hasBlockedAffiliateAccess
   ) {
     return (
       <DashboardGateFallback

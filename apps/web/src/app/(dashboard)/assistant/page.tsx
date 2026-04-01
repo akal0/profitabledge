@@ -1,6 +1,7 @@
 "use client";
 
 import { PremiumAssistant } from "@/components/ai/premium-assistant";
+import { FeatureGate } from "@/components/feature-gate";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { trpcOptions } from "@/utils/trpc";
@@ -19,15 +20,17 @@ function AssistantPageContent() {
   const activeAccountId = accountId || selectedAccountId;
 
   return (
-    <div className="flex min-h-0 w-full flex-1">
-      <PremiumAssistant
-        accountId={activeAccountId}
-        userImage={me?.image}
-        userName={me?.name}
-        className="h-full min-h-0 flex-1 self-stretch"
-        contextPathOverride={sourcePath}
-      />
-    </div>
+    <FeatureGate feature="ai-assistant" requiredPlanKey="professional">
+      <div className="flex min-h-0 w-full flex-1">
+        <PremiumAssistant
+          accountId={activeAccountId}
+          userImage={me?.image}
+          userName={me?.name}
+          className="h-full min-h-0 flex-1 self-stretch"
+          contextPathOverride={sourcePath}
+        />
+      </div>
+    </FeatureGate>
   );
 }
 

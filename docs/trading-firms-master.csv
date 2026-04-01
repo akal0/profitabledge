@@ -1,0 +1,160 @@
+index,id,displayName,type,category,status,website,platforms,serverPatterns,logoFound,logoFormat,regulators,headquarters,logoPath
+1,akuna-capital,Akuna Capital,prop-firm,stocks,active,https://akunacapital.com,other,"akuna,akuna capital,Akuna",yes,PNG,,,/prop-logos/akuna-capital.png
+2,alpha-capital-group,Alpha Capital Group,prop-firm,cfd,active,https://alphacapitalgroup.uk,"mt5,dxtrade","alpha capital group,alphacapitalgroup,ACG",yes,PNG,,,/prop-logos/alpha-capital-group.png
+3,apex-trader-funding,Apex Trader Funding,prop-firm,futures,active,https://apextraderfunding.com,"tradovate,rithmic,ninjatrader,tradingview","apex,ATF,apextraderfunding",yes,PNG,,,/prop-logos/apex-trader-funding.png
+4,aquafunded,AquaFunded,prop-firm,cfd,active,https://aquafunded.com,"mt5,ctrader,dxtrade","aquafunded,AquaFunded,aqua funded",yes,PNG,,,/prop-logos/aquafunded.png
+5,audacity-capital,Audacity Capital,prop-firm,cfd,active,https://audacitycapital.co.uk,"mt4,mt5","audacity,audacity capital,AudaCity",yes,PNG,,,/prop-logos/audacity-capital.png
+6,axi-select,Axi Select,prop-firm,cfd,active,https://axi.com,"mt4,other","axi,axi select,AxiTrader",yes,PNG,,,/prop-logos/axi-select.png
+7,blue-guardian,Blue Guardian,prop-firm,cfd,active,https://blueguardian.com,"mt5,dxtrade,match-trader","blue guardian,blueguardian,BG trader",yes,PNG,,,/prop-logos/blue-guardian.png
+8,blusky,BluSky,prop-firm,futures,active,https://blusky.pro,"rithmic,ninjatrader,other","blusky,BluSky,blusky funded",yes,PNG,,,/prop-logos/blusky.png
+9,bright-trading,Bright Trading,prop-firm,stocks,active,https://brighttrading.com,other,"bright trading,Bright,brighttrading",yes,PNG,,,/prop-logos/bright-trading.png
+10,brightfunded,BrightFunded,prop-firm,cfd,active,https://brightfunded.com,"mt5,ctrader","brightfunded,Bright Funded,bright",yes,PNG,,,/prop-logos/brightfunded.png
+11,bulenox,Bulenox,prop-firm,futures,active,https://bulenox.com,"rithmic,tradovate,ninjatrader","bulenox,Bulenox,Bule",yes,PNG,,,/prop-logos/bulenox.png
+12,chimera-securities,Chimera Securities,prop-firm,stocks,active,https://www.chimerasecurities.com,other,"chimera,chimera securities,Chimera",yes,PNG,,,/prop-logos/chimera-securities.png
+13,city-traders-imperium,City Traders Imperium,prop-firm,cfd,active,https://citytradersimperium.com,"mt5,dxtrade","city traders imperium,CTI,citytradersimperium",yes,PNG,,,/prop-logos/city-traders-imperium.png
+14,daytraders-com,DayTraders.com,prop-firm,futures,active,https://daytraders.com,"other,rithmic,tradovate,ninjatrader","daytraders.com,ONYX,daytraders funded",yes,PNG,,,/prop-logos/daytraders-com.png
+15,dna-funded,DNA Funded,prop-firm,cfd,active,https://dnafunded.com,"mt5,ctrader,match-trader","dna funded,dnafunded,DNA",yes,PNG,,,/prop-logos/dna-funded.png
+16,e8-markets,E8 Markets,prop-firm,multi,active,https://e8markets.com,"mt5,ctrader,tradelocker,match-trader","e8,e8 markets,E8X",yes,PNG,,,/prop-logos/e8-markets.png
+17,earn2trade,Earn2Trade,prop-firm,futures,active,https://earn2trade.com,"ninjatrader,other,rithmic","earn2trade,gauntlet,trader career path",yes,PNG,,,/prop-logos/earn2trade.png
+18,elite-trader-funding,Elite Trader Funding,prop-firm,futures,active,https://elitetraderfunding.com,"rithmic,tradovate,ninjatrader,tradingview","elite trader funding,ETF,elitetraderfunding",yes,PNG,,,/prop-logos/elite-trader-funding.png
+19,fast-track-trading,Fast Track Trading,prop-firm,futures,suspended,https://fasttracktrading.net,"rithmic,tradovate,ninjatrader","fast track trading,FTT,fasttracktrading",yes,PNG,,,/prop-logos/fast-track-trading.png
+20,finotive-funding,Finotive Funding,prop-firm,cfd,active,https://finotivefunding.com,"mt5,ctrader,tradelocker","finotive,finotive funding,Finotive",yes,PNG,,,/prop-logos/finotive-funding.png
+21,ftmo,FTMO,prop-firm,cfd,active,https://ftmo.com,"mt4,mt5,ctrader,dxtrade","ftmo,trader.ftmo.com,FTMO",yes,PNG,,,/prop-logos/ftmo.png
+22,funded-engineer,Funded Engineer,prop-firm,cfd,shutdown,https://fundedengineer.com,"mt5,ctrader","funded engineer,fundedengineer,FE trader",yes,PNG,,,/prop-logos/funded-engineer.png
+23,funded-futures-family,Funded Futures Family,prop-firm,futures,active,https://fundedfuturesfamily.com,"rithmic,tradovate,ninjatrader","funded futures family,FFF,fundedfuturesfamily",yes,PNG,,,/prop-logos/funded-futures-family.png
+24,funded-futures-network,Funded Futures Network,prop-firm,futures,active,https://fundedfuturesnetwork.com,"rithmic,ninjatrader,tradingview","funded futures network,FFN,fundedfuturesnetwork",yes,PNG,,,/prop-logos/funded-futures-network.png
+25,funded-trading-plus,Funded Trading Plus,prop-firm,cfd,active,https://fundedtradingplus.com,"mt4,mt5,ctrader,dxtrade,tradelocker","funded trading plus,FTP,fundedtradingplus",yes,PNG,,,/prop-logos/funded-trading-plus.png
+26,fundednext,FundedNext,prop-firm,multi,active,https://fundednext.com,"mt4,mt5,ctrader,match-trader","fundednext,FundedNext,fnmarkets",yes,PNG,,,/prop-logos/fundednext.png
+27,fundednext-futures,FundedNext Futures,prop-firm,futures,active,https://fundednext.com,"ninjatrader,tradingview,rithmic","fundednext futures,bolt challenge,legacy challenge",yes,PNG,,,/prop-logos/fundednext-futures.png
+28,funderpro,FunderPro,prop-firm,cfd,active,https://funderpro.com,"mt5,ctrader","funderpro,FunderPro,FPRO",yes,PNG,,,/prop-logos/funderpro.png
+29,funding-pips,Funding Pips,prop-firm,cfd,active,https://fundingpips.com,"mt5,ctrader,match-trader","fundingpips,FundingPips,fp trader",yes,PNG,,,/prop-logos/funding-pips.png
+30,funding-talent,Funding Talent,prop-firm,cfd,shutdown,https://fundingtalent.com,"mt4,mt5,ctrader","funding talent,fundingtalent,FTalent",yes,PNG,,,/prop-logos/funding-talent.png
+31,futures-elite,Futures Elite,prop-firm,futures,active,https://futureselite.com,"rithmic,tradovate,ninjatrader","futures elite,futureselite,FE futures",yes,PNG,,,/prop-logos/futures-elite.png
+32,fxify,FXify,prop-firm,cfd,active,https://fxify.com,"mt5,ctrader,dxtrade","fxify,FXIFY",yes,PNG,,,/prop-logos/fxify.png
+33,goat-funded-trader,Goat Funded Trader,prop-firm,cfd,active,https://goatfundedtrader.com,"mt5,ctrader,match-trader","goat funded trader,GFT,goatfundedtrader",yes,PNG,,,/prop-logos/goat-funded-trader.png
+34,hantec-trader,Hantec Trader,prop-firm,cfd,active,https://hantectrader.com,"mt4,mt5","hantec trader,Hantec,hantectrader",yes,PNG,,,/prop-logos/hantec-trader.png
+35,hola-prime,Hola Prime,prop-firm,cfd,active,https://holaprime.com,"mt5,ctrader,dxtrade","hola prime,holaprime,HPrime",yes,PNG,,,/prop-logos/hola-prime.png
+36,hold-brothers,Hold Brothers,prop-firm,stocks,active,https://holdbrothers.com,other,"hold brothers,holdbrothers,Hold",yes,PNG,,,/prop-logos/hold-brothers.png
+37,instant-funding,Instant Funding,prop-firm,cfd,active,https://instantfunding.com,"mt4,mt5,ctrader","instant funding,instantfunding,IF trader",yes,PNG,,,/prop-logos/instant-funding.png
+38,kershner-trading-group,Kershner Trading Group,prop-firm,stocks,active,https://kershnertrading.com,other,"kershner,kershner trading,KTG",yes,PNG,,,/prop-logos/kershner-trading-group.png
+39,leeloo-trading,Leeloo Trading,prop-firm,futures,active,https://leelootrading.com,"rithmic,ninjatrader,other","leeloo,leeloo trading,LeeLoo",yes,PNG,,,/prop-logos/leeloo-trading.png
+40,lux-trading-firm,Lux Trading Firm,prop-firm,multi,active,https://luxtradingfirm.com,"mt5,dxtrade","lux trading,luxtradingfirm,LTF",yes,PNG,,,/prop-logos/lux-trading-firm.png
+41,maven-trading,Maven Trading,prop-firm,cfd,active,https://maventrading.com,"mt4,mt5,ctrader","maven trading,maventrading,Maven",yes,PNG,,,/prop-logos/maven-trading.png
+42,maverick-trading,Maverick Trading,prop-firm,stocks,active,https://mavericktrading.com,"other,ib,tt","maverick trading,Maverick,mavericktrading",yes,PNG,,,/prop-logos/maverick-trading.png
+43,my-forex-funds,My Forex Funds,prop-firm,cfd,shutdown,https://myforexfunds.com,"mt4,mt5,ctrader","my forex funds,MFF,myforexfunds",yes,PNG,,,/prop-logos/my-forex-funds.png
+44,my-funded-futures,MyFundedFutures,prop-firm,futures,active,https://myfundedfutures.com,"rithmic,tradovate,ninjatrader,tradingview","myfundedfutures,MFFU,my funded futures",yes,PNG,,,/prop-logos/my-funded-futures.png
+45,ofp-funding,OFP Funding,prop-firm,cfd,active,https://ofpfunding.com,"mt4,mt5,ctrader,dxtrade","ofp funding,OFP,ofpfunding",yes,PNG,,,/prop-logos/ofp-funding.png
+46,oneup-trader,OneUp Trader,prop-firm,futures,active,https://oneuptrader.com,"rithmic,ninjatrader,other","oneup,oneup trader,OneUp",yes,PNG,,,/prop-logos/oneup-trader.png
+47,optiver,Optiver,prop-firm,stocks,active,https://optiver.com,other,"optiver,Optiver,optiver trader",yes,PNG,,,/prop-logos/optiver.png
+48,pipfarm,PipFarm,prop-firm,cfd,active,https://pipfarm.com,"mt5,ctrader","pipfarm,PipFarm,pip farm",yes,PNG,,,/prop-logos/pipfarm.png
+49,rebelsfunding,RebelsFunding,prop-firm,cfd,active,https://rebelsfunding.com,"mt5,ctrader","rebelsfunding,RebelsFunding,rebels funding",yes,PNG,,,/prop-logos/rebelsfunding.png
+50,sabio-trade,SabioTrade,prop-firm,cfd,active,https://sabiotrade.com,"match-trader,tradelocker","sabiotrade,SabioTrade,sabio",yes,PNG,,,/prop-logos/sabio-trade.png
+51,seven-points-capital,Seven Points Capital,prop-firm,stocks,active,https://sevenpointscapital.com,other,"seven points capital,7 points,sevenpointscapital",yes,PNG,,,/prop-logos/seven-points-capital.png
+52,smart-prop-trader,Smart Prop Trader,prop-firm,cfd,active,https://smartproptrader.com,"mt5,ctrader,match-trader","smart prop trader,SPT,smartproptrader",yes,PNG,,,/prop-logos/smart-prop-trader.png
+53,smb-capital,SMB Capital,prop-firm,stocks,active,https://www.smbtraining.com,"other,ib","smb capital,SMB,smbtraining",yes,PNG,,,/prop-logos/smb-capital.png
+54,surgetrader,SurgeTrader,prop-firm,cfd,shutdown,https://surgetrader.com,"mt4,mt5,match-trader","surgetrader,SurgeTrader,surge",yes,PNG,,,/prop-logos/surgetrader.png
+55,susquehanna,Susquehanna,prop-firm,stocks,active,https://sig.com,other,"SIG,susquehanna,susquehanna international group",yes,PNG,,,/prop-logos/susquehanna.png
+56,t3-trading-group,T3 Trading Group,prop-firm,multi,active,https://t3trading.com,other,"t3 trading,t3trading,T3",yes,PNG,,,/prop-logos/t3-trading-group.png
+57,take-profit-trader,Take Profit Trader,prop-firm,futures,active,https://takeprofittrader.com,"tradovate,rithmic,ninjatrader,tradingview","take profit trader,TPT,takeprofittrader",yes,PNG,,,/prop-logos/take-profit-trader.png
+58,the-trading-pit,The Trading Pit,prop-firm,multi,active,https://thetradingpit.com,"mt5,ctrader,other,rithmic","the trading pit,TTP,thetradingpit",yes,PNG,,,/prop-logos/the-trading-pit.png
+59,the5ers,The5ers,prop-firm,multi,active,https://the5ers.com,"mt5,tradelocker,dxtrade","the5ers,5ers,Five Percent Online",yes,PNG,,,/prop-logos/the5ers.png
+60,thinkcapital,ThinkCapital,prop-firm,cfd,active,https://thinkcapital.com,"mt5,match-trader,tradelocker","thinkcapital,ThinkCapital,think capital",yes,PNG,,,/prop-logos/thinkcapital.png
+61,tickticktrader,TickTickTrader,prop-firm,futures,active,https://tickticktrader.com,"rithmic,ninjatrader,other","tickticktrader,TTT,tick tick trader",yes,PNG,,,/prop-logos/tickticktrader.png
+62,topstep,Topstep,prop-firm,futures,active,https://topstep.com,"topstepx,tradovate,tradingview,ninjatrader","topstep,TopstepX,trading combine",yes,PNG,,,/prop-logos/topstep.png
+63,trade-the-pool,Trade The Pool,prop-firm,stocks,active,https://tradethepool.com,"other,tradingview","trade the pool,TTP,tradethepool",yes,PNG,,,/prop-logos/trade-the-pool.png
+64,tradeday,TradeDay,prop-firm,futures,active,https://tradeday.com,"other,tradingview,ninjatrader","tradeday,TradeDay,TD funded",yes,PNG,,,/prop-logos/tradeday.png
+65,tradeify,Tradeify,prop-firm,futures,active,https://tradeify.co,"tradovate,rithmic,other","tradeify,Tradeify,lightning funded",yes,PNG,,,/prop-logos/tradeify.png
+66,trillium-trading,Trillium Trading,prop-firm,stocks,active,https://trilliumtrading.com,other,"trillium,trillium trading,TrAC",yes,PNG,,,/prop-logos/trillium-trading.png
+67,true-forex-funds,True Forex Funds,prop-firm,cfd,shutdown,https://trueforexfunds.com,"mt4,mt5,ctrader","true forex funds,TFF,trueforexfunds",yes,PNG,,,/prop-logos/true-forex-funds.png
+68,uprofit-trader,UProfit Trader,prop-firm,futures,active,https://uprofit.com,"rithmic,tradovate,ninjatrader","uprofit,uprofit trader,UProfit",yes,PNG,,,/prop-logos/uprofit-trader.png
+69,activtrades,ActivTrades,broker,cfd,active,https://www.activtrades.com,"other,mt4,mt5,tradingview","ActivTrades-,ActivTrader,mt4,mt5",yes,PNG,"FCA,CMVM,SCB,CVM","London, United Kingdom",/brokers/activtrades.png
+70,adm-investor-services,ADM Investor Services,broker,futures,active,https://www.admis.com,"other,cqg,tt","admis,adm investor services,cqg,tt",yes,PNG,"CFTC,NFA,SEC,FINRA","Chicago, United States",/brokers/adm-investor-services.png
+71,admirals,Admirals,broker,cfd,active,https://admiralmarkets.com,"mt4,mt5","AdmiralMarkets-,Admirals-,mt4,mt5",yes,PNG,"FCA,ASIC,CySEC,EFSA","Tallinn, Estonia",/brokers/admirals.png
+72,amp-futures,AMP Futures,broker,futures,active,https://www.ampfutures.com,"other,cqg,rithmic,tt","ampfutures,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/amp-futures.png
+73,avatrade,AvaTrade,broker,cfd,active,https://www.avatrade.com,"other,mt4,mt5","Ava-,AvaTrade,mt4,mt5,avaoptions",yes,PNG,"Central Bank of Ireland,ASIC,FSCA,FSA Japan,ADGM FSRA","Dublin, Ireland",/brokers/avatrade.png
+74,axi,Axi,broker,cfd,active,https://www.axi.com,"mt4,mt5,other","Axi-,AxiTrader-,mt4,mt5",yes,PNG,"ASIC,FCA,DFSA,FMA","Sydney, Australia",/brokers/axi.png
+75,backpack-exchange,Backpack Exchange,broker,crypto,active,https://backpack.exchange,other,"backpack,backpack.exchange",yes,PNG,VARA,"Dubai, United Arab Emirates",/brokers/backpack-exchange.png
+76,binance,Binance,broker,crypto,active,https://www.binance.com,other,"binance,fstream,binanceusdm,binancecoinm",yes,PNG,,Global / no single formal HQ,/brokers/binance.png
+77,bingx,BingX,broker,crypto,active,https://bingx.com,other,"bingx,swap",yes,PNG,,Singapore,/brokers/bingx.png
+78,bitget,Bitget,broker,crypto,active,https://www.bitget.com,other,"bitget,umcbl,dmcbl,mix",yes,PNG,,"Victoria, Seychelles",/brokers/bitget.png
+79,bitmex,BitMEX,broker,crypto,active,https://www.bitmex.com,other,bitmex,yes,PNG,,Seychelles,/brokers/bitmex.png
+80,blackbull-markets,BlackBull Markets,broker,cfd,active,https://blackbull.com,"mt4,mt5,ctrader,tradingview","BlackBull-,BlackBullMarkets-,cTrader,mt4,mt5",yes,PNG,"FMA,FSA Seychelles","Auckland, New Zealand",/brokers/blackbull-markets.png
+81,btcc,BTCC,broker,crypto,active,https://www.btcc.com,other,btcc,yes,PNG,,"London, United Kingdom",/brokers/btcc.png
+82,btse,BTSE,broker,crypto,active,https://www.btse.com,other,btse,yes,PNG,,"Dubai, United Arab Emirates",/brokers/btse.png
+83,bybit,Bybit,broker,crypto,active,https://www.bybit.com,other,"bybit,linear,inverse",yes,PNG,,"Dubai, United Arab Emirates",/brokers/bybit.png
+84,cannon-trading,Cannon Trading,broker,futures,active,https://www.cannontrading.com,"cqg,rithmic,tt","cannontrading,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Beverly Hills, United States",/brokers/cannon-trading.png
+85,capital-com,Capital.com,broker,cfd,active,https://capital.com,"other,mt4,tradingview","capital.com,CapitalCom-,mt4",yes,PNG,"FCA,CySEC,ASIC,NBRB,SCB","Limassol, Cyprus",/brokers/capital-com.png
+86,charles-schwab,Charles Schwab,broker,futures,active,https://www.schwab.com,other,"thinkorswim,schwab",yes,PNG,"SEC,FINRA,CFTC,NFA","Westlake, United States",/brokers/charles-schwab.png
+87,city-index,City Index,broker,cfd,active,https://www.cityindex.com,"other,mt4,tradingview","CityIndex-,cityindex,GAIN,mt4",yes,PNG,"FCA,ASIC,MAS","London, United Kingdom",/brokers/city-index.png
+88,cmc-markets,CMC Markets,broker,cfd,active,https://www.cmcmarkets.com,"other,mt4","cmc,next generation,cmc markets,mt4",yes,PNG,"FCA,ASIC,MAS,IIROC,BaFin,FMA","London, United Kingdom",/brokers/cmc-markets.png
+89,coinbase-derivatives,Coinbase Derivatives / International Exchange,broker,crypto,active,https://www.coinbase.com/international-exchange,other,"coinbase,international.coinbase",yes,PNG,"CFTC,NFA,Bermuda Monetary Authority","New York, United States",/brokers/coinbase-derivatives.png
+90,coinex,CoinEx,broker,crypto,active,https://www.coinex.com,other,"coinex,perpetual",yes,PNG,,Hong Kong,/brokers/coinex.png
+91,cqg,CQG,broker,futures,active,https://www.cqg.com,cqg,cqg,yes,PNG,,"Denver, United States",/brokers/cqg.png
+92,crypto-com-exchange,Crypto.com Exchange,broker,crypto,active,https://crypto.com/exchange,other,"crypto.com,exchange,derivatives",yes,PNG,"CFTC,NFA,VARA,CySEC,FCA",Singapore,/brokers/crypto-com-exchange.png
+93,daniels-trading,Daniels Trading,broker,futures,active,https://www.danielstrading.com,"other,cqg,rithmic","danielstrading,dtpro,cqg,rithmic",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/daniels-trading.png
+94,delta-exchange,Delta Exchange,broker,crypto,active,https://www.delta.exchange,other,"delta.exchange,delta",yes,PNG,,Singapore,/brokers/delta-exchange.png
+95,deribit,Deribit,broker,crypto,active,https://www.deribit.com,other,deribit,yes,PNG,VARA,"Dubai, United Arab Emirates",/brokers/deribit.png
+96,deriv,Deriv,broker,cfd,active,https://deriv.com,"mt5,other","Deriv-,DerivMT5,smarttrader,synthetic",yes,PNG,"MFSA,Labuan FSA,BVI FSC,VFSC","Birkirkara, Malta",/brokers/deriv.png
+97,discount-trading,Discount Trading,broker,futures,active,https://www.discounttrading.com,"cqg,rithmic,tt","discounttrading,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/discount-trading.png
+98,dorman-trading,Dorman Trading,broker,futures,active,https://dormantrading.com,"other,cqg,rithmic,tt","dorman,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/dorman-trading.png
+99,dydx,dYdX,broker,crypto,active,https://dydx.trade,other,"dydx,indexer,v4",yes,PNG,,Decentralized / protocol,/brokers/dydx.png
+100,etrade,E*TRADE,broker,futures,active,https://us.etrade.com,other,"etrade,power etrade",yes,PNG,"SEC,FINRA,CFTC,NFA","New York, United States",/brokers/etrade.png
+101,easymarkets,easyMarkets,broker,cfd,active,https://www.easymarkets.com,"other,mt4,mt5,tradingview","easyMarkets-,EasyForex-,mt4,mt5",yes,PNG,"CySEC,ASIC,FSA Seychelles,BVI FSC","Limassol, Cyprus",/brokers/easymarkets.png
+102,edge-clear,Edge Clear,broker,futures,active,https://edgeclear.com,"other,cqg,rithmic,tt,tradingview","edgeclear,edgeprox,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/edge-clear.png
+103,eightcap,Eightcap,broker,cfd,active,https://www.eightcap.com,"mt4,mt5,tradingview","Eightcap-,EightcapEU-,mt4,mt5",yes,PNG,"ASIC,FCA,SCB","Melbourne, Australia",/brokers/eightcap.png
+104,etoro,eToro,broker,cfd,active,https://www.etoro.com,other,"etoro,copytrader",yes,PNG,"FCA,CySEC,ASIC,FSA Seychelles","Bnei Brak, Israel",/brokers/etoro.png
+105,exness,Exness,broker,cfd,active,https://www.exness.com,"mt4,mt5,other","Exness-,Exness-MT5,mt4,mt5",yes,PNG,"FCA,CySEC,FSCA,FSA Seychelles,CMA","Limassol, Cyprus",/brokers/exness.png
+106,fbs,FBS,broker,cfd,active,https://fbs.com,"mt4,mt5,other","FBS-,FBSInc-,mt4,mt5",yes,PNG,"CySEC,ASIC,FSC Belize","Belize City, Belize",/brokers/fbs.png
+107,forex-com,FOREX.com,broker,cfd,active,https://www.forex.com,"other,mt4,tradingview","FOREX.com-,GAIN,StoneX,mt4",yes,PNG,"CFTC,NFA,FCA,IIROC,CySEC,JFSA,MAS","Bedminster, United States",/brokers/forex-com.png
+108,fp-markets,FP Markets,broker,cfd,active,https://www.fpmarkets.com,"mt4,mt5,ctrader,other,tradingview","FPMarkets-,FPMarketsSC-,cTrader,Iress,mt4,mt5",yes,PNG,"ASIC,CySEC,FSCA,FSA Seychelles","Sydney, Australia",/brokers/fp-markets.png
+109,futures-online,FuturesOnline,broker,futures,active,https://www.futuresonline.com,"other,cqg,rithmic","futuresonline,cqg,rithmic",yes,PNG,"CFTC,NFA","Stuart, United States",/brokers/futures-online.png
+110,fxpro,FxPro,broker,cfd,active,https://www.fxpro.com,"other,mt4,mt5,ctrader","FxPro-,FxProUK-,cTrader,mt4,mt5",yes,PNG,"FCA,CySEC,FSCA,SCB","London, United Kingdom",/brokers/fxpro.png
+111,gate-io,Gate.io,broker,crypto,active,https://www.gate.io,other,"gateio,gate.io,futures",yes,PNG,,Global / no single formal HQ,/brokers/gate-io.png
+112,hfm,HFM,broker,cfd,active,https://www.hfm.com,"mt4,mt5,other","HFMarkets-,HFM-,mt4,mt5",yes,PNG,"FCA,CySEC,DFSA,FSCA,FSA Seychelles,CMA","Limassol, Cyprus",/brokers/hfm.png
+113,htx,HTX,broker,crypto,active,https://www.htx.com,other,"htx,huobi,swap",yes,PNG,,Seychelles,/brokers/htx.png
+114,hycm,HYCM,broker,cfd,active,https://www.hycm.com,"mt4,mt5,other","HYCM-,HYMarkets-,mt4,mt5",yes,PNG,"FCA,CySEC,CIMA,DFSA","London, United Kingdom",/brokers/hycm.png
+115,hyperliquid,Hyperliquid,broker,crypto,active,https://hyperliquid.xyz,other,"hyperliquid,hl",yes,PNG,,Decentralized / protocol,/brokers/hyperliquid.png
+116,ic-markets,IC Markets,broker,cfd,active,https://www.icmarkets.com,"mt4,mt5,ctrader,tradingview","ICMarkets-,ICMarketsSC-,ICMarketsEU-,cTrader,mt4,mt5",yes,PNG,"ASIC,CySEC,FSA Seychelles,SCB","Sydney, Australia",/brokers/ic-markets.png
+117,ig,IG,broker,cfd,active,https://www.ig.com,"other,mt4","IG-,iglive,ig demo,prorealtime,mt4",yes,PNG,"FCA,ASIC,CFTC,NFA,JFSA,MAS,FINMA,FSCA,DFSA","London, United Kingdom",/brokers/ig.png
+118,interactive-brokers,Interactive Brokers,broker,futures,active,https://www.interactivebrokers.com,"other,ib","ibkr,tws,interactivebrokers",yes,PNG,"SEC,FINRA,CFTC,NFA,FCA,IIROC,SFC,MAS","Greenwich, United States",/brokers/interactive-brokers.png
+119,ironbeam,Ironbeam,broker,futures,active,https://www.ironbeam.com,"other,rithmic","ironbeam,rithmic,tradenavigator",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/ironbeam.png
+120,kraken-futures,Kraken Futures,broker,crypto,active,https://www.kraken.com/features/futures,other,"kraken,cryptofacilities,futures.kraken",yes,PNG,"FCA,FinCEN,CFTC,NFA","San Francisco, United States",/brokers/kraken-futures.png
+121,kucoin-futures,KuCoin Futures,broker,crypto,active,https://www.kucoin.com/futures,other,"kucoin,kucoinfutures",yes,PNG,,Seychelles,/brokers/kucoin-futures.png
+122,libertex,Libertex,broker,cfd,active,https://libertex.com,"other,mt4,mt5","Libertex,ForexClub-,mt4,mt5",yes,PNG,CySEC,"Limassol, Cyprus",/brokers/libertex.png
+123,lightspeed-futures,Lightspeed Futures,broker,futures,active,https://www.lightspeed.com,"other,tt,rithmic","lightspeed,tt,rithmic",yes,PNG,"SEC,FINRA,CFTC,NFA","New York, United States",/brokers/lightspeed-futures.png
+124,marex,Marex,broker,futures,active,https://www.marex.com,"other,tt,cqg","marex,tt,cqg",yes,PNG,"CFTC,NFA,FCA,ASIC,MAS","London, United Kingdom",/brokers/marex.png
+125,markets-com,Markets.com,broker,cfd,active,https://www.markets.com,"other,mt4,mt5,tradingview","Markets.com-,Safecap,mt4,mt5",yes,PNG,"FCA,CySEC,ASIC,FSCA,BVI FSC","Limassol, Cyprus",/brokers/markets-com.png
+126,mexc,MEXC,broker,crypto,active,https://www.mexc.com,other,"mexc,contract",yes,PNG,,Seychelles,/brokers/mexc.png
+127,motivewave,MotiveWave,broker,futures,active,https://www.motivewave.com,other,motivewave,yes,PNG,,"Toronto, Canada",/brokers/motivewave.png
+128,ninjatrader,NinjaTrader,broker,futures,active,https://ninjatrader.com,ninjatrader,"ninjatrader,nt8,continuum",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/ninjatrader.png
+129,oanda,OANDA,broker,cfd,active,https://www.oanda.com,"other,mt4,tradingview","OANDA-,fxtrade,oanda,mt4",yes,PNG,"CFTC,NFA,FCA,IIROC,ASIC,MAS,JFSA","New York, United States",/brokers/oanda.png
+130,okx,OKX,broker,crypto,active,https://www.okx.com,other,"okx,okex",yes,PNG,,Seychelles,/brokers/okx.png
+131,optimus-futures,Optimus Futures,broker,futures,active,https://optimusfutures.com,"other,cqg,rithmic,tt","optimus,optimusflow,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Boca Raton, United States",/brokers/optimus-futures.png
+132,orbex,Orbex,broker,cfd,active,https://www.orbex.com,"mt4,mt5","Orbex-,mt4,mt5",yes,PNG,"CySEC,FSC Mauritius,SCB","Limassol, Cyprus",/brokers/orbex.png
+133,pepperstone,Pepperstone,broker,cfd,active,https://pepperstone.com,"mt4,mt5,ctrader,tradingview","Pepperstone-,PepperstoneEU-,Pepperstone-Demo,cTrader,mt4,mt5",yes,PNG,"ASIC,FCA,CySEC,BaFin,DFSA,CMA","Melbourne, Australia",/brokers/pepperstone.png
+134,phemex,Phemex,broker,crypto,active,https://phemex.com,other,phemex,yes,PNG,,Singapore,/brokers/phemex.png
+135,phillip-capital,Phillip Capital,broker,futures,active,https://www.phillipcapital.com,"cqg,tt,rithmic","phillipcapital,cqg,tt,rithmic",yes,PNG,"CFTC,NFA,MAS","Chicago, United States",/brokers/phillip-capital.png
+136,plus500,Plus500,broker,cfd,active,https://www.plus500.com,other,"plus500,webtrader",yes,PNG,"FCA,ASIC,CySEC,MAS,FMA,FSCA","Haifa, Israel",/brokers/plus500.png
+137,plus500-futures,Plus500 Futures,broker,futures,active,https://futures.plus500.com,other,"plus500,webtrader",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/plus500-futures.png
+138,rj-obrien,R.J. O'Brien,broker,futures,active,https://www.rjobrien.com,"other,tt,cqg","rjobrien,rjo,tt,cqg",yes,PNG,"CFTC,NFA,FCA,IIROC","Chicago, United States",/brokers/rj-obrien.png
+139,rithmic,Rithmic,broker,futures,active,https://www.rithmic.com,"other,rithmic","rithmic,rtrader",yes,PNG,,"Chicago, United States",/brokers/rithmic.png
+140,saxo-bank,Saxo Bank,broker,cfd,active,https://www.home.saxo,"other,tradingview","saxotrader,openapi.saxo,saxo,tradingview",yes,PNG,"DFSA,FCA,ASIC,MAS,FINMA,JFSA,SFC","Copenhagen, Denmark",/brokers/saxo-bank.png
+141,sierra-chart,Sierra Chart,broker,futures,active,https://www.sierrachart.com,other,sierrachart,yes,PNG,,"Manteca, United States",/brokers/sierra-chart.png
+142,skilling,Skilling,broker,cfd,active,https://skilling.com,"other,mt4,ctrader","Skilling-,cTrader,mt4",yes,PNG,"CySEC,FSA Seychelles","Nicosia, Cyprus",/brokers/skilling.png
+143,stage-5-trading,Stage 5 Trading,broker,futures,active,https://stage5trading.com,"other,cqg,rithmic,tt","stage5,cqg,rithmic,tt",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/stage-5-trading.png
+144,stonex,StoneX,broker,futures,active,https://www.stonex.com,"other,cqg,tt","stonex,cqg,tt",yes,PNG,"CFTC,NFA,SEC,FINRA,FCA,ASIC","New York, United States",/brokers/stonex.png
+145,swissquote,Swissquote,broker,cfd,active,https://www.swissquote.com,"other,mt4,mt5","Swissquote-,SQMT4,SQMT5,advanced trader,cfxd",yes,PNG,"FINMA,FCA,CySEC,DFSA,SFC,MAS","Gland, Switzerland",/brokers/swissquote.png
+146,tastytrade,tastytrade,broker,futures,active,https://tastytrade.com,other,"tastytrade,tastyworks",yes,PNG,"SEC,FINRA,CFTC,NFA","Chicago, United States",/brokers/tastytrade.png
+147,thinkmarkets,ThinkMarkets,broker,cfd,active,https://www.thinkmarkets.com,"other,mt4,mt5","ThinkMarkets-,ThinkTrader,mt4,mt5",yes,PNG,"FCA,ASIC,CySEC,FSA Seychelles,FSCA,JFSA","London, United Kingdom",/brokers/thinkmarkets.png
+148,tickmill,Tickmill,broker,cfd,active,https://www.tickmill.com,"mt4,mt5,cqg","Tickmill-,TickmillUK-,mt4,mt5,cqg",yes,PNG,"FCA,CySEC,FSCA,FSA Seychelles,Labuan FSA","London, United Kingdom",/brokers/tickmill.png
+149,trade-nation,Trade Nation,broker,cfd,active,https://tradenation.com,"other,mt4","TradeNation-,CoreTrader,mt4",yes,PNG,"FCA,ASIC,FSCA,SCB","London, United Kingdom",/brokers/trade-nation.png
+150,tradestation,TradeStation,broker,futures,active,https://www.tradestation.com,other,tradestation,yes,PNG,"SEC,FINRA,CFTC,NFA","Plantation, United States",/brokers/tradestation.png
+151,trading-technologies,Trading Technologies,broker,futures,active,https://www.tradingtechnologies.com,tt,"tradingtechnologies,tt",yes,PNG,,"Chicago, United States",/brokers/trading-technologies.png
+152,tradovate,Tradovate,broker,futures,active,https://www.tradovate.com,tradovate,"tradovate,ninjatrader",yes,PNG,"CFTC,NFA","Chicago, United States",/brokers/tradovate.png
+153,vantage,Vantage,broker,cfd,active,https://www.vantagemarkets.com,"mt4,mt5,other,tradingview","VantageFX-,VantageInternational-,mt4,mt5,vantage",yes,PNG,"ASIC,CIMA,VFSC,FSCA","Sydney, Australia",/brokers/vantage.png
+154,webull-futures,Webull,broker,futures,active,https://www.webull.com,other,webull,yes,PNG,"SEC,FINRA,CFTC,NFA","St. Petersburg, United States",/brokers/webull-futures.png
+155,wedbush-futures,Wedbush Futures,broker,futures,active,https://www.wedbushfutures.com,"other,tt,cqg","wedbush,tt,cqg",yes,PNG,"CFTC,NFA,SEC,FINRA","Los Angeles, United States",/brokers/wedbush-futures.png
+156,whitebit,WhiteBIT,broker,crypto,active,https://whitebit.com,other,whitebit,yes,PNG,,"Vilnius, Lithuania",/brokers/whitebit.png
+157,woo-x,WOO X,broker,crypto,active,https://woox.io,other,"woox,woo",yes,PNG,,"Taipei, Taiwan",/brokers/woo-x.png
+158,xm,XM,broker,cfd,active,https://www.xm.com,"mt4,mt5","XMGlobal-,XM.COM-,XMTrading-,mt4,mt5",yes,PNG,"CySEC,ASIC,DFSA,FSC Belize","Limassol, Cyprus",/brokers/xm.png
+159,xtb,XTB,broker,cfd,active,https://www.xtb.com,other,"xstation,xtb",yes,PNG,"FCA,CySEC,KNF,DFSA,FSC Belize","Warsaw, Poland",/brokers/xtb.png

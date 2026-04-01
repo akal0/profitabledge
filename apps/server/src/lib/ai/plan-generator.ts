@@ -1415,6 +1415,7 @@ function applyWeekdayPerformanceOverrides(
   const lower = userMessage.toLowerCase();
   const wantsWeekday =
     lower.includes("day of week") ||
+    lower.includes("day of the week") ||
     lower.includes("weekday performance") ||
     lower.includes("performance by weekday") ||
     (lower.includes("weekday") && lower.includes("performance"));

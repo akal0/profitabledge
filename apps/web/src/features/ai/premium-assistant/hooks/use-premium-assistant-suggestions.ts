@@ -95,8 +95,8 @@ export function usePremiumAssistantSuggestions({
             id: name,
             name,
             type: "model",
-            description: "Model tag",
-            category: "model",
+            description: "Edge",
+            category: "edge",
           });
         });
       }

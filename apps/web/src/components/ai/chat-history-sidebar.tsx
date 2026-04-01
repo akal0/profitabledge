@@ -79,20 +79,23 @@ export function ChatHistorySidebar({
   const [renameReportId, setRenameReportId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
-  const reportsQueryKey = trpcOptions.ai.getReports.queryOptions({
+  const reportsQueryKey = trpcOptions.assistant.getConversations.queryOptions({
     limit: 50,
     accountId,
   }).queryKey;
 
   const { data: reportsData, isLoading } = useQuery({
-    ...trpcOptions.ai.getReports.queryOptions({
+    ...trpcOptions.assistant.getConversations.queryOptions({
       limit: 50,
       accountId,
     }),
     staleTime: 15_000,
   });
 
-  const reports = reportsData?.items || [];
+  const reports = (reportsData?.items || []).map((report) => ({
+    ...report,
+    title: report.title || "New conversation",
+  }));
 
   const filteredReports = reports.filter((report) =>
     report.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -109,7 +112,10 @@ export function ChatHistorySidebar({
 
   const renameReportMutation = useMutation({
     mutationFn: async ({ id, title }: { id: string; title: string }) =>
-      trpcClient.ai.updateReport.mutate({ id, title }),
+      trpcClient.assistant.renameConversation.mutate({
+        conversationId: id,
+        title,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: reportsQueryKey });
       toast.success("Conversation renamed");
@@ -122,7 +128,10 @@ export function ChatHistorySidebar({
   });
 
   const deleteReportMutation = useMutation({
-    mutationFn: async (id: string) => trpcClient.ai.deleteReport.mutate({ id }),
+    mutationFn: async (id: string) =>
+      trpcClient.assistant.deleteConversation.mutate({
+        conversationId: id,
+      }),
     onSuccess: async (_, deletedReportId) => {
       await queryClient.invalidateQueries({ queryKey: reportsQueryKey });
       if (currentReportId === deletedReportId) {

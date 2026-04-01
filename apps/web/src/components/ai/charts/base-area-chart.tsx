@@ -83,7 +83,7 @@ export function BaseAreaChart({
   return (
     <ChartContainer
       config={{ value: { label: "Value", color: strokeColor } }}
-      className={cn("mt-auto aspect-auto h-60 w-full md:h-72", className)}
+      className={cn("aspect-auto h-56 w-full md:h-60", className)}
       style={height ? { height } : undefined}
     >
         <AreaChart

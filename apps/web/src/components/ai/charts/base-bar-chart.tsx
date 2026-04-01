@@ -44,10 +44,10 @@ export function BaseBarChart({
   const isSingular = mode === "singular";
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-max w-full flex-col">
       <ChartContainer
         config={{ value: { label: "Value", color: "#2dd4bf" } }}
-        className={cn("mt-auto aspect-auto h-60 w-full md:h-72", className)}
+        className={cn("aspect-auto h-56 w-full md:h-60", className)}
         style={height ? { height } : undefined}
       >
         <BarChart

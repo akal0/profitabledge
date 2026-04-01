@@ -1,0 +1,70 @@
+<svg width="1440" height="1054" viewBox="0 0 1440 1054" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="720" y1="0" x2="720" y2="1054" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A0A0A"/>
+      <stop offset="0.56" stop-color="#060606"/>
+      <stop offset="1" stop-color="#030303"/>
+    </linearGradient>
+    <radialGradient id="glow-cool" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(742 164) rotate(90) scale(308 606)">
+      <stop stop-color="#9BD9FF" stop-opacity="0.28"/>
+      <stop offset="0.52" stop-color="#64C7FF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#64C7FF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-warm-left" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(254 344) rotate(28.7) scale(320 232)">
+      <stop stop-color="#FFE7D6" stop-opacity="0.18"/>
+      <stop offset="0.58" stop-color="#FFC9A9" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFC9A9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-warm-right" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1188 316) rotate(149) scale(304 224)">
+      <stop stop-color="#FFF1E7" stop-opacity="0.18"/>
+      <stop offset="0.6" stop-color="#FFD9C3" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#FFD9C3" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="beam-left" x1="112" y1="570" x2="980" y2="74" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.44" stop-color="#FFFFFF" stop-opacity="0.16"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="beam-right" x1="494" y1="742" x2="1354" y2="168" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.46" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="0.78" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="vignette" x1="720" y1="0" x2="720" y2="1054" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#050505" stop-opacity="0.04"/>
+      <stop offset="0.62" stop-color="#050505" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#050505"/>
+    </linearGradient>
+    <pattern id="grid" width="96" height="96" patternUnits="userSpaceOnUse">
+      <path d="M95.5 0V96M0 95.5H96" stroke="white" stroke-opacity="0.045"/>
+      <circle cx="1" cy="1" r="0.75" fill="white" fill-opacity="0.08"/>
+    </pattern>
+    <filter id="blur-64" x="-160" y="-160" width="1760" height="1374" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="64"/>
+    </filter>
+    <filter id="blur-88" x="-200" y="-200" width="1840" height="1454" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="88"/>
+    </filter>
+  </defs>
+
+  <rect width="1440" height="1054" fill="url(#bg)"/>
+  <rect width="1440" height="1054" fill="url(#grid)" opacity="0.4"/>
+
+  <g filter="url(#blur-88)">
+    <ellipse cx="742" cy="164" rx="420" ry="210" fill="url(#glow-cool)"/>
+    <ellipse cx="254" cy="344" rx="228" ry="168" fill="url(#glow-warm-left)"/>
+    <ellipse cx="1188" cy="316" rx="228" ry="168" fill="url(#glow-warm-right)"/>
+  </g>
+
+  <g filter="url(#blur-64)" opacity="0.9">
+    <path d="M-84 620C216 444 494 280 978 22" stroke="url(#beam-left)" stroke-width="138" stroke-linecap="round"/>
+    <path d="M530 760C858 548 1120 362 1522 120" stroke="url(#beam-right)" stroke-width="124" stroke-linecap="round"/>
+  </g>
+
+  <path d="M122 610C434 432 634 322 1030 104" stroke="white" stroke-opacity="0.09" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M490 784C812 578 1068 404 1362 220" stroke="white" stroke-opacity="0.06" stroke-width="1.5" stroke-linecap="round"/>
+
+  <rect width="1440" height="1054" fill="url(#vignette)"/>
+</svg>

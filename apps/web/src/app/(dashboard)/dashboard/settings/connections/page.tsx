@@ -38,7 +38,10 @@ import {
   resolveMt5RequestedRegionGroup,
   type Mt5PlacementWarning,
 } from "@/features/settings/connections/lib/mt5-hosting";
-import { isTerminalProvider } from "@/features/settings/connections/lib/connection-status";
+import {
+  isTerminalProvider,
+  isWorkerManagedProvider,
+} from "@/features/settings/connections/lib/connection-status";
 import type {
   AccountRow,
   ConnectionProviderDefinition,
@@ -356,6 +359,12 @@ export default function ConnectionsSettingsPage() {
   };
 
   const handleProviderClick = (provider: ConnectionProviderDefinition) => {
+    if (provider.status === "not_applicable") {
+      toast.info(
+        provider.note ?? `${provider.name} trades sync through the linked broker.`
+      );
+      return;
+    }
     if (provider.status === "coming_soon") {
       toast.info(`${provider.name} is coming soon!`);
       return;
@@ -469,14 +478,18 @@ export default function ConnectionsSettingsPage() {
   };
 
   const providers = PROVIDERS.map((provider) =>
-    isTerminalProvider(provider.id) && !mt5IngestionEnabled
+    isWorkerManagedProvider(provider.id) && !mt5IngestionEnabled
       ? {
           ...provider,
           status: "coming_soon" as const,
           description:
-            "Hosted MT5 terminal sync is held back for this beta while the worker stack is offline.",
+            provider.id === "rithmic"
+              ? "Rithmic live sync is held back for this beta while the broker worker stack is offline."
+              : "Hosted MT5 terminal sync is held back for this beta while the worker stack is offline.",
           betaNote:
-            "Use the EA bridge for broker-side enrichment until hosted MT5 sync is enabled",
+            provider.id === "rithmic"
+              ? "Use CSV import until the worker stack is enabled for Rithmic"
+              : "Use the EA bridge for broker-side enrichment until hosted MT5 sync is enabled",
         }
       : provider
   );
@@ -535,7 +548,7 @@ export default function ConnectionsSettingsPage() {
                 isSyncing={syncNow.isPending}
                 scheduledSyncEnabled={scheduledSyncEnabled}
                 mt5IngestionEnabled={mt5IngestionEnabled}
-                activePlanTitle={activePlan?.title ?? "Student"}
+                activePlanTitle={activePlan?.title ?? "Explorer"}
                 liveSyncSlotsIncluded={liveSyncSlotsIncluded}
                 liveSyncSlotsUsed={liveSyncSlotsUsed}
                 liveSyncSlotsRemaining={liveSyncSlotsRemaining}

@@ -20,6 +20,9 @@ import type {
 
 function formatCredentialFieldLabel(field: string) {
   if (field === "serverUrl") return "Server URL";
+  if (field === "apiKey") return "API Key";
+  if (field === "fcmId") return "FCM ID";
+  if (field === "systemName") return "System name";
 
   const normalized = field
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -149,6 +152,14 @@ export function ConnectionCredentialDialog({
                       ? "https://broker.match-trader.com"
                       : field === "email"
                         ? "your@email.com"
+                        : field === "username"
+                          ? "your_username"
+                          : field === "apiKey"
+                            ? "Paste your API key"
+                            : field === "systemName"
+                              ? "Rithmic system name"
+                              : field === "fcmId"
+                                ? "Your FCM identifier"
                         : ""
                   }
                   value={credentialForm[field] ?? ""}

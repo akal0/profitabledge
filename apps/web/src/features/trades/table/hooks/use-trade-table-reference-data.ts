@@ -15,6 +15,7 @@ import type {
   NamedColorTag,
   NumericRange,
   SampleGateStatusRow,
+  TradeFilterArtifacts,
 } from "../lib/trade-table-view-state";
 import type { TradeRow } from "../lib/trade-table-types";
 import { NO_RESULTS_FILTER_ID } from "../lib/trade-table-view-state";
@@ -210,12 +211,9 @@ export function useTradeTableReferenceData({
     | SampleGateStatusRow[]
     | undefined;
 
-  const infiniteOpts = trpcOptions.trades.listInfinite.infiniteQueryOptions(
-    {
+  const closedTradeFilters = React.useMemo(
+    () => ({
       accountId,
-      limit: filters.ids.length
-        ? Math.min(Math.max(filters.ids.length, 50), 200)
-        : 50,
       q: filters.q || undefined,
       tradeDirection:
         filters.effectiveTradeDirection === "all"
@@ -254,13 +252,11 @@ export function useTradeTableReferenceData({
           ? filters.effectiveHoldRange[1]
           : undefined,
       volumeMin:
-        filters.effectiveVolRange &&
-        Number.isFinite(filters.effectiveVolRange[0])
+        filters.effectiveVolRange && Number.isFinite(filters.effectiveVolRange[0])
           ? filters.effectiveVolRange[0]
           : undefined,
       volumeMax:
-        filters.effectiveVolRange &&
-        Number.isFinite(filters.effectiveVolRange[1])
+        filters.effectiveVolRange && Number.isFinite(filters.effectiveVolRange[1])
           ? filters.effectiveVolRange[1]
           : undefined,
       profitMin:
@@ -282,13 +278,11 @@ export function useTradeTableReferenceData({
           ? filters.effectiveComRange[1]
           : undefined,
       swapMin:
-        filters.effectiveSwapRange &&
-        Number.isFinite(filters.effectiveSwapRange[0])
+        filters.effectiveSwapRange && Number.isFinite(filters.effectiveSwapRange[0])
           ? filters.effectiveSwapRange[0]
           : undefined,
       swapMax:
-        filters.effectiveSwapRange &&
-        Number.isFinite(filters.effectiveSwapRange[1])
+        filters.effectiveSwapRange && Number.isFinite(filters.effectiveSwapRange[1])
           ? filters.effectiveSwapRange[1]
           : undefined,
       slMin:
@@ -316,23 +310,19 @@ export function useTradeTableReferenceData({
           ? filters.effectiveRrRange[1]
           : undefined,
       mfeMin:
-        filters.effectiveMfeRange &&
-        Number.isFinite(filters.effectiveMfeRange[0])
+        filters.effectiveMfeRange && Number.isFinite(filters.effectiveMfeRange[0])
           ? filters.effectiveMfeRange[0]
           : undefined,
       mfeMax:
-        filters.effectiveMfeRange &&
-        Number.isFinite(filters.effectiveMfeRange[1])
+        filters.effectiveMfeRange && Number.isFinite(filters.effectiveMfeRange[1])
           ? filters.effectiveMfeRange[1]
           : undefined,
       maeMin:
-        filters.effectiveMaeRange &&
-        Number.isFinite(filters.effectiveMaeRange[0])
+        filters.effectiveMaeRange && Number.isFinite(filters.effectiveMaeRange[0])
           ? filters.effectiveMaeRange[0]
           : undefined,
       maeMax:
-        filters.effectiveMaeRange &&
-        Number.isFinite(filters.effectiveMaeRange[1])
+        filters.effectiveMaeRange && Number.isFinite(filters.effectiveMaeRange[1])
           ? filters.effectiveMaeRange[1]
           : undefined,
       efficiencyMin:
@@ -345,6 +335,37 @@ export function useTradeTableReferenceData({
         Number.isFinite(filters.effectiveEfficiencyRange[1])
           ? filters.effectiveEfficiencyRange[1]
           : undefined,
+    }),
+    [accountId, filters]
+  );
+
+  const filterArtifactsOpts = trpcOptions.trades.getFilterArtifacts.queryOptions(
+    closedTradeFilters
+  );
+  const { data: filterArtifactsRaw } = useSuspenseQuery({
+    ...filterArtifactsOpts,
+    staleTime: 15_000,
+  });
+  const filterArtifacts = (filterArtifactsRaw as TradeFilterArtifacts | undefined) ?? {
+    commissionsHistogram: [],
+    efficiencyHistogram: [],
+    holdHistogram: [],
+    maeHistogram: [],
+    mfeHistogram: [],
+    profitHistogram: [],
+    rrHistogram: [],
+    swapHistogram: [],
+    symbolCounts: {},
+    symbolTotal: 0,
+    volumeHistogram: [],
+  };
+
+  const infiniteOpts = trpcOptions.trades.listInfinite.infiniteQueryOptions(
+    {
+      ...closedTradeFilters,
+      limit: filters.ids.length
+        ? Math.min(Math.max(filters.ids.length, 50), 200)
+        : 50,
     },
     { getNextPageParam: (last: any) => last?.nextCursor }
   );
@@ -377,7 +398,7 @@ export function useTradeTableReferenceData({
       ...infiniteOpts,
     });
 
-  const rows = React.useMemo<TradeRow[]>(() => {
+  const closedRows = React.useMemo<TradeRow[]>(() => {
     const pages = (data as any)?.pages as
       | Array<{ items: TradeRow[] }>
       | undefined;
@@ -435,9 +456,16 @@ export function useTradeTableReferenceData({
   }, [accountId, liveOpenTrades]);
 
   const baseRows = React.useMemo<TradeRow[]>(
-    () => [...liveRows, ...rows],
-    [liveRows, rows]
+    () => [...liveRows, ...closedRows],
+    [closedRows, liveRows]
   );
+
+  const filteredTradesCount = React.useMemo(() => {
+    const pages = (data as any)?.pages as
+      | Array<{ filteredTradesCount?: number }>
+      | undefined;
+    return pages?.[0]?.filteredTradesCount ?? 0;
+  }, [data]);
 
   const totalTradesCount = React.useMemo(() => {
     const pages = (data as any)?.pages as
@@ -454,11 +482,15 @@ export function useTradeTableReferenceData({
     allSessionTags,
     allSymbols,
     baseRows,
+    closedRows,
     disableSampleGating,
     fetchNextPage,
+    filteredTradesCount,
+    filterArtifacts,
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    liveRows,
     maxBound,
     minBound,
     sampleGateStatus,

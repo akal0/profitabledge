@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -27,7 +27,11 @@ import { authClient } from "@/lib/auth-client";
 import { startDesktopSocialAuth } from "@/lib/desktop-social-auth";
 import { getErrorMessage } from "@/lib/error-message";
 import { clearLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
-import { storeAffiliateIntent } from "@/features/growth/lib/access-intent";
+import { storeGrowthIntent } from "@/features/growth/lib/access-intent";
+import {
+  GROWTH_VISITOR_COOKIE,
+  readCookie,
+} from "@/features/growth/lib/growth-attribution";
 import {
   buildLoginPath,
   buildPostAuthContinuePath,
@@ -90,7 +94,6 @@ export default function InvitePage() {
         image: null,
       }
     : null;
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
   const postAuthContinuePath = buildPostAuthContinuePath(requestedReturnTo);
@@ -101,15 +104,27 @@ export default function InvitePage() {
   const [affiliate, setAffiliate] = useState<AffiliateInfo | null>(
     initialAffiliate
   );
+  const affiliateCode = searchParams?.get("aff")?.trim() || username;
+  const offerCode = searchParams?.get("offer") ?? searchParams?.get("code");
   const channel = searchParams?.get("channel") ?? null;
+  const trackingLinkSlug = searchParams?.get("link") ?? null;
+  const affiliateGroupSlug = searchParams?.get("group") ?? null;
   const inviterLabel = affiliate?.username || affiliate?.name || username;
 
   useEffect(() => {
     clearLoginOnboardingBypass();
-    storeAffiliateIntent(username, channel);
+    storeGrowthIntent({
+      type: "affiliate",
+      code: affiliateCode,
+      offerCode,
+      channel,
+      trackingLinkSlug,
+      affiliateGroupSlug,
+      visitorToken: readCookie(GROWTH_VISITOR_COOKIE),
+    });
 
     trpcClient.billing.getAffiliatePublicProfile
-      .query({ code: username })
+      .query({ code: affiliateCode || offerCode || username })
       .then((profile) => {
         if (profile) {
           setAffiliate(profile);
@@ -118,7 +133,7 @@ export default function InvitePage() {
       .catch(() => {
         // Silently ignore — affiliate badge is optional
       });
-  }, [username, channel]);
+  }, [affiliateCode, affiliateGroupSlug, channel, offerCode, trackingLinkSlug, username]);
 
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -147,7 +162,7 @@ export default function InvitePage() {
           });
 
           await waitForConfirmedSession();
-          router.push(postAuthContinuePath);
+          window.location.replace(postAuthContinuePath);
         },
         onError: (error: any) => {
           const message = getErrorMessage(

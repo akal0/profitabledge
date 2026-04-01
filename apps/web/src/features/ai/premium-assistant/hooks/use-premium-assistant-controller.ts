@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -12,7 +12,10 @@ import { useAssistantStream } from "@/hooks/use-assistant-stream";
 import { usePDFExport } from "@/hooks/use-pdf-export";
 import type { AnalysisBlock, VizSpec } from "@/types/assistant-stream";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
-import { normalizeGoalTargetType } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
+import {
+  normalizeGoalTargetType,
+  TRADING_SUGGESTIONS,
+} from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import type { ChatMessage } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import { usePremiumAssistantSuggestions } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-suggestions";
 import { showAIErrorToast } from "@/lib/ai-error-toast";
@@ -23,6 +26,10 @@ import {
   normalizeMisunderstoodAssistantPayload,
   REPHRASE_REQUEST_MARKDOWN,
 } from "@/features/ai/premium-assistant/lib/premium-assistant-response-guards";
+import {
+  buildMessageWidgets,
+  extractPresentationFromWidgets,
+} from "@/features/ai/premium-assistant/lib/message-presentation";
 
 interface UsePremiumAssistantControllerOptions {
   accountId?: string;
@@ -45,6 +52,7 @@ export function usePremiumAssistantController({
   const loadRequestRef = useRef(0);
   const pendingHydrationReportIdRef = useRef<string | null>(null);
   const finalizedAssistantSignatureRef = useRef<string | null>(null);
+  const conversationContextRef = useRef<any>(null);
   const lastSubmittedPromptRef = useRef("");
   const [inputValue, setInputValue] = useState("");
   const [inputHtml, setInputHtml] = useState("");
@@ -73,10 +81,30 @@ export function usePremiumAssistantController({
   const { state, startStream, reset } = useAssistantStream();
   const { exportToPDF } = usePDFExport();
   const { fetchSuggestions } = usePremiumAssistantSuggestions({ accountId });
-  const reportsQueryKey = trpcOptions.ai.getReports.queryOptions({
+  const reportsQueryKey = trpcOptions.assistant.getConversations.queryOptions({
     limit: 50,
     accountId,
   }).queryKey;
+  const starterQuestionsQuery = useQuery({
+    ...trpcOptions.assistant.getSuggestedQuestions.queryOptions({
+      accountId: accountId || "",
+    }),
+    enabled: Boolean(accountId),
+    staleTime: 30_000,
+  });
+  const starterQuestionsData = starterQuestionsQuery.data;
+  const hasResolvedStarterQuestions = Array.isArray(starterQuestionsData);
+  const isStarterSuggestionsLoading =
+    Boolean(accountId) && !hasResolvedStarterQuestions && !starterQuestionsQuery.isError;
+  const starterSuggestions = hasResolvedStarterQuestions
+    ? Array.from(
+        new Set([...(starterQuestionsData || []), ...TRADING_SUGGESTIONS])
+      ).slice(0, TRADING_SUGGESTIONS.length)
+    : accountId
+      ? starterQuestionsQuery.isError
+        ? TRADING_SUGGESTIONS
+        : []
+      : TRADING_SUGGESTIONS;
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -90,8 +118,8 @@ export function usePremiumAssistantController({
       const reportId = currentReportId;
 
       try {
-        const result = await trpcClient.ai.getMessages.query({
-          reportId,
+        const result = await trpcClient.assistant.getConversation.query({
+          conversationId: reportId,
         });
 
         if (
@@ -101,40 +129,33 @@ export function usePremiumAssistantController({
           return;
         }
 
-        const loadedMessages: ChatMessage[] = result.items.map((message: any) => {
+        const loadedMessages: ChatMessage[] = result.messages.map((message: any) => {
+          const presentation = extractPresentationFromWidgets(
+            (message.widgets as any) || []
+          );
           const isAssistant = message.role === "assistant";
           const normalized = isAssistant
             ? normalizeMisunderstoodAssistantPayload({
                 content: message.content,
-                visualization: message.data?.visualization as
-                  | VizSpec
-                  | null
-                  | undefined,
-                analysisBlocks: message.data?.analysisBlocks as
-                  | AnalysisBlock[]
-                  | null
-                  | undefined,
+                visualization: presentation.visualization,
+                analysisBlocks: presentation.analysisBlocks,
               })
             : {
                 content: message.content,
-                visualization: message.data?.visualization as
-                  | VizSpec
-                  | null
-                  | undefined,
-                analysisBlocks: message.data?.analysisBlocks as
-                  | AnalysisBlock[]
-                  | null
-                  | undefined,
+                visualization: presentation.visualization,
+                analysisBlocks: presentation.analysisBlocks,
               };
 
           return {
             id: message.id,
-            role: message.role as "user" | "assistant",
+            role: message.role === "assistant" ? "assistant" : "user",
             content: normalized.content,
-            html: message.htmlContent || undefined,
             createdAt: new Date(message.createdAt),
             visualization: normalized.visualization || undefined,
             analysisBlocks: normalized.analysisBlocks || undefined,
+            widgets: (message.widgets as any) || [],
+            toolCalls: (message.toolCalls as any) || [],
+            context: (message.context as any) || null,
           };
         });
         const latestAssistantWithAnalysis = [...loadedMessages]
@@ -160,6 +181,10 @@ export function usePremiumAssistantController({
         setConversationHistory(
           loadedMessages.map((message) => `${message.role}: ${message.content}`)
         );
+        conversationContextRef.current =
+          [...loadedMessages]
+            .reverse()
+            .find((message) => Boolean(message.context))?.context || null;
         setSelectedVisualization(latestAssistantWithAnalysis?.visualization || null);
         setSelectedAnalysisBlocks(
           latestAssistantWithAnalysis?.analysisBlocks || []
@@ -226,11 +251,18 @@ export function usePremiumAssistantController({
     const finalContent = normalizedPayload.content;
     const finalAnalysisBlocks = normalizedPayload.analysisBlocks;
     const finalVisualization = normalizedPayload.visualization;
+    const finalWidgets = buildMessageWidgets({
+      visualization: finalVisualization,
+      analysisBlocks: finalAnalysisBlocks,
+    });
+    const finalToolCalls = state.metadata?.toolCalls || [];
+    const finalContext = state.metadata?.context || null;
     const completionSignature = [
       currentReportId || "no-report",
       finalContent,
       finalAnalysisBlocks.length,
       Boolean(finalVisualization),
+      finalToolCalls.length,
       state.error || "",
     ].join("::");
 
@@ -249,6 +281,9 @@ export function usePremiumAssistantController({
                 content: finalContent,
                 visualization: finalVisualization || undefined,
                 analysisBlocks: finalAnalysisBlocks,
+                widgets: finalWidgets,
+                toolCalls: finalToolCalls,
+                context: finalContext,
               }
             : message
         );
@@ -263,24 +298,26 @@ export function usePremiumAssistantController({
           createdAt: new Date(),
           visualization: finalVisualization || undefined,
           analysisBlocks: finalAnalysisBlocks,
+          widgets: finalWidgets,
+          toolCalls: finalToolCalls,
+          context: finalContext,
         },
       ];
     });
 
+    conversationContextRef.current = finalContext;
+
     if (currentReportId) {
       pendingHydrationReportIdRef.current = null;
-      trpcClient.ai.addMessage
+      trpcClient.assistant.addMessage
         .mutate({
-          reportId: currentReportId,
+          conversationId: currentReportId,
           role: "assistant",
           content: finalContent,
-          data:
-            finalVisualization || finalAnalysisBlocks.length > 0
-              ? {
-                  visualization: finalVisualization,
-                  analysisBlocks: finalAnalysisBlocks,
-                }
-              : undefined,
+          widgets: finalWidgets,
+          toolCalls: finalToolCalls,
+          context: finalContext,
+          accountId,
         })
         .catch((error) => {
           if (process.env.NODE_ENV !== "production") {
@@ -295,7 +332,7 @@ export function usePremiumAssistantController({
         ? prev
         : [...prev, `assistant: ${finalContent}`]
     );
-  }, [currentReportId, queryClient, reportsQueryKey, state]);
+  }, [accountId, currentReportId, queryClient, reportsQueryKey, state]);
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent) => {
@@ -331,7 +368,7 @@ export function usePremiumAssistantController({
       let reportId = currentReportId;
       if (!reportId) {
         try {
-          const report = await trpcClient.ai.createReport.mutate({
+          const report = await trpcClient.assistant.createConversation.mutate({
             title: inputValue.slice(0, 50) + (inputValue.length > 50 ? "..." : ""),
             accountId,
           });
@@ -366,12 +403,13 @@ export function usePremiumAssistantController({
       ]);
 
       if (reportId) {
-        trpcClient.ai.addMessage
+        trpcClient.assistant.addMessage
           .mutate({
-            reportId,
+            conversationId: reportId,
             role: "user",
             content: inputValue,
-            htmlContent: inputHtml || undefined,
+            context: conversationContextRef.current,
+            accountId,
           })
           .catch((error) => {
             if (process.env.NODE_ENV !== "production") {
@@ -440,6 +478,7 @@ export function usePremiumAssistantController({
     setSelectedAnalysisBlocks([]);
     pendingHydrationReportIdRef.current = null;
     finalizedAssistantSignatureRef.current = null;
+    conversationContextRef.current = null;
     reset();
     setPanelOpen(false);
     queryClient.invalidateQueries({ queryKey: reportsQueryKey });
@@ -470,6 +509,7 @@ export function usePremiumAssistantController({
     setPanelOpen(false);
     pendingHydrationReportIdRef.current = null;
     finalizedAssistantSignatureRef.current = null;
+    conversationContextRef.current = null;
     setCurrentReportId(reportId);
     setHistorySidebarOpen(false);
   }, [reset]);
@@ -574,6 +614,8 @@ export function usePremiumAssistantController({
     setHistorySidebarOpen,
     currentReportId,
     state,
+    starterSuggestions,
+    isStarterSuggestionsLoading,
     fetchSuggestions,
     handleSubmit,
     handleSuggestionClick,

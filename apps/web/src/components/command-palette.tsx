@@ -307,7 +307,7 @@ export function CommandPalette({ className }: CommandPaletteProps) {
   const canViewAffiliateDashboard = Boolean(
     billingState?.affiliate?.isAffiliate || billingState?.admin?.isAdmin
   );
-  const canViewGrowthOverview = billingState?.admin?.isAdmin === true;
+  const canViewGrowthOverview = Boolean(billingState);
   const canViewSupportSettings =
     publicAlphaFlags.supportDiagnostics && billingState?.admin?.isAdmin === true;
 

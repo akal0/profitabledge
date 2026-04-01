@@ -31,13 +31,13 @@ type BrokerLightStyle = {
 
 const BROKERS: Broker[] = [
   { name: "Tradovate", icon: "/brokers/tradovate.png" },
-  { name: "cTrader", icon: "/brokers/ctrader.svg" },
-  { name: "Robinhood", icon: "/brokers/robinhood.svg" },
-  { name: "NinjaTrader", icon: "/brokers/ninjatrader.svg" },
-  { name: "MetaTrader 5", icon: "/brokers/mt5.png" },
-  { name: "FTMO", icon: "/brokers/FTMO.png" },
+  { name: "cTrader", icon: "/platforms/ctrader.png" },
+  { name: "IC Markets", icon: "/brokers/ic-markets.png" },
+  { name: "Pepperstone", icon: "/brokers/pepperstone.png" },
+  { name: "MetaTrader 5", icon: "/platforms/mt5.png" },
+  { name: "Funding Pips", icon: "/prop-logos/funding-pips.png" },
   { name: "Profitabledge", icon: "/icon.svg" },
-  { name: "cTrader 2", icon: "/brokers/ctrader.svg" },
+  { name: "Topstep", icon: "/prop-logos/topstep.png" },
 ];
 
 const CENTER_RING_RADII = [130, 195, 260]; // inner, mid, outer
@@ -72,26 +72,17 @@ const BROKER_LIGHT_STYLES: Record<string, BrokerLightStyle> = {
       "radial-gradient(circle at 35% 35%, rgba(255,126,126,0.28) 0%, rgba(239,68,68,0.18) 36%, rgba(24,8,8,0.74) 80%)",
     ring: "rgba(255,126,126,0.22)",
   },
-  "cTrader 2": {
-    lightFilter: "hue-rotate(-42deg) saturate(1.28) brightness(1.04)",
+  "IC Markets": {
+    lightFilter: "hue-rotate(16deg) saturate(1.2) brightness(1.04)",
     overlay:
-      "radial-gradient(circle at 35% 35%, rgba(255,126,126,0.28) 0%, rgba(239,68,68,0.18) 36%, rgba(24,8,8,0.74) 80%)",
-    ring: "rgba(255,126,126,0.22)",
+      "radial-gradient(circle at 35% 35%, rgba(89,195,255,0.26) 0%, rgba(59,130,246,0.18) 36%, rgba(7,12,24,0.78) 80%)",
+    ring: "rgba(89,195,255,0.22)",
   },
-  Robinhood: {
-    lightFilter: "hue-rotate(80deg) saturate(1.18) brightness(1.04)",
+  Pepperstone: {
+    lightFilter: "hue-rotate(-20deg) saturate(1.24) brightness(1.02)",
     overlay:
-      "radial-gradient(circle at 35% 35%, rgba(93,255,140,0.24) 0%, rgba(52,211,153,0.14) 34%, rgba(9,20,13,0.74) 78%)",
-    ring: "rgba(93,255,140,0.18)",
-    iconScale: 0.96,
-  },
-  NinjaTrader: {
-    lightFilter: "hue-rotate(-80deg) saturate(3) brightness(1.0) sepia(0.3)",
-    overlay:
-      "radial-gradient(circle at 35% 35%, rgba(244,71,12,0.35) 0%, rgba(200,55,8,0.24) 34%, rgba(24,12,4,0.75) 78%)",
-    ring: "rgba(244,71,12,0.26)",
-    iconScale: 0.9,
-    lightOpacity: 0.55,
+      "radial-gradient(circle at 35% 35%, rgba(255,114,114,0.28) 0%, rgba(239,68,68,0.18) 36%, rgba(23,10,12,0.8) 80%)",
+    ring: "rgba(255,114,114,0.22)",
   },
   "MetaTrader 5": {
     lightFilter: "none",
@@ -99,12 +90,11 @@ const BROKER_LIGHT_STYLES: Record<string, BrokerLightStyle> = {
       "radial-gradient(circle at 35% 35%, rgba(0,194,255,0.2) 0%, rgba(45,212,191,0.12) 38%, rgba(8,16,22,0.68) 80%)",
     ring: "rgba(255,255,255,0.12)",
   },
-  FTMO: {
-    lightFilter: "grayscale(0.72) saturate(0.58) brightness(0.98)",
+  "Funding Pips": {
+    lightFilter: "hue-rotate(54deg) saturate(1.2) brightness(1.02)",
     overlay:
-      "radial-gradient(circle at 35% 35%, rgba(228,228,231,0.18) 0%, rgba(113,113,122,0.12) 36%, rgba(12,12,16,0.82) 80%)",
-    ring: "rgba(212,212,216,0.16)",
-    iconScale: 0.92,
+      "radial-gradient(circle at 35% 35%, rgba(255,196,92,0.28) 0%, rgba(245,158,11,0.18) 36%, rgba(24,16,6,0.8) 80%)",
+    ring: "rgba(255,196,92,0.22)",
   },
   Profitabledge: {
     lightFilter: "hue-rotate(108deg) saturate(0.8) brightness(0.72)",
@@ -114,16 +104,25 @@ const BROKER_LIGHT_STYLES: Record<string, BrokerLightStyle> = {
     iconScale: 0.88,
     iconSrc: "/icon.svg",
   },
+  Topstep: {
+    lightFilter: "hue-rotate(110deg) saturate(1.16) brightness(0.96)",
+    overlay:
+      "radial-gradient(circle at 35% 35%, rgba(80,255,190,0.22) 0%, rgba(16,185,129,0.16) 36%, rgba(8,18,14,0.82) 80%)",
+    ring: "rgba(80,255,190,0.2)",
+  },
 };
 
 const BROKER_ARC_RGB: Record<string, string> = {
   Tradovate: "125,211,252",
   cTrader: "255,90,90",
-  "cTrader 2": "255,90,90",
+  "IC Markets": "80,170,255",
+  Pepperstone: "255,110,110",
   Robinhood: "93,255,140",
   NinjaTrader: "244,120,40",
   "MetaTrader 5": "180,200,255",
   FTMO: "161,161,170",
+  "Funding Pips": "255,196,92",
+  Topstep: "80,255,190",
   Profitabledge: "34,211,238",
 };
 
@@ -190,10 +189,10 @@ function getRingRadii(sysIdx: number): number[] {
 const STATIC_GHOSTS = [
   { sysIdx: 0, ringIdx: 2, angle: 30, speed: 11, brokerIdx: 0 }, // Tradovate
   { sysIdx: 0, ringIdx: 1, angle: 160, speed: 14, brokerIdx: 1 }, // cTrader
-  { sysIdx: 0, ringIdx: 0, angle: 270, speed: 17, brokerIdx: 2 }, // Robinhood
-  { sysIdx: 2, ringIdx: 2, angle: 70, speed: 12, brokerIdx: 3 }, // NinjaTrader
+  { sysIdx: 0, ringIdx: 0, angle: 270, speed: 17, brokerIdx: 2 }, // IC Markets
+  { sysIdx: 2, ringIdx: 2, angle: 70, speed: 12, brokerIdx: 3 }, // Pepperstone
   { sysIdx: 2, ringIdx: 1, angle: 200, speed: 15, brokerIdx: 4 }, // MetaTrader 5
-  { sysIdx: 2, ringIdx: 0, angle: 320, speed: 18, brokerIdx: 5 }, // FTMO
+  { sysIdx: 2, ringIdx: 0, angle: 320, speed: 18, brokerIdx: 5 }, // Funding Pips
 ];
 
 // Initial placement: staggered across center rings to avoid visual overlap
@@ -662,7 +661,7 @@ export function BrokersSection() {
           </h2>
         </div>
 
-        <p className="max-w-md text-sm leading-relaxed text-white/50">
+        <p className="max-w-3xl text-sm leading-relaxed text-white/60 font-medium">
           We&apos;ve taken the grunt work out of journaling. Just sync your
           account once, and your trades show up like magic — ready to review,
           analyze, and learn from. No mess, no hassle, just smooth, automated

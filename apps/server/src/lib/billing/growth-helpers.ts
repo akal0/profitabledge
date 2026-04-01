@@ -101,11 +101,41 @@ export function buildAffiliateShareUrl(input: {
   channel?: string | null;
   destinationPath?: string | null;
 }) {
-  const handle = input.username || input.affiliateCode;
-  const url = new URL(`/invite/${encodeURIComponent(handle)}`, getWebAppUrl());
-  if (input.channel) {
-    url.searchParams.set("channel", input.channel);
+  const normalizedAffiliateCode = normalizeGrowthCode(input.affiliateCode);
+  const normalizedOfferCode = normalizeGrowthCode(input.offerCode ?? "");
+  const normalizedTrackingLinkSlug = normalizeGrowthSlug(input.trackingLinkSlug);
+  const normalizedGroupSlug = normalizeGrowthSlug(input.groupSlug);
+  const normalizedChannel = input.channel?.trim().toLowerCase() ?? "";
+  const destinationPath = normalizeDestinationPath(input.destinationPath);
+  const shouldUseInviteRoute = Boolean(input.username?.trim()) && destinationPath === "/sign-up";
+  const handle = input.username?.trim() || input.affiliateCode;
+  const url = new URL(
+    shouldUseInviteRoute
+      ? `/invite/${encodeURIComponent(handle)}`
+      : destinationPath,
+    getWebAppUrl()
+  );
+
+  if (normalizedAffiliateCode) {
+    url.searchParams.set("aff", normalizedAffiliateCode);
   }
+
+  if (normalizedOfferCode) {
+    url.searchParams.set("offer", normalizedOfferCode);
+  }
+
+  if (normalizedTrackingLinkSlug) {
+    url.searchParams.set("link", normalizedTrackingLinkSlug);
+  }
+
+  if (normalizedGroupSlug) {
+    url.searchParams.set("group", normalizedGroupSlug);
+  }
+
+  if (normalizedChannel) {
+    url.searchParams.set("channel", normalizedChannel);
+  }
+
   return url.toString();
 }
 
@@ -276,7 +306,10 @@ export function buildAffiliateTierProgress(
     thresholdAmount: null,
     remainingAmount: null,
     progressPercent: null,
-    statusMessage: "Elite is manually assigned for top affiliate partners.",
+    statusMessage:
+      tierKey === "elite"
+        ? "Elite is manually assigned for top affiliate partners."
+        : `${AFFILIATE_TIER_CONFIG[tierKey].label} is manually assigned by your team.`,
     isAutomatic: false,
   };
 }

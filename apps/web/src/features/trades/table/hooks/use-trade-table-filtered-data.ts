@@ -9,8 +9,8 @@ import {
 } from "../lib/trade-table-search";
 import {
   buildTradeStreakMap,
-  isFiniteNumber,
   type NumericRange,
+  type TradeFilterArtifacts,
 } from "../lib/trade-table-view-state";
 import {
   isTradeWithinDateRange,
@@ -19,7 +19,9 @@ import {
 import type { TradeRow } from "../lib/trade-table-types";
 
 type UseTradeTableFilteredDataArgs = {
-  baseRows: TradeRow[];
+  closedRows: TradeRow[];
+  liveRows: TradeRow[];
+  filterArtifacts: TradeFilterArtifacts;
   ids: string[];
   q: string;
   killzones: string[];
@@ -44,8 +46,24 @@ type UseTradeTableFilteredDataArgs = {
   hasMergedFilterConflict: boolean;
 };
 
+const EMPTY_FILTER_ARTIFACTS: TradeFilterArtifacts = {
+  commissionsHistogram: [],
+  efficiencyHistogram: [],
+  holdHistogram: [],
+  maeHistogram: [],
+  mfeHistogram: [],
+  profitHistogram: [],
+  rrHistogram: [],
+  swapHistogram: [],
+  symbolCounts: {},
+  symbolTotal: 0,
+  volumeHistogram: [],
+};
+
 export function useTradeTableFilteredData({
-  baseRows,
+  closedRows,
+  liveRows,
+  filterArtifacts,
   ids,
   q,
   killzones,
@@ -74,14 +92,14 @@ export function useTradeTableFilteredData({
     [q]
   );
   const searchDocumentByTradeId = React.useMemo(() => {
-    if (searchQueryTokens.length === 0) {
+    if (searchQueryTokens.length === 0 || liveRows.length === 0) {
       return null;
     }
 
     return new Map(
-      baseRows.map((row) => [row.id, buildTradeSearchDocument(row)])
+      liveRows.map((row) => [row.id, buildTradeSearchDocument(row)])
     );
-  }, [baseRows, searchQueryTokens.length]);
+  }, [liveRows, searchQueryTokens.length]);
 
   const idsSet = React.useMemo(() => new Set(ids), [ids]);
   const killzoneSet = React.useMemo(() => new Set(killzones), [killzones]);
@@ -106,47 +124,18 @@ export function useTradeTableFilteredData({
     [effectiveSymbols]
   );
 
-  const filteredArtifacts = React.useMemo(() => {
-    const emptyArtifacts = {
-      commissionsHistogram: [] as number[],
-      displayRows: [] as TradeRow[],
-      efficiencyHistogram: [] as number[],
-      holdHistogram: [] as Array<TradeRow["holdSeconds"]>,
-      maeHistogram: [] as number[],
-      mfeHistogram: [] as number[],
-      profitHistogram: [] as Array<TradeRow["profit"]>,
-      rrHistogram: [] as number[],
-      swapHistogram: [] as number[],
-      symbolCounts: {} as Record<string, number>,
-      symbolTotal: 0,
-      volumeHistogram: [] as Array<TradeRow["volume"]>,
-    };
-
+  const filteredLiveRows = React.useMemo(() => {
     if (hasMergedFilterConflict) {
-      return emptyArtifacts;
+      return [] as TradeRow[];
     }
 
-    const commissionsHistogram: number[] = [];
-    const displayRows: TradeRow[] = [];
-    const efficiencyHistogram: number[] = [];
-    const holdHistogram: Array<TradeRow["holdSeconds"]> = [];
-    const maeHistogram: number[] = [];
-    const mfeHistogram: number[] = [];
-    const profitHistogram: Array<TradeRow["profit"]> = [];
-    const rrHistogram: number[] = [];
-    const swapHistogram: number[] = [];
-    const symbolCounts: Record<string, number> = {};
-    let symbolTotal = 0;
-    const volumeHistogram: Array<TradeRow["volume"]> = [];
-
-    for (const row of baseRows) {
+    return liveRows.filter((row) => {
       const matchesIds = idsSet.size === 0 || idsSet.has(row.id);
       const matchesDirection =
         effectiveTradeDirection === "all" ||
         row.tradeDirection === effectiveTradeDirection;
       const matchesSymbols =
         symbolSet.size === 0 ||
-        row.isLive !== true ||
         [row.rawSymbol, row.symbol, row.symbolGroup]
           .filter((value): value is string => Boolean(value))
           .some((value) => symbolSet.has(value));
@@ -159,9 +148,8 @@ export function useTradeTableFilteredData({
       const matchesProtocol =
         protocolSet.size === 0 ||
         protocolSet.has((row.protocolAlignment || "") as any);
-      const rowOutcome = row.isLive ? "Live" : row.outcome || "";
       const matchesOutcome =
-        outcomeSet.size === 0 || outcomeSet.has(rowOutcome as any);
+        outcomeSet.size === 0 || outcomeSet.has("Live" as any);
       const matchesDate = isTradeWithinDateRange(
         row,
         mergedDateRange.start,
@@ -194,36 +182,18 @@ export function useTradeTableFilteredData({
         effectiveEfficiencyRange
       );
 
-      const matchesStaticFilters =
+      return (
         matchesIds &&
         matchesDirection &&
+        matchesSymbols &&
         matchesKillzone &&
         matchesSessionTag &&
         matchesModelTag &&
         matchesProtocol &&
         matchesOutcome &&
         matchesDate &&
-        matchesSearch;
-      const matchesNumericFilters =
+        matchesSearch &&
         matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesMae &&
-        matchesEfficiency;
-
-      if (matchesStaticFilters && matchesSymbols && matchesNumericFilters) {
-        displayRows.push(row);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
         matchesVolume &&
         matchesProfit &&
         matchesCommissions &&
@@ -234,172 +204,9 @@ export function useTradeTableFilteredData({
         matchesMfe &&
         matchesMae &&
         matchesEfficiency
-      ) {
-        holdHistogram.push(row.holdSeconds);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesMae &&
-        matchesEfficiency
-      ) {
-        volumeHistogram.push(row.volume);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesMae &&
-        matchesEfficiency
-      ) {
-        profitHistogram.push(row.profit);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesMae &&
-        matchesEfficiency
-      ) {
-        commissionsHistogram.push(Number(row.commissions || 0));
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesMae &&
-        matchesEfficiency
-      ) {
-        swapHistogram.push(Number(row.swap || 0));
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesMfe &&
-        matchesMae &&
-        matchesEfficiency &&
-        isFiniteNumber(row.realisedRR)
-      ) {
-        rrHistogram.push(row.realisedRR);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMae &&
-        matchesEfficiency &&
-        isFiniteNumber(row.mfePips)
-      ) {
-        mfeHistogram.push(row.mfePips);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesEfficiency &&
-        isFiniteNumber(row.maePips)
-      ) {
-        maeHistogram.push(row.maePips);
-      }
-
-      if (
-        matchesStaticFilters &&
-        matchesSymbols &&
-        matchesHold &&
-        matchesVolume &&
-        matchesProfit &&
-        matchesCommissions &&
-        matchesSwap &&
-        matchesSl &&
-        matchesTp &&
-        matchesRr &&
-        matchesMfe &&
-        matchesMae &&
-        isFiniteNumber(row.rrCaptureEfficiency)
-      ) {
-        efficiencyHistogram.push(row.rrCaptureEfficiency);
-      }
-
-      if (matchesStaticFilters && matchesNumericFilters) {
-        symbolCounts[row.symbol] = (symbolCounts[row.symbol] || 0) + 1;
-        symbolTotal += 1;
-      }
-    }
-
-    return {
-      commissionsHistogram,
-      displayRows,
-      efficiencyHistogram,
-      holdHistogram,
-      maeHistogram,
-      mfeHistogram,
-      profitHistogram,
-      rrHistogram,
-      swapHistogram,
-      symbolCounts,
-      symbolTotal,
-      volumeHistogram,
-    };
+      );
+    });
   }, [
-    baseRows,
     effectiveComRange,
     effectiveEfficiencyRange,
     effectiveHoldRange,
@@ -415,6 +222,7 @@ export function useTradeTableFilteredData({
     hasMergedFilterConflict,
     idsSet,
     killzoneSet,
+    liveRows,
     mergedDateRange.end,
     mergedDateRange.start,
     modelTagSet,
@@ -426,25 +234,18 @@ export function useTradeTableFilteredData({
     symbolSet,
   ]);
 
-  const displayRows = filteredArtifacts.displayRows;
+  const displayRows = React.useMemo(
+    () => [...filteredLiveRows, ...closedRows],
+    [closedRows, filteredLiveRows]
+  );
   const streakByTradeId = React.useMemo(
     () => buildTradeStreakMap(displayRows),
     [displayRows]
   );
 
   return {
-    commissionsHistogram: filteredArtifacts.commissionsHistogram,
+    ...(hasMergedFilterConflict ? EMPTY_FILTER_ARTIFACTS : filterArtifacts),
     displayRows,
-    efficiencyHistogram: filteredArtifacts.efficiencyHistogram,
-    holdHistogram: filteredArtifacts.holdHistogram,
-    maeHistogram: filteredArtifacts.maeHistogram,
-    mfeHistogram: filteredArtifacts.mfeHistogram,
-    profitHistogram: filteredArtifacts.profitHistogram,
-    rrHistogram: filteredArtifacts.rrHistogram,
     streakByTradeId,
-    swapHistogram: filteredArtifacts.swapHistogram,
-    symbolCounts: filteredArtifacts.symbolCounts,
-    symbolTotal: filteredArtifacts.symbolTotal,
-    volumeHistogram: filteredArtifacts.volumeHistogram,
   };
 }

@@ -639,6 +639,10 @@ function buildTableData(
 }
 
 function formatFieldLabel(key: string): string {
+  if (key === "modelTag" || key === "edgeName") {
+    return "Edge";
+  }
+
   const cleaned = key
     .replace(/_/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")

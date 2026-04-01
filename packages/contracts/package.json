@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./currency": "./src/currency.ts",
     "./reports": "./src/reports.ts",
+    "./trading-catalog": "./src/trading-catalog.ts",
     "./uploadthing": "./src/uploadthing.ts",
     "./trpc": "./src/trpc.ts"
   }

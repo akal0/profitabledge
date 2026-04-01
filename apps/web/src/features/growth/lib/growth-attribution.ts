@@ -10,6 +10,7 @@ export type GrowthTouchPayload = {
   offerCode?: string;
   channel?: string;
   trackingLinkSlug?: string;
+  affiliateGroupSlug?: string;
   landingPath?: string;
   query?: string;
 };
@@ -45,6 +46,7 @@ export function readGrowthTouchFromSearchParams(
   );
   const channel = searchParams.get("channel")?.trim().toLowerCase() || "";
   const trackingLinkSlug = normalizeSlug(searchParams.get("link"));
+  const affiliateGroupSlug = normalizeSlug(searchParams.get("group"));
 
   if (!affiliateCode && !referralCode && !offerCode) {
     return null;
@@ -57,6 +59,7 @@ export function readGrowthTouchFromSearchParams(
       offerCode: offerCode || undefined,
       channel: channel || undefined,
       trackingLinkSlug: trackingLinkSlug || undefined,
+      affiliateGroupSlug: affiliateGroupSlug || undefined,
       landingPath: pathname ?? undefined,
       query: searchParams.toString() || undefined,
     };
@@ -78,6 +81,7 @@ export function readGrowthTouchFromSearchParams(
       offerCode,
       channel: channel || undefined,
       trackingLinkSlug: trackingLinkSlug || undefined,
+      affiliateGroupSlug: affiliateGroupSlug || undefined,
       landingPath: pathname ?? undefined,
       query: searchParams.toString() || undefined,
     };
@@ -106,11 +110,12 @@ function toComparableGrowthTouchKey(value: ComparableGrowthTouch) {
     type: value.type,
     code: value.code ?? "",
     offerCode: value.offerCode ?? "",
-    channel: value.channel ?? "",
-    trackingLinkSlug: value.trackingLinkSlug ?? "",
-    landingPath: value.landingPath ?? "",
-    query: value.query ?? "",
-  });
+      channel: value.channel ?? "",
+      trackingLinkSlug: value.trackingLinkSlug ?? "",
+      affiliateGroupSlug: value.affiliateGroupSlug ?? "",
+      landingPath: value.landingPath ?? "",
+      query: value.query ?? "",
+    });
 }
 
 export function areGrowthTouchesEquivalent(

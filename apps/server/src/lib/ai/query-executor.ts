@@ -109,7 +109,7 @@ async function validateFilterValues(
     }
   }
 
-  // Check model tags
+  // Check edges (stored in modelTag)
   if (modelTagFilters.length > 0) {
     const existingTags = await db
       .selectDistinct({ tag: trade.modelTag })
@@ -123,9 +123,9 @@ async function validateFilterValues(
       const value = String(filter.value).toLowerCase();
       const found = validTags.some(t => t?.toLowerCase().includes(value));
       if (!found && validTags.length > 0) {
-        warnings.push(`No trades found with model tag '${filter.value}'. Your model tags: ${validTags.join(', ')}`);
+        warnings.push(`No trades found with edge '${filter.value}'. Your edges: ${validTags.join(', ')}`);
       } else if (!found && validTags.length === 0) {
-        warnings.push(`You haven't tagged any trades with model tags yet.`);
+        warnings.push(`You haven't tagged any trades with edges yet.`);
       }
     }
   }

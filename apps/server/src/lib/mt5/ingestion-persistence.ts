@@ -39,10 +39,16 @@ import {
   type MtSymbolSpecLike,
 } from "./symbol-specs";
 
-type MtPlatform = "mt4" | "mt5";
+type MtPlatform = "mt4" | "mt5" | "rithmic";
 
 function resolveMtPlatform(provider: string): MtPlatform {
-  return provider === "mt4-terminal" ? "mt4" : "mt5";
+  if (provider === "mt4-terminal") {
+    return "mt4";
+  }
+  if (provider === "rithmic") {
+    return "rithmic";
+  }
+  return "mt5";
 }
 
 export async function ensureMt5TradingAccount(

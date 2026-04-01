@@ -75,8 +75,8 @@ export function BaseTable({
           }));
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className="min-h-0 flex-1 overflow-auto">
+    <div className="flex h-max w-full flex-col gap-2">
+      <div className="max-h-[22rem] overflow-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-white/10">

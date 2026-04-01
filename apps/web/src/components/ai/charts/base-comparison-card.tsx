@@ -46,7 +46,7 @@ export function BaseComparisonCard({
       : "text-rose-400";
 
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center space-y-4">
+    <div className="flex h-max w-full flex-col justify-center space-y-4">
       <div className="grid grid-cols-2 gap-4">
         <div
           className={cn(

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
+import { FeatureGate } from "@/components/feature-gate";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import {
   PropAccountStatusBadges,
@@ -23,7 +24,12 @@ import {
 } from "@/components/prop-account-status-badges";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { PropAccountPhaseActionsMenu } from "@/features/accounts/prop-tracker/components/prop-account-phase-actions-menu";
-import { getOverallPropProgress } from "@/features/accounts/prop-tracker/lib/prop-tracker-detail";
+import {
+  formatMetricValue,
+  formatSignedMetricValue,
+  getMetricMode,
+  getOverallPropProgress,
+} from "@/features/accounts/prop-tracker/lib/prop-tracker-detail";
 import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,6 +42,7 @@ type SurvivalState = "critical" | "fragile" | "tight" | "stable";
 type PropFirmLike = {
   id?: string | null;
   displayName?: string | null;
+  logo?: string | null;
 };
 
 const HEADER_BADGE_CLASS = "h-7 rounded-sm px-1.5 text-[10px] font-medium";
@@ -280,10 +287,10 @@ function PropFirmAvatar({
         className
       )}
     >
-      {isFtmoFirm(firm) ? (
+      {firm?.logo || isFtmoFirm(firm) ? (
         <Image
-          src={FTMO_IMAGE_SRC}
-          alt="FTMO"
+          src={firm?.logo || FTMO_IMAGE_SRC}
+          alt={firm?.displayName || "Prop firm"}
           fill
           sizes="64px"
           className="object-contain p-2"
@@ -359,13 +366,21 @@ function PropAccountCard({
     id: account.propFirmId || dashboard?.propFirm?.id || "",
     displayName:
       dashboard?.propFirm?.displayName || account.broker || "Prop firm",
+    logo: dashboard?.propFirm?.logo || null,
   };
+  const metricMode = getMetricMode(dashboard?.currentPhase);
   const overallProgress = getOverallPropProgress({
     initialBalance: account.initialBalance,
     currentBalance: dashboard?.ruleCheck?.metrics?.currentBalance,
     fallbackBalance: account.liveBalance,
   });
-  const currentProfitPercent = overallProgress.profitPercent;
+  const currentResult = dashboard?.ruleCheck
+    ? metricMode === "currency"
+      ? dashboard.ruleCheck.metrics.currentProfit
+      : dashboard.ruleCheck.metrics.currentProfitPercent
+    : metricMode === "currency"
+      ? overallProgress.profit
+      : overallProgress.profitPercent;
   const tradingDays =
     dashboard?.ruleCheck?.metrics?.tradingDays ??
     account.propPhaseTradingDays ??
@@ -382,6 +397,16 @@ function PropAccountCard({
     dashboard?.currentPhase?.profitTarget != null
       ? Number(dashboard.currentPhase.profitTarget)
       : null;
+  const maxDrawdownValue = dashboard?.ruleCheck
+    ? metricMode === "currency"
+      ? dashboard.ruleCheck.metrics.maxDrawdown
+      : dashboard.ruleCheck.metrics.maxDrawdownPercent
+    : null;
+  const dailyDrawdownValue = dashboard?.ruleCheck
+    ? metricMode === "currency"
+      ? dashboard.ruleCheck.metrics.dailyDrawdown
+      : dashboard.ruleCheck.metrics.dailyDrawdownPercent
+    : null;
 
   return (
     <PropAccountFrame
@@ -394,8 +419,7 @@ function PropAccountCard({
             badgeClassName={HEADER_BADGE_CLASS}
           />
           <PropAccountPhaseActionsMenu
-            accountId={account.id}
-            accountName={account.name}
+            account={account}
             dashboard={dashboard}
           />
           <RemovePropAccountButton
@@ -427,11 +451,10 @@ function PropAccountCard({
           <p
             className={cn(
               "text-xs font-medium",
-              currentProfitPercent >= 0 ? "text-teal-300" : "text-red-300"
+              currentResult >= 0 ? "text-teal-300" : "text-red-300"
             )}
           >
-            {currentProfitPercent >= 0 ? "+" : ""}
-            {currentProfitPercent.toFixed(2)}%
+            {formatSignedMetricValue(currentResult, metricMode)}
           </p>
         </div>
       </div>
@@ -452,11 +475,10 @@ function PropAccountCard({
               <p
                 className={cn(
                   "mt-1 text-lg font-semibold",
-                  currentProfitPercent >= 0 ? "text-teal-400" : "text-red-400"
+                  currentResult >= 0 ? "text-teal-400" : "text-red-400"
                 )}
               >
-                {currentProfitPercent >= 0 ? "+" : ""}
-                {currentProfitPercent.toFixed(2)}%
+                {formatSignedMetricValue(currentResult, metricMode)}
               </p>
             </div>
           </div>
@@ -478,25 +500,19 @@ function PropAccountCard({
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Max DD</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {dashboard?.ruleCheck
-              ? `${dashboard.ruleCheck.metrics.maxDrawdownPercent.toFixed(2)}%`
-              : "—"}
+            {formatMetricValue(maxDrawdownValue, metricMode)}
           </p>
         </div>
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Daily DD</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {dashboard?.ruleCheck
-              ? `${dashboard.ruleCheck.metrics.dailyDrawdownPercent.toFixed(
-                  2
-                )}%`
-              : "—"}
+            {formatMetricValue(dailyDrawdownValue, metricMode)}
           </p>
         </div>
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Target</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {phaseTarget != null ? `${phaseTarget}%` : "—"}
+            {formatMetricValue(phaseTarget, metricMode)}
           </p>
         </div>
       </div>
@@ -703,11 +719,12 @@ export default function PropTrackerIndexPage() {
   }
 
   return (
-    <main className="space-y-6 p-6 py-4 min-h-screen">
-      {propAccounts.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <>
+    <FeatureGate feature="prop-tracker" requiredPlanKey="professional">
+      <main className="space-y-6 p-6 py-4 min-h-screen">
+        {propAccounts.length === 0 ? (
+          <EmptyState />
+        ) : (
+          <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <OverviewStatCard
               icon={Trophy}
@@ -851,8 +868,9 @@ export default function PropTrackerIndexPage() {
               ))}
             </div>
           </section>
-        </>
-      )}
-    </main>
+          </>
+        )}
+      </main>
+    </FeatureGate>
   );
 }

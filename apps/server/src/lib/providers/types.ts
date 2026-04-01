@@ -89,8 +89,8 @@ export type ProviderCapabilityMap = Partial<
 export interface ProviderScaffoldMetadata {
   name: string;
   description: string;
-  authType: "oauth" | "credentials";
-  fields: string[];
+  authType: "oauth" | "credentials" | "api_key";
+  fields: readonly string[];
   status: "active" | "coming_soon";
   capabilities: ProviderCapabilityMap;
 }

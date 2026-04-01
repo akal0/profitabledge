@@ -31,13 +31,19 @@ import {
   getHigherBillingPlanKey,
   type BillingPlanKey,
 } from "../billing/config";
+import { resolveEffectiveBillingPlanKey } from "../billing/effective-plan";
 import {
   decryptCredentials,
   encryptCredentials,
 } from "../providers/credential-cipher";
 import { resolveUniqueConnectionDisplayName } from "../connections/display-name";
+import { buildDiscoveredAccountsMeta } from "../connections/discovered-accounts";
 import { sanitizeConnectionMeta } from "../connections/sanitize-meta";
-import { isMtTerminalProvider } from "./constants";
+import {
+  isMtTerminalProvider,
+  isWorkerManagedProvider,
+  WORKER_MANAGED_PROVIDERS,
+} from "./constants";
 import { buildMtConnectionCompleteness } from "./completeness";
 import { getServerEnv } from "../env";
 import { getMt5LiveLeaseSnapshot } from "./live-lease";
@@ -65,6 +71,7 @@ import {
   withMt5ForceSyncRequest,
 } from "./queue-state";
 import { getMt5RuntimeState } from "./runtime-state";
+import type { ProviderAuthorizedAccount } from "../providers/types";
 
 const ACTIVE_LEASE_MS = 60 * 1000;
 const CHECKOUT_ORDER_GRACE_WINDOW_MS = 15 * 60 * 1000;
@@ -345,6 +352,7 @@ async function resolveMt5UserPlanKeys(userIds: string[]) {
       .select({
         userId: billingEntitlementOverride.userId,
         planKey: billingEntitlementOverride.planKey,
+        sourceType: billingEntitlementOverride.sourceType,
       })
       .from(billingEntitlementOverride)
       .where(
@@ -353,6 +361,11 @@ async function resolveMt5UserPlanKeys(userIds: string[]) {
           lte(billingEntitlementOverride.startsAt, now),
           gte(billingEntitlementOverride.endsAt, now)
         )
+      )
+      .orderBy(
+        desc(billingEntitlementOverride.updatedAt),
+        desc(billingEntitlementOverride.endsAt),
+        desc(billingEntitlementOverride.createdAt)
       ),
     db
       .select({
@@ -372,6 +385,13 @@ async function resolveMt5UserPlanKeys(userIds: string[]) {
   const planByUserId = new Map<string, BillingPlanKey>(
     uniqueUserIds.map((userId) => [userId, "student"])
   );
+  const overridesByUserId = new Map<string, typeof overrides>();
+
+  for (const override of overrides) {
+    const bucket = overridesByUserId.get(override.userId) ?? [];
+    bucket.push(override);
+    overridesByUserId.set(override.userId, bucket);
+  }
 
   for (const subscription of subscriptions) {
     if (!isActiveSubscriptionStatus(subscription.status)) {
@@ -401,15 +421,13 @@ async function resolveMt5UserPlanKeys(userIds: string[]) {
     );
   }
 
-  for (const override of overrides) {
-    const planKey = override.planKey as BillingPlanKey;
-    if (!getBillingPlanDefinition(planKey)) {
-      continue;
-    }
-
+  for (const userId of uniqueUserIds) {
     planByUserId.set(
-      override.userId,
-      getHigherBillingPlanKey(planByUserId.get(override.userId) ?? "student", planKey)
+      userId,
+      resolveEffectiveBillingPlanKey({
+        subscriptionPlanKey: planByUserId.get(userId) ?? "student",
+        overrides: overridesByUserId.get(userId) ?? [],
+      })
     );
   }
 
@@ -551,6 +569,140 @@ export async function createMtTerminalConnection(input: {
   return conn;
 }
 
+function resolveWorkerPlatform(provider: string) {
+  if (provider === "mt4-terminal") {
+    return "mt4";
+  }
+  if (provider === "rithmic") {
+    return "rithmic";
+  }
+  return "mt5";
+}
+
+export async function createWorkerManagedConnection(input: {
+  userId: string;
+  provider: string;
+  displayName: string;
+  credentials: Record<string, string>;
+  meta?: Record<string, unknown>;
+}) {
+  if (isMtTerminalProvider(input.provider)) {
+    return createMtTerminalConnection(input);
+  }
+
+  if (input.provider !== "rithmic") {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: `Unsupported worker-managed provider: ${input.provider}`,
+    });
+  }
+
+  const login = input.credentials.login?.trim();
+  const password = input.credentials.password?.trim();
+  const systemName = input.credentials.systemName?.trim();
+  const fcmId = input.credentials.fcmId?.trim();
+  const ibId = input.credentials.ibId?.trim() || null;
+  const gatewayUrl = input.credentials.gatewayUrl?.trim() || null;
+  const selectedAccountId = input.credentials.accountId?.trim() || null;
+
+  if (!login || !password || !systemName || !fcmId) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Rithmic connections require login, password, systemName, and fcmId.",
+    });
+  }
+
+  const { encrypted, iv } = encryptCredentials(
+    JSON.stringify({
+      login,
+      password,
+      systemName,
+      fcmId,
+      ...(ibId ? { ibId } : {}),
+      ...(gatewayUrl ? { gatewayUrl } : {}),
+      ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
+    })
+  );
+  const displayName = await resolveUniqueConnectionDisplayName({
+    userId: input.userId,
+    provider: input.provider,
+    displayName: input.displayName,
+  });
+  const userRow = await db.query.user.findFirst({
+    where: eq(userTable.id, input.userId),
+    columns: {
+      widgetPreferences: true,
+    },
+  });
+  const userTimezone = getUserTimezoneFromWidgetPreferences(
+    userRow?.widgetPreferences
+  );
+  const mergedMeta = mergeMt5ConnectionHostingMeta({
+    rawMeta: {
+      ...(input.meta && typeof input.meta === "object"
+        ? (input.meta as Record<string, unknown>)
+        : {}),
+      mt5Hosting: {
+        ...(
+          input.meta &&
+          typeof input.meta === "object" &&
+          input.meta.mt5Hosting &&
+          typeof input.meta.mt5Hosting === "object"
+            ? (input.meta.mt5Hosting as Record<string, unknown>)
+            : {}
+        ),
+        requiredHostTags: ["platform:rithmic"],
+      },
+    },
+    userId: input.userId,
+    userTimezone,
+  });
+  const queuedMeta = withMt5ForceSyncRequest(mergedMeta, {
+    reason: "connection-created",
+  });
+  const safeQueuedMeta = sanitizeConnectionMeta(queuedMeta);
+
+  const [conn] = await db
+    .insert(platformConnection)
+    .values({
+      userId: input.userId,
+      provider: input.provider,
+      displayName,
+      meta: {
+        ...safeQueuedMeta,
+        platform: "rithmic",
+        workerProvider: "rithmic",
+        connectionMode: "worker-managed",
+        ...(selectedAccountId ? { rithmicAccountId: selectedAccountId } : {}),
+      },
+      encryptedCredentials: encrypted,
+      credentialIv: iv,
+      status: "pending",
+      syncIntervalMinutes: 0,
+    })
+    .returning();
+
+  return conn;
+}
+
+function hostMatchesWorkerManagedProvider(
+  hostTags: string[],
+  provider: string
+): boolean {
+  const platformTag = hostTags.find((tag) => tag.startsWith("platform:"));
+  if (!platformTag) {
+    return true;
+  }
+
+  const expected = platformTag.slice("platform:".length);
+  if (expected === "mt-terminal") {
+    return isMtTerminalProvider(provider);
+  }
+
+  return provider === expected;
+}
+
 export async function claimMtConnections(input: {
   hostId?: string;
   workerId?: string;
@@ -573,7 +725,7 @@ export async function claimMtConnections(input: {
     host: input.host ?? null,
   });
   const connections = await db.query.platformConnection.findMany({
-    where: inArray(platformConnection.provider, ["mt5-terminal"]),
+    where: inArray(platformConnection.provider, [...WORKER_MANAGED_PROVIDERS]),
     orderBy: desc(platformConnection.updatedAt),
   });
   const now = Date.now();
@@ -681,6 +833,10 @@ export async function claimMtConnections(input: {
   }> = [];
 
   for (const connection of candidates) {
+    if (!hostMatchesWorkerManagedProvider(hostProfile.tags, connection.provider)) {
+      continue;
+    }
+
     const liveLease = getMt5LiveLeaseSnapshot(connection.meta);
     const policy = resolveMt5ConnectionHostingPolicy({
       userId: connection.userId,
@@ -789,7 +945,7 @@ export async function claimMtConnections(input: {
       .update(brokerSession)
       .set({
         accountId: connection.accountId ?? null,
-        platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
+        platform: resolveWorkerPlatform(connection.provider),
         workerHostId: workerId,
         sessionKey: claimSessionKey,
         status: claimStatus,
@@ -824,7 +980,7 @@ export async function claimMtConnections(input: {
         .values({
           connectionId: connection.id,
           accountId: connection.accountId ?? null,
-          platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
+          platform: resolveWorkerPlatform(connection.provider),
           workerHostId: workerId,
           sessionKey: claimSessionKey,
           status: claimStatus,
@@ -885,17 +1041,17 @@ export async function getMtConnectionBootstrap(connectionId: string) {
     where: eq(brokerSyncCheckpoint.connectionId, connectionId),
   });
 
-  if (!connection || !isMtTerminalProvider(connection.provider)) {
+  if (!connection || !isWorkerManagedProvider(connection.provider)) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "MT terminal connection not found",
+      message: "Worker-managed connection not found",
     });
   }
 
   if (!connection.encryptedCredentials || !connection.credentialIv) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Connection has no stored MT terminal credentials",
+      message: "Connection has no stored worker credentials",
     });
   }
 
@@ -1014,10 +1170,10 @@ export async function reportMtConnectionStatus(input: {
     where: eq(platformConnection.id, input.connectionId),
   });
 
-  if (!connection || !isMtTerminalProvider(connection.provider)) {
+  if (!connection || !isWorkerManagedProvider(connection.provider)) {
     throw new TRPCError({
       code: "NOT_FOUND",
-      message: "MT terminal connection not found",
+      message: "Worker-managed connection not found",
     });
   }
 
@@ -1048,13 +1204,13 @@ export async function reportMtConnectionStatus(input: {
   };
 
   await db
-    .insert(brokerSession)
-    .values({
-      connectionId: input.connectionId,
-      accountId: connection.accountId ?? null,
-      platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
-      workerHostId: workerId,
-      sessionKey: input.sessionKey ?? null,
+      .insert(brokerSession)
+      .values({
+        connectionId: input.connectionId,
+        accountId: connection.accountId ?? null,
+        platform: resolveWorkerPlatform(connection.provider),
+        workerHostId: workerId,
+        sessionKey: input.sessionKey ?? null,
       status: input.status,
       heartbeatAt: new Date(),
       lastError: input.lastError ?? null,
@@ -1065,7 +1221,7 @@ export async function reportMtConnectionStatus(input: {
       target: brokerSession.connectionId,
       set: {
         accountId: connection.accountId ?? null,
-        platform: connection.provider === "mt4-terminal" ? "mt4" : "mt5",
+        platform: resolveWorkerPlatform(connection.provider),
         workerHostId: workerId,
         sessionKey: input.sessionKey ?? null,
         status: input.status,
@@ -1076,6 +1232,18 @@ export async function reportMtConnectionStatus(input: {
       },
     });
 
+  const discoveredAccounts = Array.isArray(input.meta?.discoveredAccounts)
+    ? (input.meta?.discoveredAccounts as ProviderAuthorizedAccount[])
+    : [];
+  const mergedMeta =
+    discoveredAccounts.length > 0
+      ? buildDiscoveredAccountsMeta({
+          provider: connection.provider,
+          meta: currentMeta,
+          discoveredAccounts,
+        })
+      : currentMeta;
+
   await db
     .update(platformConnection)
     .set({
@@ -1083,7 +1251,7 @@ export async function reportMtConnectionStatus(input: {
       lastError: input.lastError ?? null,
       updatedAt: new Date(),
       meta: sanitizeConnectionMeta({
-        ...currentMeta,
+        ...mergedMeta,
         mt5Worker: {
           workerHostId: workerId,
           reportedAt: new Date().toISOString(),

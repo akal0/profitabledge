@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import {
   clearStoredGrowthIntent,
   getStoredGrowthIntent,
+  isGrowthIntentExpired,
 } from "@/features/growth/lib/access-intent";
 import {
   clearStoredOnboardingStep,
@@ -32,6 +33,7 @@ import {
 import { getOnboardingButtonClassName } from "@/features/onboarding/lib/onboarding-button-styles";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
+type BillingInterval = "monthly" | "annual";
 const CHECKOUT_SYNC_RETRY_DELAYS_MS = [0, 1500, 3000, 5000] as const;
 
 function sleep(ms: number) {
@@ -45,6 +47,8 @@ function OnboardingPageContent() {
   const [pendingPlanKey, setPendingPlanKey] = useState<BillingPlanKey | null>(
     null
   );
+  const [billingInterval, setBillingInterval] =
+    useState<BillingInterval>("annual");
   const [isCompletingOnboarding, setIsCompletingOnboarding] = useState(false);
 
   const router = useRouter();
@@ -73,9 +77,6 @@ function OnboardingPageContent() {
     ...trpcOptions.billing.getState.queryOptions(),
     enabled: isSessionReady,
   });
-  const bootstrapGrowthAccess = useMutation(
-    trpcOptions.billing.completeGrowthAccess.mutationOptions()
-  );
   const createCheckout = useMutation<any, unknown, any>({
     mutationFn: (input) => (trpcClient.billing as any).createCheckout.mutate(input),
   });
@@ -141,6 +142,14 @@ function OnboardingPageContent() {
   }, [activePlanKey]);
 
   useEffect(() => {
+    const configuredDefaultInterval = billingConfigQuery.data
+      ?.defaultBillingInterval as BillingInterval | undefined;
+    if (configuredDefaultInterval) {
+      setBillingInterval(configuredDefaultInterval);
+    }
+  }, [billingConfigQuery.data?.defaultBillingInterval]);
+
+  useEffect(() => {
     if (!bootstrappedStepState.current) {
       return;
     }
@@ -161,7 +170,16 @@ function OnboardingPageContent() {
 
     const checkoutStatus = searchParams?.get("checkout");
     const planParam = searchParams?.get("plan");
+    const intervalParam = searchParams?.get("interval");
     const storedStep = getStoredOnboardingStep(onboardingStorageUserId);
+
+    if (intervalParam === "monthly" || intervalParam === "annual") {
+      setBillingInterval(intervalParam);
+    }
+
+    if (planParam === "professional" || planParam === "institutional") {
+      setSelectedPlanKey(planParam);
+    }
 
     if (
       checkoutStatus === "success" &&
@@ -203,34 +221,41 @@ function OnboardingPageContent() {
     bootstrappedGrowthState.current = true;
 
     const storedIntent = getStoredGrowthIntent();
-    const storedReferralCode = storedIntent.referralCode;
-    const storedAffiliateCode = storedIntent.affiliateCode;
-
-    if (!storedReferralCode && !storedAffiliateCode) {
+    if (!storedIntent) {
       return;
     }
 
-    void bootstrapGrowthAccess
-      .mutateAsync({
-        referralCode: storedReferralCode ?? undefined,
-        affiliateCode: storedAffiliateCode ?? undefined,
-        source: "onboarding",
-      })
-      .then((result) => {
+    if (isGrowthIntentExpired(storedIntent)) {
+      clearStoredGrowthIntent();
+      return;
+    }
+
+    void (async () => {
+      try {
+        await trpcClient.billing.captureGrowthTouch.mutate({
+          type: storedIntent.type,
+          code: storedIntent.code || undefined,
+          offerCode: storedIntent.offerCode ?? undefined,
+          channel: storedIntent.channel ?? undefined,
+          trackingLinkSlug: storedIntent.trackingLinkSlug ?? undefined,
+          affiliateGroupSlug: storedIntent.affiliateGroupSlug ?? undefined,
+          landingPath: "/onboarding",
+          visitorToken: storedIntent.visitorToken ?? undefined,
+        } as any);
+
+        await trpcClient.billing.claimPendingGrowthAttribution.mutate({
+          visitorToken: storedIntent.visitorToken ?? undefined,
+        } as any);
+
         clearStoredGrowthIntent();
-
-        if (result.growth.message) {
-          toast.error(result.growth.message);
-        }
-
         void billingStateQuery.refetch();
-      })
-      .catch((error: Error) => {
-        if (error.message) {
+      } catch (error) {
+        if (error instanceof Error && error.message) {
           toast.error(error.message);
         }
-      });
-  }, [billingStateQuery.data, billingStateQuery, bootstrapGrowthAccess]);
+      }
+    })();
+  }, [billingStateQuery.data, billingStateQuery]);
 
   useEffect(() => {
     const checkoutStatus = searchParams?.get("checkout");
@@ -370,6 +395,7 @@ function OnboardingPageContent() {
       setPendingPlanKey(planKey);
       const result = await createCheckout.mutateAsync({
         planKey,
+        billingInterval,
         returnPath: checkoutContinuePath,
       });
 
@@ -517,6 +543,8 @@ function OnboardingPageContent() {
                     activePlanKey={activePlanKey}
                     selectedPlanKey={selectedPlanKey}
                     pendingPlanKey={pendingPlanKey}
+                    billingInterval={billingInterval}
+                    onBillingIntervalChange={setBillingInterval}
                     onSelectPlan={handlePlanSelection}
                   />
                   {activePlanKey !== "student" ? (

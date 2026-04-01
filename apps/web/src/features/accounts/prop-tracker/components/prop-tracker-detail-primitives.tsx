@@ -54,10 +54,10 @@ export function PropFirmAvatar({
         className
       )}
     >
-      {isFtmoFirm(firm) ? (
+      {firm?.logo || isFtmoFirm(firm) ? (
         <Image
-          src={FTMO_IMAGE_SRC}
-          alt="FTMO"
+          src={firm?.logo || FTMO_IMAGE_SRC}
+          alt={firm?.displayName || "Prop firm"}
           fill
           sizes="64px"
           className="object-contain p-2"

@@ -8,7 +8,7 @@ import { db } from "../../db";
 import { platformConnection } from "../../db/schema/connections";
 import { and, eq, isNull, notInArray, or, sql } from "drizzle-orm";
 import { syncConnection } from "./sync-engine";
-import { MT_TERMINAL_PROVIDERS } from "../mt5/constants";
+import { WORKER_MANAGED_PROVIDERS } from "../mt5/constants";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -105,7 +105,7 @@ async function runDueConnections(): Promise<SyncSchedulerRunSummary> {
   const dueConnections = await db.query.platformConnection.findMany({
     where: and(
       eq(platformConnection.isPaused, false),
-      notInArray(platformConnection.provider, [...MT_TERMINAL_PROVIDERS]),
+      notInArray(platformConnection.provider, [...WORKER_MANAGED_PROVIDERS]),
       sql`${platformConnection.syncIntervalMinutes} > 0`,
       or(
         isNull(platformConnection.lastSyncSuccessAt),

@@ -40,6 +40,10 @@ export function isTerminalProvider(provider: string) {
   return provider === "mt5-terminal" || provider === "mt4-terminal";
 }
 
+export function isWorkerManagedProvider(provider: string) {
+  return isTerminalProvider(provider) || provider === "rithmic";
+}
+
 export function formatStatusTimestamp(value: string | Date | null | undefined) {
   if (!value) return "Never";
   return new Date(value).toLocaleString();

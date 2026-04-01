@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { bulkActionsStyles } from "../lib/bulk-actions-styles";
 import type { BulkTagEditorProps } from "../lib/bulk-actions-types";
 
-export function BulkTagSubmenuContent({
+export function ColorTagEditor({
   title,
   inputId,
   inputLabel,
@@ -198,3 +198,5 @@ export function BulkTagSubmenuContent({
     </DropdownMenuSubContent>
   );
 }
+
+export { ColorTagEditor as BulkTagSubmenuContent };

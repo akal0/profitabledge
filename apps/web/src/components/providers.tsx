@@ -77,6 +77,7 @@ function SessionQueryBoundary({ children }: { children: React.ReactNode }) {
       touch.offerCode ?? "",
       touch.channel ?? "",
       touch.trackingLinkSlug ?? "",
+      touch.affiliateGroupSlug ?? "",
       "",
       pathname ?? "",
       searchParams?.toString() ?? "",

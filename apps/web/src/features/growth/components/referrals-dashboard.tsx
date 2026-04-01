@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import {
+  BadgePercent,
   CheckCircle2,
   Clock3,
   Copy,
   Gift,
   Lock,
+  Mail,
   Rocket,
   UserPlus,
   Users,
@@ -31,20 +33,10 @@ import {
 } from "@/components/goals/goal-surface";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
+import { getBillingPlanTitle } from "@/features/settings/billing/lib/plan-labels";
 
 type BillingPlanKey = "student" | "professional" | "institutional";
 type RewardMilestoneState = "completed" | "active" | "pending";
-
-function getPlanTitle(planKey: BillingPlanKey) {
-  switch (planKey) {
-    case "professional":
-      return "Professional";
-    case "institutional":
-      return "Institutional";
-    default:
-      return "Student";
-  }
-}
 
 function formatDate(value?: string | Date | null) {
   if (!value) return "N/A";
@@ -66,11 +58,11 @@ function formatRewardType(
       return "1,000 Edge credits";
     case "free_month":
       return targetPlanKey
-        ? `Free month on ${getPlanTitle(targetPlanKey as BillingPlanKey)}`
+        ? `Free month on ${getBillingPlanTitle(targetPlanKey as BillingPlanKey)}`
         : "Free month";
     case "upgrade_trial":
       return targetPlanKey
-        ? `30-day ${getPlanTitle(targetPlanKey as BillingPlanKey)} trial`
+        ? `30-day ${getBillingPlanTitle(targetPlanKey as BillingPlanKey)} trial`
         : "30-day upgrade trial";
     default:
       return "Referral reward";
@@ -227,6 +219,10 @@ export function ReferralsDashboard() {
     }
   };
 
+  const openShareUrl = (url: string) => {
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   if (billingStateQuery.isLoading) {
     return (
       <RouteLoadingFallback
@@ -332,6 +328,22 @@ export function ReferralsDashboard() {
       foundCurrentTarget = true;
     }
   }
+  const currentTarget =
+    rewardMilestones.find((milestone) => (milestone as any).isCurrentTarget) ??
+    rewardMilestones[rewardMilestones.length - 1];
+  const currentTargetProgress = currentTarget
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            ((currentTarget.threshold - currentTarget.remaining) /
+              currentTarget.threshold) *
+              100
+          )
+        )
+      )
+    : 0;
 
   return (
     <main className="space-y-6 p-6 py-4">
@@ -349,8 +361,24 @@ export function ReferralsDashboard() {
           title="Referral share link"
           bodyClassName="flex flex-col"
           className="w-full md:col-span-2 xl:col-span-3"
+          action={
+            <Button
+              asChild
+              className="h-8 rounded-sm ring ring-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+            >
+              <Link href="/apply/affiliate">
+                <BadgePercent className="mr-1 size-3" />
+                Apply for affiliate
+              </Link>
+            </Button>
+          }
         >
-          <div className="mt-auto flex flex-col gap-2 lg:flex-row lg:items-end">
+          <div className="mt-auto flex flex-col gap-3">
+            <p className="text-xs leading-5 text-white/40">
+              Share your invite link, then move into the affiliate program once
+              you have traction and want recurring commission.
+            </p>
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
             <Input
               readOnly
               value={referral?.profile?.shareUrl ?? ""}
@@ -389,6 +417,71 @@ export function ReferralsDashboard() {
                 Copy code
               </Button>
             </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() =>
+                  referral?.profile?.shareUrl
+                    ? openShareUrl(
+                        `https://twitter.com/intent/tweet?text=${encodeURIComponent(
+                          `Join me on Profitabledge and start journaling your trades: ${referral.profile.shareUrl}`
+                        )}`
+                      )
+                    : toast.error("Referral link is not ready yet")
+                }
+                className="h-8 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+              >
+                Share on X
+              </Button>
+              <Button
+                onClick={() =>
+                  referral?.profile?.shareUrl
+                    ? openShareUrl(
+                        `https://wa.me/?text=${encodeURIComponent(
+                          `Join me on Profitabledge: ${referral.profile.shareUrl}`
+                        )}`
+                      )
+                    : toast.error("Referral link is not ready yet")
+                }
+                className="h-8 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+              >
+                WhatsApp
+              </Button>
+              <Button
+                onClick={() =>
+                  referral?.profile?.shareUrl
+                    ? openShareUrl(
+                        `https://t.me/share/url?url=${encodeURIComponent(
+                          referral.profile.shareUrl
+                        )}&text=${encodeURIComponent(
+                          "Join me on Profitabledge"
+                        )}`
+                      )
+                    : toast.error("Referral link is not ready yet")
+                }
+                className="h-8 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+              >
+                Telegram
+              </Button>
+              <Button
+                onClick={() =>
+                  referral?.profile?.shareUrl
+                    ? openShareUrl(
+                        `mailto:?subject=${encodeURIComponent(
+                          "Join me on Profitabledge"
+                        )}&body=${encodeURIComponent(
+                          `I use Profitabledge to review my trades. Join here: ${referral.profile.shareUrl}`
+                        )}`
+                      )
+                    : toast.error("Referral link is not ready yet")
+                }
+                className="h-8 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+              >
+                <Mail className="mr-1 size-3" />
+                Email
+              </Button>
+            </div>
           </div>
         </GoalPanel>
       </div>
@@ -399,6 +492,12 @@ export function ReferralsDashboard() {
             <Rocket className="mt-0.5 size-4 text-amber-300" />
             <div>
               <p className="text-sm font-medium text-white">Reward ladder</p>
+              {currentTarget ? (
+                <p className="mt-1 text-xs leading-5 text-white/40">
+                  {paidConversions} / {currentTarget.threshold} paid conversions
+                  toward {currentTarget.title.toLowerCase()}.
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -409,6 +508,32 @@ export function ReferralsDashboard() {
         </div>
 
         <div className="rounded-md ring ring-white/5 bg-sidebar px-4 py-6">
+          {currentTarget ? (
+            <div className="mb-6 rounded-sm border border-white/5 bg-sidebar-accent/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium text-white">
+                    Next reward: {currentTarget.title}
+                  </p>
+                  <p className="mt-1 text-[11px] text-white/40">
+                    {currentTarget.remaining === 0
+                      ? "Unlocked now"
+                      : `${currentTarget.remaining} more paid conversion${currentTarget.remaining === 1 ? "" : "s"} to go`}
+                  </p>
+                </div>
+                <span className="text-[11px] text-white/40">
+                  {currentTargetProgress}% complete
+                </span>
+              </div>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/5">
+                <div
+                  className="h-full rounded-full bg-amber-400"
+                  style={{ width: `${currentTargetProgress}%` }}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex w-full items-start">
             {rewardMilestones.map((milestone, index) => {
               const Icon = milestone.icon;

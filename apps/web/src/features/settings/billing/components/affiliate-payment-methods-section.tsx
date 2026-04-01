@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
@@ -9,6 +9,7 @@ import {
   ExternalLink,
   RefreshCw,
   Shield,
+  Trash2,
   Unplug,
   Wallet,
 } from "lucide-react";
@@ -23,6 +24,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { trpcOptions } from "@/utils/trpc";
 import { getBillingV2Options } from "@/features/growth/lib/billing-v2";
 
@@ -94,6 +102,15 @@ function SummaryCard({
 
 export function AffiliatePaymentMethodsSection() {
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
+  const [withdrawalDestination, setWithdrawalDestination] = useState<
+    "stripe_connect" | "manual"
+  >("stripe_connect");
+  const [selectedManualPaymentMethodId, setSelectedManualPaymentMethodId] =
+    useState("");
+  const [manualMethodType, setManualMethodType] = useState("paypal");
+  const [manualMethodLabel, setManualMethodLabel] = useState("");
+  const [manualRecipientName, setManualRecipientName] = useState("");
+  const [manualMethodDetails, setManualMethodDetails] = useState("");
   const billingV2 = getBillingV2Options();
 
   const billingStateQuery = useQuery(
@@ -148,6 +165,63 @@ export function AffiliatePaymentMethodsSection() {
       );
     },
   });
+  const saveAffiliatePaymentMethod = useMutation({
+    ...(billingV2.saveAffiliatePaymentMethod?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Manual payout methods are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      setManualMethodLabel("");
+      setManualRecipientName("");
+      setManualMethodDetails("");
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Manual payout method saved");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to save payout method"
+      );
+    },
+  });
+  const setDefaultAffiliatePaymentMethod = useMutation({
+    ...(billingV2.setDefaultAffiliatePaymentMethod?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Manual payout methods are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Default payout method updated");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to update default payout method"
+      );
+    },
+  });
+  const deleteAffiliatePaymentMethod = useMutation({
+    ...(billingV2.deleteAffiliatePaymentMethod?.mutationOptions?.() ?? {
+      mutationFn: async () => {
+        throw new Error("Manual payout methods are not available yet");
+      },
+    }),
+    onSuccess: () => {
+      void affiliatePayoutSettingsQuery.refetch();
+      toast.success("Payout method removed");
+    },
+    onError: (error: unknown) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to remove payout method"
+      );
+    },
+  });
   const requestAffiliateWithdrawal = useMutation({
     ...(billingV2.requestAffiliateWithdrawal?.mutationOptions?.() ?? {
       mutationFn: async () => {
@@ -197,6 +271,38 @@ export function AffiliatePaymentMethodsSection() {
   const stripeAccountLabel =
     stripeConnect?.accountLabel ?? "Stripe Express payout account";
   const withdrawalRequests = affiliatePayoutSettings?.withdrawalRequests ?? [];
+  const manualPaymentMethods = affiliatePayoutSettings?.manualPaymentMethods ?? [];
+  const defaultManualPaymentMethodId =
+    manualPaymentMethods.find((method: any) => method.isDefault)?.id ??
+    manualPaymentMethods[0]?.id ??
+    "";
+
+  useEffect(() => {
+    const selectedMethodStillExists = manualPaymentMethods.some(
+      (method: any) => method.id === selectedManualPaymentMethodId
+    );
+
+    if (
+      (!selectedManualPaymentMethodId || !selectedMethodStillExists) &&
+      defaultManualPaymentMethodId
+    ) {
+      setSelectedManualPaymentMethodId(defaultManualPaymentMethodId);
+    }
+
+    if (
+      withdrawalDestination === "stripe_connect" &&
+      !stripeConnect?.payoutsEnabled &&
+      defaultManualPaymentMethodId
+    ) {
+      setWithdrawalDestination("manual");
+    }
+  }, [
+    defaultManualPaymentMethodId,
+    manualPaymentMethods,
+    selectedManualPaymentMethodId,
+    stripeConnect?.payoutsEnabled,
+    withdrawalDestination,
+  ]);
 
   const handleStripeConnect = async (mode: "onboarding" | "dashboard") => {
     try {
@@ -227,9 +333,41 @@ export function AffiliatePaymentMethodsSection() {
       return;
     }
 
+    if (
+      withdrawalDestination === "manual" &&
+      !selectedManualPaymentMethodId
+    ) {
+      toast.error("Choose a manual payout method first");
+      return;
+    }
+
     await requestAffiliateWithdrawal.mutateAsync({
       amountUsd: Math.round(amount * 100),
-      destinationType: "stripe_connect",
+      destinationType: withdrawalDestination,
+      paymentMethodId:
+        withdrawalDestination === "manual"
+          ? selectedManualPaymentMethodId
+          : undefined,
+    } as any);
+  };
+
+  const handleSaveManualMethod = async () => {
+    if (!manualMethodLabel.trim()) {
+      toast.error("Add a label for this payout method");
+      return;
+    }
+
+    if (!manualMethodDetails.trim()) {
+      toast.error("Add the payment details to save this method");
+      return;
+    }
+
+    await saveAffiliatePaymentMethod.mutateAsync({
+      methodType: manualMethodType,
+      label: manualMethodLabel.trim(),
+      recipientName: manualRecipientName.trim() || undefined,
+      details: manualMethodDetails.trim(),
+      isDefault: manualPaymentMethods.length === 0,
     } as any);
   };
 
@@ -237,8 +375,8 @@ export function AffiliatePaymentMethodsSection() {
     <div className="flex flex-col px-6 py-5 sm:gap-6 sm:px-8">
       <div className="space-y-3">
         {billingStateQuery.isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {[0, 1, 2, 3].map((index) => (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((index) => (
               <div
                 key={index}
                 className="h-28 animate-pulse rounded-sm ring ring-white/5 bg-sidebar"
@@ -264,8 +402,8 @@ export function AffiliatePaymentMethodsSection() {
             </Button>
           </GoalPanel>
         ) : affiliatePayoutSettingsQuery.isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {[0, 1, 2, 3].map((index) => (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {[0, 1, 2, 3, 4].map((index) => (
               <div
                 key={index}
                 className="h-28 animate-pulse rounded-sm ring ring-white/5 bg-sidebar"
@@ -274,7 +412,15 @@ export function AffiliatePaymentMethodsSection() {
           </div>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <SummaryCard
+                label="Total earned"
+                value={formatCurrency(
+                  affiliatePayoutSettings?.summary.totalEarnedAmount
+                )}
+                description="All-time affiliate commission across available, pending, and paid out balance"
+              />
+
               <SummaryCard
                 label="Available"
                 value={formatCurrency(
@@ -294,12 +440,10 @@ export function AffiliatePaymentMethodsSection() {
 
               <SummaryCard
                 label="Pending"
-                value={
-                  withdrawalRequests.filter(
-                    (item: any) => item.status === "pending"
-                  ).length
-                }
-                description="Withdrawal requests waiting for admin review"
+                value={formatCurrency(
+                  affiliatePayoutSettings?.summary.pendingAmount
+                )}
+                description="Reserved in withdrawal requests that are awaiting review or settlement"
               />
 
               <SummaryCard
@@ -313,7 +457,11 @@ export function AffiliatePaymentMethodsSection() {
               <SummaryCard
                 label="Payouts"
                 value={affiliatePayoutSettings?.summary.payoutCount ?? 0}
-                description="Historical payout records kept on your affiliate account"
+                description={`${withdrawalRequests.filter(
+                  (item: any) => item.status === "pending" || item.status === "approved" || item.status === "processing"
+                ).length} open request${withdrawalRequests.filter(
+                  (item: any) => item.status === "pending" || item.status === "approved" || item.status === "processing"
+                ).length === 1 ? "" : "s"}`}
               />
             </div>
 
@@ -431,14 +579,199 @@ export function AffiliatePaymentMethodsSection() {
 
                   <GoalSurface>
                     <div className="p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium text-white">
+                            Manual payout methods
+                          </p>
+                          <p className="mt-1 text-[11px] leading-5 text-white/40">
+                            Add PayPal, Wise, bank transfer, or other destinations.
+                            Payment details are encrypted at rest and only a masked
+                            preview is shown back to you.
+                          </p>
+                        </div>
+                        <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
+                          {manualPaymentMethods.length} method
+                          {manualPaymentMethods.length === 1 ? "" : "s"}
+                        </Badge>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] text-white/35">
+                            Method type
+                          </Label>
+                          <Select
+                            value={manualMethodType}
+                            onValueChange={setManualMethodType}
+                          >
+                            <SelectTrigger className="h-10 bg-sidebar text-xs ring-white/5">
+                              <SelectValue placeholder="Choose method type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {[
+                                ["paypal", "PayPal"],
+                                ["wise", "Wise"],
+                                ["bank_transfer", "Bank transfer"],
+                                ["crypto", "Crypto"],
+                                ["other", "Other"],
+                              ].map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] text-white/35">
+                            Label
+                          </Label>
+                          <Input
+                            value={manualMethodLabel}
+                            onChange={(event) =>
+                              setManualMethodLabel(event.target.value)
+                            }
+                            placeholder="Primary PayPal"
+                            className="h-10 bg-sidebar text-xs ring-white/5"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] text-white/35">
+                            Recipient name
+                          </Label>
+                          <Input
+                            value={manualRecipientName}
+                            onChange={(event) =>
+                              setManualRecipientName(event.target.value)
+                            }
+                            placeholder="Jane Trader"
+                            className="h-10 bg-sidebar text-xs ring-white/5"
+                          />
+                        </div>
+
+                        <div className="space-y-1.5 md:col-span-2">
+                          <Label className="text-[11px] text-white/35">
+                            Payment details
+                          </Label>
+                          <Input
+                            value={manualMethodDetails}
+                            onChange={(event) =>
+                              setManualMethodDetails(event.target.value)
+                            }
+                            placeholder="paypal@example.com / bank details / wallet address"
+                            className="h-10 bg-sidebar text-xs ring-white/5"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-[11px] text-white/35">
+                          Withdrawals are typically reviewed within 3-5 business days.
+                        </p>
+                        <Button
+                          onClick={handleSaveManualMethod}
+                          disabled={saveAffiliatePaymentMethod.isPending}
+                          className="h-9 rounded-sm border border-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent"
+                        >
+                          {saveAffiliatePaymentMethod.isPending
+                            ? "Saving..."
+                            : "Save manual method"}
+                        </Button>
+                      </div>
+
+                      <div className="mt-4 space-y-2">
+                        {manualPaymentMethods.length ? (
+                          manualPaymentMethods.map((method: any) => {
+                            const isDeleting =
+                              deleteAffiliatePaymentMethod.isPending &&
+                              (deleteAffiliatePaymentMethod.variables as any)
+                                ?.paymentMethodId === method.id;
+                            const isUpdatingDefault =
+                              setDefaultAffiliatePaymentMethod.isPending &&
+                              (setDefaultAffiliatePaymentMethod.variables as any)
+                                ?.paymentMethodId === method.id;
+
+                            return (
+                              <div
+                                key={method.id}
+                                className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent/70 p-3"
+                              >
+                                <div className="min-w-0">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <p className="text-sm font-medium text-white">
+                                      {method.label}
+                                    </p>
+                                    {method.isDefault ? (
+                                      <Badge className="ring ring-emerald-500/20 bg-emerald-900/30 text-[10px] text-emerald-300">
+                                        Default
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                  <p className="mt-1 text-[11px] leading-5 text-white/40">
+                                    {formatPaymentMethodType(method.methodType)}
+                                    {method.recipientName
+                                      ? ` · ${method.recipientName}`
+                                      : ""}
+                                    {method.detailsPreview
+                                      ? ` · ${method.detailsPreview}`
+                                      : ""}
+                                  </p>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                  {!method.isDefault ? (
+                                    <Button
+                                      onClick={() =>
+                                        setDefaultAffiliatePaymentMethod.mutate({
+                                          paymentMethodId: method.id,
+                                        } as any)
+                                      }
+                                      disabled={setDefaultAffiliatePaymentMethod.isPending}
+                                      className="h-8 rounded-sm border border-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent"
+                                    >
+                                      {isUpdatingDefault
+                                        ? "Updating..."
+                                        : "Set default"}
+                                    </Button>
+                                  ) : null}
+                                  <Button
+                                    onClick={() =>
+                                      deleteAffiliatePaymentMethod.mutate({
+                                        paymentMethodId: method.id,
+                                      } as any)
+                                    }
+                                    disabled={deleteAffiliatePaymentMethod.isPending}
+                                    className="h-8 rounded-sm border border-white/10 bg-rose-600/90 px-3 text-[11px] text-white hover:brightness-110"
+                                  >
+                                    <Trash2 className="mr-1 size-3.5" />
+                                    {isDeleting ? "Removing..." : "Delete"}
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
+                            No manual payout methods saved yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </GoalSurface>
+
+                  <GoalSurface>
+                    <div className="p-4">
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="text-xs font-medium text-white">
                             Request withdrawal
                           </p>
                           <p className="mt-1 text-[11px] leading-5 text-white/40">
-                            Submit a withdrawal request in Billing. Admins can
-                            settle it through Stripe Connect.
+                            Submit a withdrawal request in Billing. Choose Stripe
+                            Connect or a saved manual payout method.
                           </p>
                         </div>
                         <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
@@ -451,9 +784,51 @@ export function AffiliatePaymentMethodsSection() {
                       </div>
 
                       <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
-                        <div className="flex h-10 items-center rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white/65">
-                          Stripe Connect
-                        </div>
+                        <Select
+                          value={withdrawalDestination}
+                          onValueChange={(value) =>
+                            setWithdrawalDestination(
+                              value as "stripe_connect" | "manual"
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-10 bg-sidebar text-xs ring-white/5">
+                            <SelectValue placeholder="Choose destination" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="stripe_connect">
+                              Stripe Connect
+                            </SelectItem>
+                            <SelectItem value="manual">
+                              Manual payout method
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        {withdrawalDestination === "manual" ? (
+                          <Select
+                            value={selectedManualPaymentMethodId}
+                            onValueChange={setSelectedManualPaymentMethodId}
+                          >
+                            <SelectTrigger className="h-10 bg-sidebar text-xs ring-white/5">
+                              <SelectValue placeholder="Choose payout method" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {manualPaymentMethods.map((method: any) => (
+                                <SelectItem key={method.id} value={method.id}>
+                                  {method.label}
+                                  {method.isDefault ? " (default)" : ""}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="flex h-10 items-center rounded-sm border border-white/10 bg-sidebar px-3 text-xs text-white/65">
+                            {stripeConnect?.payoutsEnabled
+                              ? "Stripe Connect ready"
+                              : "Finish Stripe onboarding first"}
+                          </div>
+                        )}
 
                         <Input
                           value={withdrawalAmount}
@@ -555,9 +930,16 @@ export function AffiliatePaymentMethodsSection() {
                                     : "Manual payout method")}
                               </td>
                               <td className="px-4 py-3">
-                                <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
-                                  {formatStatusLabel(request.status)}
-                                </Badge>
+                                <div className="space-y-1">
+                                  <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
+                                    {formatStatusLabel(request.status)}
+                                  </Badge>
+                                  {request.requiresManualReconciliation ? (
+                                    <p className="text-[10px] leading-4 text-amber-200/80">
+                                      Payment sent. Waiting for internal reconciliation.
+                                    </p>
+                                  ) : null}
+                                </div>
                               </td>
                               <td className="px-4 py-3 text-sm text-white/75">
                                 {formatDate(

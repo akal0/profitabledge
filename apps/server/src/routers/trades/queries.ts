@@ -55,6 +55,282 @@ import {
   parseNaiveAsUTC,
 } from "./shared";
 
+type TradeFilterInput = {
+  accountId: string;
+  startISO?: string;
+  endISO?: string;
+  q?: string;
+  tradeDirection?: "all" | "long" | "short";
+  ids?: string[];
+  symbols?: string[];
+  killzones?: string[];
+  sessionTags?: string[];
+  edgeIds?: string[];
+  modelTags?: string[];
+  customTags?: string[];
+  protocolAlignment?: Array<"aligned" | "against" | "discretionary">;
+  outcomes?: Array<"Win" | "Loss" | "BE" | "PW">;
+  holdMin?: number;
+  holdMax?: number;
+  volumeMin?: number;
+  volumeMax?: number;
+  profitMin?: number;
+  profitMax?: number;
+  commissionsMin?: number;
+  commissionsMax?: number;
+  swapMin?: number;
+  swapMax?: number;
+  slMin?: number;
+  slMax?: number;
+  tpMin?: number;
+  tpMax?: number;
+  rrMin?: number;
+  rrMax?: number;
+  mfeMin?: number;
+  mfeMax?: number;
+  maeMin?: number;
+  maeMax?: number;
+  efficiencyMin?: number;
+  efficiencyMax?: number;
+};
+
+type TradeFilterScope = {
+  scopedAccountIds: string[];
+  symbolResolver: ReturnType<typeof createSymbolResolver>;
+  userMappings: Awaited<ReturnType<typeof listUserSymbolMappings>>;
+};
+
+async function resolveTradeFilterScope(
+  userId: string,
+  accountId: string
+): Promise<TradeFilterScope> {
+  const scopedAccountIds = await resolveScopedAccountIds(userId, accountId);
+  const userMappings = await listUserSymbolMappings(userId);
+
+  return {
+    scopedAccountIds,
+    symbolResolver: createSymbolResolver(userMappings),
+    userMappings,
+  };
+}
+
+async function buildTradeWhereClauses({
+  userId,
+  input,
+  scopedAccountIds,
+  userMappings,
+  omitSymbols = false,
+  omitNumericRanges = false,
+}: {
+  userId: string;
+  input: TradeFilterInput;
+  scopedAccountIds: string[];
+  userMappings: Awaited<ReturnType<typeof listUserSymbolMappings>>;
+  omitSymbols?: boolean;
+  omitNumericRanges?: boolean;
+}) {
+  const whereClauses: SQL[] = [
+    buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+  ];
+  const edgeFilterIds = [
+    ...(input.edgeIds ?? []),
+    ...(input.modelTags?.length
+      ? await resolveOwnedEdgeIdsForLegacyNames({
+          userId,
+          names: input.modelTags,
+        })
+      : []),
+  ];
+  const holdSecondsExpr = sql<number | null>`NULLIF(${trade.tradeDurationSeconds}, '')::numeric`;
+
+  addTradeDateWindowClauses(whereClauses, input.startISO, input.endISO);
+
+  if (input.tradeDirection && input.tradeDirection !== "all") {
+    const direction = input.tradeDirection.toLowerCase();
+    if (direction === "long" || direction === "buy") {
+      whereClauses.push(sql`LOWER(${trade.tradeType}) IN ('long','buy')`);
+    } else if (direction === "short" || direction === "sell") {
+      whereClauses.push(sql`LOWER(${trade.tradeType}) IN ('short','sell')`);
+    }
+  }
+
+  if (input.ids?.length) {
+    whereClauses.push(inArray(trade.id, input.ids));
+  }
+
+  if (!omitSymbols && input.symbols?.length) {
+    const symbolScopeClauses: SQL[] = [
+      buildAccountScopeCondition(trade.accountId, scopedAccountIds),
+    ];
+    addTradeDateWindowClauses(
+      symbolScopeClauses,
+      input.startISO,
+      input.endISO
+    );
+
+    const rawSymbolRows = await db
+      .selectDistinct({ symbol: trade.symbol })
+      .from(trade)
+      .where(and(...symbolScopeClauses));
+    const matchingRawSymbols = expandCanonicalSymbolsToRawSymbols(
+      rawSymbolRows
+        .map((row) => row.symbol)
+        .filter((value): value is string => Boolean(value)),
+      input.symbols,
+      userMappings
+    );
+
+    if (matchingRawSymbols.length === 0) {
+      return { whereClauses, noResults: true } as const;
+    }
+
+    whereClauses.push(inArray(trade.symbol, matchingRawSymbols));
+  }
+
+  if (input.killzones?.length) {
+    whereClauses.push(
+      sql`(${sql.join(
+        input.killzones.map((killzone) => eq(trade.killzone, killzone)),
+        sql` OR `
+      )})`
+    );
+  }
+  if (input.sessionTags?.length) {
+    whereClauses.push(
+      sql`(${sql.join(
+        input.sessionTags.map((tag) => eq(trade.sessionTag, tag)),
+        sql` OR `
+      )})`
+    );
+  }
+  if (edgeFilterIds.length) {
+    whereClauses.push(
+      sql`EXISTS (
+        SELECT 1
+        FROM ${tradeEdgeAssignment}
+        WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
+          AND ${tradeEdgeAssignment.edgeId} IN (${sql.join(
+            edgeFilterIds.map((edgeId) => sql`${edgeId}`),
+            sql`, `
+          )})
+      )`
+    );
+  }
+  if (input.customTags?.length) {
+    whereClauses.push(
+      sql`(${sql.join(
+        input.customTags.map(
+          (tag) => sql`${trade.customTags} @> ${JSON.stringify([tag])}::jsonb`
+        ),
+        sql` OR `
+      )})`
+    );
+  }
+  if (input.protocolAlignment?.length) {
+    whereClauses.push(
+      sql`(${sql.join(
+        input.protocolAlignment.map((value) => eq(trade.protocolAlignment, value)),
+        sql` OR `
+      )})`
+    );
+  }
+  if (input.outcomes?.length) {
+    whereClauses.push(
+      sql`(${sql.join(
+        input.outcomes.map((value) => eq(trade.outcome, value)),
+        sql` OR `
+      )})`
+    );
+  }
+
+  whereClauses.push(...buildTradeSearchPredicates(input.q));
+
+  if (!omitNumericRanges) {
+    addNumericRangeClause(
+      whereClauses,
+      holdSecondsExpr,
+      input.holdMin,
+      input.holdMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.volume as any,
+      input.volumeMin,
+      input.volumeMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.profit as any,
+      input.profitMin,
+      input.profitMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.commissions as any,
+      input.commissionsMin,
+      input.commissionsMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.swap as any,
+      input.swapMin,
+      input.swapMax
+    );
+    addNumericRangeClause(whereClauses, trade.sl as any, input.slMin, input.slMax);
+    addNumericRangeClause(whereClauses, trade.tp as any, input.tpMin, input.tpMax);
+    addNumericRangeClause(
+      whereClauses,
+      trade.realisedRR as any,
+      input.rrMin,
+      input.rrMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.mfePips as any,
+      input.mfeMin,
+      input.mfeMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.maePips as any,
+      input.maeMin,
+      input.maeMax
+    );
+    addNumericRangeClause(
+      whereClauses,
+      trade.rrCaptureEfficiency as any,
+      input.efficiencyMin,
+      input.efficiencyMax
+    );
+  }
+
+  return { whereClauses, noResults: false } as const;
+}
+
+function isNumberInRange(
+  value: number | null | undefined,
+  min?: number,
+  max?: number
+) {
+  if (min === undefined && max === undefined) {
+    return true;
+  }
+
+  if (value == null || Number.isNaN(Number(value))) {
+    return false;
+  }
+
+  if (min !== undefined && Number(value) < min) {
+    return false;
+  }
+
+  if (max !== undefined && Number(value) > max) {
+    return false;
+  }
+
+  return true;
+}
+
 export const tradeQueryProcedures = {
   getById: protectedProcedure
     .input(z.object({ tradeId: z.string() }))
@@ -207,21 +483,17 @@ export const tradeQueryProcedures = {
       await backfillUserEdgesFromLegacy(ctx.session.user.id);
 
       const { accountId, limit } = input;
-      const scopedAccountIds = await resolveScopedAccountIds(
-        ctx.session.user.id,
-        accountId
-      );
+      const { scopedAccountIds, symbolResolver, userMappings } =
+        await resolveTradeFilterScope(ctx.session.user.id, accountId);
 
       if (scopedAccountIds.length === 0) {
         return {
           items: [],
           nextCursor: undefined,
+          filteredTradesCount: 0,
           totalTradesCount: 0,
         } as const;
       }
-
-      const userMappings = await listUserSymbolMappings(ctx.session.user.id);
-      const symbolResolver = createSymbolResolver(userMappings);
 
       const userRows = await db
         .select({ advancedMetricsPreferences: user.advancedMetricsPreferences })
@@ -237,195 +509,30 @@ export const tradeQueryProcedures = {
           ? (advancedPrefs.complianceRulesByAccount as any)?.[accountId] || {}
           : {};
 
-      const whereClauses: SQL[] = [
-        buildAccountScopeCondition(trade.accountId, scopedAccountIds),
-      ];
-      const edgeFilterIds = [
-        ...(input.edgeIds ?? []),
-        ...(input.modelTags?.length
-          ? await resolveOwnedEdgeIdsForLegacyNames({
-              userId: ctx.session.user.id,
-              names: input.modelTags,
-            })
-          : []),
-      ];
-      const holdSecondsExpr = sql<
-        number | null
-      >`NULLIF(${trade.tradeDurationSeconds}, '')::numeric`;
+      const { whereClauses: baseWhereClauses, noResults } =
+        await buildTradeWhereClauses({
+          userId: ctx.session.user.id,
+          input,
+          scopedAccountIds,
+          userMappings,
+        });
 
-      addTradeDateWindowClauses(whereClauses, input.startISO, input.endISO);
-
-      if (input.tradeDirection !== "all") {
-        const direction = input.tradeDirection.toLowerCase();
-        if (direction === "long" || direction === "buy") {
-          whereClauses.push(sql`LOWER(${trade.tradeType}) IN ('long','buy')`);
-        } else if (direction === "short" || direction === "sell") {
-          whereClauses.push(sql`LOWER(${trade.tradeType}) IN ('short','sell')`);
-        }
+      if (noResults) {
+        return {
+          items: [],
+          nextCursor: undefined,
+          filteredTradesCount: 0,
+          totalTradesCount: 0,
+        } as const;
       }
 
-      if (input.ids?.length) {
-        whereClauses.push(inArray(trade.id, input.ids));
-      }
-      if (input.symbols?.length) {
-        const symbolScopeClauses: SQL[] = [
-          buildAccountScopeCondition(trade.accountId, scopedAccountIds),
-        ];
-        addTradeDateWindowClauses(
-          symbolScopeClauses,
-          input.startISO,
-          input.endISO
-        );
+      const filteredTradesCount = await db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(trade)
+        .where(and(...baseWhereClauses))
+        .then((result) => result[0]?.count ?? 0);
 
-        const rawSymbolRows = await db
-          .selectDistinct({ symbol: trade.symbol })
-          .from(trade)
-          .where(and(...symbolScopeClauses));
-        const matchingRawSymbols = expandCanonicalSymbolsToRawSymbols(
-          rawSymbolRows
-            .map((row) => row.symbol)
-            .filter((value): value is string => Boolean(value)),
-          input.symbols,
-          userMappings
-        );
-
-        if (matchingRawSymbols.length === 0) {
-          return {
-            items: [],
-            nextCursor: undefined,
-            totalTradesCount: 0,
-          } as const;
-        }
-
-        whereClauses.push(inArray(trade.symbol, matchingRawSymbols));
-      }
-      if (input.killzones?.length) {
-        whereClauses.push(
-          sql`(${sql.join(
-            input.killzones.map((killzone) => eq(trade.killzone, killzone)),
-            sql` OR `
-          )})`
-        );
-      }
-      if (input.sessionTags?.length) {
-        whereClauses.push(
-          sql`(${sql.join(
-            input.sessionTags.map((tag) => eq(trade.sessionTag, tag)),
-            sql` OR `
-          )})`
-        );
-      }
-      if (edgeFilterIds.length) {
-        whereClauses.push(
-          sql`EXISTS (
-            SELECT 1
-            FROM ${tradeEdgeAssignment}
-            WHERE ${tradeEdgeAssignment.tradeId} = ${trade.id}
-              AND ${tradeEdgeAssignment.edgeId} IN (${sql.join(
-                edgeFilterIds.map((edgeId) => sql`${edgeId}`),
-                sql`, `
-              )})
-          )`
-        );
-      }
-      if (input.customTags?.length) {
-        whereClauses.push(
-          sql`(${sql.join(
-            input.customTags.map(
-              (tag) =>
-                sql`${trade.customTags} @> ${JSON.stringify([tag])}::jsonb`
-            ),
-            sql` OR `
-          )})`
-        );
-      }
-      if (input.protocolAlignment?.length) {
-        whereClauses.push(
-          sql`(${sql.join(
-            input.protocolAlignment.map((value) =>
-              eq(trade.protocolAlignment, value)
-            ),
-            sql` OR `
-          )})`
-        );
-      }
-      if (input.outcomes?.length) {
-        whereClauses.push(
-          sql`(${sql.join(
-            input.outcomes.map((value) => eq(trade.outcome, value)),
-            sql` OR `
-          )})`
-        );
-      }
-
-      whereClauses.push(...buildTradeSearchPredicates(input.q));
-
-      addNumericRangeClause(
-        whereClauses,
-        holdSecondsExpr,
-        input.holdMin,
-        input.holdMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.volume as any,
-        input.volumeMin,
-        input.volumeMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.profit as any,
-        input.profitMin,
-        input.profitMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.commissions as any,
-        input.commissionsMin,
-        input.commissionsMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.swap as any,
-        input.swapMin,
-        input.swapMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.sl as any,
-        input.slMin,
-        input.slMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.tp as any,
-        input.tpMin,
-        input.tpMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.realisedRR as any,
-        input.rrMin,
-        input.rrMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.mfePips as any,
-        input.mfeMin,
-        input.mfeMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.maePips as any,
-        input.maeMin,
-        input.maeMax
-      );
-      addNumericRangeClause(
-        whereClauses,
-        trade.rrCaptureEfficiency as any,
-        input.efficiencyMin,
-        input.efficiencyMax
-      );
+      const whereClauses = [...baseWhereClauses];
 
       if (input.cursor) {
         const cursorDate = new Date(input.cursor.createdAtISO);
@@ -825,7 +932,361 @@ export const tradeQueryProcedures = {
         };
       });
 
-      return { items: result, nextCursor, totalTradesCount } as const;
+      return {
+        items: result,
+        nextCursor,
+        filteredTradesCount,
+        totalTradesCount,
+      } as const;
+    }),
+
+  getFilterArtifacts: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string().min(1),
+        startISO: z.string().optional(),
+        endISO: z.string().optional(),
+        q: z.string().optional(),
+        tradeDirection: z.enum(["all", "long", "short"]).default("all"),
+        ids: z.array(z.string()).optional(),
+        symbols: z.array(z.string()).optional(),
+        killzones: z.array(z.string()).optional(),
+        sessionTags: z.array(z.string()).optional(),
+        edgeIds: z.array(z.string()).optional(),
+        modelTags: z.array(z.string()).optional(),
+        customTags: z.array(z.string()).optional(),
+        protocolAlignment: z
+          .array(z.enum(["aligned", "against", "discretionary"]))
+          .optional(),
+        outcomes: z.array(z.enum(["Win", "Loss", "BE", "PW"])).optional(),
+        holdMin: z.number().optional(),
+        holdMax: z.number().optional(),
+        volumeMin: z.number().optional(),
+        volumeMax: z.number().optional(),
+        profitMin: z.number().optional(),
+        profitMax: z.number().optional(),
+        commissionsMin: z.number().optional(),
+        commissionsMax: z.number().optional(),
+        swapMin: z.number().optional(),
+        swapMax: z.number().optional(),
+        slMin: z.number().optional(),
+        slMax: z.number().optional(),
+        tpMin: z.number().optional(),
+        tpMax: z.number().optional(),
+        rrMin: z.number().optional(),
+        rrMax: z.number().optional(),
+        mfeMin: z.number().optional(),
+        mfeMax: z.number().optional(),
+        maeMin: z.number().optional(),
+        maeMax: z.number().optional(),
+        efficiencyMin: z.number().optional(),
+        efficiencyMax: z.number().optional(),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      await backfillUserEdgesFromLegacy(ctx.session.user.id);
+
+      const { scopedAccountIds, symbolResolver, userMappings } =
+        await resolveTradeFilterScope(ctx.session.user.id, input.accountId);
+
+      const emptyArtifacts = {
+        commissionsHistogram: [] as number[],
+        efficiencyHistogram: [] as number[],
+        holdHistogram: [] as number[],
+        maeHistogram: [] as number[],
+        mfeHistogram: [] as number[],
+        profitHistogram: [] as number[],
+        rrHistogram: [] as number[],
+        swapHistogram: [] as number[],
+        symbolCounts: {} as Record<string, number>,
+        symbolTotal: 0,
+        volumeHistogram: [] as number[],
+      };
+
+      if (scopedAccountIds.length === 0) {
+        return emptyArtifacts;
+      }
+
+      const { whereClauses, noResults } = await buildTradeWhereClauses({
+        userId: ctx.session.user.id,
+        input,
+        scopedAccountIds,
+        userMappings,
+        omitSymbols: true,
+        omitNumericRanges: true,
+      });
+
+      if (noResults) {
+        return emptyArtifacts;
+      }
+
+      const rows = await db
+        .select({
+          symbol: trade.symbol,
+          holdSeconds: sql<number | null>`NULLIF(${trade.tradeDurationSeconds}, '')::numeric`,
+          volume: sql<number | null>`CAST(${trade.volume} AS NUMERIC)`,
+          profit: sql<number | null>`CAST(${trade.profit} AS NUMERIC)`,
+          commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
+          swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
+          sl: sql<number | null>`CAST(${trade.sl} AS NUMERIC)`,
+          tp: sql<number | null>`CAST(${trade.tp} AS NUMERIC)`,
+          realisedRR: sql<number | null>`CAST(${trade.realisedRR} AS NUMERIC)`,
+          mfePips: sql<number | null>`CAST(${trade.mfePips} AS NUMERIC)`,
+          maePips: sql<number | null>`CAST(${trade.maePips} AS NUMERIC)`,
+          rrCaptureEfficiency: sql<number | null>`CAST(${trade.rrCaptureEfficiency} AS NUMERIC)`,
+        })
+        .from(trade)
+        .where(and(...whereClauses));
+
+      const symbolSet = new Set(input.symbols ?? []);
+      const commissionsHistogram: number[] = [];
+      const efficiencyHistogram: number[] = [];
+      const holdHistogram: number[] = [];
+      const maeHistogram: number[] = [];
+      const mfeHistogram: number[] = [];
+      const profitHistogram: number[] = [];
+      const rrHistogram: number[] = [];
+      const swapHistogram: number[] = [];
+      const symbolCounts: Record<string, number> = {};
+      const volumeHistogram: number[] = [];
+      let symbolTotal = 0;
+
+      for (const row of rows) {
+        const resolvedSymbol = symbolResolver.resolve(row.symbol ?? "");
+        const symbolKey = resolvedSymbol.canonicalSymbol || row.symbol || "";
+        const matchesSymbols =
+          symbolSet.size === 0 ||
+          [row.symbol, symbolKey]
+            .filter((value): value is string => Boolean(value))
+            .some((value) => symbolSet.has(value));
+        const matchesHold = isNumberInRange(
+          row.holdSeconds,
+          input.holdMin,
+          input.holdMax
+        );
+        const matchesVolume = isNumberInRange(
+          row.volume,
+          input.volumeMin,
+          input.volumeMax
+        );
+        const matchesProfit = isNumberInRange(
+          row.profit,
+          input.profitMin,
+          input.profitMax
+        );
+        const matchesCommissions = isNumberInRange(
+          row.commissions,
+          input.commissionsMin,
+          input.commissionsMax
+        );
+        const matchesSwap = isNumberInRange(row.swap, input.swapMin, input.swapMax);
+        const matchesSl = isNumberInRange(row.sl, input.slMin, input.slMax);
+        const matchesTp = isNumberInRange(row.tp, input.tpMin, input.tpMax);
+        const matchesRr = isNumberInRange(
+          row.realisedRR,
+          input.rrMin,
+          input.rrMax
+        );
+        const matchesMfe = isNumberInRange(
+          row.mfePips,
+          input.mfeMin,
+          input.mfeMax
+        );
+        const matchesMae = isNumberInRange(
+          row.maePips,
+          input.maeMin,
+          input.maeMax
+        );
+        const matchesEfficiency = isNumberInRange(
+          row.rrCaptureEfficiency,
+          input.efficiencyMin,
+          input.efficiencyMax
+        );
+        const matchesNumericFilters =
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency;
+
+        if (matchesNumericFilters && symbolKey) {
+          symbolCounts[symbolKey] = (symbolCounts[symbolKey] || 0) + 1;
+          symbolTotal += 1;
+        }
+
+        if (
+          matchesSymbols &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.holdSeconds != null
+        ) {
+          holdHistogram.push(Number(row.holdSeconds));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.volume != null
+        ) {
+          volumeHistogram.push(Number(row.volume));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.profit != null
+        ) {
+          profitHistogram.push(Number(row.profit));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.commissions != null
+        ) {
+          commissionsHistogram.push(Number(row.commissions));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.swap != null
+        ) {
+          swapHistogram.push(Number(row.swap));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesMfe &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.realisedRR != null
+        ) {
+          rrHistogram.push(Number(row.realisedRR));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMae &&
+          matchesEfficiency &&
+          row.mfePips != null
+        ) {
+          mfeHistogram.push(Number(row.mfePips));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesEfficiency &&
+          row.maePips != null
+        ) {
+          maeHistogram.push(Number(row.maePips));
+        }
+
+        if (
+          matchesSymbols &&
+          matchesHold &&
+          matchesVolume &&
+          matchesProfit &&
+          matchesCommissions &&
+          matchesSwap &&
+          matchesSl &&
+          matchesTp &&
+          matchesRr &&
+          matchesMfe &&
+          matchesMae &&
+          row.rrCaptureEfficiency != null
+        ) {
+          efficiencyHistogram.push(Number(row.rrCaptureEfficiency));
+        }
+      }
+
+      return {
+        commissionsHistogram,
+        efficiencyHistogram,
+        holdHistogram,
+        maeHistogram,
+        mfeHistogram,
+        profitHistogram,
+        rrHistogram,
+        swapHistogram,
+        symbolCounts,
+        symbolTotal,
+        volumeHistogram,
+      };
     }),
 
   list: protectedProcedure

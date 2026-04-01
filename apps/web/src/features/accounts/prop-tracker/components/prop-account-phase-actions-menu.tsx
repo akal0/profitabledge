@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { Check, ChevronDown, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, ChevronDown, Loader2, PencilLine } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,12 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
 import { cn } from "@/lib/utils";
 import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 
@@ -47,8 +51,8 @@ function getPhaseOptions(dashboard?: PropDashboardLike): PhaseOption[] {
         typeof phase?.name === "string" && phase.name.trim().length > 0
           ? phase.name.trim()
           : Number(phase?.order ?? 0) === 0
-          ? "Funded"
-          : `Phase ${Number(phase?.order ?? 1)}`,
+            ? "Funded"
+            : `Phase ${Number(phase?.order ?? 1)}`,
     }))
     .sort((left, right) => {
       if (left.order === 0 && right.order !== 0) return 1;
@@ -58,16 +62,15 @@ function getPhaseOptions(dashboard?: PropDashboardLike): PhaseOption[] {
 }
 
 export function PropAccountPhaseActionsMenu({
-  accountId,
-  accountName,
+  account,
   dashboard,
   className,
 }: {
-  accountId: string;
-  accountName: string;
+  account: any;
   dashboard?: PropDashboardLike;
   className?: string;
 }) {
+  const [rulesDialogOpen, setRulesDialogOpen] = useState(false);
   const phaseOptions = useMemo(() => getPhaseOptions(dashboard), [dashboard]);
   const currentPhase = dashboard?.account?.propCurrentPhase ?? null;
   const updatePhase = trpcClient.propFirms.updatePhase;
@@ -77,7 +80,7 @@ export function PropAccountPhaseActionsMenu({
   const handleSelectPhase = async (phase: PhaseOption) => {
     try {
       await updatePhase.mutate({
-        accountId,
+        accountId: account.id,
         newPhase: phase.order,
         status: phase.order === 0 ? "passed" : "active",
       });
@@ -88,69 +91,98 @@ export function PropAccountPhaseActionsMenu({
         }),
         queryClient.invalidateQueries({
           queryKey: trpcOptions.propFirms.getTrackerDashboard.queryOptions({
-            accountId,
+            accountId: account.id,
+          }).queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: trpcOptions.propFirms.getTrackerDashboards.queryOptions({
+            accountIds: [account.id],
           }).queryKey,
         }),
       ]);
 
-      toast.success(`${accountName} moved to ${phase.name}.`);
+      toast.success(`${account.name} moved to ${phase.name}.`);
     } catch (error: any) {
       toast.error(error?.message || "Failed to update phase");
     }
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className={cn(ACTION_BUTTON_CLASS, className)}
-          disabled={!hasOptions}
+    <>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className={cn(ACTION_BUTTON_CLASS, className)}>
+            Actions
+            <ChevronDown className="size-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="w-52 rounded-sm bg-sidebar p-1 ring-1 ring-white/10 border-none"
         >
-          Change phase
-          <ChevronDown className="size-3" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="w-52 rounded-sm bg-sidebar p-1 ring-1 ring-white/10 border-none"
-      >
-        <DropdownMenuLabel className="px-2 py-1.5 text-[10px] text-white/35">
-          Change phase
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator className="-mx-1 my-1 bg-white/5" />
-        {hasOptions ? (
-          phaseOptions.map((phase) => {
-            const isCurrent = phase.order === currentPhase;
+          <DropdownMenuLabel className="px-2 py-1.5 text-[10px] text-white/35">
+            Account actions
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator className="-mx-1 my-1 bg-white/5" />
 
-            return (
-              <DropdownMenuItem
-                key={`${accountId}-${phase.order}`}
-                className={ACTION_ITEM_CLASS}
-                disabled={isCurrent}
-                onSelect={() => {
-                  void handleSelectPhase(phase);
-                }}
-              >
-                <div className="flex w-full items-center justify-between gap-3">
-                  <span>{phase.name}</span>
-                  {isCurrent ? (
-                    <Check className="size-3.5 text-teal-300" />
-                  ) : null}
-                </div>
-              </DropdownMenuItem>
-            );
-          })
-        ) : (
-          <DropdownMenuItem className={ACTION_ITEM_CLASS} disabled>
-            <div className="flex items-center gap-2 text-white/45">
-              <Loader2 className="size-3 animate-spin" />
-              <span>No phase model</span>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className={ACTION_ITEM_CLASS} disabled={!hasOptions}>
+              Change phase
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-44 rounded-sm bg-sidebar p-1 ring-1 ring-white/10 border-none">
+              {hasOptions ? (
+                phaseOptions.map((phase) => {
+                  const isCurrent = phase.order === currentPhase;
+
+                  return (
+                    <DropdownMenuItem
+                      key={`${account.id}-${phase.order}`}
+                      className={ACTION_ITEM_CLASS}
+                      disabled={isCurrent}
+                      onSelect={() => {
+                        void handleSelectPhase(phase);
+                      }}
+                    >
+                      <div className="flex w-full items-center justify-between gap-3">
+                        <span>{phase.name}</span>
+                        {isCurrent ? (
+                          <Check className="size-3.5 text-teal-300" />
+                        ) : null}
+                      </div>
+                    </DropdownMenuItem>
+                  );
+                })
+              ) : (
+                <DropdownMenuItem className={ACTION_ITEM_CLASS} disabled>
+                  <div className="flex items-center gap-2 text-white/45">
+                    <Loader2 className="size-3 animate-spin" />
+                    <span>No phase model</span>
+                  </div>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuItem
+            className={ACTION_ITEM_CLASS}
+            onSelect={() => {
+              setRulesDialogOpen(true);
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <PencilLine className="size-3.5" />
+              <span>Change challenge rules</span>
             </div>
           </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ManualPropAccountDialog
+        account={account}
+        open={rulesDialogOpen}
+        onOpenChange={setRulesDialogOpen}
+        hideTrigger
+      />
+    </>
   );
 }

@@ -24,6 +24,14 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function replaceBrowserLocation(path: string) {
+  window.location.replace(path);
+}
+
+function assignBrowserLocation(path: string) {
+  window.location.assign(path);
+}
+
 export default function AuthContinuePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -123,14 +131,14 @@ export default function AuthContinuePage() {
     hasStartedCheckoutFinalizeRef.current = true;
     setCheckoutSyncFailed(false);
 
-    const redirectToDashboard = async () => {
+    const redirectToDashboard = () => {
       router.prefetch(DASHBOARD_TOUR_ENTRY_PATH);
       void prefetchDashboardWorkspace(DASHBOARD_TOUR_ENTRY_PATH).catch(
         () => undefined
       );
 
       if (isMountedRef.current) {
-        router.replace(DASHBOARD_TOUR_ENTRY_PATH);
+        replaceBrowserLocation(DASHBOARD_TOUR_ENTRY_PATH);
       }
     };
 
@@ -154,7 +162,7 @@ export default function AuthContinuePage() {
         return;
       }
 
-      await redirectToDashboard();
+      redirectToDashboard();
     };
 
     void (async () => {
@@ -217,7 +225,7 @@ export default function AuthContinuePage() {
 
     if (!hasConfirmedSession) {
       if (hasAttemptedSessionRecovery) {
-        router.replace(buildLoginPath(requestedReturnTo));
+        replaceBrowserLocation(buildLoginPath(requestedReturnTo));
       }
       return;
     }
@@ -238,11 +246,10 @@ export default function AuthContinuePage() {
     hasStartedRedirectRef.current = true;
 
     if (!redirectTarget.startsWith("/dashboard")) {
-      router.replace(redirectTarget);
+      replaceBrowserLocation(redirectTarget);
       return;
     }
 
-    let cancelled = false;
     router.prefetch("/dashboard");
     if (redirectTarget !== "/dashboard") {
       router.prefetch(redirectTarget);
@@ -250,13 +257,7 @@ export default function AuthContinuePage() {
 
     void prefetchDashboardWorkspace(redirectTarget).catch(() => undefined);
 
-    if (!cancelled) {
-      router.replace(redirectTarget);
-    }
-
-    return () => {
-      cancelled = true;
-    };
+    replaceBrowserLocation(redirectTarget);
   }, [
     redirectTarget,
     router,
@@ -281,7 +282,7 @@ export default function AuthContinuePage() {
               Refresh
             </Button>
             <Button
-              onClick={() => router.replace("/dashboard/settings/billing")}
+              onClick={() => assignBrowserLocation("/dashboard/settings/billing")}
             >
               Open Billing
             </Button>

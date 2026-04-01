@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AtSign,
@@ -13,7 +12,6 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Message,
   MessageAvatar,
@@ -45,7 +43,6 @@ import {
   PremiumAssistantStreamingContent,
 } from "@/features/ai/premium-assistant/components/premium-assistant-streaming-content";
 import { usePremiumAssistantController } from "@/features/ai/premium-assistant/hooks/use-premium-assistant-controller";
-import { TRADING_SUGGESTIONS } from "@/features/ai/premium-assistant/lib/premium-assistant-types";
 import { PROFITABLEDGE_FAVICON_PATH } from "@/lib/brand-assets";
 import {
   WidgetBlockRenderer,
@@ -77,7 +74,12 @@ function sanitizeAssistantHtml(markup: string) {
   }
 
   const parser = new DOMParser();
-  const documentFragment = parser.parseFromString(markup, "text/html");
+  const documentFragment = parser.parseFromString(markup || "", "text/html");
+  const root = documentFragment.body ?? documentFragment.documentElement;
+
+  if (!root) {
+    return markup;
+  }
 
   const sanitizeNode = (node: Node) => {
     if (node.nodeType === Node.ELEMENT_NODE) {
@@ -134,8 +136,8 @@ function sanitizeAssistantHtml(markup: string) {
     }
   };
 
-  sanitizeNode(documentFragment.body);
-  return documentFragment.body.innerHTML;
+  sanitizeNode(root);
+  return documentFragment.body?.innerHTML ?? markup;
 }
 
 function SidebarToggleButton() {
@@ -157,14 +159,7 @@ function AssistantEmptyArtwork() {
       aria-hidden="true"
       className="pointer-events-none absolute inset-0 overflow-hidden"
     >
-      <Image
-        src="/landing/hero-background-assistant.webp"
-        alt=""
-        width={1920}
-        height={1405}
-        priority
-        className="absolute right-[-14rem] top-[-5rem] h-auto w-[120rem] max-w-none opacity-[0.14] select-none"
-      />
+      <div className="absolute inset-0 bg-[url('/landing/hero-background-assistant.svg')] bg-cover bg-center bg-no-repeat opacity-[0.22]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_34%,rgba(5,5,5,0.5)_100%)]" />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,5,0.22)_0%,rgba(5,5,5,0.4)_100%)]" />
     </div>
@@ -259,7 +254,8 @@ export function PremiumAssistant({
             {isEmptyState ? (
               <PremiumAssistantEmptyState
                 onSuggestionClick={controller.handleSuggestionClick}
-                suggestions={TRADING_SUGGESTIONS}
+                suggestions={controller.starterSuggestions}
+                isLoadingSuggestions={controller.isStarterSuggestionsLoading}
               />
             ) : (
               <ScrollArea className="relative z-0 h-full w-full">

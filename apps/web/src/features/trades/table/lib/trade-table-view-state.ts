@@ -51,6 +51,20 @@ export type SampleGateStatusRow = {
   unlocks?: string[];
 };
 
+export type TradeFilterArtifacts = {
+  commissionsHistogram: number[];
+  efficiencyHistogram: number[];
+  holdHistogram: number[];
+  maeHistogram: number[];
+  mfeHistogram: number[];
+  profitHistogram: number[];
+  rrHistogram: number[];
+  swapHistogram: number[];
+  symbolCounts: Record<string, number>;
+  symbolTotal: number;
+  volumeHistogram: number[];
+};
+
 export const NO_RESULTS_FILTER_ID = "__trades_no_results__";
 
 export const isFiniteNumber = (

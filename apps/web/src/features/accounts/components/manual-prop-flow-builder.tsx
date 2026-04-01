@@ -4,6 +4,13 @@ import { Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { TRADE_SURFACE_CARD_CLASS } from "@/components/trades/trade-identifier-pill";
@@ -51,6 +58,8 @@ export function CustomPhaseEditor({
   onRemove,
   disableMaxLoss = false,
   disableMinTradingDays = false,
+  metricMode = "percentage",
+  maxLossType = "absolute",
 }: {
   title: string;
   description: string;
@@ -63,7 +72,21 @@ export function CustomPhaseEditor({
   onRemove?: () => void;
   disableMaxLoss?: boolean;
   disableMinTradingDays?: boolean;
+  metricMode?: "percentage" | "absolute";
+  maxLossType?: "absolute" | "trailing";
 }) {
+  const targetLabel = metricMode === "absolute" ? "Target" : "Target %";
+  const dailyLabel =
+    metricMode === "absolute" ? "Daily limit" : "Daily DD %";
+  const maxLossLabel =
+    metricMode === "absolute"
+      ? maxLossType === "trailing"
+        ? "Trailing loss"
+        : "Max loss"
+      : maxLossType === "trailing"
+        ? "Trailing DD %"
+        : "Max DD %";
+
   return (
     <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-4 rounded-sm p-4")}>
       <div className="flex items-start justify-between gap-3">
@@ -95,7 +118,7 @@ export function CustomPhaseEditor({
       >
         {showTarget ? (
           <div className="space-y-1.5">
-            <p className="text-[11px] font-medium text-white/55">Target %</p>
+            <p className="text-[11px] font-medium text-white/55">{targetLabel}</p>
             <Input
               type="number"
               inputMode="decimal"
@@ -112,7 +135,7 @@ export function CustomPhaseEditor({
         ) : null}
 
         <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-white/55">Daily DD %</p>
+          <p className="text-[11px] font-medium text-white/55">{dailyLabel}</p>
           <Input
             type="number"
             inputMode="decimal"
@@ -128,7 +151,7 @@ export function CustomPhaseEditor({
         </div>
 
         <div className="space-y-1.5">
-          <p className="text-[11px] font-medium text-white/55">Max DD %</p>
+          <p className="text-[11px] font-medium text-white/55">{maxLossLabel}</p>
           <Input
             type="number"
             inputMode="decimal"
@@ -190,6 +213,8 @@ export function ManualPropFlowBuilder({
   sharedMaxLoss,
   applySharedMinTradingDays,
   sharedMinTradingDays,
+  metricMode,
+  maxLossType,
   onAddPhase,
   onCustomChallengePhaseChange,
   onRemoveChallengePhase,
@@ -198,9 +223,12 @@ export function ManualPropFlowBuilder({
   onSharedMaxLossChange,
   onApplySharedMinTradingDaysChange,
   onSharedMinTradingDaysChange,
+  onMetricModeChange,
+  onMaxLossTypeChange,
   onReset,
   onSave,
   isSaving,
+  propFirmNameLocked,
 }: {
   customPropFirmName: string;
   onCustomPropFirmNameChange: (value: string) => void;
@@ -210,6 +238,8 @@ export function ManualPropFlowBuilder({
   sharedMaxLoss: string;
   applySharedMinTradingDays: boolean;
   sharedMinTradingDays: string;
+  metricMode: "percentage" | "absolute";
+  maxLossType: "absolute" | "trailing";
   onAddPhase: () => void;
   onCustomChallengePhaseChange: (
     phaseIndex: number,
@@ -225,28 +255,73 @@ export function ManualPropFlowBuilder({
   onSharedMaxLossChange: (value: string) => void;
   onApplySharedMinTradingDaysChange: (checked: boolean) => void;
   onSharedMinTradingDaysChange: (value: string) => void;
+  onMetricModeChange: (value: "percentage" | "absolute") => void;
+  onMaxLossTypeChange: (value: "absolute" | "trailing") => void;
   onReset: () => void;
   onSave: () => void;
   isSaving: boolean;
+  propFirmNameLocked?: string | null;
 }) {
   return (
     <div className="-mx-6">
       <Separator />
 
       <div className="space-y-4 px-6 py-5">
-        <div className="space-y-2">
-          <p className="text-xs text-white/50">Prop firm name</p>
-          <Input
-            value={customPropFirmName}
-            onChange={(event) => onCustomPropFirmNameChange(event.target.value)}
-            placeholder="Profitabledge"
-            className="h-9 rounded-sm ring-white/10 bg-sidebar text-sm text-white"
-          />
-        </div>
+        {propFirmNameLocked ? (
+          <div className="space-y-2">
+            <p className="text-xs text-white/50">Prop firm</p>
+            <div
+              className={cn(
+                TRADE_SURFACE_CARD_CLASS,
+                "rounded-sm px-4 py-3 text-sm text-white"
+              )}
+            >
+              {propFirmNameLocked}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-white/50">Prop firm name</p>
+            <Input
+              value={customPropFirmName}
+              onChange={(event) => onCustomPropFirmNameChange(event.target.value)}
+              placeholder="Profitabledge"
+              className="h-9 rounded-sm ring-white/10 bg-sidebar text-sm text-white"
+            />
+          </div>
+        )}
       </div>
 
       <Separator />
       <div className="px-6 py-5">
+        <div className="mb-4 grid gap-3 md:grid-cols-2">
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium text-white/55">Rule units</p>
+            <Select value={metricMode} onValueChange={onMetricModeChange}>
+              <SelectTrigger className="h-9 rounded-sm ring-white/10 bg-sidebar text-sm text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">Percentage</SelectItem>
+                <SelectItem value="absolute">Absolute</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-medium text-white/55">Max loss mode</p>
+            <Select value={maxLossType} onValueChange={onMaxLossTypeChange}>
+              <SelectTrigger className="h-9 rounded-sm ring-white/10 bg-sidebar text-sm text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="absolute">Static</SelectItem>
+                <SelectItem value="trailing">Trailing</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold tracking-wide text-white/70">
@@ -351,6 +426,8 @@ export function ManualPropFlowBuilder({
               }
               disableMaxLoss={applySharedMaxLoss}
               disableMinTradingDays={applySharedMinTradingDays}
+              metricMode={metricMode}
+              maxLossType={maxLossType}
               onRemove={
                 customChallengePhases.length > 1
                   ? () => onRemoveChallengePhase(index)
@@ -383,6 +460,8 @@ export function ManualPropFlowBuilder({
             onCustomFundedPhaseChange(key as keyof CustomFundedPhaseDraft, value)
           }
           showTarget={false}
+          metricMode={metricMode}
+          maxLossType={maxLossType}
         />
       </div>
 

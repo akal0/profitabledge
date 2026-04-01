@@ -8,6 +8,10 @@ import {
   trade,
   tradingAccount,
 } from "../db/schema/trading";
+import {
+  getBuiltinPropChallengeRuleSeeds,
+  getBuiltinPropFirmSeeds,
+} from "./builtin-trading-firms";
 import { cache } from "./cache";
 import { ensurePropChallengeLineageForAccount } from "./prop-challenge-lineage";
 
@@ -46,98 +50,22 @@ export interface AutoPropClassificationResult {
 }
 
 const DEFAULT_PROP_START_BALANCE = 100_000;
-const BUILTIN_PROP_TIMESTAMP = new Date("2025-01-01T00:00:00.000Z");
 const AUTO_PROP_SYNC_TTL_MS = 60_000;
 
-const BUILTIN_PROP_FIRMS: PropFirmRecord[] = [
-  {
-    id: "ftmo",
-    createdByUserId: null,
-    name: "FTMO",
-    displayName: "FTMO",
-    description:
-      "One of the world's leading prop trading firms with a proven track record since 2015.",
-    logo: "/brokers/FTMO.png",
-    website: "https://ftmo.com",
-    supportedPlatforms: ["mt4", "mt5", "ctrader"],
-    brokerDetectionPatterns: [
-      "FTMO",
-      "ftmo",
-      "FTMO-Demo",
-      "FTMO-Live",
-      "FTMO-Server",
-    ],
-    active: true,
-    createdAt: BUILTIN_PROP_TIMESTAMP,
-    updatedAt: BUILTIN_PROP_TIMESTAMP,
-  },
-];
+const BUILTIN_PROP_FIRMS = getBuiltinPropFirmSeeds() as PropFirmRecord[];
+const ACTIVE_BUILTIN_PROP_FIRMS = BUILTIN_PROP_FIRMS.filter(
+  (firm) => firm.active
+) as PropFirmRecord[];
+const BUILTIN_PROP_CHALLENGE_RULES = getBuiltinPropChallengeRuleSeeds().reduce<
+  Record<string, PropChallengeRuleRecord[]>
+>((accumulator, rule) => {
+  if (!accumulator[rule.propFirmId]) {
+    accumulator[rule.propFirmId] = [];
+  }
 
-const BUILTIN_PROP_CHALLENGE_RULES: Record<string, PropChallengeRuleRecord[]> =
-  {
-    ftmo: [
-      {
-        id: "ftmo-2step",
-        createdByUserId: null,
-        propFirmId: "ftmo",
-        challengeType: "standard",
-        displayName: "FTMO 2-Step Challenge",
-        phases: [
-          {
-            order: 1,
-            name: "Phase 1 - FTMO Challenge",
-            profitTarget: 10,
-            profitTargetType: "percentage",
-            dailyLossLimit: 5,
-            maxLoss: 10,
-            maxLossType: "absolute",
-            timeLimitDays: null,
-            minTradingDays: 4,
-            consistencyRule: null,
-            customRules: {
-              description:
-                "Achieve 10% profit while staying within risk limits",
-            },
-          },
-          {
-            order: 2,
-            name: "Phase 2 - Verification",
-            profitTarget: 5,
-            profitTargetType: "percentage",
-            dailyLossLimit: 5,
-            maxLoss: 10,
-            maxLossType: "absolute",
-            timeLimitDays: null,
-            minTradingDays: 4,
-            consistencyRule: null,
-            customRules: {
-              description: "Achieve 5% profit to unlock your funded account",
-            },
-          },
-          {
-            order: 0,
-            name: "Funded Account",
-            profitTarget: null,
-            profitTargetType: "percentage",
-            dailyLossLimit: 5,
-            maxLoss: 10,
-            maxLossType: "absolute",
-            timeLimitDays: null,
-            minTradingDays: 0,
-            consistencyRule: null,
-            customRules: {
-              profitSplit: 80,
-              profitSplitScaled: 90,
-              description: "80% profit split (90% after scaling)",
-            },
-          },
-        ],
-        active: true,
-        createdAt: BUILTIN_PROP_TIMESTAMP,
-        updatedAt: BUILTIN_PROP_TIMESTAMP,
-      },
-    ],
-  };
+  accumulator[rule.propFirmId]!.push(rule as PropChallengeRuleRecord);
+  return accumulator;
+}, {});
 
 function sortPropFirms(records: PropFirmRecord[]) {
   return [...records].sort((left, right) =>
@@ -153,7 +81,7 @@ function sortPropChallengeRules(records: PropChallengeRuleRecord[]) {
 
 function mergePropFirmsWithBuiltIns(records: PropFirmRecord[]) {
   const byId = new Map<string, PropFirmRecord>(
-    BUILTIN_PROP_FIRMS.map((firm) => [firm.id, firm])
+    ACTIVE_BUILTIN_PROP_FIRMS.map((firm) => [firm.id, firm])
   );
 
   for (const record of records) {
@@ -179,6 +107,13 @@ function mergeChallengeRulesWithBuiltIns(
   }
 
   return sortPropChallengeRules(Array.from(byId.values()));
+}
+
+function normalizeChallengeRuleLookupKey(value: string | null | undefined) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
 }
 
 function buildPropFirmAccessCondition(userId?: string | null) {
@@ -780,6 +715,18 @@ export async function getChallengeRuleById(id: string, userId?: string | null) {
     const match = rules.find((rule) => rule.id === id);
     if (match) {
       return match;
+    }
+  }
+
+  const normalizedId = normalizeChallengeRuleLookupKey(id);
+  if (normalizedId) {
+    for (const rules of Object.values(BUILTIN_PROP_CHALLENGE_RULES)) {
+      const match = rules.find(
+        (rule) => normalizeChallengeRuleLookupKey(rule.id) === normalizedId
+      );
+      if (match) {
+        return match;
+      }
     }
   }
 

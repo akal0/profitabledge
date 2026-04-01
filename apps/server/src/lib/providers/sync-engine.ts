@@ -12,12 +12,12 @@ import {
 import { openTrade, trade, tradingAccount } from "../../db/schema/trading";
 import { eq, and, notInArray } from "drizzle-orm";
 import { decryptCredentials, encryptCredentials } from "./credential-cipher";
-import { getProvider } from "./registry";
+import { getProvider, PROVIDER_INFO } from "./registry";
 import { normalizeToTradeInsert } from "./trade-normalizer";
 import { notifyEarnedAchievements } from "../achievements";
 import { createNotification } from "../notifications";
 import { syncPropAccountState } from "../prop-rule-monitor";
-import { isMtTerminalProvider } from "../mt5/constants";
+import { isWorkerManagedProvider } from "../mt5/constants";
 import { nanoid } from "nanoid";
 import { cache, cacheKeys } from "../cache";
 
@@ -58,7 +58,7 @@ export async function syncConnection(
     };
   }
 
-  if (isMtTerminalProvider(conn.provider)) {
+  if (isWorkerManagedProvider(conn.provider)) {
     return {
       connectionId,
       status: "skipped",
@@ -66,7 +66,20 @@ export async function syncConnection(
       tradesInserted: 0,
       tradesDuplicated: 0,
       errorMessage:
-        "MT terminal connections are handled by the MT5 worker queue, not the generic sync engine.",
+        "Worker-managed connections are handled by the broker worker queue, not the generic sync engine.",
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  if (PROVIDER_INFO[conn.provider]?.status === "coming_soon") {
+    return {
+      connectionId,
+      status: "skipped",
+      tradesFound: 0,
+      tradesInserted: 0,
+      tradesDuplicated: 0,
+      errorMessage:
+        "This provider is saved but still marked coming soon for live sync.",
       durationMs: Date.now() - startTime,
     };
   }

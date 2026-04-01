@@ -29,7 +29,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-import { BulkTagSubmenuContent } from "./bulk-tag-submenu-content";
+import { ColorTagEditor } from "./bulk-tag-submenu-content";
 import { bulkActionsStyles } from "../lib/bulk-actions-styles";
 import type {
   BulkTagEditorProps,
@@ -114,7 +114,7 @@ export function BulkActionsBar({
               >
                 Session tag
               </DropdownMenuSubTrigger>
-              <BulkTagSubmenuContent {...sessionTagEditor} />
+              <ColorTagEditor {...sessionTagEditor} />
             </DropdownMenuSub>
 
             <DropdownMenuSub>
@@ -123,7 +123,7 @@ export function BulkActionsBar({
               >
                 Model tag
               </DropdownMenuSubTrigger>
-              <BulkTagSubmenuContent {...modelTagEditor} />
+              <ColorTagEditor {...modelTagEditor} />
             </DropdownMenuSub>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -112,6 +112,19 @@ function formatCompactNumber(value?: number | null) {
   }).format(value ?? 0);
 }
 
+function requestOptionalNote(promptLabel: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const value = window.prompt(promptLabel, "");
+  if (value === null) {
+    return null;
+  }
+
+  return value.trim() || undefined;
+}
+
 function parsePercentToBasisPoints(
   value: string,
   { min = 0, max = 100 }: { min?: number; max?: number } = {}
@@ -391,7 +404,10 @@ export function GrowthAdminDashboard() {
     await saveAffiliateTierSettings.mutateAsync({
       affiliateUserId: entry.affiliate.id,
       tierMode: draft.tierMode,
-      tierKey: draft.tierMode === "manual" ? "elite" : entry.tier?.key ?? "partner",
+      tierKey:
+        draft.tierMode === "manual"
+          ? (draft.tierKey as any)
+          : entry.tier?.key ?? "partner",
       offerCode: draft.code.trim().toUpperCase(),
       offerLabel: draft.label.trim(),
       discountPercent: discountBasisPoints / 100,
@@ -815,7 +831,9 @@ export function GrowthAdminDashboard() {
                                       tierMode: value as "automatic" | "manual",
                                       tierKey:
                                         value === "manual"
-                                          ? "elite"
+                                          ? selectedTierDraft.tierKey ||
+                                            selectedAffiliateEntry.tier?.key ||
+                                            "partner"
                                           : selectedAffiliateEntry.tier?.key ?? "partner",
                                       code: value === "automatic"
                                         ? selectedAffiliateEntry.defaultOffer?.code ??
@@ -866,13 +884,43 @@ export function GrowthAdminDashboard() {
                                   <SelectTrigger className="h-10 bg-sidebar-accent text-xs ring-white/10">
                                     <SelectValue placeholder="Select mode" />
                                   </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="automatic">
+                                        Automatic
+                                      </SelectItem>
+                                      <SelectItem value="manual">
+                                        Manual override
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] text-white/35">
+                                  Manual tier
+                                </Label>
+                                <Select
+                                  value={selectedTierDraft.tierKey}
+                                  onValueChange={(value) =>
+                                    updateTierDraft(selectedAffiliateEntry.affiliate.id, {
+                                      tierKey: value,
+                                    })
+                                  }
+                                  disabled={selectedTierDraft.tierMode !== "manual"}
+                                >
+                                  <SelectTrigger className="h-10 bg-sidebar-accent text-xs ring-white/10 disabled:cursor-not-allowed disabled:opacity-50">
+                                    <SelectValue placeholder="Select tier" />
+                                  </SelectTrigger>
                                   <SelectContent>
-                                    <SelectItem value="automatic">
-                                      Automatic
-                                    </SelectItem>
-                                    <SelectItem value="manual">
-                                      Manual elite
-                                    </SelectItem>
+                                    {[
+                                      ["partner", "Partner"],
+                                      ["pro", "Pro"],
+                                      ["elite", "Elite"],
+                                    ].map(([value, label]) => (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ))}
                                   </SelectContent>
                                 </Select>
                               </div>
@@ -1032,11 +1080,11 @@ export function GrowthAdminDashboard() {
                                   <p className="text-[11px] text-white/35">
                                     Benefit toggles
                                   </p>
-                                  <p className="mt-1 text-[10px] text-white/25">
-                                    {selectedTierDraft.tierMode === "automatic"
-                                      ? "Automatic tiers keep the default benefit set."
-                                      : "Enable or disable tier-specific perks for this elite affiliate."}
-                                  </p>
+                                    <p className="mt-1 text-[10px] text-white/25">
+                                      {selectedTierDraft.tierMode === "automatic"
+                                        ? "Automatic tiers keep the default benefit set."
+                                        : "Enable or disable tier-specific perks for this manually managed affiliate."}
+                                    </p>
                                 </div>
                                 <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
                                   {selectedAffiliateEntry.tier?.benefits?.length ?? 0} perks
@@ -1204,6 +1252,11 @@ export function GrowthAdminDashboard() {
                                 (request.destinationType === "stripe_connect"
                                   ? "Stripe Connect"
                                   : "Method removed")}
+                              {request.paymentMethod?.detailsPreview ? (
+                                <p className="mt-1 text-[10px] text-white/35">
+                                  {request.paymentMethod.detailsPreview}
+                                </p>
+                              ) : null}
                             </td>
                             <td className="px-4 py-3">
                               <Badge className="ring ring-white/10 bg-white/5 text-[10px] text-white/65">
@@ -1218,11 +1271,19 @@ export function GrowthAdminDashboard() {
                                 {request.status === "pending" ? (
                                   <>
                                     <Button
-                                      onClick={() =>
+                                      onClick={() => {
+                                        const notes = requestOptionalNote(
+                                          "Add optional approval notes for this withdrawal"
+                                        );
+                                        if (notes === null) {
+                                          return;
+                                        }
+
                                         approveAffiliateWithdrawal.mutate({
                                           withdrawalRequestId: request.id,
-                                        } as any)
-                                      }
+                                          notes,
+                                        } as any);
+                                      }}
                                       disabled={approveAffiliateWithdrawal.isPending}
                                       className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
                                     >
@@ -1230,11 +1291,19 @@ export function GrowthAdminDashboard() {
                                       {isApproving ? "Approving..." : "Approve"}
                                     </Button>
                                     <Button
-                                      onClick={() =>
+                                      onClick={() => {
+                                        const notes = requestOptionalNote(
+                                          "Add optional rejection notes for this withdrawal"
+                                        );
+                                        if (notes === null) {
+                                          return;
+                                        }
+
                                         rejectAffiliateWithdrawal.mutate({
                                           withdrawalRequestId: request.id,
-                                        } as any)
-                                      }
+                                          notes,
+                                        } as any);
+                                      }}
                                       disabled={rejectAffiliateWithdrawal.isPending}
                                       className="h-8 rounded-sm bg-rose-600/90 px-3 text-[11px] text-white hover:brightness-110"
                                     >
@@ -1244,29 +1313,55 @@ export function GrowthAdminDashboard() {
                                   </>
                                 ) : null}
 
-                                {request.status === "approved" &&
+                                {(request.status === "approved" ||
+                                  (request.status === "processing" &&
+                                    request.requiresManualReconciliation)) &&
                                 request.destinationType === "stripe_connect" ? (
                                   <Button
-                                    onClick={() =>
+                                    onClick={() => {
+                                      const notes = requestOptionalNote(
+                                        request.status === "processing"
+                                          ? "Add optional notes before finalizing this Stripe payout"
+                                          : "Add optional notes before sending this Stripe payout"
+                                      );
+                                      if (notes === null) {
+                                        return;
+                                      }
+
                                       sendAffiliateStripeWithdrawal.mutate({
                                         withdrawalRequestId: request.id,
-                                      } as any)
-                                    }
+                                        notes,
+                                      } as any);
+                                    }}
                                     disabled={sendAffiliateStripeWithdrawal.isPending}
                                     className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
                                   >
-                                    {isSendingStripe ? "Sending..." : "Send Stripe payout"}
+                                    {isSendingStripe
+                                      ? request.status === "processing"
+                                        ? "Finalizing..."
+                                        : "Sending..."
+                                      : request.status === "processing"
+                                      ? "Finalize Stripe payout"
+                                      : "Send Stripe payout"}
                                   </Button>
                                 ) : null}
 
                                 {request.status === "approved" &&
                                 request.destinationType === "manual" ? (
                                   <Button
-                                    onClick={() =>
+                                    onClick={() => {
+                                      const externalReference = requestOptionalNote(
+                                        "Add an optional external reference for this manual payout"
+                                      );
+                                      if (externalReference === null) {
+                                        return;
+                                      }
+
                                       markAffiliateManualWithdrawalPaid.mutate({
                                         withdrawalRequestId: request.id,
-                                      } as any)
-                                    }
+                                        externalReference,
+                                      } as any);
+                                    }}
                                     disabled={markAffiliateManualWithdrawalPaid.isPending}
                                     className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
                                   >
@@ -1277,9 +1372,12 @@ export function GrowthAdminDashboard() {
                                 ) : null}
 
                                 {request.status !== "pending" &&
-                                !(request.status === "approved" &&
+                                !((request.status === "approved" &&
                                   (request.destinationType === "stripe_connect" ||
-                                    request.destinationType === "manual")) ? (
+                                    request.destinationType === "manual")) ||
+                                  (request.status === "processing" &&
+                                    request.destinationType === "stripe_connect" &&
+                                    request.requiresManualReconciliation)) ? (
                                   <span className="text-xs text-white/30">—</span>
                                 ) : null}
                               </div>
@@ -1367,6 +1465,11 @@ export function GrowthAdminDashboard() {
                                 : payout.provider === "stripe_connect"
                                   ? "Stripe Connect"
                                   : "Method removed")}
+                            {payout.paymentMethod?.detailsPreview ? (
+                              <p className="mt-1 text-[10px] text-white/35">
+                                {payout.paymentMethod.detailsPreview}
+                              </p>
+                            ) : null}
                           </td>
                           <td className="px-4 py-3 text-sm text-white/75">
                             {payout.provider
@@ -1572,22 +1675,38 @@ export function GrowthAdminDashboard() {
                           {entry.application.status === "pending" ? (
                             <div className="flex flex-wrap gap-2">
                               <Button
-                                onClick={() =>
+                                onClick={() => {
+                                  const adminNotes = requestOptionalNote(
+                                    "Add optional private admin notes for this approval"
+                                  );
+                                  if (adminNotes === null) {
+                                    return;
+                                  }
+
                                   approveAffiliate.mutate({
                                     applicationId: entry.application.id,
-                                  })
-                                }
+                                    adminNotes,
+                                  });
+                                }}
                                 disabled={approveAffiliate.isPending}
                                 className="h-8 rounded-sm bg-emerald-600 px-3 text-[11px] text-white hover:brightness-110"
                               >
                                 {isApproving ? "Approving..." : "Approve"}
                               </Button>
                               <Button
-                                onClick={() =>
+                                onClick={() => {
+                                  const adminNotes = requestOptionalNote(
+                                    "Add optional private admin notes for this rejection"
+                                  );
+                                  if (adminNotes === null) {
+                                    return;
+                                  }
+
                                   rejectAffiliate.mutate({
                                     applicationId: entry.application.id,
-                                  })
-                                }
+                                    adminNotes,
+                                  });
+                                }}
                                 disabled={rejectAffiliate.isPending}
                                 className="h-8 rounded-sm bg-rose-600 px-3 text-[11px] text-white hover:brightness-110"
                               >

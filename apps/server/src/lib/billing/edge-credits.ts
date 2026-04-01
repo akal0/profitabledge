@@ -25,9 +25,9 @@ import {
 } from "../../db/schema/billing";
 import {
   getBillingPlanDefinition,
-  getHigherBillingPlanKey,
   type BillingPlanKey,
 } from "./config";
+import { resolveEffectiveBillingPlanKey } from "./effective-plan";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = ["active", "trialing"] as const;
 const MILLION = 1_000_000;
@@ -36,6 +36,8 @@ const DEFAULT_ESTIMATED_MAX_OUTPUT_TOKENS = 1_024;
 export const EDGE_CREDIT_USD_MICROS = 10_000;
 export const EDGE_CREDIT_EXHAUSTED_MESSAGE =
   "No Edge credits remain for platform AI this billing cycle. Upgrade your plan or wait for the next reset.";
+export const EDGE_CREDIT_LOW_WARNING_RATIO = 0.15;
+export const EDGE_CREDIT_LOW_WARNING_MIN_CREDITS = 25;
 
 export type AICredentialSource = "platform" | "user_key";
 
@@ -135,6 +137,21 @@ export function calculateGeminiCostMicros(input: {
   );
 }
 
+export function convertCostMicrosToCredits(costMicros: number) {
+  return Math.ceil(Math.max(0, costMicros) / EDGE_CREDIT_USD_MICROS);
+}
+
+export function getLowCreditWarningThreshold(allowanceCredits: number) {
+  if (allowanceCredits <= 0) {
+    return 0;
+  }
+
+  return Math.max(
+    EDGE_CREDIT_LOW_WARNING_MIN_CREDITS,
+    Math.ceil(allowanceCredits * EDGE_CREDIT_LOW_WARNING_RATIO)
+  );
+}
+
 export function estimatePromptTokens(request: GenerateContentRequestLike) {
   const serialized =
     typeof request === "string" ? request : JSON.stringify(request ?? "");
@@ -203,9 +220,10 @@ export async function getUserEdgeCreditSnapshot(
     .limit(1);
 
   const now = new Date();
-  const [override] = await db
+  const overrides = await db
     .select({
       planKey: billingEntitlementOverride.planKey,
+      sourceType: billingEntitlementOverride.sourceType,
       startsAt: billingEntitlementOverride.startsAt,
       endsAt: billingEntitlementOverride.endsAt,
     })
@@ -217,17 +235,18 @@ export async function getUserEdgeCreditSnapshot(
         gte(billingEntitlementOverride.endsAt, now)
       )
     )
-    .orderBy(desc(billingEntitlementOverride.endsAt))
-    .limit(1);
+    .orderBy(
+      desc(billingEntitlementOverride.updatedAt),
+      desc(billingEntitlementOverride.endsAt),
+      desc(billingEntitlementOverride.createdAt)
+    );
 
   const subscriptionPlanKey = (subscription?.planKey ??
     "student") as BillingPlanKey;
-  const activePlanKey = override?.planKey
-    ? getHigherBillingPlanKey(
-        subscriptionPlanKey,
-        override.planKey as BillingPlanKey
-      )
-    : subscriptionPlanKey;
+  const activePlanKey = resolveEffectiveBillingPlanKey({
+    subscriptionPlanKey,
+    overrides,
+  });
   const plan = getBillingPlanDefinition(activePlanKey);
   const allowanceCredits = plan?.includedAiCredits ?? 0;
 
@@ -257,7 +276,7 @@ export async function getUserEdgeCreditSnapshot(
     .where(and(...usageConditions));
 
   const spentCostMicros = Math.max(0, usageRow?.spentCostMicros ?? 0);
-  const spentCredits = Math.ceil(spentCostMicros / EDGE_CREDIT_USD_MICROS);
+  const spentCredits = convertCostMicrosToCredits(spentCostMicros);
   const planRemainingCredits = Math.max(0, allowanceCredits - spentCredits);
 
   const [bonusRow] = await db
@@ -339,9 +358,7 @@ export async function recordAICreditUsage(input: RecordAICreditUsageInput) {
     return;
   }
 
-  const chargedCredits = Math.ceil(
-    Math.max(0, input.chargedCostMicros ?? 0) / EDGE_CREDIT_USD_MICROS
-  );
+  const chargedCredits = convertCostMicrosToCredits(input.chargedCostMicros ?? 0);
   const bonusCreditsToConsume = Math.max(
     0,
     chargedCredits - snapshotBefore.planRemainingCredits

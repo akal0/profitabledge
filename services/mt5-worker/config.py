@@ -104,6 +104,9 @@ class WorkerConfig:
     tick_replay_seconds: int
     full_reconcile_minutes: int
     post_exit_tracking_seconds: int
+    rithmic_gateway_url: str | None
+    rithmic_app_name: str | None
+    rithmic_app_version: str | None
 
 
 @dataclass
@@ -252,6 +255,9 @@ def load_config() -> WorkerConfig:
             int(os.getenv("MT5_POST_EXIT_TRACKING_SECONDS", "3600")),
             0,
         ),
+        rithmic_gateway_url=os.getenv("RITHMIC_GATEWAY_URL", "").strip() or None,
+        rithmic_app_name=os.getenv("RITHMIC_APP_NAME", "").strip() or None,
+        rithmic_app_version=os.getenv("RITHMIC_APP_VERSION", "").strip() or None,
     )
 
 

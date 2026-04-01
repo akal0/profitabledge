@@ -70,7 +70,7 @@ export function BaseKpiSingle({
       : true;
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-sm flex-col items-start justify-center py-2 text-left">
+    <div className="mx-auto flex h-auto w-full max-w-sm flex-col items-start justify-center py-2 text-left">
       <div
         className={cn(
           "text-4xl font-bold",
@@ -120,9 +120,9 @@ export function BaseKpiSingle({
 
 export function BaseKpiGrid({ items }: BaseKpiGridProps) {
   return (
-    <div className="grid h-full min-h-0 auto-rows-fr grid-cols-2 gap-3">
+    <div className="grid h-auto grid-cols-2 gap-3">
       {items.map((row, i) => (
-        <div key={i} className="bg-white/5 rounded-lg p-3">
+        <div key={i} className="rounded-lg bg-white/5 p-3">
           <p className="text-[10px] text-white/50">
             {sentenceCase(row.label)}
           </p>

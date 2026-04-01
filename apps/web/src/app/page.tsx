@@ -12,6 +12,10 @@ import { GlassBtnStyles } from "@/components/landing/glass-btn-styles";
 import { FeaturesCarouselSection } from "@/components/landing/features-carousel-section";
 import { Preloader } from "@/components/landing/preloader";
 import { Hero } from "@/components/landing/hero";
+import {
+  PricingFaqSection,
+  PricingSection,
+} from "@/components/landing/pricing-section";
 import { SmartSignalsSection } from "@/components/landing/smart-signals-section";
 import { BrokersSection } from "@/components/landing/brokers-section";
 
@@ -29,7 +33,11 @@ export default function Home() {
         <main className="relative flex min-h-screen h-full w-full flex-col bg-black overflow-x-hidden">
           {/* Preload only the assets needed for the first landing paint. */}
           <link rel="preload" href="/landing/hero-background.svg" as="image" />
-          <link rel="preload" href="/landing/dashboard-preview.png" as="image" />
+          <link
+            rel="preload"
+            href="/landing/dashboard-preview.png"
+            as="image"
+          />
           <link rel="preload" href="/landing/trades-preview.png" as="image" />
 
           <AnimatePresence>
@@ -54,6 +62,8 @@ export default function Home() {
               <FeaturesCarouselSection />
               <SmartSignalsSection />
               <BrokersSection />
+              <PricingSection />
+              <PricingFaqSection />
             </>
           )}
         </main>

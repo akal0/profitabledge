@@ -23,6 +23,11 @@ import {
 } from "./assistant-specialists";
 import { logAIProviderError } from "./provider-errors";
 import { isLowSignalAssistantQuery } from "./query-normalization";
+import type { AssistantResponseMetadata } from "../assistant/types";
+import {
+  buildConversationContextFromPlan,
+  buildToolCallsFromPlan,
+} from "../assistant/presentation";
 
 // ===== EVENT TYPES =====
 
@@ -39,6 +44,7 @@ export type StreamEvent =
   | { event: "delta"; text: string }
   | { event: "analysis"; block: AnalysisBlock }
   | { event: "visualization"; viz: VizSpec }
+  | { event: "metadata"; metadata: AssistantResponseMetadata }
   | { event: "profile"; profile: CondensedProfile }
   | { event: "insight"; insights: any[] }
   | { event: "alert"; alerts: any[] }
@@ -218,6 +224,25 @@ export async function* streamQuery(
     })
 
     if (specialist.handled && specialist.message) {
+      const specialistMetadata: AssistantResponseMetadata = {
+        toolCalls: [
+          {
+            name: "specialist_query",
+            input: {
+              message: userMessage,
+              page: context.pageContext?.pathname ?? null,
+            },
+            output: {
+              handled: true,
+              analysisBlockCount: specialist.analysisBlocks?.length ?? 0,
+            },
+          },
+        ],
+        context: {
+          referencedEntities: {},
+        },
+      };
+
       for (const block of specialist.analysisBlocks || []) {
         yield {
           event: "analysis",
@@ -228,6 +253,10 @@ export async function* streamQuery(
       for await (const chunk of streamText(specialist.message)) {
         yield { event: "delta", text: chunk }
       }
+      yield {
+        event: "metadata",
+        metadata: specialistMetadata,
+      };
       yield { event: "done" };
       return;
     }
@@ -284,6 +313,7 @@ export async function* streamQuery(
     }
 
     const plan = planResult.plan;
+    let finalVizSpec: VizSpec | null = null;
 
     // ===== STAGE: PLANNING =====
     yield {
@@ -327,6 +357,19 @@ export async function* streamQuery(
       for await (const chunk of streamText(answer.markdown)) {
         yield { event: "delta", text: chunk };
       }
+      yield {
+        event: "metadata",
+        metadata: {
+          toolCalls: buildToolCallsFromPlan({
+            userMessage,
+            plan,
+          }),
+          context: buildConversationContextFromPlan({
+            plan,
+            visualization: null,
+          }),
+        },
+      };
       yield { event: "done" };
       return;
     }
@@ -371,6 +414,7 @@ export async function* streamQuery(
       };
     } else {
       const vizSpec = buildVizSpec(plan, executionResult);
+      finalVizSpec = vizSpec;
 
       // Emit coverage block
       yield {
@@ -542,6 +586,22 @@ export async function* streamQuery(
       userMessage,
       answer.markdown
     ).catch(() => {});
+
+    yield {
+      event: "metadata",
+      metadata: {
+        toolCalls: buildToolCallsFromPlan({
+          userMessage,
+          plan,
+          executionResult,
+          visualization: finalVizSpec,
+        }),
+        context: buildConversationContextFromPlan({
+          plan,
+          visualization: finalVizSpec,
+        }),
+      },
+    };
 
     // ===== DONE =====
     yield { event: "done" };
@@ -988,6 +1048,10 @@ function sentenceCase(value: string): string {
 }
 
 function formatFieldLabel(key: string): string {
+  if (key === "modelTag" || key === "edgeName") {
+    return "Edge";
+  }
+
   const cleaned = key
     .replace(/_/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")

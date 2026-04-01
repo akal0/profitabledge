@@ -11,6 +11,7 @@ type TradeTableEmptyStateProps = {
   actionLabel?: string;
   onAction?: () => void;
   className?: string;
+  details?: React.ReactNode;
 };
 
 export function TradeTableEmptyState({
@@ -19,6 +20,7 @@ export function TradeTableEmptyState({
   actionLabel,
   onAction,
   className,
+  details,
 }: TradeTableEmptyStateProps) {
   return (
     <div
@@ -34,6 +36,7 @@ export function TradeTableEmptyState({
       <div className="space-y-2">
         <h3 className="text-sm font-semibold tracking-wide text-white">{title}</h3>
         <p className="max-w-md text-sm leading-6 text-white/55">{description}</p>
+        {details ? <div className="pt-1">{details}</div> : null}
       </div>
 
       {actionLabel && onAction ? (

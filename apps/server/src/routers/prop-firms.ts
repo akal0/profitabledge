@@ -226,6 +226,9 @@ const customFundedPhaseSchema = z.object({
   minTradingDays: z.number().int().min(0).default(0),
 });
 
+const customChallengeMetricModeSchema = z.enum(["percentage", "absolute"]);
+const customChallengeMaxLossTypeSchema = z.enum(["absolute", "trailing"]);
+
 async function buildTrackerDashboardForUser(userId: string, accountId: string) {
   const account = await db.query.tradingAccount.findFirst({
     where: and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)),
@@ -388,83 +391,115 @@ export const propFirmsRouter = router({
   createCustomFlow: protectedProcedure
     .input(
       z.object({
-        propFirmName: z.string().trim().min(2).max(80),
+        propFirmId: z.string().trim().min(1).optional(),
+        propFirmName: z.string().trim().min(2).max(80).optional(),
         challengeDisplayName: z.string().trim().min(2).max(120).optional(),
         description: z.string().trim().max(240).optional(),
+        metricMode: customChallengeMetricModeSchema.default("percentage"),
+        maxLossType: customChallengeMaxLossTypeSchema.default("absolute"),
         challengePhases: z.array(customChallengePhaseSchema).min(1).max(8),
         fundedPhase: customFundedPhaseSchema,
-      })
+      }).refine(
+        (value) => Boolean(value.propFirmId || value.propFirmName?.trim()),
+        {
+          message: "Select an existing prop firm or enter a custom prop firm name",
+          path: ["propFirmName"],
+        }
+      )
     )
     .mutation(async ({ input, ctx }) => {
-      const propFirmName = input.propFirmName.trim();
-      const challengeDisplayName =
-        input.challengeDisplayName?.trim() || `${propFirmName} Custom Flow`;
-      const firmDescription =
-        input.description?.trim() || "Custom user-defined prop challenge flow.";
       const now = new Date();
+      const metricMode = input.metricMode;
+      const maxLossType = input.maxLossType;
+
+      let targetFirm = null;
+
+      if (input.propFirmId) {
+        targetFirm = await getPropFirmById(input.propFirmId, ctx.session.user.id);
+
+        if (!targetFirm || !targetFirm.active) {
+          throw new Error("Selected prop firm is unavailable");
+        }
+      } else {
+        const propFirmName = input.propFirmName?.trim() || "";
+        const firmDescription =
+          input.description?.trim() || "Custom user-defined prop challenge flow.";
+
+        const [createdFirm] = await db
+          .insert(propFirm)
+          .values({
+            id: crypto.randomUUID(),
+            createdByUserId: ctx.session.user.id,
+            name: propFirmName,
+            displayName: propFirmName,
+            description: firmDescription,
+            logo: null,
+            website: null,
+            supportedPlatforms: ["mt4", "mt5", "ctrader"],
+            brokerDetectionPatterns: [],
+            active: true,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+
+        if (!createdFirm) {
+          throw new Error("Failed to create prop firm");
+        }
+
+        targetFirm = createdFirm;
+      }
+
+      const challengeDisplayName =
+        input.challengeDisplayName?.trim() ||
+        `${targetFirm.displayName || targetFirm.name} Custom Flow`;
 
       const phases = [
         ...input.challengePhases.map((phase, index) => ({
           order: index + 1,
           name: `Phase ${index + 1}`,
           profitTarget: phase.profitTarget,
-          profitTargetType: "percentage" as const,
+          profitTargetType: metricMode,
           dailyLossLimit: phase.dailyLossLimit,
+          dailyLossLimitType: metricMode,
           maxLoss: phase.maxLoss,
-          maxLossType: "absolute" as const,
+          maxLossType,
           timeLimitDays: phase.timeLimitDays ?? null,
           minTradingDays: phase.minTradingDays,
           consistencyRule: null,
           customRules: {
             isCustom: true,
+            metricMode,
+            customTemplateForFirmId: targetFirm.id,
           },
         })),
         {
           order: 0,
           name: "Funded",
           profitTarget: null,
-          profitTargetType: "percentage" as const,
+          profitTargetType: metricMode,
           dailyLossLimit: input.fundedPhase.dailyLossLimit,
+          dailyLossLimitType: metricMode,
           maxLoss: input.fundedPhase.maxLoss,
-          maxLossType: "absolute" as const,
+          maxLossType,
           timeLimitDays: input.fundedPhase.timeLimitDays ?? null,
           minTradingDays: input.fundedPhase.minTradingDays,
           consistencyRule: null,
           customRules: {
             isCustom: true,
             funded: true,
+            metricMode,
+            customTemplateForFirmId: targetFirm.id,
           },
         },
       ];
-
-      const [createdFirm] = await db
-        .insert(propFirm)
-        .values({
-          id: crypto.randomUUID(),
-          createdByUserId: ctx.session.user.id,
-          name: propFirmName,
-          displayName: propFirmName,
-          description: firmDescription,
-          logo: null,
-          website: null,
-          supportedPlatforms: ["mt4", "mt5", "ctrader"],
-          brokerDetectionPatterns: [],
-          active: true,
-          createdAt: now,
-          updatedAt: now,
-        })
-        .returning();
-
-      if (!createdFirm) {
-        throw new Error("Failed to create prop firm");
-      }
 
       const [createdRule] = await db
         .insert(propChallengeRule)
         .values({
           id: crypto.randomUUID(),
           createdByUserId: ctx.session.user.id,
-          propFirmId: createdFirm.id,
+          propFirmId: targetFirm.id,
           challengeType: "custom",
           displayName: challengeDisplayName,
           phases,
@@ -479,7 +514,7 @@ export const propFirmsRouter = router({
       }
 
       return {
-        propFirm: createdFirm,
+        propFirm: targetFirm,
         challengeRule: createdRule,
       };
     }),

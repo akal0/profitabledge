@@ -69,7 +69,19 @@ export const updateBrokerSettingsProcedure = protectedProcedure
   .input(
     z.object({
       accountId: z.string().min(1),
-      brokerType: z.enum(["mt4", "mt5", "ctrader", "other"]).optional(),
+      brokerType: z
+        .enum([
+          "mt4",
+          "mt5",
+          "ctrader",
+          "dxtrade",
+          "tradovate",
+          "topstepx",
+          "rithmic",
+          "ninjatrader",
+          "other",
+        ])
+        .optional(),
       preferredDataSource: z
         .enum(["dukascopy", "alphavantage", "truefx", "broker"])
         .optional(),

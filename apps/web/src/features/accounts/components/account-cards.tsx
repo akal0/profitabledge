@@ -14,7 +14,12 @@ import { AccountCardActionsMenu } from "@/features/accounts/components/account-c
 import { DeleteAccountButton } from "@/features/accounts/components/delete-account-button";
 import { RemovePropAccountButton } from "@/features/accounts/components/remove-prop-account-button";
 import { PropAccountPhaseActionsMenu } from "@/features/accounts/prop-tracker/components/prop-account-phase-actions-menu";
-import { getOverallPropProgress } from "@/features/accounts/prop-tracker/lib/prop-tracker-detail";
+import {
+  formatMetricValue,
+  formatSignedMetricValue,
+  getMetricMode,
+  getOverallPropProgress,
+} from "@/features/accounts/prop-tracker/lib/prop-tracker-detail";
 import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
 import {
   getAccountImage,
@@ -241,13 +246,21 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
     displayName:
       dashboard?.propFirm?.displayName || account.broker || "Prop firm",
     description: dashboard?.propFirm?.description,
+    logo: dashboard?.propFirm?.logo,
   };
+  const metricMode = getMetricMode(dashboard?.currentPhase);
   const overallProgress = getOverallPropProgress({
     initialBalance: account.initialBalance,
     currentBalance: dashboard?.ruleCheck?.metrics?.currentBalance,
     fallbackBalance: account.liveBalance,
   });
-  const currentProfitPercent = overallProgress.profitPercent;
+  const currentResult = dashboard?.ruleCheck
+    ? metricMode === "currency"
+      ? dashboard.ruleCheck.metrics.currentProfit
+      : dashboard.ruleCheck.metrics.currentProfitPercent
+    : metricMode === "currency"
+      ? overallProgress.profit
+      : overallProgress.profitPercent;
   const tradingDays =
     dashboard?.ruleCheck?.metrics?.tradingDays ??
     account.propPhaseTradingDays ??
@@ -264,6 +277,16 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
     dashboard?.currentPhase?.profitTarget != null
       ? Number(dashboard.currentPhase.profitTarget)
       : null;
+  const maxDrawdownValue = dashboard?.ruleCheck
+    ? metricMode === "currency"
+      ? dashboard.ruleCheck.metrics.maxDrawdown
+      : dashboard.ruleCheck.metrics.maxDrawdownPercent
+    : null;
+  const dailyDrawdownValue = dashboard?.ruleCheck
+    ? metricMode === "currency"
+      ? dashboard.ruleCheck.metrics.dailyDrawdown
+      : dashboard.ruleCheck.metrics.dailyDrawdownPercent
+    : null;
 
   return (
     <AccountWidgetFrame
@@ -277,8 +300,7 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
             badgeClassName={HEADER_BADGE_CLASS}
           />
           <PropAccountPhaseActionsMenu
-            accountId={account.id}
-            accountName={account.name}
+            account={account}
             dashboard={dashboard}
           />
           <RemovePropAccountButton
@@ -328,11 +350,10 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
               <p
                 className={cn(
                   "mt-1 text-lg font-semibold",
-                  currentProfitPercent >= 0 ? "text-teal-400" : "text-red-400"
+                  currentResult >= 0 ? "text-teal-400" : "text-red-400"
                 )}
               >
-                {currentProfitPercent >= 0 ? "+" : ""}
-                {currentProfitPercent.toFixed(2)}%
+                {formatSignedMetricValue(currentResult, metricMode)}
               </p>
             </div>
           </div>
@@ -354,25 +375,19 @@ export function PropAccountCard({ account }: { account: AccountRecord }) {
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Max DD</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {dashboard?.ruleCheck
-              ? `${dashboard.ruleCheck.metrics.maxDrawdownPercent.toFixed(2)}%`
-              : "—"}
+            {formatMetricValue(maxDrawdownValue, metricMode)}
           </p>
         </div>
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Daily DD</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {dashboard?.ruleCheck
-              ? `${dashboard.ruleCheck.metrics.dailyDrawdownPercent.toFixed(
-                  2
-                )}%`
-              : "—"}
+            {formatMetricValue(dailyDrawdownValue, metricMode)}
           </p>
         </div>
         <div className="basis-1/2 text-center sm:basis-0 sm:flex-1">
           <p className="text-xs text-white/35">Target</p>
           <p className="mt-1 text-sm font-semibold text-white/85">
-            {phaseTarget != null ? `${phaseTarget}%` : "—"}
+            {formatMetricValue(phaseTarget, metricMode)}
           </p>
         </div>
       </div>

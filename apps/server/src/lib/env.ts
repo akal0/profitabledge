@@ -45,6 +45,7 @@ const serverEnvSchema = z.object({
   TRADOVATE_REDIRECT_URI: z.string().url().optional(),
   TRADOVATE_OAUTH_URL: z.string().url().optional(),
   TRADOVATE_API_BASE_URL: z.string().url().optional(),
+  TOPSTEPX_API_BASE_URL: z.string().url().optional(),
   RESEND_API_KEY: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().email().optional(),
   UPLOADTHING_TOKEN: z.string().min(1).optional(),
@@ -56,7 +57,9 @@ const serverEnvSchema = z.object({
   STRIPE_SECRET_KEY: stripeSecretKeySchema.optional(),
   STRIPE_WEBHOOK_SECRET: stripeWebhookSecretSchema.optional(),
   STRIPE_PRICE_PROFESSIONAL_MONTHLY_ID: stripePriceIdSchema.optional(),
+  STRIPE_PRICE_PROFESSIONAL_ANNUAL_ID: stripePriceIdSchema.optional(),
   STRIPE_PRICE_INSTITUTIONAL_MONTHLY_ID: stripePriceIdSchema.optional(),
+  STRIPE_PRICE_INSTITUTIONAL_ANNUAL_ID: stripePriceIdSchema.optional(),
   STRIPE_BILLING_PORTAL_CONFIGURATION_ID:
     stripeBillingPortalConfigurationSchema.optional(),
   STRIPE_CONNECT_COUNTRY: z.string().min(2).max(2).optional(),

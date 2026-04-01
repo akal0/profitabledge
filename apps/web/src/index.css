@@ -856,6 +856,13 @@ html.dark body {
   height: 22%;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .name-sparkle-particle {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
 @keyframes pfp-electric {
   0%,
   100% {

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -81,7 +81,6 @@ const FormSchema = z.object({
 });
 
 const LoginPage = () => {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedReturnTo = resolvePostAuthPath(searchParams?.get("returnTo"));
   const postLoginPath = buildPostLoginPath(requestedReturnTo);
@@ -125,14 +124,14 @@ const LoginPage = () => {
 
     if (result.data?.twoFactorRedirect) {
       markLoginOnboardingBypass();
-      router.replace(twoFactorPath);
+      window.location.replace(twoFactorPath);
       return;
     }
 
     toast.success("Login successful", { id: "auth-login-status" });
     await waitForConfirmedSession();
     markLoginOnboardingBypass();
-    router.replace(postLoginPath);
+    window.location.replace(postLoginPath);
   }
 
   async function handleSocialLogin(provider: "google") {
@@ -174,7 +173,7 @@ const LoginPage = () => {
       toast.success("Login successful", { id: "auth-login-status" });
       await waitForConfirmedSession();
       markLoginOnboardingBypass();
-      router.replace(postLoginPath);
+      window.location.replace(postLoginPath);
     } finally {
       setPasskeyLoading(false);
     }

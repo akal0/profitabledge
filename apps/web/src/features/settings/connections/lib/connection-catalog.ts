@@ -1,4 +1,15 @@
 import type { ConnectionProviderDefinition } from "@/features/settings/connections/lib/connection-types";
+import { ACTIVE_PROP_FIRM_CATALOG } from "@profitabledge/contracts/trading-catalog";
+
+function firmsForPlatforms(...platformIds: string[]) {
+  const platformSet = new Set(platformIds);
+
+  return ACTIVE_PROP_FIRM_CATALOG.filter((firm) =>
+    firm.supportedPlatforms.some((platform) => platformSet.has(platform))
+  )
+    .map((firm) => firm.displayName)
+    .sort((left, right) => left.localeCompare(right));
+}
 
 export const PROVIDERS: ConnectionProviderDefinition[] = [
   {
@@ -10,7 +21,7 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
     authType: "credentials",
     fields: ["login", "password", "server"],
     status: "active",
-    firms: ["Any MT5 Broker", "FTMO", "FundedNext"],
+    firms: ["Any MT5 Broker", ...firmsForPlatforms("mt5")],
     color: "#2563EB",
   },
   {
@@ -22,7 +33,7 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
     authType: "credentials",
     fields: ["login", "password", "server"],
     status: "active",
-    firms: ["Any MT4 Broker", "FundingPips", "Alpha Capital"],
+    firms: ["Any MT4 Broker", ...firmsForPlatforms("mt4")],
     color: "#1D4ED8",
   },
   {
@@ -34,7 +45,7 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
     authType: "oauth",
     fields: [],
     status: "active",
-    firms: ["FTMO", "FundedNext", "E8", "FundingPips", "Alpha Capital"],
+    firms: firmsForPlatforms("ctrader"),
     color: "#00B4D8",
   },
   {
@@ -46,7 +57,7 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
     authType: "credentials",
     fields: ["serverUrl", "login", "password"],
     status: "active",
-    firms: ["FTMO", "FundedNext", "E8", "Maven"],
+    firms: firmsForPlatforms("match-trader"),
     color: "#6366F1",
   },
   {
@@ -58,18 +69,19 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
     authType: "credentials",
     fields: ["email", "password", "server"],
     status: "active",
-    firms: ["FTMO", "E8", "Alpha Capital", "DNA Funded"],
+    firms: firmsForPlatforms("tradelocker"),
     color: "#10B981",
   },
   {
     id: "dxtrade",
     name: "DXTrade",
     category: "forex",
-    description: "Used by FundingPips, Alpha Capital, BrightFunded, FundedNext.",
+    description:
+      "Login with your DXTrade server URL, username, and password. Used by FTMO, The5ers, Alpha Capital Group, FXify, and other CFD prop firms.",
     authType: "credentials",
     fields: ["serverUrl", "login", "password"],
-    status: "coming_soon",
-    firms: ["FundingPips", "Alpha Capital", "BrightFunded"],
+    status: "active",
+    firms: firmsForPlatforms("dxtrade"),
     color: "#F59E0B",
   },
   {
@@ -77,23 +89,65 @@ export const PROVIDERS: ConnectionProviderDefinition[] = [
     name: "Tradovate",
     category: "futures",
     description:
-      "Futures platform with REST + WebSocket. Used by Apex Trader Funding, Topstep (legacy).",
+      "OAuth connection for Tradovate futures accounts. Syncs discovered accounts, closed trades, open positions, and account balances.",
     authType: "oauth",
     fields: [],
-    status: "coming_soon",
-    firms: ["Apex", "Topstep"],
+    status: "active",
+    firms: firmsForPlatforms("tradovate"),
     color: "#EF4444",
   },
   {
     id: "topstepx",
     name: "TopstepX",
     category: "futures",
-    description: "Futures trading platform. Used exclusively by Topstep.",
+    description:
+      "ProjectX / TopstepX API connection for Topstep futures accounts.",
+    authType: "api_key",
+    fields: ["username", "apiKey"],
+    status: "active",
+    firms: firmsForPlatforms("topstepx"),
+    color: "#8B5CF6",
+  },
+  {
+    id: "rithmic",
+    name: "Rithmic",
+    category: "futures",
+    description:
+      "Protocol-based futures sync for Apex, Bulenox, Earn2Trade, OneUp, and many prop firms. Uses the broker worker path.",
     authType: "credentials",
+    fields: ["login", "password", "systemName", "fcmId"],
+    status: "active",
+    firms: firmsForPlatforms("rithmic"),
+    color: "#DC2626",
+    betaNote:
+      "Worker-host setup is required on the backend before new Rithmic connections can sync live.",
+  },
+  {
+    id: "ninjatrader",
+    name: "NinjaTrader",
+    category: "futures",
+    description:
+      "NinjaTrader API keys can be saved now. Live sync is still being finalized, and CSV import remains the current fallback.",
+    authType: "api_key",
     fields: ["apiKey"],
     status: "coming_soon",
-    firms: ["Topstep"],
-    color: "#8B5CF6",
+    firms: firmsForPlatforms("ninjatrader"),
+    color: "#0F766E",
+    betaNote:
+      "Save the API key now from Settings > API keys, then activate live sync once the provider is promoted.",
+  },
+  {
+    id: "tradingview",
+    name: "TradingView",
+    category: "multi",
+    description:
+      "TradingView does not expose broker trade history directly. Sync the broker that TradingView is connected to instead.",
+    authType: "credentials",
+    fields: [],
+    status: "not_applicable",
+    firms: firmsForPlatforms("tradingview"),
+    color: "#2563EB",
+    note: "Sync through your broker connection (Tradovate, Rithmic, DXTrade, MT5, and similar).",
   },
 ];
 

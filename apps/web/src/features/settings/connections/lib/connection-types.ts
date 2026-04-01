@@ -3,12 +3,13 @@ export type ConnectionProviderDefinition = {
   name: string;
   category: string;
   description: string;
-  authType: "credentials" | "oauth";
+  authType: "credentials" | "oauth" | "api_key";
   fields: string[];
-  status: "active" | "coming_soon";
+  status: "active" | "coming_soon" | "not_applicable";
   firms: string[];
   color: string;
   betaNote?: string;
+  note?: string;
 };
 
 export type ConnectionRegionOption = {
@@ -22,6 +23,7 @@ export type ConnectionRow = {
   accountId: string | null;
   provider: string;
   displayName: string;
+  meta?: Record<string, unknown> | null;
   status: string;
   lastSyncSuccessAt: string | Date | null;
   lastSyncedTradeCount: number | null;
@@ -226,7 +228,7 @@ export type CreateCredentialInput = {
 export type CreateCredentialOutput = {
   connectionId: string;
   accountInfo: unknown | null;
-  mode?: "terminal-farm";
+  mode?: "terminal-farm" | "worker-managed" | "saved-credential";
 };
 
 export type LinkAccountInput = {

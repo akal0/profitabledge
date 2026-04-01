@@ -43,6 +43,10 @@ import {
   type BillingPlanKey,
 } from "./config";
 import {
+  resolveEffectiveBillingPlanKey,
+  selectPrimaryBillingOverride,
+} from "./effective-plan";
+import {
   AFFILIATE_PREMIUM_PLAN_KEY,
   AFFILIATE_PRO_REVENUE_THRESHOLD_CENTS,
   AFFILIATE_TIER_CONFIG,
@@ -105,6 +109,10 @@ import {
   resolveStripeOnboardingStatus,
   retrieveStripeConnectedAccount,
 } from "./stripe-connect";
+import {
+  decryptCredentials,
+  encryptCredentials,
+} from "../providers/credential-cipher";
 
 export {
   AFFILIATE_PREMIUM_PLAN_KEY,
@@ -185,6 +193,145 @@ type AffiliateTouchContext = {
 
 type PendingAttributionRow = typeof affiliatePendingAttribution.$inferSelect;
 
+type AffiliateWithdrawalMetadata = {
+  reservedEventIds?: string[];
+  reservedAmount?: number | null;
+  reservedCurrency?: string | null;
+  reservedAt?: string | null;
+  failureReason?: string | null;
+  requiresManualReconciliation?: boolean;
+  payoutProcessingStartedAt?: string | null;
+  payoutProcessingStartedByUserId?: string | null;
+};
+
+type ReservedCommissionSelection = {
+  selected: Array<typeof affiliateCommissionEvent.$inferSelect>;
+  amount: number;
+  currency: string;
+};
+
+type StoredAffiliatePaymentMethodDetails = {
+  encrypted: string;
+  iv: string;
+};
+
+function getAffiliateWithdrawalMetadata(
+  metadata?: unknown
+): AffiliateWithdrawalMetadata {
+  return metadata && typeof metadata === "object"
+    ? (metadata as AffiliateWithdrawalMetadata)
+    : {};
+}
+
+function buildAffiliateWithdrawalMetadata(input: {
+  current?: unknown;
+  reservedEventIds?: string[];
+  reservedAmount?: number | null;
+  reservedCurrency?: string | null;
+  reservedAt?: Date | null;
+  failureReason?: string | null;
+  requiresManualReconciliation?: boolean;
+  payoutProcessingStartedAt?: Date | null;
+  payoutProcessingStartedByUserId?: string | null;
+}) {
+  const current = getAffiliateWithdrawalMetadata(input.current);
+
+  return {
+    ...current,
+    ...(input.reservedEventIds !== undefined
+      ? { reservedEventIds: input.reservedEventIds }
+      : {}),
+    ...(input.reservedAmount !== undefined
+      ? { reservedAmount: input.reservedAmount }
+      : {}),
+    ...(input.reservedCurrency !== undefined
+      ? { reservedCurrency: input.reservedCurrency }
+      : {}),
+    ...(input.reservedAt !== undefined
+      ? { reservedAt: input.reservedAt?.toISOString() ?? null }
+      : {}),
+    ...(input.failureReason !== undefined
+      ? { failureReason: input.failureReason ?? null }
+      : {}),
+    ...(input.requiresManualReconciliation !== undefined
+      ? { requiresManualReconciliation: input.requiresManualReconciliation }
+      : {}),
+    ...(input.payoutProcessingStartedAt !== undefined
+      ? {
+          payoutProcessingStartedAt:
+            input.payoutProcessingStartedAt?.toISOString() ?? null,
+        }
+      : {}),
+    ...(input.payoutProcessingStartedByUserId !== undefined
+      ? {
+          payoutProcessingStartedByUserId:
+            input.payoutProcessingStartedByUserId ?? null,
+        }
+      : {}),
+  } satisfies AffiliateWithdrawalMetadata;
+}
+
+function encryptAffiliatePaymentMethodDetails(details: string) {
+  const { encrypted, iv } = encryptCredentials(details);
+  return JSON.stringify({ encrypted, iv } satisfies StoredAffiliatePaymentMethodDetails);
+}
+
+function decryptAffiliatePaymentMethodDetails(details: string) {
+  try {
+    const parsed = JSON.parse(details) as StoredAffiliatePaymentMethodDetails;
+    if (parsed?.encrypted && parsed?.iv) {
+      try {
+        return decryptCredentials(parsed.encrypted, parsed.iv);
+      } catch {
+        return "Hidden";
+      }
+    }
+  } catch {
+    // Fall back to legacy plaintext values.
+  }
+
+  return details;
+}
+
+function maskAffiliatePaymentMethodDetails(details: string) {
+  const normalized = collapseWhitespace(details);
+  if (!normalized) {
+    return "Hidden";
+  }
+
+  if (normalized.includes("@")) {
+    const [localPart, domain] = normalized.split("@");
+    if (localPart && domain) {
+      return `${localPart.slice(0, 2)}***@${domain}`;
+    }
+  }
+
+  if (normalized.length <= 8) {
+    return `${normalized.slice(0, 2)}***`;
+  }
+
+  return `${normalized.slice(0, 4)}***${normalized.slice(-4)}`;
+}
+
+function serializeAffiliatePaymentMethod(
+  method: typeof affiliatePaymentMethod.$inferSelect
+) {
+  const plaintextDetails = decryptAffiliatePaymentMethodDetails(method.details);
+
+  return {
+    id: method.id,
+    affiliateUserId: method.affiliateUserId,
+    methodType: method.methodType,
+    label: method.label,
+    recipientName: method.recipientName,
+    isDefault: method.isDefault,
+    isActive: method.isActive,
+    createdAt: method.createdAt,
+    updatedAt: method.updatedAt,
+    detailsPreview: maskAffiliatePaymentMethodDetails(plaintextDetails),
+  };
+}
+
 async function getUsername(userId: string) {
   const [row] = await db
     .select({ username: userTable.username })
@@ -253,7 +400,7 @@ export async function getEffectiveBillingState(userId: string) {
     .limit(10);
 
   const now = new Date();
-  const [override] = await db
+  const overrides = await db
     .select()
     .from(billingEntitlementOverride)
     .where(
@@ -263,8 +410,11 @@ export async function getEffectiveBillingState(userId: string) {
         gte(billingEntitlementOverride.endsAt, now)
       )
     )
-    .orderBy(desc(billingEntitlementOverride.endsAt))
-    .limit(1);
+    .orderBy(
+      desc(billingEntitlementOverride.updatedAt),
+      desc(billingEntitlementOverride.endsAt),
+      desc(billingEntitlementOverride.createdAt)
+    );
 
   const activeSubscriptions = subscriptions.filter((subscription) =>
     isActiveSubscriptionStatus(subscription.status)
@@ -322,14 +472,12 @@ export async function getEffectiveBillingState(userId: string) {
     "student"
   );
 
-  const activePlanKey =
-    override?.planKey &&
-    getBillingPlanDefinition(override.planKey as BillingPlanKey)
-      ? getHigherBillingPlanKey(
-          getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey),
-          override.planKey as BillingPlanKey
-        )
-      : getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey);
+  const override = selectPrimaryBillingOverride(overrides);
+  const activePlanKey = resolveEffectiveBillingPlanKey({
+    subscriptionPlanKey,
+    recentPaidOrderPlanKey,
+    overrides,
+  });
 
   return {
     subscription: subscription ?? null,
@@ -377,7 +525,11 @@ export async function getEffectiveBillingPlanKeys(userIds: string[]) {
           gte(billingEntitlementOverride.endsAt, new Date())
         )
       )
-      .orderBy(desc(billingEntitlementOverride.endsAt)),
+      .orderBy(
+        desc(billingEntitlementOverride.updatedAt),
+        desc(billingEntitlementOverride.endsAt),
+        desc(billingEntitlementOverride.createdAt)
+      ),
   ]);
 
   const subscriptionsByUserId = new Map<string, typeof subscriptions>();
@@ -394,18 +546,18 @@ export async function getEffectiveBillingPlanKeys(userIds: string[]) {
     paidOrdersByUserId.set(order.userId, bucket);
   }
 
-  const overrideByUserId = new Map<string, (typeof overrides)[number]>();
+  const overridesByUserId = new Map<string, typeof overrides>();
   for (const override of overrides) {
-    if (!overrideByUserId.has(override.userId)) {
-      overrideByUserId.set(override.userId, override);
-    }
+    const bucket = overridesByUserId.get(override.userId) ?? [];
+    bucket.push(override);
+    overridesByUserId.set(override.userId, bucket);
   }
 
   const now = new Date();
   for (const userId of dedupedUserIds) {
     const userSubscriptions = subscriptionsByUserId.get(userId) ?? [];
     const userPaidOrders = paidOrdersByUserId.get(userId) ?? [];
-    const override = overrideByUserId.get(userId) ?? null;
+    const userOverrides = overridesByUserId.get(userId) ?? [];
 
     const activeSubscriptions = userSubscriptions.filter((subscription) =>
       isActiveSubscriptionStatus(subscription.status)
@@ -438,14 +590,11 @@ export async function getEffectiveBillingPlanKeys(userIds: string[]) {
       "student"
     );
 
-    const activePlanKey =
-      override?.planKey &&
-      getBillingPlanDefinition(override.planKey as BillingPlanKey)
-        ? getHigherBillingPlanKey(
-            getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey),
-            override.planKey as BillingPlanKey
-          )
-        : getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey);
+    const activePlanKey = resolveEffectiveBillingPlanKey({
+      subscriptionPlanKey,
+      recentPaidOrderPlanKey,
+      overrides: userOverrides,
+    });
 
     planByUserId.set(userId, activePlanKey);
   }
@@ -848,19 +997,21 @@ async function syncAffiliateTierState(affiliateUserId: string) {
       ? (metadata.program as Record<string, unknown>)
       : null;
   const tierMode = normalizeAffiliateTierMode(profile.tierMode);
+  const manualTierKey = normalizeAffiliateTierKey(profile.tierKey);
+  const nextAffiliateCode = isAffiliateProgramCode(profile.code)
+    ? profile.code
+    : await generateUniqueAffiliateProgramCode();
   const tierKey =
     tierMode === "manual"
-      ? "elite"
+      ? manualTierKey
       : getAffiliateAutomaticTierKey(referredRevenueAmount);
   const tierDefaults = AFFILIATE_TIER_CONFIG[tierKey];
   const defaultOffer = await ensureAffiliateDefaultOfferForTier({
     profile,
     desiredDiscountBasisPoints:
       tierMode === "manual"
-        ? normalizeAffiliateTierKey(profile.tierKey) === "elite"
-          ? (currentProgram && typeof currentProgram.discountBasisPoints === "number"
-              ? Math.round(currentProgram.discountBasisPoints)
-              : tierDefaults.defaultDiscountBasisPoints)
+        ? currentProgram && typeof currentProgram.discountBasisPoints === "number"
+          ? Math.round(currentProgram.discountBasisPoints)
           : tierDefaults.defaultDiscountBasisPoints
         : tierDefaults.defaultDiscountBasisPoints,
     forceDiscount: tierMode !== "manual",
@@ -868,7 +1019,7 @@ async function syncAffiliateTierState(affiliateUserId: string) {
 
   const manualBenefitFlags =
     tierMode === "manual"
-      ? parseAffiliateBenefitFlags(currentProgram, "elite")
+      ? parseAffiliateBenefitFlags(currentProgram, tierKey)
       : null;
   const currentPublicProof = buildAffiliatePublicProofMetadata(metadata);
   const nextPublicProof =
@@ -923,6 +1074,7 @@ async function syncAffiliateTierState(affiliateUserId: string) {
         };
 
   const shouldUpdateProfile =
+    profile.code !== nextAffiliateCode ||
     profile.commissionBps !==
       (tierMode === "manual"
         ? profile.commissionBps
@@ -937,6 +1089,7 @@ async function syncAffiliateTierState(affiliateUserId: string) {
     const [updated] = await db
       .update(affiliateProfile)
       .set({
+        code: nextAffiliateCode,
         commissionBps:
           tierMode === "manual"
             ? profile.commissionBps
@@ -1133,8 +1286,36 @@ async function getAffiliateWithdrawalRequestRows(userId: string) {
     );
 }
 
-async function getUnpaidAffiliateCommissionEvents(userId: string) {
-  return db
+async function getReservedCommissionEventIdsForAffiliate(input: {
+  affiliateUserId: string;
+  statuses?: string[];
+}) {
+  const requests = await db
+    .select({
+      metadata: affiliateWithdrawalRequest.metadata,
+    })
+    .from(affiliateWithdrawalRequest)
+    .where(
+      and(
+        eq(affiliateWithdrawalRequest.affiliateUserId, input.affiliateUserId),
+        inArray(affiliateWithdrawalRequest.status, input.statuses ?? ["pending", "approved", "processing"])
+      )
+    );
+
+  return Array.from(
+    new Set(
+      requests.flatMap((request) =>
+        getAffiliateWithdrawalMetadata(request.metadata).reservedEventIds ?? []
+      )
+    )
+  );
+}
+
+async function getUnpaidAffiliateCommissionEvents(
+  userId: string,
+  options?: { excludeReserved?: boolean }
+) {
+  const unpaidEvents = await db
     .select()
     .from(affiliateCommissionEvent)
     .where(
@@ -1143,23 +1324,52 @@ async function getUnpaidAffiliateCommissionEvents(userId: string) {
         isNull(affiliateCommissionEvent.affiliatePayoutId)
       )
     )
-    .orderBy(desc(affiliateCommissionEvent.occurredAt), desc(affiliateCommissionEvent.createdAt));
+    .orderBy(asc(affiliateCommissionEvent.occurredAt), asc(affiliateCommissionEvent.createdAt));
+
+  if (!options?.excludeReserved) {
+    return unpaidEvents;
+  }
+
+  const reservedEventIds = await getReservedCommissionEventIdsForAffiliate({
+    affiliateUserId: userId,
+  });
+  if (reservedEventIds.length === 0) {
+    return unpaidEvents;
+  }
+
+  const reservedSet = new Set(reservedEventIds);
+  return unpaidEvents.filter((event) => !reservedSet.has(event.id));
 }
 
 function buildAffiliatePayoutSummary(input: {
   unpaidEvents: Array<{ commissionAmount: number | null }>;
   payouts: Array<{ payout: { amount: number | null } }>;
+  withdrawalRequests?: Array<{ request: { amount: number | null; status: string | null } }>;
 }) {
+  const pendingAmount = (input.withdrawalRequests ?? []).reduce(
+    (sum, row) =>
+      row.request.status === "pending" ||
+      row.request.status === "approved" ||
+      row.request.status === "processing"
+        ? sum + (row.request.amount ?? 0)
+        : sum,
+    0
+  );
+  const paidAmount = input.payouts.reduce(
+    (sum, row) => sum + (row.payout.amount ?? 0),
+    0
+  );
+  const availableAmount = input.unpaidEvents.reduce(
+    (sum, row) => sum + (row.commissionAmount ?? 0),
+    0
+  );
+
   return {
-    availableAmount: input.unpaidEvents.reduce(
-      (sum, row) => sum + (row.commissionAmount ?? 0),
-      0
-    ),
+    availableAmount,
     availableEventCount: input.unpaidEvents.length,
-    paidAmount: input.payouts.reduce(
-      (sum, row) => sum + (row.payout.amount ?? 0),
-      0
-    ),
+    pendingAmount,
+    paidAmount,
+    totalEarnedAmount: availableAmount + pendingAmount + paidAmount,
     payoutCount: input.payouts.length,
   };
 }
@@ -1181,6 +1391,18 @@ function buildStripeConnectStatusLabel(
     default:
       return "Needs onboarding";
   }
+}
+
+function maskProviderAccountId(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  if (value.length <= 12) {
+    return value;
+  }
+
+  return `${value.slice(0, 8)}...${value.slice(-4)}`;
 }
 
 function buildWithdrawalDestinationLabel(input: {
@@ -1514,12 +1736,35 @@ async function createStripeAffiliateOfferCoupon(input: {
   });
 }
 
+function isAffiliateProgramCode(code?: string | null) {
+  return normalizeGrowthCode(code ?? "").startsWith("AFF");
+}
+
+async function generateUniqueAffiliateProgramCode() {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = buildAffiliateCode();
+    const [existing] = await db
+      .select({ id: affiliateProfile.id })
+      .from(affiliateProfile)
+      .where(eq(affiliateProfile.code, code))
+      .limit(1);
+
+    if (!existing) {
+      return code;
+    }
+  }
+
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Unable to generate affiliate code",
+  });
+}
+
 async function ensureAffiliateProfileApproved(
   user: MinimalUser,
   approvedByUserId: string
 ) {
   const existing = await getAffiliateProfileRow(user.id);
-  const referral = await ensureReferralProfile(user.id);
   const partnerDefaults = AFFILIATE_TIER_CONFIG.partner;
   const publicProofDefaults = {
     publicProof: partnerDefaults.publicProof,
@@ -1533,44 +1778,59 @@ async function ensureAffiliateProfileApproved(
   };
 
   if (existing) {
-    const [updated] = await db
-      .update(affiliateProfile)
-      .set({
-        code: existing.code || referral.code,
-        displayName: existing.displayName || user.name,
-        commissionBps:
-          existing.commissionBps ?? partnerDefaults.defaultCommissionBps,
-        tierKey: normalizeAffiliateTierKey(existing.tierKey),
-        tierMode: normalizeAffiliateTierMode(existing.tierMode),
-        tierAssignedAt: existing.tierAssignedAt ?? new Date(),
-        tierAssignedByUserId:
-          existing.tierAssignedByUserId ?? approvedByUserId,
-        isActive: true,
-        approvedAt: new Date(),
-        approvedByUserId,
-        metadata:
-          existing.metadata && typeof existing.metadata === "object"
-            ? {
-                ...(existing.metadata as Record<string, unknown>),
-                publicProof:
-                  (
-                    (existing.metadata as Record<string, unknown>)
-                      .publicProof as Record<string, unknown> | undefined
-                  ) ?? publicProofDefaults.publicProof,
-              }
-            : publicProofDefaults,
-        updatedAt: new Date(),
-      })
-      .where(eq(affiliateProfile.id, existing.id))
-      .returning();
+    const nextCode = isAffiliateProgramCode(existing.code) ? existing.code : null;
 
-    if (updated) {
-      return updated;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const code = nextCode ?? buildAffiliateCode();
+
+      try {
+        const [updated] = await db
+          .update(affiliateProfile)
+          .set({
+            code,
+            displayName: existing.displayName || user.name,
+            commissionBps:
+              existing.commissionBps ?? partnerDefaults.defaultCommissionBps,
+            tierKey: normalizeAffiliateTierKey(existing.tierKey),
+            tierMode: normalizeAffiliateTierMode(existing.tierMode),
+            tierAssignedAt: existing.tierAssignedAt ?? new Date(),
+            tierAssignedByUserId:
+              existing.tierAssignedByUserId ?? approvedByUserId,
+            isActive: true,
+            approvedAt: new Date(),
+            approvedByUserId,
+            metadata:
+              existing.metadata && typeof existing.metadata === "object"
+                ? {
+                    ...(existing.metadata as Record<string, unknown>),
+                    publicProof:
+                      (
+                        (existing.metadata as Record<string, unknown>)
+                          .publicProof as Record<string, unknown> | undefined
+                      ) ?? publicProofDefaults.publicProof,
+                  }
+                : publicProofDefaults,
+            updatedAt: new Date(),
+          })
+          .where(eq(affiliateProfile.id, existing.id))
+          .returning();
+
+        if (updated) {
+          return updated;
+        }
+      } catch {
+        if (nextCode) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Unable to activate affiliate profile",
+          });
+        }
+      }
     }
   }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const code = attempt === 0 ? referral.code : buildAffiliateCode();
+    const code = buildAffiliateCode();
     try {
       const inserted = await db
         .insert(affiliateProfile)
@@ -1844,14 +2104,6 @@ export async function approveAffiliateApplication(input: {
     offer,
   });
 
-  await db
-    .update(referralProfile)
-    .set({
-      isActive: false,
-      updatedAt: new Date(),
-    })
-    .where(eq(referralProfile.userId, user.id));
-
   const [updatedApplication] = await db
     .update(affiliateApplication)
     .set({
@@ -1895,14 +2147,6 @@ export async function grantAffiliateAccess(input: {
     group,
     offer,
   });
-
-  await db
-    .update(referralProfile)
-    .set({
-      isActive: false,
-      updatedAt: new Date(),
-    })
-    .where(eq(referralProfile.userId, user.id));
 
   const synced = await syncAffiliateTierState(user.id);
 
@@ -2053,6 +2297,9 @@ export async function buildAffiliateState(userId: string) {
 
   const offers = await getAffiliateOfferRows(userId);
   const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+  const trackingLinks = await getAffiliateTrackingLinkRows(userId);
+  const defaultLink = trackingLinks.find((row) => row.isDefault) ?? trackingLinks[0] ?? null;
+  const offerLookup = new Map(offers.map((offer) => [offer.id, offer]));
 
   const attributions = await db
     .select()
@@ -2159,6 +2406,10 @@ export async function buildAffiliateDashboard(userId: string) {
 
   const offers = await getAffiliateOfferRows(userId);
   const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
+  const trackingLinks = await getAffiliateTrackingLinkRows(userId);
+  const defaultLink =
+    trackingLinks.find((row) => row.isDefault) ?? trackingLinks[0] ?? null;
+  const offerLookup = new Map(offers.map((offer) => [offer.id, offer]));
 
   const attributions = await db
     .select()
@@ -2166,16 +2417,73 @@ export async function buildAffiliateDashboard(userId: string) {
     .where(eq(affiliateAttribution.affiliateUserId, userId))
     .orderBy(desc(affiliateAttribution.createdAt));
 
-  const commissionEvents = await db
-    .select()
+  const commissionEventRows = await db
+    .select({
+      id: affiliateCommissionEvent.id,
+      affiliateAttributionId: affiliateCommissionEvent.affiliateAttributionId,
+      affiliateUserId: affiliateCommissionEvent.affiliateUserId,
+      referredUserId: affiliateCommissionEvent.referredUserId,
+      referredUsernameSnapshot: affiliateCommissionEvent.referredUsername,
+      referredEmailSnapshot: affiliateCommissionEvent.referredEmail,
+      provider: affiliateCommissionEvent.provider,
+      providerOrderId: affiliateCommissionEvent.providerOrderId,
+      billingOrderId: affiliateCommissionEvent.billingOrderId,
+      stripeInvoiceId: affiliateCommissionEvent.stripeInvoiceId,
+      stripeSubscriptionId: affiliateCommissionEvent.stripeSubscriptionId,
+      trackedPlanKey: affiliateCommissionEvent.planKey,
+      orderAmount: affiliateCommissionEvent.orderAmount,
+      commissionBps: affiliateCommissionEvent.commissionBps,
+      commissionAmount: affiliateCommissionEvent.commissionAmount,
+      currency: affiliateCommissionEvent.currency,
+      affiliatePayoutId: affiliateCommissionEvent.affiliatePayoutId,
+      paidOutAt: affiliateCommissionEvent.paidOutAt,
+      occurredAt: affiliateCommissionEvent.occurredAt,
+      metadata: affiliateCommissionEvent.metadata,
+      createdAt: affiliateCommissionEvent.createdAt,
+      updatedAt: affiliateCommissionEvent.updatedAt,
+      referredUsername: userTable.username,
+      referredName: userTable.name,
+      referredEmail: userTable.email,
+      planKey: billingOrder.planKey,
+    })
     .from(affiliateCommissionEvent)
+    .leftJoin(userTable, eq(userTable.id, affiliateCommissionEvent.referredUserId))
+    .leftJoin(billingOrder, eq(billingOrder.id, affiliateCommissionEvent.billingOrderId))
     .where(eq(affiliateCommissionEvent.affiliateUserId, userId))
     .orderBy(desc(affiliateCommissionEvent.occurredAt), desc(affiliateCommissionEvent.createdAt));
+  const commissionEvents = commissionEventRows.map((row) => {
+    const metadata =
+      row.metadata && typeof row.metadata === "object"
+        ? (row.metadata as Record<string, unknown>)
+        : null;
+    const metadataPlanKey =
+      typeof metadata?.plan_key === "string" ? metadata.plan_key : null;
+    const paymentPlanKey = row.trackedPlanKey ?? row.planKey ?? metadataPlanKey;
+
+    return {
+      ...row,
+      orderReference: row.providerOrderId ?? row.stripeInvoiceId ?? null,
+      referredUsername: row.referredUsernameSnapshot ?? row.referredUsername,
+      referredEmail: row.referredEmailSnapshot ?? row.referredEmail,
+      paymentPlanKey,
+      paymentPlanLabel: formatAffiliatePlanLabel(paymentPlanKey),
+    };
+  });
   const touchEvents = await db
     .select()
     .from(affiliateTouchEvent)
     .where(eq(affiliateTouchEvent.affiliateUserId, userId))
     .orderBy(desc(affiliateTouchEvent.createdAt));
+  const withdrawalRequests = await getAffiliateWithdrawalRequestRows(userId);
+  const payouts = await getAffiliatePayoutRows(userId);
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(userId, {
+    excludeReserved: true,
+  });
+  const payoutSummary = buildAffiliatePayoutSummary({
+    unpaidEvents,
+    payouts,
+    withdrawalRequests,
+  });
 
   // Build channel stats from touch event metadata
   const channelMap = new Map<string, { touches: number }>();
@@ -2239,7 +2547,40 @@ export async function buildAffiliateDashboard(userId: string) {
       endsAt: synced?.premiumOverride?.endsAt ?? null,
     },
     defaultOffer,
+    defaultLink: defaultLink
+      ? {
+          ...defaultLink,
+          shareUrl: buildAffiliateShareUrl({
+            affiliateCode: profile.code,
+            username,
+            groupSlug: defaultLink.affiliateGroupSlug ?? null,
+            offerCode:
+              defaultLink.affiliateOfferId && offerLookup.get(defaultLink.affiliateOfferId)
+                ? offerLookup.get(defaultLink.affiliateOfferId)!.code
+                : null,
+            trackingLinkSlug: defaultLink.slug,
+            channel:
+              defaultLink.utmMedium ?? defaultLink.utmSource ?? null,
+            destinationPath: defaultLink.destinationPath,
+          }),
+        }
+      : null,
     offers,
+    trackingLinks: trackingLinks.map((trackingLink) => ({
+      ...trackingLink,
+      shareUrl: buildAffiliateShareUrl({
+        affiliateCode: profile.code,
+        username,
+        groupSlug: trackingLink.affiliateGroupSlug ?? null,
+        offerCode:
+          trackingLink.affiliateOfferId && offerLookup.get(trackingLink.affiliateOfferId)
+            ? offerLookup.get(trackingLink.affiliateOfferId)!.code
+            : null,
+        trackingLinkSlug: trackingLink.slug,
+        channel: trackingLink.utmMedium ?? trackingLink.utmSource ?? null,
+        destinationPath: trackingLink.destinationPath,
+      }),
+    })),
     channels: channelStats,
     stats: {
       signups: attributions.length,
@@ -2252,10 +2593,14 @@ export async function buildAffiliateDashboard(userId: string) {
         synced?.tier.referredRevenueAmount ??
         commissionEvents.reduce((sum, row) => sum + (row.orderAmount ?? 0), 0),
       linkClicks: touchEvents.length,
+      availableBalanceAmount: payoutSummary.availableAmount,
+      pendingBalanceAmount: payoutSummary.pendingAmount,
+      paidOutAmount: payoutSummary.paidAmount,
     },
     attributions,
     commissionEvents,
     touchEvents,
+    payoutSummary,
   };
 }
 
@@ -2271,12 +2616,15 @@ export async function getAffiliatePayoutSettings(userId: string) {
 
   const paymentMethods = await getAffiliatePaymentMethods(userId);
   const payouts = await getAffiliatePayoutRows(userId);
-  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(userId);
-  const providerAccount = await getAffiliateProviderAccountRow(userId);
   const withdrawalRequests = await getAffiliateWithdrawalRequestRows(userId);
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(userId, {
+    excludeReserved: true,
+  });
+  const providerAccount = await getAffiliateProviderAccountRow(userId);
   const summary = buildAffiliatePayoutSummary({
     unpaidEvents,
     payouts,
+    withdrawalRequests,
   });
 
   return {
@@ -2290,12 +2638,12 @@ export async function getAffiliatePayoutSettings(userId: string) {
       endsAt: synced?.premiumOverride?.endsAt ?? null,
     },
     stripeConnect: providerAccount
-      ? {
-          id: providerAccount.id,
-          provider: providerAccount.provider,
-          accountId: providerAccount.providerAccountId,
-          accountLabel: "Stripe Express payout account",
-          statusLabel: buildStripeConnectStatusLabel(providerAccount),
+        ? {
+            id: providerAccount.id,
+            provider: providerAccount.provider,
+            accountId: maskProviderAccountId(providerAccount.providerAccountId),
+            accountLabel: "Stripe Express payout account",
+            statusLabel: buildStripeConnectStatusLabel(providerAccount),
           onboardingStatus: providerAccount.onboardingStatus,
           chargesEnabled: providerAccount.chargesEnabled,
           payoutsEnabled: providerAccount.payoutsEnabled,
@@ -2305,7 +2653,7 @@ export async function getAffiliatePayoutSettings(userId: string) {
           country: providerAccount.country,
         }
       : null,
-    manualPaymentMethods: paymentMethods,
+    manualPaymentMethods: paymentMethods.map(serializeAffiliatePaymentMethod),
     summary,
     withdrawalRequests: withdrawalRequests.map((row) => ({
       ...row.request,
@@ -2325,12 +2673,15 @@ export async function getAffiliatePayoutSettings(userId: string) {
           }
         : null,
       paymentMethod: row.paymentMethod
-        ? {
-            id: row.paymentMethod.id,
-            label: row.paymentMethod.label,
-            methodType: row.paymentMethod.methodType,
-          }
+        ? serializeAffiliatePaymentMethod(row.paymentMethod)
         : null,
+      reservedEventIds:
+        getAffiliateWithdrawalMetadata(row.request.metadata).reservedEventIds ?? [],
+      requiresManualReconciliation:
+        getAffiliateWithdrawalMetadata(row.request.metadata)
+          .requiresManualReconciliation ?? false,
+      failureReason:
+        getAffiliateWithdrawalMetadata(row.request.metadata).failureReason ?? null,
     })),
     payouts: payouts.map((row) => ({
       ...row.payout,
@@ -2342,11 +2693,7 @@ export async function getAffiliatePayoutSettings(userId: string) {
         providerAccount: row.providerAccount,
       }),
       paymentMethod: row.paymentMethod
-        ? {
-            id: row.paymentMethod.id,
-            label: row.paymentMethod.label,
-            methodType: row.paymentMethod.methodType,
-          }
+        ? serializeAffiliatePaymentMethod(row.paymentMethod)
         : null,
       providerAccount: row.providerAccount
         ? {
@@ -2370,7 +2717,9 @@ async function selectCommissionEventsForWithdrawal(input: {
   affiliateUserId: string;
   amountLimit: number;
 }) {
-  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId);
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId, {
+    excludeReserved: true,
+  });
   const selected: typeof unpaidEvents = [];
   let runningAmount = 0;
 
@@ -2381,7 +2730,7 @@ async function selectCommissionEventsForWithdrawal(input: {
     }
 
     if (selected.length > 0 && runningAmount + eventAmount > input.amountLimit) {
-      continue;
+      break;
     }
 
     if (selected.length === 0 && eventAmount > input.amountLimit) {
@@ -2410,6 +2759,63 @@ async function selectCommissionEventsForWithdrawal(input: {
     selected,
     amount: runningAmount,
     currency: selected.find((row) => row.currency)?.currency ?? "USD",
+  };
+}
+
+async function getReservedCommissionSelectionForWithdrawal(
+  request: typeof affiliateWithdrawalRequest.$inferSelect
+): Promise<ReservedCommissionSelection> {
+  const metadata = getAffiliateWithdrawalMetadata(request.metadata);
+  const reservedEventIds = Array.from(
+    new Set((metadata.reservedEventIds ?? []).filter(Boolean))
+  );
+
+  if (reservedEventIds.length === 0) {
+    return selectCommissionEventsForWithdrawal({
+      affiliateUserId: request.affiliateUserId,
+      amountLimit: request.amount,
+    });
+  }
+
+  const selected = await db
+    .select()
+    .from(affiliateCommissionEvent)
+    .where(
+      and(
+        eq(affiliateCommissionEvent.affiliateUserId, request.affiliateUserId),
+        isNull(affiliateCommissionEvent.affiliatePayoutId),
+        inArray(affiliateCommissionEvent.id, reservedEventIds)
+      )
+    )
+    .orderBy(asc(affiliateCommissionEvent.occurredAt), asc(affiliateCommissionEvent.createdAt));
+
+  if (selected.length !== reservedEventIds.length) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Reserved affiliate commission is no longer fully available",
+    });
+  }
+
+  const amount = selected.reduce(
+    (sum, event) => sum + (event.commissionAmount ?? 0),
+    0
+  );
+  const currency =
+    selected.find((row) => row.currency)?.currency ??
+    metadata.reservedCurrency ??
+    request.currency;
+
+  if (metadata.reservedAmount != null && amount !== metadata.reservedAmount) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Reserved affiliate commission amount no longer matches this request",
+    });
+  }
+
+  return {
+    selected,
+    amount,
+    currency,
   };
 }
 
@@ -2631,14 +3037,9 @@ export async function saveAffiliateTierSettings(input: {
   const nextTierMode = normalizeAffiliateTierMode(input.tierMode);
   const automaticTierKey = getAffiliateAutomaticTierKey(referredRevenueAmount);
   const nextTierKey =
-    nextTierMode === "manual" ? "elite" : automaticTierKey;
-
-  if (nextTierMode === "manual" && input.tierKey !== "elite") {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "Only the Elite tier can be assigned manually",
-    });
-  }
+    nextTierMode === "manual"
+      ? normalizeAffiliateTierKey(input.tierKey)
+      : automaticTierKey;
 
   const metadata = getAffiliateMetadataObject(
     (profile.metadata as Record<string, unknown> | null | undefined) ?? null
@@ -2675,7 +3076,7 @@ export async function saveAffiliateTierSettings(input: {
       : tierDefaults.defaultDiscountBasisPoints;
   const nextBenefitFlags =
     nextTierMode === "manual"
-      ? buildAffiliateBenefitFlags("elite", input.benefits ?? null)
+      ? buildAffiliateBenefitFlags(nextTierKey, input.benefits ?? null)
       : buildAffiliateBenefitFlags(nextTierKey);
   const nextBadgeLabel =
     nextTierMode === "manual"
@@ -2817,6 +3218,7 @@ export async function saveAffiliateTrackingLink(input: {
     (input.affiliateOfferId
       ? offers.find((row) => row.id === input.affiliateOfferId)
       : offers.find((row) => row.isDefault) ?? offers[0]) ?? null;
+  const normalizedGroupSlug = normalizeGrowthSlug(input.affiliateGroupSlug);
 
   let existing: typeof affiliateTrackingLink.$inferSelect | null = null;
   if (input.trackingLinkId) {
@@ -2837,14 +3239,14 @@ export async function saveAffiliateTrackingLink(input: {
   if (existing) {
     const [updated] = await db
       .update(affiliateTrackingLink)
-      .set({
-        affiliateOfferId: selectedOffer?.id ?? null,
-        name: input.name.trim(),
-        destinationPath: normalizeDestinationPath(input.destinationPath),
-        affiliateGroupSlug: input.affiliateGroupSlug?.trim() || group?.slug || null,
-        isActive: true,
-        updatedAt: new Date(),
-      })
+        .set({
+          affiliateOfferId: selectedOffer?.id ?? null,
+          name: input.name.trim(),
+          destinationPath: normalizeDestinationPath(input.destinationPath),
+          affiliateGroupSlug: normalizedGroupSlug || group?.slug || null,
+          isActive: true,
+          updatedAt: new Date(),
+        })
       .where(eq(affiliateTrackingLink.id, existing.id))
       .returning();
     savedLink = updated ?? null;
@@ -2863,8 +3265,7 @@ export async function saveAffiliateTrackingLink(input: {
             name: input.name.trim(),
             slug,
             destinationPath: normalizeDestinationPath(input.destinationPath),
-            affiliateGroupSlug:
-              input.affiliateGroupSlug?.trim() || group?.slug || null,
+            affiliateGroupSlug: normalizedGroupSlug || group?.slug || null,
             utmSource: "affiliate",
             utmMedium: "share",
             utmCampaign: profile.code.toLowerCase(),
@@ -3044,7 +3445,9 @@ export async function requestAffiliateWithdrawal(input: {
     });
   }
 
-  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId);
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId, {
+    excludeReserved: true,
+  });
   const summary = buildAffiliatePayoutSummary({
     unpaidEvents,
     payouts: [],
@@ -3109,7 +3512,7 @@ export async function requestAffiliateWithdrawal(input: {
     .where(
       and(
         eq(affiliateWithdrawalRequest.affiliateUserId, input.affiliateUserId),
-        inArray(affiliateWithdrawalRequest.status, ["pending", "approved"])
+        inArray(affiliateWithdrawalRequest.status, ["pending", "approved", "processing"])
       )
     )
     .limit(1);
@@ -3136,6 +3539,13 @@ export async function requestAffiliateWithdrawal(input: {
       amount: selection.amount,
       currency: selection.currency,
       status: "pending",
+      metadata: buildAffiliateWithdrawalMetadata({
+        reservedEventIds: selection.selected.map((event) => event.id),
+        reservedAmount: selection.amount,
+        reservedCurrency: selection.currency,
+        reservedAt: new Date(),
+        requiresManualReconciliation: false,
+      }),
     })
     .returning();
 
@@ -3241,10 +3651,10 @@ export async function rejectAffiliateWithdrawal(input: {
     });
   }
 
-  if (request.status === "paid") {
+  if (request.status === "paid" || request.status === "processing") {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Paid withdrawals cannot be rejected",
+      message: "This withdrawal can no longer be rejected",
     });
   }
 
@@ -3274,88 +3684,110 @@ async function finalizeAffiliateWithdrawalPayout(input: {
   externalReference?: string | null;
   notes?: string | null;
   stripeTransferId?: string | null;
-  selection?: Awaited<ReturnType<typeof selectCommissionEventsForWithdrawal>>;
+  selection?: ReservedCommissionSelection;
 }) {
   const selection =
     input.selection ??
-    (await selectCommissionEventsForWithdrawal({
-      affiliateUserId: input.withdrawalRequest.affiliateUserId,
-      amountLimit: input.withdrawalRequest.amount,
-    }));
+    (await getReservedCommissionSelectionForWithdrawal(input.withdrawalRequest));
 
-  const payoutId = crypto.randomUUID();
-  const paidAt = new Date();
-  const provisionalCurrency = selection.currency ?? input.withdrawalRequest.currency;
-
-  await db.insert(affiliatePayout).values({
-    id: payoutId,
-    affiliateUserId: input.withdrawalRequest.affiliateUserId,
-    withdrawalRequestId: input.withdrawalRequest.id,
-    destinationType: input.destinationType,
-    providerAccountId: input.providerAccountId ?? null,
-    paymentMethodId: input.paymentMethodId ?? null,
-    amount: 0,
-    currency: provisionalCurrency,
-    eventCount: 0,
-    status: "processing",
-    externalReference: input.externalReference ?? null,
-    stripeTransferId: input.stripeTransferId ?? null,
-    notes: input.notes ?? null,
-    createdByUserId: input.createdByUserId,
-    paidAt,
-  });
-
-  const claimedEvents = await claimCommissionEventsForPayout({
-    affiliateUserId: input.withdrawalRequest.affiliateUserId,
-    payoutId,
-    eventIds: selection.selected.map((row) => row.id),
-    paidAt,
-  });
-
-  if (claimedEvents.length !== selection.selected.length) {
-    await releaseCommissionEventsFromPayout(payoutId);
-    await db.delete(affiliatePayout).where(eq(affiliatePayout.id, payoutId));
+  if (selection.amount !== input.withdrawalRequest.amount) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Affiliate balance changed before the payout could be settled",
+      message: "Reserved affiliate commission no longer matches this withdrawal request",
     });
   }
 
-  const amount = selection.amount;
-  const currency = selection.currency ?? provisionalCurrency;
+  return db.transaction(async (tx) => {
+    const payoutId = crypto.randomUUID();
+    const paidAt = new Date();
+    const provisionalCurrency = selection.currency ?? input.withdrawalRequest.currency;
 
-  const [payout] = await db
-    .update(affiliatePayout)
-    .set({
-      amount,
-      currency,
-      eventCount: claimedEvents.length,
-      status: "paid",
-      updatedAt: new Date(),
-    })
-    .where(eq(affiliatePayout.id, payoutId))
-    .returning();
-
-  const [updatedRequest] = await db
-    .update(affiliateWithdrawalRequest)
-    .set({
-      status: "paid",
-      externalReference: input.externalReference ?? input.withdrawalRequest.externalReference,
-      providerTransferId:
-        input.stripeTransferId ?? input.withdrawalRequest.providerTransferId,
-      notes: input.notes ?? input.withdrawalRequest.notes,
+    await tx.insert(affiliatePayout).values({
+      id: payoutId,
+      affiliateUserId: input.withdrawalRequest.affiliateUserId,
+      withdrawalRequestId: input.withdrawalRequest.id,
+      destinationType: input.destinationType,
+      providerAccountId: input.providerAccountId ?? null,
+      paymentMethodId: input.paymentMethodId ?? null,
+      amount: 0,
+      currency: provisionalCurrency,
+      eventCount: 0,
+      status: "processing",
+      externalReference: input.externalReference ?? null,
+      stripeTransferId: input.stripeTransferId ?? null,
+      notes: input.notes ?? null,
+      createdByUserId: input.createdByUserId,
       paidAt,
-      reviewedAt: paidAt,
-      reviewedByUserId: input.createdByUserId,
-      updatedAt: paidAt,
-    })
-    .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequest.id))
-    .returning();
+    });
 
-  return {
-    payout: payout ?? null,
-    withdrawalRequest: updatedRequest ?? input.withdrawalRequest,
-  };
+    const claimedEvents = await tx
+      .update(affiliateCommissionEvent)
+      .set({
+        affiliatePayoutId: payoutId,
+        paidOutAt: paidAt,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(affiliateCommissionEvent.affiliateUserId, input.withdrawalRequest.affiliateUserId),
+          isNull(affiliateCommissionEvent.affiliatePayoutId),
+          inArray(
+            affiliateCommissionEvent.id,
+            selection.selected.map((row) => row.id)
+          )
+        )
+      )
+      .returning();
+
+    if (claimedEvents.length !== selection.selected.length) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Affiliate balance changed before the payout could be settled",
+      });
+    }
+
+    const amount = selection.amount;
+    const currency = selection.currency ?? provisionalCurrency;
+
+    const [payout] = await tx
+      .update(affiliatePayout)
+      .set({
+        amount,
+        currency,
+        eventCount: claimedEvents.length,
+        status: "paid",
+        updatedAt: new Date(),
+      })
+      .where(eq(affiliatePayout.id, payoutId))
+      .returning();
+
+    const [updatedRequest] = await tx
+      .update(affiliateWithdrawalRequest)
+      .set({
+        status: "paid",
+        externalReference:
+          input.externalReference ?? input.withdrawalRequest.externalReference,
+        providerTransferId:
+          input.stripeTransferId ?? input.withdrawalRequest.providerTransferId,
+        notes: input.notes ?? input.withdrawalRequest.notes,
+        metadata: buildAffiliateWithdrawalMetadata({
+          current: input.withdrawalRequest.metadata,
+          failureReason: null,
+          requiresManualReconciliation: false,
+        }),
+        paidAt,
+        reviewedAt: paidAt,
+        reviewedByUserId: input.createdByUserId,
+        updatedAt: paidAt,
+      })
+      .where(eq(affiliateWithdrawalRequest.id, input.withdrawalRequest.id))
+      .returning();
+
+    return {
+      payout: payout ?? null,
+      withdrawalRequest: updatedRequest ?? input.withdrawalRequest,
+    };
+  });
 }
 
 export async function markAffiliateManualWithdrawalPaid(input: {
@@ -3428,7 +3860,13 @@ export async function sendAffiliateStripeWithdrawal(input: {
     });
   }
 
-  if (!["pending", "approved"].includes(request.status)) {
+  const requestMetadata = getAffiliateWithdrawalMetadata(request.metadata);
+  const isRecoveringCommittedTransfer =
+    request.status === "processing" &&
+    Boolean(request.providerTransferId) &&
+    requestMetadata.requiresManualReconciliation === true;
+
+  if (!isRecoveringCommittedTransfer && !["pending", "approved"].includes(request.status)) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
       message: "Withdrawal request cannot be paid",
@@ -3443,28 +3881,70 @@ export async function sendAffiliateStripeWithdrawal(input: {
     });
   }
 
-  const selection = await selectCommissionEventsForWithdrawal({
-    affiliateUserId: request.affiliateUserId,
-    amountLimit: request.amount,
-  });
+  const selection = await getReservedCommissionSelectionForWithdrawal(request);
 
   if (selection.amount !== request.amount) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
-      message: "Affiliate balance changed since this withdrawal was approved",
+      message: "Reserved affiliate commission changed since this withdrawal was approved",
     });
   }
 
-  const transfer = await createStripeTransfer({
-    accountId: providerAccount.providerAccountId,
-    amount: selection.amount,
-    currency: selection.currency,
-    description: `Affiliate payout ${request.id}`,
-    metadata: {
-      affiliate_user_id: request.affiliateUserId,
-      withdrawal_request_id: request.id,
-    },
-  });
+  let stripeTransferId = request.providerTransferId ?? null;
+
+  if (!isRecoveringCommittedTransfer) {
+    const processingMetadata = buildAffiliateWithdrawalMetadata({
+      current: request.metadata,
+      payoutProcessingStartedAt: new Date(),
+      payoutProcessingStartedByUserId: input.reviewedByUserId,
+      failureReason: null,
+      requiresManualReconciliation: false,
+    });
+
+    await db
+      .update(affiliateWithdrawalRequest)
+      .set({
+        status: "processing",
+        metadata: processingMetadata,
+        reviewedAt: new Date(),
+        reviewedByUserId: input.reviewedByUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(affiliateWithdrawalRequest.id, request.id));
+
+    try {
+      const transfer = await createStripeTransfer({
+        accountId: providerAccount.providerAccountId,
+        amount: selection.amount,
+        currency: selection.currency,
+        description: `Affiliate payout ${request.id}`,
+        metadata: {
+          affiliate_user_id: request.affiliateUserId,
+          withdrawal_request_id: request.id,
+        },
+      });
+      stripeTransferId = transfer.id;
+    } catch (error) {
+      await db
+        .update(affiliateWithdrawalRequest)
+        .set({
+          status: request.status,
+          metadata: buildAffiliateWithdrawalMetadata({
+            current: request.metadata,
+            failureReason:
+              error instanceof Error
+                ? error.message
+                : "Unable to create Stripe transfer",
+            requiresManualReconciliation: false,
+          }),
+          reviewedAt: new Date(),
+          reviewedByUserId: input.reviewedByUserId,
+          updatedAt: new Date(),
+        })
+        .where(eq(affiliateWithdrawalRequest.id, request.id));
+      throw error;
+    }
+  }
 
   try {
     return finalizeAffiliateWithdrawalPayout({
@@ -3472,18 +3952,27 @@ export async function sendAffiliateStripeWithdrawal(input: {
       createdByUserId: input.reviewedByUserId,
       destinationType: "stripe_connect",
       providerAccountId: providerAccount.id,
-      stripeTransferId: transfer.id,
+      stripeTransferId,
       notes: input.notes ?? null,
       selection,
     });
   } catch (error) {
-    // The transfer exists at this point, so preserve the request for manual reconciliation.
+    // A Stripe transfer may already exist at this point, so preserve the request
+    // in a processing state and block duplicate re-requests until it is reconciled.
     await db
       .update(affiliateWithdrawalRequest)
       .set({
-        status: "failed",
-        providerTransferId: transfer.id,
+        status: "processing",
+        providerTransferId: stripeTransferId,
         notes: input.notes?.trim() || request.notes,
+        metadata: buildAffiliateWithdrawalMetadata({
+          current: request.metadata,
+          payoutProcessingStartedAt: new Date(),
+          payoutProcessingStartedByUserId: input.reviewedByUserId,
+          failureReason:
+            error instanceof Error ? error.message : "Unable to finalize Stripe payout",
+          requiresManualReconciliation: true,
+        }),
         reviewedAt: new Date(),
         reviewedByUserId: input.reviewedByUserId,
         updatedAt: new Date(),
@@ -3509,6 +3998,16 @@ export async function saveAffiliatePaymentMethod(input: {
       message: "Affiliate access required",
     });
   }
+
+  const normalizedDetails = collapseWhitespace(input.details);
+  if (!normalizedDetails) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Payment method details are required",
+    });
+  }
+
+  const encryptedDetails = encryptAffiliatePaymentMethodDetails(normalizedDetails);
 
   let savedMethod: typeof affiliatePaymentMethod.$inferSelect | null = null;
 
@@ -3537,7 +4036,7 @@ export async function saveAffiliatePaymentMethod(input: {
         methodType: input.methodType,
         label: input.label,
         recipientName: input.recipientName ?? null,
-        details: input.details,
+        details: encryptedDetails,
         isActive: true,
         updatedAt: new Date(),
       })
@@ -3554,7 +4053,7 @@ export async function saveAffiliatePaymentMethod(input: {
         methodType: input.methodType,
         label: input.label,
         recipientName: input.recipientName ?? null,
-        details: input.details,
+        details: encryptedDetails,
       })
       .returning();
 
@@ -3626,7 +4125,12 @@ export async function deleteAffiliatePaymentMethod(input: {
   }
 
   await db
-    .delete(affiliatePaymentMethod)
+    .update(affiliatePaymentMethod)
+    .set({
+      isActive: false,
+      isDefault: false,
+      updatedAt: new Date(),
+    })
     .where(eq(affiliatePaymentMethod.id, existing.id));
 
   const remainingMethods = await getAffiliatePaymentMethods(input.affiliateUserId);
@@ -3720,14 +4224,17 @@ export async function listAffiliatePayoutQueue() {
       const profile = synced?.profile ?? entry.profile;
       const paymentMethods = await getAffiliatePaymentMethods(entry.user.id);
       const payouts = await getAffiliatePayoutRows(entry.user.id);
-      const unpaidEvents = await getUnpaidAffiliateCommissionEvents(entry.user.id);
-      const providerAccount = await getAffiliateProviderAccountRow(entry.user.id);
       const withdrawalRequests = await getAffiliateWithdrawalRequestRows(entry.user.id);
+      const unpaidEvents = await getUnpaidAffiliateCommissionEvents(entry.user.id, {
+        excludeReserved: true,
+      });
+      const providerAccount = await getAffiliateProviderAccountRow(entry.user.id);
       const offers = await getAffiliateOfferRows(entry.user.id);
       const trackingLinks = await getAffiliateTrackingLinkRows(entry.user.id);
       const summary = buildAffiliatePayoutSummary({
         unpaidEvents,
         payouts,
+        withdrawalRequests,
       });
       const defaultOffer = offers.find((row) => row.isDefault) ?? offers[0] ?? null;
       const defaultLink =
@@ -3764,8 +4271,8 @@ export async function listAffiliatePayoutQueue() {
             AFFILIATE_TIER_OVERRIDE_SOURCE,
           endsAt: synced?.premiumOverride?.endsAt ?? null,
         },
-        paymentMethods,
-        manualPaymentMethods: paymentMethods,
+        paymentMethods: paymentMethods.map(serializeAffiliatePaymentMethod),
+        manualPaymentMethods: paymentMethods.map(serializeAffiliatePaymentMethod),
         stripeConnect: providerAccount
           ? {
               id: providerAccount.id,
@@ -3778,7 +4285,11 @@ export async function listAffiliatePayoutQueue() {
             }
           : null,
         defaultPaymentMethod:
-          paymentMethods.find((row) => row.isDefault) ?? paymentMethods[0] ?? null,
+          (() => {
+            const defaultMethod =
+              paymentMethods.find((row) => row.isDefault) ?? paymentMethods[0] ?? null;
+            return defaultMethod ? serializeAffiliatePaymentMethod(defaultMethod) : null;
+          })(),
         defaultOffer,
         offers,
         defaultLink: defaultLink
@@ -3830,12 +4341,15 @@ export async function listAffiliatePayoutQueue() {
               }
             : null,
           paymentMethod: row.paymentMethod
-            ? {
-                id: row.paymentMethod.id,
-                label: row.paymentMethod.label,
-                methodType: row.paymentMethod.methodType,
-              }
+            ? serializeAffiliatePaymentMethod(row.paymentMethod)
             : null,
+          reservedEventIds:
+            getAffiliateWithdrawalMetadata(row.request.metadata).reservedEventIds ?? [],
+          requiresManualReconciliation:
+            getAffiliateWithdrawalMetadata(row.request.metadata)
+              .requiresManualReconciliation ?? false,
+          failureReason:
+            getAffiliateWithdrawalMetadata(row.request.metadata).failureReason ?? null,
         })),
         recentPayouts: payouts.slice(0, 5).map((row) => ({
           ...row.payout,
@@ -3846,11 +4360,7 @@ export async function listAffiliatePayoutQueue() {
             providerAccount: row.providerAccount,
           }),
           paymentMethod: row.paymentMethod
-            ? {
-                id: row.paymentMethod.id,
-                label: row.paymentMethod.label,
-                methodType: row.paymentMethod.methodType,
-              }
+            ? serializeAffiliatePaymentMethod(row.paymentMethod)
             : null,
         })),
         payouts: payouts.map((row) => ({
@@ -3862,11 +4372,7 @@ export async function listAffiliatePayoutQueue() {
             providerAccount: row.providerAccount,
           }),
           paymentMethod: row.paymentMethod
-            ? {
-                id: row.paymentMethod.id,
-                label: row.paymentMethod.label,
-                methodType: row.paymentMethod.methodType,
-              }
+            ? serializeAffiliatePaymentMethod(row.paymentMethod)
             : null,
         })),
       };
@@ -3893,7 +4399,9 @@ export async function recordAffiliatePayout(input: {
     });
   }
 
-  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId);
+  const unpaidEvents = await getUnpaidAffiliateCommissionEvents(input.affiliateUserId, {
+    excludeReserved: true,
+  });
   if (unpaidEvents.length === 0) {
     throw new TRPCError({
       code: "PRECONDITION_FAILED",
@@ -4354,11 +4862,32 @@ export async function claimPendingGrowthAttribution(input: {
     .where(eq(affiliatePendingAttribution.visitorToken, input.visitorToken.trim()))
     .limit(1);
 
-  if (!pending || pending.expiresAt.getTime() <= now.getTime()) {
+  if (!pending) {
     return {
       referral: null,
       affiliate: null,
-      pending: pending ?? null,
+      pending: null,
+    };
+  }
+
+  if (pending.expiresAt.getTime() <= now.getTime()) {
+    const [expiredPending] = await db
+      .update(affiliatePendingAttribution)
+      .set({
+        status: "ignored",
+        metadata: {
+          ...getAffiliateWithdrawalMetadata(pending.metadata),
+          ignoredReason: "expired",
+        },
+        updatedAt: now,
+      })
+      .where(eq(affiliatePendingAttribution.id, pending.id))
+      .returning();
+
+    return {
+      referral: null,
+      affiliate: null,
+      pending: expiredPending ?? pending,
     };
   }
 
@@ -4412,6 +4941,7 @@ export async function claimPendingGrowthAttribution(input: {
           affiliateCode: pending.affiliateCode,
           affiliateOfferId: pending.affiliateOfferId ?? null,
           affiliateTrackingLinkId: pending.affiliateTrackingLinkId ?? null,
+          affiliateGroupSlug: pending.affiliateGroupSlug ?? null,
           source: input.source ?? "claim",
         });
       } catch (error) {
@@ -4433,7 +4963,7 @@ export async function claimPendingGrowthAttribution(input: {
     referral = (await backfillReferralConversionPaidStatus(input.userId)) ?? referral;
   }
 
-  await db
+  const [updatedPending] = await db
     .update(affiliatePendingAttribution)
     .set({
       status: pendingStatus,
@@ -4442,12 +4972,13 @@ export async function claimPendingGrowthAttribution(input: {
       metadata: pendingMetadata,
       updatedAt: now,
     })
-    .where(eq(affiliatePendingAttribution.id, pending.id));
+    .where(eq(affiliatePendingAttribution.id, pending.id))
+    .returning();
 
   return {
     referral,
     affiliate,
-    pending,
+    pending: updatedPending ?? pending,
   };
 }
 
@@ -4660,6 +5191,7 @@ export async function attachAffiliateAttributionToUser(input: {
   affiliateCode: string;
   affiliateOfferId?: string | null;
   affiliateTrackingLinkId?: string | null;
+  affiliateGroupSlug?: string | null;
   source?: string | null;
 }) {
   if (!input.affiliateCode.trim()) {
@@ -4704,6 +5236,18 @@ export async function attachAffiliateAttributionToUser(input: {
     });
   }
 
+  const trackingLink = input.affiliateTrackingLinkId
+    ? await getAffiliateTrackingLinkById(input.affiliateTrackingLinkId)
+    : null;
+  const groupSlug =
+    input.affiliateGroupSlug?.trim() || trackingLink?.affiliateGroupSlug || null;
+  const group = groupSlug
+    ? await getAffiliateGroupBySlug({
+        affiliateProfileId: approvedProfile.id,
+        slug: groupSlug,
+      })
+    : null;
+
   const [inserted] = await db
     .insert(affiliateAttribution)
     .values({
@@ -4714,14 +5258,23 @@ export async function attachAffiliateAttributionToUser(input: {
       affiliateCode: approvedProfile.code,
       affiliateOfferId: input.affiliateOfferId ?? null,
       affiliateTrackingLinkId: input.affiliateTrackingLinkId ?? null,
-      affiliateGroupId: null,
+      affiliateGroupId: group?.id ?? null,
       metadata: {
         source: input.source?.trim() || "app",
         affiliateOfferId: input.affiliateOfferId ?? null,
         affiliateTrackingLinkId: input.affiliateTrackingLinkId ?? null,
+        affiliateGroupSlug: group?.slug ?? groupSlug,
       },
     })
     .returning();
+
+  if (inserted && group?.id) {
+    await joinAffiliateGroupIfNeeded({
+      userId: input.userId,
+      groupId: group.id,
+      source: input.source ?? "app",
+    });
+  }
 
   return inserted ?? null;
 }
@@ -5373,15 +5926,35 @@ export async function updateAffiliateProfileEffects(
     typeof existingMetadata.publicProof === "object"
       ? (existingMetadata.publicProof as Record<string, unknown>)
       : { badgeLabel: "Affiliate", effectVariant: "gold-emerald" };
+  const [existingUserProfile] = await db
+    .select({
+      profileEffects: userTable.profileEffects,
+    })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1);
+  const nextUserProfileEffects =
+    existingUserProfile?.profileEffects &&
+    typeof existingUserProfile.profileEffects === "object"
+      ? { ...(existingUserProfile.profileEffects as Record<string, unknown>) }
+      : {};
 
   const updatedPublicProof = { ...existingPublicProof };
 
-  if (effects.pfpEffect !== undefined) updatedPublicProof.pfpEffect = effects.pfpEffect;
-  if (effects.nameEffect !== undefined) updatedPublicProof.nameEffect = effects.nameEffect;
-  if (effects.nameFont !== undefined) updatedPublicProof.nameFont = effects.nameFont;
-  if (effects.nameColor !== undefined) updatedPublicProof.nameColor = effects.nameColor;
+  if (effects.pfpEffect !== undefined) nextUserProfileEffects.pfpEffect = effects.pfpEffect;
+  if (effects.nameEffect !== undefined) nextUserProfileEffects.nameEffect = effects.nameEffect;
+  if (effects.nameFont !== undefined) nextUserProfileEffects.nameFont = effects.nameFont;
+  if (effects.nameColor !== undefined) nextUserProfileEffects.nameColor = effects.nameColor;
   if (effects.badgeLabel !== undefined) updatedPublicProof.badgeLabel = effects.badgeLabel;
   if (effects.effectVariant !== undefined) updatedPublicProof.effectVariant = effects.effectVariant;
+
+  await db
+    .update(userTable)
+    .set({
+      profileEffects: nextUserProfileEffects,
+      updatedAt: new Date(),
+    })
+    .where(eq(userTable.id, userId));
 
   const [updated] = await db
     .update(affiliateProfile)

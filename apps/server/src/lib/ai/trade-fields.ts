@@ -283,9 +283,9 @@ export const TRADE_FIELDS: TradeField[] = [
   },
   {
     key: "modelTag",
-    label: "Model Tag",
+    label: "Edge",
     type: "string",
-    description: "Trading model/strategy used (e.g., Breaker Block, FVG)",
+    description: "Trading edge used on the trade (e.g., Breaker Block, FVG)",
     synonyms: ["model", "strategy", "setup", "pattern", "entry model"],
     aggregations: ["count"],
     filterOps: ["eq", "in", "contains"],

@@ -1,8 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { markLoginOnboardingBypass } from "@/lib/login-onboarding-bypass";
@@ -24,11 +24,11 @@ export function AuthEntryGate({
   children,
   mode = "signup",
 }: AuthEntryGateProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { isSessionPending, hasConfirmedSession } = useConfirmedSession({
     autoRecover: false,
   });
+  const hasStartedRedirectRef = useRef(false);
   const [canRenderChildren, setCanRenderChildren] = useState(
     () => !isSessionPending
   );
@@ -46,16 +46,22 @@ export function AuthEntryGate({
   );
 
   useEffect(() => {
-    if (!hasConfirmedSession) {
+    if (
+      isSessionPending ||
+      !hasConfirmedSession ||
+      hasStartedRedirectRef.current
+    ) {
       return;
     }
+
+    hasStartedRedirectRef.current = true;
 
     if (mode === "login") {
       markLoginOnboardingBypass();
     }
 
-    router.replace(postAuthPath);
-  }, [hasConfirmedSession, mode, postAuthPath, router]);
+    window.location.replace(postAuthPath);
+  }, [hasConfirmedSession, isSessionPending, mode, postAuthPath]);
 
   useEffect(() => {
     if (hasConfirmedSession) {
@@ -77,7 +83,7 @@ export function AuthEntryGate({
     };
   }, [hasConfirmedSession, isSessionPending]);
 
-  if (hasConfirmedSession) {
+  if (hasConfirmedSession && !isSessionPending) {
     return (
       <RouteLoadingFallback
         route="continue"

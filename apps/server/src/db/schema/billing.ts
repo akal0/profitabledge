@@ -80,7 +80,13 @@ export const billingSubscription = pgTable(
     amount: integer("amount"),
     recurringInterval: varchar("recurring_interval", { length: 20 }),
     recurringIntervalCount: integer("recurring_interval_count"),
+    pauseStatus: varchar("pause_status", { length: 32 }),
+    pauseBehavior: varchar("pause_behavior", { length: 32 }),
+    pausedAt: timestamp("paused_at"),
+    pauseResumesAt: timestamp("pause_resumes_at"),
     cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    cancelReason: varchar("cancel_reason", { length: 80 }),
+    cancelReasonDetail: text("cancel_reason_detail"),
     currentPeriodStart: timestamp("current_period_start"),
     currentPeriodEnd: timestamp("current_period_end"),
     trialStart: timestamp("trial_start"),
@@ -832,6 +838,16 @@ export const affiliateWithdrawalRequest = pgTable(
     providerTransferId: varchar("provider_transfer_id", { length: 120 }),
     providerPayoutId: varchar("provider_payout_id", { length: 120 }),
     notes: text("notes"),
+    metadata: jsonb("metadata").$type<{
+      reservedEventIds?: string[];
+      reservedAmount?: number | null;
+      reservedCurrency?: string | null;
+      reservedAt?: string | null;
+      failureReason?: string | null;
+      requiresManualReconciliation?: boolean;
+      payoutProcessingStartedAt?: string | null;
+      payoutProcessingStartedByUserId?: string | null;
+    }>(),
     requestedAt: timestamp("requested_at").notNull().defaultNow(),
     approvedAt: timestamp("approved_at"),
     rejectedAt: timestamp("rejected_at"),

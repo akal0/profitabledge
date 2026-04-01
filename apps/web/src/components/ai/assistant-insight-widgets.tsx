@@ -155,7 +155,7 @@ function SurfaceCard({
   className?: string;
 }) {
   return (
-    <GoalSurface className={cn("h-full w-full overflow-hidden", className)}>
+    <GoalSurface className={cn("h-max w-full self-start overflow-hidden", className)}>
       <div className="flex items-center justify-between gap-3 px-3.5 py-2">
         <h3 className="text-sm font-medium text-white/60">{title}</h3>
         {headerRight ? <div className="shrink-0">{headerRight}</div> : null}
@@ -176,8 +176,8 @@ function MetricCard({
   note?: string;
 }) {
   return (
-    <GoalSurface className="h-full w-full overflow-hidden">
-      <div className="flex h-full min-h-[6.25rem] px-3.5 py-3.5">
+    <GoalSurface className="h-max w-full self-start overflow-hidden">
+      <div className="flex min-h-[6.25rem] px-3.5 py-3.5">
         <div className="flex w-full flex-col items-start justify-center gap-1.5 text-left">
           <p className="text-xs font-medium text-white/45">{label}</p>
           <p className="text-xl font-semibold text-white">{value}</p>
@@ -207,7 +207,7 @@ function SummaryCard({
       : "text-white";
 
   return (
-    <GoalSurface className="w-full overflow-hidden">
+    <GoalSurface className="h-max w-full self-start overflow-hidden">
       <div className="flex min-h-[6.25rem] px-3.5 py-3.5">
         <div className="flex w-full flex-col items-start justify-center gap-1.5 text-left">
           <p className="text-xs font-medium text-white/45">{label}</p>
@@ -669,7 +669,7 @@ function InsightBarChartCard({
       <div className="flex flex-col">
         <ChartContainer
           config={{ value: { label: tooltipTitle, color: "#2dd4bf" } }}
-          className="h-60 w-full md:h-72"
+          className="h-56 w-full md:h-60"
         >
           <BarChart
             data={rows}

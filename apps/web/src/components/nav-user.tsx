@@ -39,6 +39,10 @@ import AccountSwitch from "@/public/graphics/profile/account-switch.svg";
 
 import Cmd from "@/public/graphics/cmd.svg";
 import type { PlanKey } from "@/features/navigation/config/nav-sections";
+import {
+  getBillingPlanTitle,
+  getNextBillingPlanKey,
+} from "@/features/settings/billing/lib/plan-labels";
 
 type Me = {
   name: string;
@@ -50,34 +54,12 @@ type Me = {
   username: string | null;
 };
 
-function getPlanTitle(planKey: PlanKey) {
-  switch (planKey) {
-    case "professional":
-      return "Professional";
-    case "institutional":
-      return "Institutional";
-    default:
-      return "Student";
-  }
-}
-
-function getNextPlanKey(planKey: PlanKey): PlanKey | null {
-  switch (planKey) {
-    case "student":
-      return "professional";
-    case "professional":
-      return "institutional";
-    default:
-      return null;
-  }
-}
-
 function getUpgradeOfferLabel(planKey: PlanKey | null) {
   switch (planKey) {
     case "professional":
-      return "10% off";
+      return "Most popular";
     case "institutional":
-      return "15% off";
+      return "Best value";
     default:
       return null;
   }
@@ -103,9 +85,9 @@ const NavUser: React.FC<{ user: Me }> = ({ user }) => {
   );
   const currentPlan = (billingState?.billing?.activePlanKey ??
     "student") as PlanKey;
-  const nextPlan = getNextPlanKey(currentPlan);
-  const currentPlanTitle = getPlanTitle(currentPlan);
-  const nextPlanTitle = nextPlan ? getPlanTitle(nextPlan) : null;
+  const nextPlan = getNextBillingPlanKey(currentPlan);
+  const currentPlanTitle = getBillingPlanTitle(currentPlan);
+  const nextPlanTitle = nextPlan ? getBillingPlanTitle(nextPlan) : null;
   const upgradeOfferLabel = getUpgradeOfferLabel(nextPlan);
   const currentPlanBadgeClassName = getPlanBadgeClassName(currentPlan);
   const nextPlanBadgeClassName = nextPlan

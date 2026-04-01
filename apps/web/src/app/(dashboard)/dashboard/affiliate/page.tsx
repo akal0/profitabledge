@@ -1,6 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   BadgePercent,
   Copy,
@@ -19,14 +21,22 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   GoalContentSeparator,
   GoalPanel,
   GoalSurface,
 } from "@/components/goals/goal-surface";
 import { cn } from "@/lib/utils";
-import { trpcOptions } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 
 function formatDate(value?: string | Date | null) {
   if (!value) return "N/A";
@@ -79,6 +89,7 @@ const SHARE_ASSET_INPUT_CLASS =
   "h-10 border-none ring ring-white/10! shadow-none bg-transparent! text-xs hover:bg-sidebar-accent hover:brightness-120";
 const SHARE_ASSET_INLINE_BUTTON_CLASS =
   "h-10 rounded-sm border-none ring ring-white/10 bg-transparent px-2 text-xs text-white hover:bg-sidebar-accent hover:brightness-120";
+const NO_OFFER_VALUE = "__none__";
 
 const AFFILIATE_TIER_TIMELINE = [
   {
@@ -341,15 +352,67 @@ export default function AffiliateDashboardPage() {
   const affiliateDashboardQuery = useQuery(
     trpcOptions.billing.getAffiliateDashboard.queryOptions()
   );
+  const [offerCodeDraft, setOfferCodeDraft] = useState("");
+  const [offerLabelDraft, setOfferLabelDraft] = useState("");
+  const [offerDescriptionDraft, setOfferDescriptionDraft] = useState("");
+  const [trackingLinkNameDraft, setTrackingLinkNameDraft] = useState("");
+  const [trackingLinkDestinationDraft, setTrackingLinkDestinationDraft] =
+    useState("/sign-up");
+  const [trackingLinkOfferIdDraft, setTrackingLinkOfferIdDraft] = useState(NO_OFFER_VALUE);
+  const [trackingLinkGroupSlugDraft, setTrackingLinkGroupSlugDraft] =
+    useState("");
+
+  const saveAffiliateOffer = useMutation({
+    ...trpcOptions.billing.saveAffiliateOffer.mutationOptions(),
+    onSuccess: async () => {
+      setOfferCodeDraft("");
+      setOfferLabelDraft("");
+      setOfferDescriptionDraft("");
+      await queryClient.invalidateQueries({
+        queryKey: trpcOptions.billing.getAffiliateDashboard.queryOptions().queryKey,
+      });
+      toast.success("Offer code saved");
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to save offer code"
+      );
+    },
+  });
+
+  const saveAffiliateTrackingLink = useMutation({
+    ...trpcOptions.billing.saveAffiliateTrackingLink.mutationOptions(),
+    onSuccess: async () => {
+      setTrackingLinkNameDraft("");
+      setTrackingLinkDestinationDraft("/sign-up");
+      setTrackingLinkOfferIdDraft(NO_OFFER_VALUE);
+      setTrackingLinkGroupSlugDraft("");
+      await queryClient.invalidateQueries({
+        queryKey: trpcOptions.billing.getAffiliateDashboard.queryOptions().queryKey,
+      });
+      toast.success("Tracking link saved");
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Unable to save tracking link"
+      );
+    },
+  });
 
   const dashboard = affiliateDashboardQuery.data?.dashboard as any;
   const isAdmin = affiliateDashboardQuery.data?.isAdmin === true;
   const profile = dashboard?.profile ?? null;
+  const offers = dashboard?.offers ?? [];
+  const trackingLinks = dashboard?.trackingLinks ?? [];
+  const payoutSummary = dashboard?.payoutSummary ?? null;
   const defaultOfferCode =
     dashboard?.defaultOffer?.code ??
     profile?.defaultOfferCode ??
     profile?.offerCode ??
     "";
+  const defaultTrackingLink = dashboard?.defaultLink ?? null;
   const channels = dashboard?.channels ?? [];
   const tier = dashboard?.tier ?? null;
 
@@ -386,6 +449,44 @@ export default function AffiliateDashboardPage() {
     } catch {
       toast.error("Unable to copy right now");
     }
+  };
+
+  const handleSaveOffer = async () => {
+    if (!offerCodeDraft.trim()) {
+      toast.error("Add an offer code first");
+      return;
+    }
+
+    if (!offerLabelDraft.trim()) {
+      toast.error("Add a label for this offer code");
+      return;
+    }
+
+    await saveAffiliateOffer.mutateAsync({
+      code: offerCodeDraft.trim(),
+      label: offerLabelDraft.trim(),
+      description: offerDescriptionDraft.trim() || undefined,
+      discountBasisPoints: tier?.effectiveDiscountBasisPoints ?? 1000,
+      isDefault: offers.length === 0,
+    } as any);
+  };
+
+  const handleSaveTrackingLink = async () => {
+    if (!trackingLinkNameDraft.trim()) {
+      toast.error("Add a label for this tracking link");
+      return;
+    }
+
+    await saveAffiliateTrackingLink.mutateAsync({
+      affiliateOfferId:
+        trackingLinkOfferIdDraft !== NO_OFFER_VALUE
+          ? trackingLinkOfferIdDraft
+          : undefined,
+      name: trackingLinkNameDraft.trim(),
+      destinationPath: trackingLinkDestinationDraft.trim() || "/sign-up",
+      affiliateGroupSlug: trackingLinkGroupSlugDraft.trim() || undefined,
+      isDefault: trackingLinks.length === 0,
+    } as any);
   };
 
   if (affiliateDashboardQuery.isLoading) {
@@ -427,6 +528,51 @@ export default function AffiliateDashboardPage() {
           />
         ))}
       </div>
+
+      <GoalPanel
+        icon={DollarSign}
+        title="Available balance"
+        description="Commission that is currently free to withdraw after open payout requests are excluded."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              asChild
+              className="h-8 rounded-sm border-none ring ring-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+            >
+              <Link href="/dashboard/settings/billing/payment-methods">
+                Withdraw
+              </Link>
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-4">
+          <TierSummaryCard
+            label="Available now"
+            value={formatCurrency(payoutSummary?.availableAmount)}
+            hint="Ready for a new withdrawal request"
+            icon={DollarSign}
+          />
+          <TierSummaryCard
+            label="Pending requests"
+            value={formatCurrency(payoutSummary?.pendingAmount)}
+            hint="Reserved in open payout requests"
+            icon={Users}
+          />
+          <TierSummaryCard
+            label="Paid out"
+            value={formatCurrency(payoutSummary?.paidAmount)}
+            hint="Historical affiliate settlements"
+            icon={BadgePercent}
+          />
+          <TierSummaryCard
+            label="Total earned"
+            value={formatCurrency(payoutSummary?.totalEarnedAmount)}
+            hint="All-time affiliate commission"
+            icon={UserPlus}
+          />
+        </div>
+      </GoalPanel>
 
       {tier ? <AffiliateTierTimeline tier={tier} /> : null}
 
@@ -532,8 +678,11 @@ export default function AffiliateDashboardPage() {
         action={
           <Button
             onClick={() =>
-              profile?.shareUrl
-                ? copyToClipboard(profile.shareUrl, "Affiliate link copied")
+              defaultTrackingLink?.shareUrl || profile?.shareUrl
+                ? copyToClipboard(
+                    defaultTrackingLink?.shareUrl ?? profile?.shareUrl ?? "",
+                    "Affiliate link copied"
+                  )
                 : toast.error("Affiliate link is not ready yet")
             }
             className="h-7 gap-1.5 rounded-sm border-none ring ring-white/10 bg-transparent px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
@@ -548,7 +697,7 @@ export default function AffiliateDashboardPage() {
             <p className="text-[11px] text-white/30">Affiliate link</p>
             <Input
               readOnly
-              value={profile?.shareUrl ?? ""}
+              value={defaultTrackingLink?.shareUrl ?? profile?.shareUrl ?? ""}
               className={SHARE_ASSET_INPUT_CLASS}
             />
           </div>
@@ -605,8 +754,264 @@ export default function AffiliateDashboardPage() {
               </div>
             </div>
           ) : null}
+
+          {defaultTrackingLink ? (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-white/30">Default tracking link</p>
+              <div className="rounded-sm border border-white/5 bg-sidebar-accent p-3 text-xs text-white/55">
+                <span className="font-medium text-white">{defaultTrackingLink.slug}</span>
+                {defaultTrackingLink.destinationPath
+                  ? ` -> ${defaultTrackingLink.destinationPath}`
+                  : ""}
+              </div>
+            </div>
+          ) : null}
         </div>
       </GoalPanel>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <GoalPanel
+          icon={BadgePercent}
+          title="Offer codes"
+          description="Create additional coupon codes for campaigns while keeping your tier discount fixed."
+          bodyClassName="space-y-4"
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-white/35">Offer code</Label>
+              <Input
+                value={offerCodeDraft}
+                onChange={(event) => setOfferCodeDraft(event.target.value.toUpperCase())}
+                placeholder="PROFIT10"
+                className={SHARE_ASSET_INPUT_CLASS}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-white/35">Label</Label>
+              <Input
+                value={offerLabelDraft}
+                onChange={(event) => setOfferLabelDraft(event.target.value)}
+                placeholder="YouTube campaign"
+                className={SHARE_ASSET_INPUT_CLASS}
+              />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-[11px] text-white/35">Description</Label>
+              <Input
+                value={offerDescriptionDraft}
+                onChange={(event) => setOfferDescriptionDraft(event.target.value)}
+                placeholder="Optional note for where this offer is used"
+                className={SHARE_ASSET_INPUT_CLASS}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[11px] text-white/35">
+              New offer codes inherit your current tier discount of {formatTierPercent(
+                tier?.effectiveDiscountBasisPoints
+              )}.
+            </p>
+            <Button
+              onClick={() => void handleSaveOffer()}
+              disabled={saveAffiliateOffer.isPending}
+              className="h-8 rounded-sm border-none ring ring-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+            >
+              {saveAffiliateOffer.isPending ? "Saving..." : "Save offer code"}
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {offers.length ? (
+              offers.map((offer: any) => (
+                <div
+                  key={offer.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent p-3"
+                >
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-white">{offer.code}</p>
+                      {offer.isDefault ? (
+                        <Badge className="rounded-full bg-emerald-500/15 text-[10px] text-emerald-200 ring ring-emerald-500/20">
+                          Default
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-[11px] text-white/40">
+                      {offer.label} · {formatTierPercent(offer.discountBasisPoints)} off
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!offer.isDefault ? (
+                      <Button
+                        onClick={() =>
+                          void saveAffiliateOffer.mutateAsync({
+                            affiliateOfferId: offer.id,
+                            code: offer.code,
+                            label: offer.label,
+                            description: offer.description ?? undefined,
+                            discountBasisPoints: offer.discountBasisPoints,
+                            isDefault: true,
+                          } as any)
+                        }
+                        className="h-7 rounded-sm border border-white/10 bg-sidebar px-2 text-[11px] text-white hover:bg-sidebar-accent"
+                      >
+                        Set default
+                      </Button>
+                    ) : null}
+                    <Button
+                      onClick={() =>
+                        void copyToClipboard(offer.code, `${offer.code} copied`)
+                      }
+                      className="h-7 rounded-sm border border-white/10 bg-sidebar px-2 text-[11px] text-white hover:bg-sidebar-accent"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
+                No offer codes yet.
+              </div>
+            )}
+          </div>
+        </GoalPanel>
+
+        <GoalPanel
+          icon={Link2}
+          title="Tracking links"
+          description="Create campaign-specific links with destinations, offer codes, and optional group auto-join context."
+          bodyClassName="space-y-4"
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-white/35">Link label</Label>
+              <Input
+                value={trackingLinkNameDraft}
+                onChange={(event) => setTrackingLinkNameDraft(event.target.value)}
+                placeholder="Twitter bio"
+                className={SHARE_ASSET_INPUT_CLASS}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-white/35">Destination path</Label>
+              <Input
+                value={trackingLinkDestinationDraft}
+                onChange={(event) =>
+                  setTrackingLinkDestinationDraft(event.target.value)
+                }
+                placeholder="/sign-up"
+                className={SHARE_ASSET_INPUT_CLASS}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-white/35">Offer code</Label>
+                  <Select
+                    value={trackingLinkOfferIdDraft}
+                    onValueChange={setTrackingLinkOfferIdDraft}
+                  >
+                <SelectTrigger className={SHARE_ASSET_INPUT_CLASS}>
+                  <SelectValue placeholder="Choose an offer code" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_OFFER_VALUE}>No offer code</SelectItem>
+                  {offers.map((offer: any) => (
+                    <SelectItem key={offer.id} value={offer.id}>
+                      {offer.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] text-white/35">Group slug</Label>
+              <Input
+                value={trackingLinkGroupSlugDraft}
+                onChange={(event) =>
+                  setTrackingLinkGroupSlugDraft(event.target.value)
+                }
+                placeholder="Optional group slug"
+                className={SHARE_ASSET_INPUT_CLASS}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() => void handleSaveTrackingLink()}
+              disabled={saveAffiliateTrackingLink.isPending}
+              className="h-8 rounded-sm border-none ring ring-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
+            >
+              {saveAffiliateTrackingLink.isPending
+                ? "Saving..."
+                : "Save tracking link"}
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            {trackingLinks.length ? (
+              trackingLinks.map((trackingLink: any) => (
+                <div
+                  key={trackingLink.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/5 bg-sidebar-accent p-3"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-white">
+                        {trackingLink.name}
+                      </p>
+                      {trackingLink.isDefault ? (
+                        <Badge className="rounded-full bg-emerald-500/15 text-[10px] text-emerald-200 ring ring-emerald-500/20">
+                          Default
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 truncate text-[11px] text-white/40">
+                      {trackingLink.shareUrl}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!trackingLink.isDefault ? (
+                      <Button
+                        onClick={() =>
+                          void saveAffiliateTrackingLink.mutateAsync({
+                            trackingLinkId: trackingLink.id,
+                            affiliateOfferId: trackingLink.affiliateOfferId ?? undefined,
+                            name: trackingLink.name,
+                            destinationPath: trackingLink.destinationPath,
+                            affiliateGroupSlug:
+                              trackingLink.affiliateGroupSlug ?? undefined,
+                            isDefault: true,
+                          } as any)
+                        }
+                        className="h-7 rounded-sm border border-white/10 bg-sidebar px-2 text-[11px] text-white hover:bg-sidebar-accent"
+                      >
+                        Set default
+                      </Button>
+                    ) : null}
+                    <Button
+                      onClick={() =>
+                        void copyToClipboard(
+                          trackingLink.shareUrl,
+                          `${trackingLink.name} link copied`
+                        )
+                      }
+                      className="h-7 rounded-sm border border-white/10 bg-sidebar px-2 text-[11px] text-white hover:bg-sidebar-accent"
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-sm border border-dashed border-white/10 p-4 text-xs text-white/30">
+                No tracking links yet.
+              </div>
+            )}
+          </div>
+        </GoalPanel>
+      </div>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">

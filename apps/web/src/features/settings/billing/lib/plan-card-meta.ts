@@ -1,4 +1,4 @@
-export type BillingPlanKey = "student" | "professional" | "institutional";
+import type { BillingPlanKey } from "./plan-labels";
 
 export const BILLING_PLAN_CARD_META: Record<
   BillingPlanKey,

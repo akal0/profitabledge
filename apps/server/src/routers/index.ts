@@ -28,6 +28,7 @@ import { symbolMappingsRouter } from "./symbol-mappings";
 import { proofRouter } from "./proof";
 import { reportsRouter } from "./reports";
 import { verificationRouter } from "./verification";
+import { assistantRouter } from "./assistant";
 
 export const appRouter = router({
   upload: uploadRouter,
@@ -59,5 +60,6 @@ export const appRouter = router({
   proof: proofRouter,
   reports: reportsRouter,
   verification: verificationRouter,
+  assistant: assistantRouter,
 });
 export type AppRouter = typeof appRouter;

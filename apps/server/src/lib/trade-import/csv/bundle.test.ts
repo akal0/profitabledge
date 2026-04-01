@@ -296,4 +296,67 @@ NQ,1001,1002,1,20000,20010,100,03/15/2026 10:00 AM,03/15/2026 10:05 AM`;
     );
     expect(result.files).toEqual(["statement.xlsx"]);
   });
+
+  it("parses a NinjaTrader performance report", () => {
+    const csv = `Instrument,Market pos.,Qty,Entry Time,Entry Price,Exit Time,Exit Price,Profit,Commission,Account
+NQ 06-26,Long,1,2026-03-15 10:00:00,20000,2026-03-15 10:05:00,20010,200,-4.5,SIM101`;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "ninjatrader",
+      files: [{ fileName: "TradePerformance.csv", fileContent: csv }],
+    });
+
+    expect(result.parserId).toBe("ninjatrader-performance-report");
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]).toMatchObject({
+      symbol: "NQ 06-26",
+      tradeType: "long",
+      openPrice: 20000,
+      closePrice: 20010,
+      profit: 200,
+      commissions: -4.5,
+    });
+    expect(result.accountHints.brokerType).toBe("ninjatrader");
+  });
+
+  it("parses a Rithmic R|Trader Pro export", () => {
+    const csv = `Symbol,Buy/Sell,Qty,Open Date,Open Time,Open Price,Close Date,Close Time,Close Price,P/L,Account
+MNQH6,Buy,2,2026-03-15,10:00:00,20000,2026-03-15,10:08:00,20008,160,RITH123`;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "rithmic",
+      files: [{ fileName: "RithmicHistory.csv", fileContent: csv }],
+    });
+
+    expect(result.parserId).toBe("rithmic-rtrader-pro");
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]).toMatchObject({
+      symbol: "MNQH6",
+      tradeType: "long",
+      volume: 2,
+      profit: 160,
+    });
+    expect(result.accountHints.brokerType).toBe("rithmic");
+  });
+
+  it("parses a DXTrade statement export", () => {
+    const csv = `Position ID,Symbol,Side,Volume,Open Time,Open Price,Close Time,Close Price,Net Profit,Commission,Account
+DX-1001,EURUSD,Buy,1.2,2026-03-15 09:00:00,1.0825,2026-03-15 11:30:00,1.084,180,-6,ACC-55`;
+
+    const result = parseBrokerCsvImportBundle({
+      broker: "dxtrade",
+      files: [{ fileName: "statement.csv", fileContent: csv }],
+    });
+
+    expect(result.parserId).toBe("dxtrade-statement");
+    expect(result.trades).toHaveLength(1);
+    expect(result.trades[0]).toMatchObject({
+      ticket: "DX-1001",
+      symbol: "EURUSD",
+      tradeType: "long",
+      profit: 180,
+      commissions: -6,
+    });
+    expect(result.accountHints.brokerType).toBe("dxtrade");
+  });
 });

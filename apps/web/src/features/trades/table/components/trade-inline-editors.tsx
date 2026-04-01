@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowDownRight, ArrowUpRight, X } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Input } from "@/components/ui/input";
@@ -44,6 +44,7 @@ type EditableTradeInputCellProps<TValue> = {
   activateOn?: "click" | "doubleClick";
   align?: "left" | "right";
   blockedReason?: string;
+  isSaving?: boolean;
 };
 
 function useEditableCellActivation(
@@ -88,10 +89,11 @@ function EditableTradeInputCell<TValue>({
   activateOn = "click",
   align = "left",
   blockedReason,
+  isSaving = false,
 }: EditableTradeInputCellProps<TValue>) {
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(() => formatForDraft(value));
-  const [isSaving, setIsSaving] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const sizerRef = React.useRef<HTMLSpanElement | null>(null);
   const [inputWidth, setInputWidth] = React.useState(() =>
@@ -149,12 +151,12 @@ function EditableTradeInputCell<TValue>({
       return;
     }
 
-    setIsSaving(true);
+    setIsSubmitting(true);
     try {
       await onSave(parsed);
       setEditing(false);
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
     }
   }, [areEqual, closeEditor, draft, onSave, parseDraft, value]);
 
@@ -196,7 +198,7 @@ function EditableTradeInputCell<TValue>({
           type={inputType}
           step={step}
           placeholder={placeholder}
-          disabled={isSaving}
+          disabled={isSubmitting}
           className={cn(
             EDITABLE_INPUT_CLASS,
             align === "right" ? "text-right" : "text-left"
@@ -230,7 +232,8 @@ function EditableTradeInputCell<TValue>({
       className={cn(
         "inline-flex max-w-full min-w-0 items-center overflow-hidden",
         EDITABLE_DISPLAY_CLASS,
-        align === "right" ? "justify-end" : "justify-start"
+        align === "right" ? "justify-end" : "justify-start",
+        isSaving && "text-teal-300/80"
       )}
       title={
         activateOn === "doubleClick" ? "Double-click to edit" : "Click to edit"
@@ -238,6 +241,7 @@ function EditableTradeInputCell<TValue>({
       onPointerDown={(event) => event.stopPropagation()}
       {...activationHandlers}
     >
+      {isSaving ? <Loader2 className="mr-1 size-3 animate-spin text-teal-300" /> : null}
       {displayValue}
     </button>
   );
@@ -249,6 +253,7 @@ type EditableTradeTextCellProps = {
   placeholder?: string;
   onSave: (value: string) => Promise<void>;
   blockedReason?: string;
+  isSaving?: boolean;
 };
 
 export function EditableTradeTextCell({
@@ -257,6 +262,7 @@ export function EditableTradeTextCell({
   placeholder,
   onSave,
   blockedReason,
+  isSaving,
 }: EditableTradeTextCellProps) {
   const currentValue = value ?? "";
 
@@ -273,6 +279,7 @@ export function EditableTradeTextCell({
       areEqual={(next, current) => next.trim() === current.trim()}
       onSave={onSave}
       blockedReason={blockedReason}
+      isSaving={isSaving}
     />
   );
 }
@@ -284,6 +291,7 @@ type EditableTradeNumberCellProps = {
   nullable?: boolean;
   onSave: (value: number | null) => Promise<void>;
   blockedReason?: string;
+  isSaving?: boolean;
 };
 
 export function EditableTradeNumberCell({
@@ -293,6 +301,7 @@ export function EditableTradeNumberCell({
   nullable = false,
   onSave,
   blockedReason,
+  isSaving,
 }: EditableTradeNumberCellProps) {
   const currentValue = value ?? null;
 
@@ -317,6 +326,7 @@ export function EditableTradeNumberCell({
       areEqual={(next, current) => next === current}
       onSave={onSave}
       blockedReason={blockedReason}
+      isSaving={isSaving}
     />
   );
 }
@@ -326,6 +336,7 @@ type EditableTradeDateTimeCellProps = {
   displayValue: React.ReactNode;
   onSave: (value: string) => Promise<void>;
   blockedReason?: string;
+  isSaving?: boolean;
 };
 
 function formatDateTimeLocalValue(value: string) {
@@ -343,6 +354,7 @@ export function EditableTradeDateTimeCell({
   displayValue,
   onSave,
   blockedReason,
+  isSaving,
 }: EditableTradeDateTimeCellProps) {
   return (
     <EditableTradeInputCell
@@ -362,6 +374,7 @@ export function EditableTradeDateTimeCell({
       areEqual={(next, current) => next === current}
       onSave={onSave}
       blockedReason={blockedReason}
+      isSaving={isSaving}
     />
   );
 }
@@ -370,15 +383,17 @@ type EditableTradeDirectionCellProps = {
   value: "long" | "short";
   onSave: (value: InlineTradeUpdateInput["tradeType"]) => Promise<void>;
   blockedReason?: string;
+  isSaving?: boolean;
 };
 
 export function EditableTradeDirectionCell({
   value,
   onSave,
   blockedReason,
+  isSaving = false,
 }: EditableTradeDirectionCellProps) {
   const [editing, setEditing] = React.useState(false);
-  const [isSaving, setIsSaving] = React.useState(false);
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
@@ -401,12 +416,12 @@ export function EditableTradeDirectionCell({
         return;
       }
 
-      setIsSaving(true);
+      setIsSubmitting(true);
       try {
         await onSave(nextValue);
         setEditing(false);
       } finally {
-        setIsSaving(false);
+        setIsSubmitting(false);
       }
     },
     [onSave, value]
@@ -429,7 +444,7 @@ export function EditableTradeDirectionCell({
       >
         <button
           type="button"
-          disabled={isSaving}
+          disabled={isSubmitting}
           className={cn(
             TRADE_IDENTIFIER_PILL_CLASS,
             DIRECTION_BUTTON_CLASS,
@@ -443,7 +458,7 @@ export function EditableTradeDirectionCell({
         </button>
         <button
           type="button"
-          disabled={isSaving}
+          disabled={isSubmitting}
           className={cn(
             TRADE_IDENTIFIER_PILL_CLASS,
             DIRECTION_BUTTON_CLASS,
@@ -457,7 +472,7 @@ export function EditableTradeDirectionCell({
         </button>
         <button
           type="button"
-          disabled={isSaving}
+          disabled={isSubmitting}
           className="rounded-sm p-1 text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white/80"
           onClick={() => setEditing(false)}
         >
@@ -488,6 +503,7 @@ export function EditableTradeDirectionCell({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
+      {isSaving ? <Loader2 className="mr-1 size-3 animate-spin text-teal-300" /> : null}
       <span className={cn(TRADE_IDENTIFIER_PILL_CLASS, "gap-1 pr-2", tone)}>
         {value === "long" ? "Long" : "Short"}
         {value === "long" ? (

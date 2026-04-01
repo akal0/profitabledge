@@ -2,6 +2,7 @@ export type ManualAccountBrokerType =
   | "mt4"
   | "mt5"
   | "ctrader"
+  | "dxtrade"
   | "tradovate"
   | "topstepx"
   | "rithmic"
@@ -15,6 +16,7 @@ export const MANUAL_ACCOUNT_BROKER_TYPE_OPTIONS: Array<{
   { value: "mt4", label: "MetaTrader 4" },
   { value: "mt5", label: "MetaTrader 5" },
   { value: "ctrader", label: "cTrader" },
+  { value: "dxtrade", label: "DXTrade" },
   { value: "tradovate", label: "Tradovate" },
   { value: "topstepx", label: "TopstepX" },
   { value: "rithmic", label: "Rithmic" },

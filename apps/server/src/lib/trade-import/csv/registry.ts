@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { parseImportDocument } from "./document";
+import { dxtradeStatementCsvParser } from "./parsers/dxtrade-statement";
 import { genericTradeStatementCsvParser } from "./parsers/generic-trade-statement";
+import { ninjatraderPerformanceReportCsvParser } from "./parsers/ninjatrader-performance-report";
+import { rithmicRTraderProCsvParser } from "./parsers/rithmic-rtrader-pro";
 import { tradovatePerformanceCsvParser } from "./parsers/tradovate-performance";
 import { tradovatePositionHistoryCsvParser } from "./parsers/tradovate-position-history";
 import type {
@@ -10,6 +13,9 @@ import type {
 } from "./types";
 
 const parsers: BrokerCsvParser[] = [
+  dxtradeStatementCsvParser,
+  ninjatraderPerformanceReportCsvParser,
+  rithmicRTraderProCsvParser,
   tradovatePerformanceCsvParser,
   tradovatePositionHistoryCsvParser,
   genericTradeStatementCsvParser,

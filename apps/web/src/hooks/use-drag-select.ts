@@ -15,19 +15,40 @@ export function useDragSelect(options: UseDragSelectOptions = {}) {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastHoveredRef = useRef<string | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const longPressTimeoutRef = useRef<number | null>(null);
+  const suppressClickUntilRef = useRef(0);
 
   // Track which IDs we've encountered during this drag session
   const dragSessionIdsRef = useRef<Set<string>>(new Set());
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent, rowId: string) => {
+  const beginDragSelection = useCallback(
+    (rowId: string) => {
+      setIsDragging(true);
+      setDragStartId(rowId);
+      dragSessionIdsRef.current = new Set([rowId]);
+      lastHoveredRef.current = rowId;
+      suppressClickUntilRef.current = Date.now() + 400;
+
+      const newSelection = new Set<string>([rowId]);
+      setSelectedIds(newSelection);
+      onSelectionChange?.(newSelection);
+    },
+    [onSelectionChange]
+  );
+
+  const clearPendingLongPress = useCallback(() => {
+    if (longPressTimeoutRef.current != null) {
+      window.clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent, rowId: string) => {
       if (disabled) return;
 
-      // Only start drag on left click, and not if clicking on interactive elements
-      if (e.button !== 0) return;
-
       const target = e.target as HTMLElement;
-      // Don't start drag if clicking on buttons, inputs, or other interactive elements
       if (
         target.closest("button") ||
         target.closest("input") ||
@@ -38,21 +59,24 @@ export function useDragSelect(options: UseDragSelectOptions = {}) {
         return;
       }
 
-      e.preventDefault();
-      setIsDragging(true);
-      setDragStartId(rowId);
-      dragSessionIdsRef.current = new Set([rowId]);
-      lastHoveredRef.current = rowId;
+      if (e.pointerType === "mouse") {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        beginDragSelection(rowId);
+        return;
+      }
 
-      // Start with this row selected
-      const newSelection = new Set<string>([rowId]);
-      setSelectedIds(newSelection);
-      onSelectionChange?.(newSelection);
+      activePointerIdRef.current = e.pointerId;
+      clearPendingLongPress();
+      longPressTimeoutRef.current = window.setTimeout(() => {
+        beginDragSelection(rowId);
+        longPressTimeoutRef.current = null;
+      }, 280);
     },
-    [disabled, onSelectionChange]
+    [beginDragSelection, clearPendingLongPress, disabled]
   );
 
-  const handleMouseEnter = useCallback(
+  const handlePointerEnter = useCallback(
     (rowId: string) => {
       if (!isDragging || disabled || !dragStartId) return;
 
@@ -70,36 +94,56 @@ export function useDragSelect(options: UseDragSelectOptions = {}) {
     [isDragging, disabled, dragStartId, onSelectionChange]
   );
 
-  const handleMouseUp = useCallback(() => {
+  const handlePointerUp = useCallback((pointerId?: number) => {
+    if (pointerId != null && activePointerIdRef.current != null) {
+      if (pointerId !== activePointerIdRef.current) {
+        return;
+      }
+    }
+
+    clearPendingLongPress();
+    activePointerIdRef.current = null;
+
     if (isDragging) {
       setIsDragging(false);
       setDragStartId(null);
       lastHoveredRef.current = null;
     }
-  }, [isDragging]);
+  }, [clearPendingLongPress, isDragging]);
 
   const clearSelection = useCallback(() => {
+    clearPendingLongPress();
     setSelectedIds(new Set());
     setIsDragging(false);
     setDragStartId(null);
     lastHoveredRef.current = null;
     dragSessionIdsRef.current.clear();
+    activePointerIdRef.current = null;
     onSelectionChange?.(new Set());
-  }, [onSelectionChange]);
+  }, [clearPendingLongPress, onSelectionChange]);
 
-  // Handle global mouse up to end dragging
-  useEffect(() => {
-    if (isDragging) {
-      const handleGlobalMouseUp = () => {
-        handleMouseUp();
-      };
-
-      document.addEventListener("mouseup", handleGlobalMouseUp);
-      return () => {
-        document.removeEventListener("mouseup", handleGlobalMouseUp);
-      };
+  const shouldSuppressClick = useCallback(() => {
+    if (Date.now() <= suppressClickUntilRef.current) {
+      suppressClickUntilRef.current = 0;
+      return true;
     }
-  }, [isDragging, handleMouseUp]);
+
+    return false;
+  }, []);
+
+  useEffect(() => {
+    const handleGlobalPointerUp = (event: PointerEvent) => {
+      handlePointerUp(event.pointerId);
+    };
+
+    document.addEventListener("pointerup", handleGlobalPointerUp);
+    document.addEventListener("pointercancel", handleGlobalPointerUp);
+    return () => {
+      document.removeEventListener("pointerup", handleGlobalPointerUp);
+      document.removeEventListener("pointercancel", handleGlobalPointerUp);
+      clearPendingLongPress();
+    };
+  }, [clearPendingLongPress, handlePointerUp]);
 
   // Handle escape key to cancel selection
   useEffect(() => {
@@ -118,10 +162,14 @@ export function useDragSelect(options: UseDragSelectOptions = {}) {
   return {
     selectedIds,
     isDragging,
-    handleMouseDown,
-    handleMouseEnter,
-    handleMouseUp,
+    handleMouseDown: handlePointerDown,
+    handleMouseEnter: handlePointerEnter,
+    handleMouseUp: () => handlePointerUp(),
+    handlePointerDown,
+    handlePointerEnter,
+    handlePointerUp,
     clearSelection,
+    shouldSuppressClick,
     containerRef,
     isRowSelected: (rowId: string) => selectedIds.has(rowId),
     selectedCount: selectedIds.size,

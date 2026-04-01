@@ -12,7 +12,7 @@ const QUERY_VERB_RE =
   /\b(what|which|how|show|compare|give|tell|find|calculate|breakdown|summarize|analyse|analyze|review)\b/i;
 
 const ANALYTICS_SIGNAL_RE =
-  /\b(profit|loss|p&l|pnl|win|rate|session|setup|model|strategy|asset|symbol|pair|trade|journal|edge|leak|profile|overview|performance|rr|drawdown|mae|mfe|hold|entry|exit|volume|balance|equity|margin|slippage|spread|compliance|trailing|partial|goal|psychology|focus|confidence|expectancy|factor)\b/i;
+  /\b(profit|profits|loss|losses|p&l|pnl|win|wins|rate|rates|session|sessions|setup|setups|model|models|strategy|strategies|asset|assets|symbol|symbols|pair|pairs|trade|trades|journal|journals|edge|edges|leak|leaks|profile|profiles|overview|performance|rr|drawdown|mae|mfe|hold|holding|entry|entries|exit|exits|exiting|volume|volumes|balance|balances|equity|margin|slippage|spread|compliance|trailing|partial|goal|goals|psychology|focus|confidence|expectancy|factor)\b/i;
 
 const PROFILE_SUMMARY_PATTERNS = [
   /what('?s| is) my edge/i,
@@ -27,7 +27,7 @@ const PROFILE_SUMMARY_PATTERNS = [
   /how am i doing/i,
   /leav(e|ing).*(table|money|profit)/i,
   /money.*(table|leaving|left)/i,
-  /exit(ing)? too (early|soon|late)/i,
+  /\bexit(?:ing)?\b.*\btoo\s+(early|soon|late)\b/i,
   /opportunity cost/i,
   /how much.*(miss|left|leave|table)/i,
 ];
@@ -39,7 +39,7 @@ const ANALYSIS_DIMENSION_HINTS = [
   /\b(edge|edges|playbook|playbooks)\b/i,
   /\b(setup|setups|strategy|strategies|model|models|pattern|patterns|condition|conditions|combo|combos|combination|combinations|intersection|intersections)\b/i,
   /\b(protocol|aligned|against protocol|non aligned|non-aligned|discretionary)\b/i,
-  /\b(day of week|weekday|weekdays|monday|tuesday|wednesday|thursday|friday)\b/i,
+  /\b(day of week|day of the week|weekday|weekdays|monday|tuesday|wednesday|thursday|friday)\b/i,
   /\b(time of day|morning|afternoon|evening|night|market open|market close)\b/i,
 ];
 

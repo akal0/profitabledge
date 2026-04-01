@@ -169,6 +169,7 @@ function formatPricing(plan: PricingPlan, interval: BillingInterval) {
     return {
       amount: "Free",
       detail: " / No credit card required",
+      subdetail: null,
       savings: null,
     };
   }
@@ -179,11 +180,17 @@ function formatPricing(plan: PricingPlan, interval: BillingInterval) {
       : null;
   const monthlyPricing = plan.pricing?.monthly ?? null;
   const amount =
-    annualPricing?.monthlyEquivalentCents ?? monthlyPricing?.priceCents ?? 0;
+    annualPricing?.priceCents ?? monthlyPricing?.priceCents ?? 0;
 
   return {
     amount: `£${(amount / 100).toFixed(0)}`,
-    detail: annualPricing ? "/ mo billed annually" : "/ mo",
+    detail: annualPricing ? "/ year" : "/ mo",
+    subdetail:
+      annualPricing?.monthlyEquivalentCents != null
+        ? `£${(annualPricing.monthlyEquivalentCents / 100).toFixed(
+            0
+          )}/mo billed annually`
+        : null,
     savings: annualPricing?.discountPercent
       ? `Save ${annualPricing.discountPercent}%`
       : null,
@@ -561,12 +568,19 @@ export function PricingSection() {
 
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                      <p className="text-xl font-bold text-white sm:text-2xl">
-                        {pricing.amount}
-                        <span className="ml-1 text-sm font-medium text-white/35">
-                          {pricing.detail}
-                        </span>
-                      </p>
+                      <div>
+                        <p className="text-xl font-bold text-white sm:text-2xl">
+                          {pricing.amount}
+                          <span className="ml-1 text-sm font-medium text-white/35">
+                            {pricing.detail}
+                          </span>
+                        </p>
+                        {pricing.subdetail ? (
+                          <p className="text-xs text-white/35">
+                            {pricing.subdetail}
+                          </p>
+                        ) : null}
+                      </div>
 
                       {pricing.savings ? (
                         <Badge

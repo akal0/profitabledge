@@ -96,6 +96,7 @@ function getDisplayedPricing(plan: BillingPlan, billingInterval: BillingInterval
     return {
       amount: "Free",
       interval: null,
+      detail: null,
       savings: null,
     };
   }
@@ -103,8 +104,14 @@ function getDisplayedPricing(plan: BillingPlan, billingInterval: BillingInterval
   const annualPricing = plan.pricing?.annual;
   if (billingInterval === "annual" && annualPricing?.isConfigured) {
     return {
-      amount: `£${((annualPricing.monthlyEquivalentCents ?? annualPricing.priceCents) / 100).toFixed(0)}`,
-      interval: "/ mo billed annually",
+      amount: `£${(annualPricing.priceCents / 100).toFixed(0)}`,
+      interval: "/ year",
+      detail:
+        annualPricing.monthlyEquivalentCents != null
+          ? `£${(annualPricing.monthlyEquivalentCents / 100).toFixed(
+              0
+            )}/mo billed annually`
+          : null,
       savings:
         typeof annualPricing.discountPercent === "number"
           ? `Save ${annualPricing.discountPercent}%`
@@ -116,6 +123,7 @@ function getDisplayedPricing(plan: BillingPlan, billingInterval: BillingInterval
   return {
     amount: fallback.amount,
     interval: fallback.interval,
+    detail: null,
     savings: null,
   };
 }
@@ -158,28 +166,29 @@ const Plans = ({
           const isLockedCurrentPlan = isActive && !plan.isFree;
           const isSelected = selectedPlanKey === plan.key;
           const isPending = pendingPlanKey === plan.key;
+          const hasSelectedIntervalConfigured = plan.isFree
+            ? true
+            : billingInterval === "annual"
+              ? Boolean(plan.pricing?.annual?.isConfigured)
+              : Boolean(plan.pricing?.monthly?.isConfigured);
           const buttonLabel = isPending
             ? "Redirecting..."
             : isLockedCurrentPlan
             ? "Current plan"
-            : !plan.isConfigured
-            ? "Unavailable"
+            : !hasSelectedIntervalConfigured
+            ? `${billingInterval} not configured`
             : plan.isFree
             ? "Stick with this plan"
             : plan.ctaLabel;
           const isButtonDisabled =
             isPending ||
             isLockedCurrentPlan ||
-            !plan.isConfigured;
+            !hasSelectedIntervalConfigured;
           const isProfessional = plan.key === "professional";
           const isInstitutional = plan.key === "institutional";
           const price = getDisplayedPricing(plan, billingInterval);
           const featureLines = getPlanFeatureLines(plan);
-          const canCheckout =
-            !plan.isFree &&
-            (billingInterval === "annual"
-              ? Boolean(plan.pricing?.annual?.isConfigured || plan.pricing?.monthly?.isConfigured)
-              : Boolean(plan.pricing?.monthly?.isConfigured));
+          const canCheckout = !plan.isFree && hasSelectedIntervalConfigured;
           const outerCn = isProfessional
             ? "bg-blue-500/10 ring-blue-500/25"
             : isInstitutional
@@ -282,18 +291,23 @@ const Plans = ({
                   <Separator className="-mx-5 w-auto opacity-15" />
 
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xl font-bold text-white">
-                        {price.amount}
-                        {price.interval ? (
-                          <span className="ml-1 text-sm font-normal text-white/35">
-                          {price.interval}
-                        </span>
-                      ) : null}
-                    </p>
-                    {plan.highlight ? (
-                      <span
-                        className={cn(
-                          "rounded px-3 py-1 text-[10px] font-semibold",
+                      <div>
+                        <p className="text-xl font-bold text-white">
+                          {price.amount}
+                          {price.interval ? (
+                            <span className="ml-1 text-sm font-normal text-white/35">
+                              {price.interval}
+                            </span>
+                          ) : null}
+                        </p>
+                        {price.detail ? (
+                          <p className="text-xs text-white/35">{price.detail}</p>
+                        ) : null}
+                      </div>
+                      {plan.highlight ? (
+                        <span
+                          className={cn(
+                            "rounded px-3 py-1 text-[10px] font-semibold",
                           meta.badgeClassName
                         )}
                       >
@@ -358,14 +372,14 @@ const Plans = ({
                       >
                         Current plan
                       </div>
-                    ) : !plan.isConfigured ? (
+                    ) : !hasSelectedIntervalConfigured ? (
                       <div
                         className={cn(
                           "flex h-9 w-full items-center justify-center rounded-sm text-xs",
                           freePlanCn
                         )}
                       >
-                        Unavailable
+                        {buttonLabel}
                       </div>
                     ) : (
                       <Button

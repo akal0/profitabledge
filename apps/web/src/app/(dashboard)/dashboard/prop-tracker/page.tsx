@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -535,17 +535,19 @@ export default function PropTrackerIndexPage() {
     [accounts]
   );
 
-  const dashboardQueries = useQueries({
-    queries: propAccounts.map((account) => ({
-      queryKey: ["propFirms.getTrackerDashboard", { accountId: account.id }],
-      queryFn: () =>
-        trpcClient.propFirms.getTrackerDashboard.query({
-          accountId: account.id,
-        }),
-      staleTime: 15_000,
-      refetchInterval: 15_000,
-      retry: false,
-    })),
+  const { data: dashboardResults = [] } = useQuery({
+    queryKey: [
+      "propFirms.getTrackerDashboards",
+      propAccounts.map((account) => account.id),
+    ],
+    queryFn: () =>
+      trpcClient.propFirms.getTrackerDashboards.query({
+        accountIds: propAccounts.map((account) => account.id),
+      }),
+    enabled: propAccounts.length > 0,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
+    retry: false,
   });
 
   const trackedAccounts = useMemo(
@@ -553,10 +555,10 @@ export default function PropTrackerIndexPage() {
       propAccounts
         .map((account, index) => ({
           account,
-          dashboard: dashboardQueries[index]?.data,
+          dashboard: dashboardResults[index],
         }))
         .filter((item) => Boolean(item.dashboard)),
-    [dashboardQueries, propAccounts]
+    [dashboardResults, propAccounts]
   );
 
   const dashboardByAccountId = useMemo(

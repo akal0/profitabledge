@@ -37,8 +37,6 @@ function getCandidateBases(): string[] {
 
 const DEFAULT_QUERY_STALE_TIME = 10_000;
 const DEFAULT_QUERY_GC_TIME = 30 * 60_000;
-const NOTIFICATIONS_LIST_QUERY_KEY_PREFIX = [["notifications", "list"]];
-
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -69,12 +67,6 @@ export const queryClient = new QueryClient({
     },
   }),
   mutationCache: new MutationCache({
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: NOTIFICATIONS_LIST_QUERY_KEY_PREFIX,
-        refetchType: "active",
-      });
-    },
     onError: (error) => {
       showAIErrorToast(error);
     },
@@ -174,6 +166,27 @@ queryClient.setQueryDefaults(
   {
     staleTime: 60_000,
     gcTime: 15 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.notifications.list.queryOptions({ limit: 25 }).queryKey,
+  {
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.notifications.unreadSummary.queryOptions().queryKey,
+  {
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
+  }
+);
+queryClient.setQueryDefaults(
+  trpcOptions.rules.getWorkspace.queryOptions({ accountId: "__defaults__" }).queryKey,
+  {
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
   }
 );
 queryClient.setQueryDefaults(trpcOptions.views.list.queryOptions().queryKey, {

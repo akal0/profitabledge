@@ -250,9 +250,27 @@ export const connectionsRouter = router({
     const rows = await db.query.platformConnection.findMany({
       where: eq(platformConnection.userId, ctx.session.user.id),
       orderBy: desc(platformConnection.createdAt),
+      columns: {
+        id: true,
+        userId: true,
+        accountId: true,
+        provider: true,
+        displayName: true,
+        meta: true,
+        status: true,
+        lastError: true,
+        lastSyncAttemptAt: true,
+        lastSyncSuccessAt: true,
+        lastSyncedTradeCount: true,
+        syncCursor: true,
+        syncIntervalMinutes: true,
+        tokenExpiresAt: true,
+        isPaused: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
-    // Strip encrypted credentials from response
-    return rows.map(({ encryptedCredentials: _, credentialIv: __, ...safe }) => ({
+    return rows.map((safe) => ({
       ...safe,
       meta: sanitizeConnectionMeta(
         safe.meta && typeof safe.meta === "object"
@@ -266,6 +284,14 @@ export const connectionsRouter = router({
     const rows = await db.query.platformConnection.findMany({
       where: eq(platformConnection.userId, ctx.session.user.id),
       orderBy: desc(platformConnection.updatedAt),
+      columns: {
+        id: true,
+        provider: true,
+        status: true,
+        lastSyncSuccessAt: true,
+        syncIntervalMinutes: true,
+        isPaused: true,
+      },
     });
     const scheduledConnections = rows.filter(
       (connection) =>
@@ -329,6 +355,25 @@ export const connectionsRouter = router({
     const allConnections = await db.query.platformConnection.findMany({
       where: eq(platformConnection.userId, ctx.session.user.id),
       orderBy: desc(platformConnection.createdAt),
+      columns: {
+        id: true,
+        userId: true,
+        accountId: true,
+        provider: true,
+        displayName: true,
+        meta: true,
+        status: true,
+        lastError: true,
+        lastSyncAttemptAt: true,
+        lastSyncSuccessAt: true,
+        lastSyncedTradeCount: true,
+        syncCursor: true,
+        syncIntervalMinutes: true,
+        tokenExpiresAt: true,
+        isPaused: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
     const terminalConnections = allConnections.filter((connection) =>
       isMtTerminalProvider(connection.provider)
@@ -393,9 +438,15 @@ export const connectionsRouter = router({
     const dealRows =
       terminalConnections.length > 0
         ? await db.query.brokerDealEvent.findMany({
-            where: inArray(
-              brokerDealEvent.connectionId,
-              terminalConnections.map((connection) => connection.id)
+            where: and(
+              inArray(
+                brokerDealEvent.connectionId,
+                terminalConnections.map((connection) => connection.id)
+              ),
+              gte(
+                brokerDealEvent.eventTime,
+                new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+              )
             ),
             columns: {
               connectionId: true,
@@ -411,9 +462,15 @@ export const connectionsRouter = router({
     const orderRows =
       terminalConnections.length > 0
         ? await db.query.brokerOrderEvent.findMany({
-            where: inArray(
-              brokerOrderEvent.connectionId,
-              terminalConnections.map((connection) => connection.id)
+            where: and(
+              inArray(
+                brokerOrderEvent.connectionId,
+                terminalConnections.map((connection) => connection.id)
+              ),
+              gte(
+                brokerOrderEvent.eventTime,
+                new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+              )
             ),
             columns: {
               connectionId: true,

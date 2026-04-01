@@ -35,6 +35,7 @@ import type {
 import { entryTypeConfig } from "@/components/journal/list/list-types";
 import { trpc } from "@/utils/trpc";
 import { FolderPlus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 type EntryTypeFilter =
   | "general"
@@ -71,18 +72,26 @@ export function JournalList({
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [folderTitle, setFolderTitle] = useState("");
   const [renameFolderOpen, setRenameFolderOpen] = useState(false);
-  const [folderToRename, setFolderToRename] = useState<JournalListEntry | null>(null);
+  const [folderToRename, setFolderToRename] = useState<JournalListEntry | null>(
+    null
+  );
   const [renameFolderTitle, setRenameFolderTitle] = useState("");
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>([]);
   const [draggingEntryIds, setDraggingEntryIds] = useState<string[]>([]);
-  const [activeDropFolderId, setActiveDropFolderId] = useState<string | null>(null);
+  const [activeDropFolderId, setActiveDropFolderId] = useState<string | null>(
+    null
+  );
 
   const debouncedSetSearch = useDebouncedCallback((value: string) => {
     setSearch(value);
   }, 250);
 
-  const { data: entriesData, isLoading, refetch } = trpc.journal.list.useQuery({
+  const {
+    data: entriesData,
+    isLoading,
+    refetch,
+  } = trpc.journal.list.useQuery({
     limit: 50,
     accountId,
     includeShared: true,
@@ -117,6 +126,7 @@ export function JournalList({
     onSuccess: () => {
       setCreateFolderOpen(false);
       setFolderTitle("");
+      toast.success("Folder successfully created.");
       void refetch();
       void refetchFolders();
     },
@@ -156,7 +166,8 @@ export function JournalList({
     title: folder.title,
   }));
   const currentFolderName = currentFolderId
-    ? foldersData?.find((folder) => folder.id === currentFolderId)?.title ?? null
+    ? foldersData?.find((folder) => folder.id === currentFolderId)?.title ??
+      null
     : null;
 
   const dateRangeLabelMap: Record<DateRangeFilter, string> = {
@@ -252,16 +263,24 @@ export function JournalList({
     updateEntry.mutate({ id, folderId });
   };
 
-  const handleMoveEntriesToFolder = (ids: string[], folderId: string | null) => {
+  const handleMoveEntriesToFolder = (
+    ids: string[],
+    folderId: string | null
+  ) => {
     if (ids.length === 0) return;
     setDraggingEntryIds([]);
     setActiveDropFolderId(null);
     setSelectedEntryIds([]);
-    void Promise.all(ids.map((id) => updateEntry.mutateAsync({ id, folderId })));
+    void Promise.all(
+      ids.map((id) => updateEntry.mutateAsync({ id, folderId }))
+    );
   };
 
   const handleCreateFolder = () => {
-    createFolder.mutate({ title: folderTitle.trim() || "Untitled folder" });
+    createFolder.mutate({
+      title: folderTitle.trim() || "Untitled folder",
+      accountId,
+    });
   };
 
   const handleOpenRenameFolder = (entry: JournalListEntry) => {
@@ -314,14 +333,18 @@ export function JournalList({
             setSelectedEntryIds([]);
           }
         }}
-        onSelectAll={() => setSelectedEntryIds(selectableEntries.map((entry) => entry.id))}
+        onSelectAll={() =>
+          setSelectedEntryIds(selectableEntries.map((entry) => entry.id))
+        }
         onClearSelected={() => setSelectedEntryIds([])}
         onMoveSelectedToFolder={(folderId) =>
           handleMoveEntriesToFolder(selectedEntryIds, folderId)
         }
         onArchiveSelected={() => {
           void Promise.all(
-            selectedEntryIds.map((id) => updateEntry.mutateAsync({ id, isArchived: true }))
+            selectedEntryIds.map((id) =>
+              updateEntry.mutateAsync({ id, isArchived: true })
+            )
           );
           setSelectedEntryIds([]);
         }}
@@ -330,7 +353,8 @@ export function JournalList({
           setDeleteConfirmIds(selectedEntryIds);
           setDeleteConfirmTitle(
             selectedEntryIds.length === 1
-              ? entries.find((entry) => entry.id === selectedEntryIds[0])?.title ?? "this entry"
+              ? entries.find((entry) => entry.id === selectedEntryIds[0])
+                  ?.title ?? "this entry"
               : `${selectedEntryIds.length} selected entries`
           );
         }}
@@ -398,21 +422,22 @@ export function JournalList({
         open={deleteConfirmIds.length > 0}
         onOpenChange={(open) => !open && setDeleteConfirmIds([])}
       >
-        <AlertDialogContent
-          className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md [&>button]:hidden"
-        >
-          <div className="flex flex-col gap-0 overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+        <AlertDialogContent className="flex flex-col gap-0 overflow-hidden rounded-md ring ring-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-md [&>button]:hidden">
+          <div className="flex flex-col gap-0 overflow-hidden rounded-sm ring ring-white/5 bg-sidebar-accent/80">
             {/* Header */}
             <div className="flex items-start gap-3 px-5 py-4">
-              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md ring ring-white/5 bg-sidebar-accent">
                 <Trash2 className="h-3.5 w-3.5 text-rose-400" />
               </div>
               <div className="min-w-0">
                 <AlertDialogTitle className="text-sm font-medium text-white">
-                  {deleteConfirmIds.length > 1 ? "Delete entries?" : "Delete entry?"}
+                  {deleteConfirmIds.length > 1
+                    ? "Delete entries?"
+                    : "Delete entry?"}
                 </AlertDialogTitle>
                 <AlertDialogDescription className="mt-1 text-xs leading-relaxed text-white/40">
-                  Are you sure you want to delete "{deleteConfirmTitle}"? This action cannot be undone.
+                  Are you sure you want to delete "{deleteConfirmTitle}"? This
+                  action cannot be undone.
                 </AlertDialogDescription>
               </div>
             </div>
@@ -420,12 +445,12 @@ export function JournalList({
 
             {/* Footer */}
             <AlertDialogFooter className="flex items-center justify-end gap-2 px-5 py-3">
-              <AlertDialogCancel className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none">
+              <AlertDialogCancel className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white/70 transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none">
                 Cancel
               </AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleConfirmDelete}
-                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm border border-red-500/20 bg-red-500/12 px-3 py-2 h-9 text-xs text-red-200 transition-all duration-250 active:scale-95 hover:bg-red-500/18 shadow-none"
+                className="cursor-pointer flex items-center justify-center gap-2 rounded-sm ring ring-red-500/20 bg-red-500/12 px-3 py-2 h-9 text-xs text-red-200 transition-all duration-250 active:scale-95 hover:bg-red-500/18 shadow-none"
               >
                 Delete
               </AlertDialogAction>
@@ -442,14 +467,15 @@ export function JournalList({
       />
 
       <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
-        <DialogContent className="border-white/10 bg-sidebar text-white sm:max-w-md">
+        <DialogContent className="ring-white/10 bg-sidebar text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <FolderPlus className="size-4 text-teal-300" />
               New folder
             </DialogTitle>
             <DialogDescription className="text-white/45">
-              Create a journal folder now and add entries into it whenever you want.
+              Create a journal folder now and add entries into it whenever you
+              want.
             </DialogDescription>
           </DialogHeader>
 
@@ -459,7 +485,7 @@ export function JournalList({
               value={folderTitle}
               onChange={(event) => setFolderTitle(event.target.value)}
               placeholder="Weekly reviews"
-              className="border-white/10 bg-sidebar-accent text-white placeholder:text-white/25"
+              className="ring-white/10 bg-sidebar-accent text-white placeholder:text-white/25 mt-2"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -472,13 +498,13 @@ export function JournalList({
           <DialogFooter>
             <button
               onClick={() => setCreateFolderOpen(false)}
-              className="cursor-pointer rounded-sm border border-white/10 bg-sidebar px-3 py-2 text-xs text-white/70 transition hover:bg-sidebar-accent"
+              className="cursor-pointer rounded-sm ring ring-white/10 bg-sidebar px-3 py-2 text-xs text-white/70 transition hover:bg-sidebar-accent"
             >
               Cancel
             </button>
             <button
               onClick={handleCreateFolder}
-              className="cursor-pointer rounded-sm border border-teal-400/20 bg-teal-500/15 px-3 py-2 text-xs text-teal-100 transition hover:bg-teal-500/20"
+              className="cursor-pointer rounded-sm ring ring-teal-400/20 bg-teal-500/15 px-3 py-2 text-xs text-teal-100 transition hover:bg-teal-500/20"
             >
               Create folder
             </button>
@@ -487,7 +513,7 @@ export function JournalList({
       </Dialog>
 
       <Dialog open={renameFolderOpen} onOpenChange={setRenameFolderOpen}>
-        <DialogContent className="border-white/10 bg-sidebar text-white sm:max-w-md">
+        <DialogContent className="ring-white/10 bg-sidebar text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">Rename folder</DialogTitle>
             <DialogDescription className="text-white/45">
@@ -496,12 +522,12 @@ export function JournalList({
           </DialogHeader>
 
           <div className="space-y-2">
-            <label className="text-xs text-white/55">Folder name</label>
+            <label className="text-xs text-white/55 mb-2">Folder name</label>
             <Input
               value={renameFolderTitle}
               onChange={(event) => setRenameFolderTitle(event.target.value)}
               placeholder="Weekly reviews"
-              className="border-white/10 bg-sidebar-accent text-white placeholder:text-white/25"
+              className="ring-white/10 bg-sidebar-accent text-white placeholder:text-white/25"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -514,20 +540,19 @@ export function JournalList({
           <DialogFooter>
             <button
               onClick={() => setRenameFolderOpen(false)}
-              className="cursor-pointer rounded-sm border border-white/10 bg-sidebar px-3 py-2 text-xs text-white/70 transition hover:bg-sidebar-accent"
+              className="cursor-pointer rounded-sm ring ring-white/10 bg-sidebar px-3 py-2 text-xs text-white/70 transition hover:bg-sidebar-accent"
             >
               Cancel
             </button>
             <button
               onClick={handleRenameFolder}
-              className="cursor-pointer rounded-sm border border-teal-400/20 bg-teal-500/15 px-3 py-2 text-xs text-teal-100 transition hover:bg-teal-500/20"
+              className="cursor-pointer rounded-sm ring ring-teal-400/20 bg-teal-500/15 px-3 py-2 text-xs text-teal-100 transition hover:bg-teal-500/20"
             >
               Save
             </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

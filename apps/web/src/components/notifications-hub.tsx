@@ -756,17 +756,23 @@ export default function NotificationsHub() {
   const [open, setOpen] = useState(false);
   const [inviteActionState, setInviteActionState] =
     useState<InviteActionState>(null);
-  const inactivePollingIntervalMs = 60_000;
   const activePollingIntervalMs = 15_000;
+  const { data: unreadSummary } = trpc.notifications.unreadSummary.useQuery(
+    undefined,
+    {
+      staleTime: 30_000,
+      refetchInterval: 60_000,
+      refetchIntervalInBackground: true,
+    }
+  );
   const { data: notifications = [], isFetched: hasFetchedNotifications } =
     trpc.notifications.list.useQuery(
       { limit: 25 },
       {
-        refetchInterval: open
-          ? activePollingIntervalMs
-          : inactivePollingIntervalMs,
+        refetchInterval: open ? activePollingIntervalMs : 60_000,
         refetchIntervalInBackground: open,
         refetchOnWindowFocus: open,
+        staleTime: 30_000,
       }
     );
   type NotificationQueryItem = (typeof notifications)[number];
@@ -774,6 +780,8 @@ export default function NotificationsHub() {
   const notificationsQueryKey = trpcOptions.notifications.list.queryOptions({
     limit: 25,
   }).queryKey;
+  const unreadSummaryQueryKey =
+    trpcOptions.notifications.unreadSummary.queryOptions().queryKey;
   const markAllRead = trpc.notifications.markAllRead.useMutation({
     onSuccess: () => {
       const readAt = new Date().toISOString();
@@ -788,6 +796,9 @@ export default function NotificationsHub() {
           readAt: item.readAt ?? readAt,
         }))
       );
+      queryClient.setQueryData(unreadSummaryQueryKey, {
+        unreadCount: 0,
+      });
     },
     onSettled: () => {
       void queryClient.invalidateQueries({
@@ -812,6 +823,12 @@ export default function NotificationsHub() {
             : item
         )
       );
+      const unreadCount = current.filter(
+        (item) => !item.readAt && !readIds.has(item.id)
+      ).length;
+      queryClient.setQueryData(unreadSummaryQueryKey, {
+        unreadCount,
+      });
     },
     onSettled: () => {
       void queryClient.invalidateQueries({
@@ -872,9 +889,10 @@ export default function NotificationsHub() {
       unreadItems,
       notificationsByTab: grouped,
       unreadCounts,
-      unreadCount: unreadItems.length,
+      unreadCount:
+        unreadSummary?.unreadCount ?? unreadItems.length,
     };
-  }, [canUseInAppChannel, items]);
+  }, [canUseInAppChannel, items, unreadSummary?.unreadCount]);
 
   const handleNavigate = (url: string) => {
     setOpen(false);

@@ -46,11 +46,16 @@ function SessionQueryBoundary({ children }: { children: React.ReactNode }) {
     }
 
     if (previousUserId !== currentUserId) {
-      void queryClient.cancelQueries(undefined, { silent: true }).then(() => {
-        queryClient.removeQueries();
-        queryClient.getMutationCache().clear();
-        useAccountStore.getState().setSelectedAccountId(undefined);
-      });
+      void queryClient
+        .cancelQueries(undefined, { silent: true })
+        .catch(() => {
+          // Ignore query cancellation errors while switching auth state.
+        })
+        .finally(() => {
+          queryClient.removeQueries();
+          queryClient.getMutationCache().clear();
+          useAccountStore.getState().setSelectedAccountId(undefined);
+        });
     }
 
     previousUserIdRef.current = currentUserId;

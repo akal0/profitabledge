@@ -143,6 +143,7 @@ export function GrowthAdminDashboard() {
     >
   >({});
   const [selectedAffiliateUserId, setSelectedAffiliateUserId] = useState("");
+  const [grantAffiliateIdentifier, setGrantAffiliateIdentifier] = useState("");
   const [isAffiliateSettingsDialogOpen, setAffiliateSettingsDialogOpen] =
     useState(false);
   const billingV2 = getBillingV2Options();
@@ -178,6 +179,23 @@ export function GrowthAdminDashboard() {
     onError: (error) => {
       toast.error(
         error instanceof Error ? error.message : "Unable to reject affiliate"
+      );
+    },
+  });
+  const grantAffiliate = useMutation({
+    ...trpcOptions.billing.grantAffiliate.mutationOptions(),
+    onSuccess: (result) => {
+      setGrantAffiliateIdentifier("");
+      void affiliateApplicationsQuery.refetch();
+      void affiliatePayoutQueueQuery.refetch();
+      void billingStateQuery.refetch();
+      toast.success(
+        `Affiliate access granted to ${result.user.name || result.user.email}.`
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to grant affiliate access"
       );
     },
   });
@@ -1395,6 +1413,49 @@ export function GrowthAdminDashboard() {
           <Badge className="rounded-full bg-white/5 text-[10px] text-white/65 ring ring-white/10">
             {affiliateApplications.length} applications
           </Badge>
+        </div>
+
+        <div className="rounded-lg border border-white/5 bg-sidebar p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p className="text-sm font-medium text-white">Grant affiliate access</p>
+              <p className="mt-1 text-sm text-white/45">
+                Approve someone directly by email or username without an application.
+              </p>
+            </div>
+
+            <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
+              <div className="w-full sm:min-w-[320px] lg:w-[360px]">
+                <Label className="text-[11px] text-white/35">Email or username</Label>
+                <Input
+                  value={grantAffiliateIdentifier}
+                  onChange={(event) => setGrantAffiliateIdentifier(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && grantAffiliateIdentifier.trim()) {
+                      event.preventDefault();
+                      grantAffiliate.mutate({
+                        identifier: grantAffiliateIdentifier.trim(),
+                      });
+                    }
+                  }}
+                  placeholder="name@example.com or @username"
+                  className="mt-1 h-10 bg-sidebar-accent text-xs ring-white/10"
+                />
+              </div>
+
+              <Button
+                onClick={() =>
+                  grantAffiliate.mutate({
+                    identifier: grantAffiliateIdentifier.trim(),
+                  })
+                }
+                disabled={grantAffiliate.isPending || !grantAffiliateIdentifier.trim()}
+                className="h-10 rounded-sm bg-emerald-600 px-4 text-xs text-white hover:brightness-110"
+              >
+                {grantAffiliate.isPending ? "Granting..." : "Grant access"}
+              </Button>
+            </div>
+          </div>
         </div>
 
         {affiliateApplications.length ? (

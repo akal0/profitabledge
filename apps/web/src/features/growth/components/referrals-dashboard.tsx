@@ -19,7 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   GoalContentSeparator,
   GoalPanel,
@@ -191,7 +195,7 @@ function StatCard({
   icon: LucideIcon;
 }) {
   return (
-    <GoalSurface>
+    <GoalSurface className="w-full">
       <div className="p-3.5">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-amber-300" />
@@ -331,16 +335,21 @@ export function ReferralsDashboard() {
 
   return (
     <main className="space-y-6 p-6 py-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-4 xl:grid-cols-5">
         {statCards.map((stat) => (
-          <StatCard
+          <div
             key={stat.label}
-            label={stat.label}
-            value={stat.value}
-            icon={stat.icon}
-          />
+            className="flex h-full md:col-span-1 xl:col-span-1"
+          >
+            <StatCard label={stat.label} value={stat.value} icon={stat.icon} />
+          </div>
         ))}
-        <GoalPanel icon={Gift} title="Referral share link" bodyClassName="flex flex-col">
+        <GoalPanel
+          icon={Gift}
+          title="Referral share link"
+          bodyClassName="flex flex-col"
+          className="w-full md:col-span-2 xl:col-span-3"
+        >
           <div className="mt-auto flex flex-col gap-2 lg:flex-row lg:items-end">
             <Input
               readOnly
@@ -463,9 +472,7 @@ export function ReferralsDashboard() {
                               "text-[10px] font-medium leading-tight",
                               isAchieved && "text-amber-400",
                               isCurrentTarget && "text-teal-400",
-                              !isAchieved &&
-                                !isCurrentTarget &&
-                                "text-white/25"
+                              !isAchieved && !isCurrentTarget && "text-white/25"
                             )}
                           >
                             {milestone.title}
@@ -475,9 +482,7 @@ export function ReferralsDashboard() {
                               "mt-0.5 text-[10px] tabular-nums",
                               isAchieved && "text-amber-400/50",
                               isCurrentTarget && "text-teal-400/50",
-                              !isAchieved &&
-                                !isCurrentTarget &&
-                                "text-white/20"
+                              !isAchieved && !isCurrentTarget && "text-white/20"
                             )}
                           >
                             {milestone.cadence}
@@ -487,9 +492,7 @@ export function ReferralsDashboard() {
                               "mt-0.5 text-[9px]",
                               isAchieved && "text-amber-400/60",
                               isCurrentTarget && "text-teal-400/70",
-                              !isAchieved &&
-                                !isCurrentTarget &&
-                                "text-white/15"
+                              !isAchieved && !isCurrentTarget && "text-white/15"
                             )}
                           >
                             {milestone.statusLabel}
@@ -532,7 +535,7 @@ export function ReferralsDashboard() {
       </section>
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent">
               <Gift className="size-4 text-amber-300" />
@@ -554,19 +557,16 @@ export function ReferralsDashboard() {
               <table className="min-w-[980px] w-full text-left">
                 <thead className="bg-sidebar">
                   <tr className="border-b border-white/5">
-                    {[
-                      "Reward",
-                      "Threshold",
-                      "Status",
-                      "Granted",
-                    ].map((column) => (
-                      <th
-                        key={column}
-                        className="px-4 py-3 text-left text-xs font-medium text-white/55"
-                      >
-                        {column}
-                      </th>
-                    ))}
+                    {["Reward", "Threshold", "Status", "Granted"].map(
+                      (column) => (
+                        <th
+                          key={column}
+                          className="px-4 py-3 text-left text-xs font-medium text-white/55"
+                        >
+                          {column}
+                        </th>
+                      )
+                    )}
                   </tr>
                 </thead>
                 <tbody className="bg-sidebar-accent/60">
@@ -577,7 +577,10 @@ export function ReferralsDashboard() {
                     >
                       <td className="px-4 py-3 text-left align-top">
                         <p className="text-xs font-medium text-white">
-                          {formatRewardType(grant.rewardType, grant.targetPlanKey)}
+                          {formatRewardType(
+                            grant.rewardType,
+                            grant.targetPlanKey
+                          )}
                         </p>
                       </td>
                       <td className="px-4 py-3 text-left align-top text-xs text-white/75">
@@ -607,7 +610,7 @@ export function ReferralsDashboard() {
       </section>
 
       <section className="space-y-3 pt-2">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-sm border border-white/5 bg-sidebar-accent">
               <Users className="size-4 text-amber-300" />
@@ -716,7 +719,9 @@ export function ReferralsDashboard() {
                             className="text-xs text-white/55"
                             title={conversion.paidSubscriptionId}
                           >
-                            {formatCompactReference(conversion.paidSubscriptionId)}
+                            {formatCompactReference(
+                              conversion.paidSubscriptionId
+                            )}
                           </p>
                         ) : (
                           <span className="text-xs text-white/30">—</span>

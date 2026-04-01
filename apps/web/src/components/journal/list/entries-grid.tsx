@@ -7,6 +7,7 @@ import type { JournalListEntry } from "@/components/journal/list/list-types";
 export function EntriesGrid({
   entries,
   viewMode,
+  layout = "default",
   entryTypeLabels,
   availableFolders,
   onSelect,
@@ -28,6 +29,7 @@ export function EntriesGrid({
 }: {
   entries: JournalListEntry[];
   viewMode: "grid" | "list";
+  layout?: "default" | "compact-folders";
   entryTypeLabels: Record<string, string>;
   availableFolders: Array<{ id: string; title: string }>;
   onSelect: (entry: JournalListEntry) => void;
@@ -60,6 +62,44 @@ export function EntriesGrid({
             onDelete={() => onDelete(entry.id, entry.title)}
             onDuplicate={() => onDuplicate(entry.id)}
             onTogglePin={() => onTogglePin(entry.id, entry.isPinned)}
+            onMoveToFolder={(folderId) => onMoveToFolder(entry.id, folderId)}
+            onRename={() => onRename(entry)}
+            onToggleSelected={() => onToggleSelected(entry)}
+            selectionMode={selectionMode}
+            isSelected={selectedEntryIds.includes(entry.id)}
+            onDragStart={() => onDragEntryStart?.(entry)}
+            onDragEnd={onDragEntryEnd}
+            onDragTarget={() => {
+              if (entry.itemType === "folder") {
+                onDragOverFolder?.(entry.id);
+              }
+            }}
+            onDropEntry={
+              draggingEntryIds?.length && entry.itemType === "folder"
+                ? () => onMoveEntriesToFolder(draggingEntryIds, entry.id)
+                : undefined
+            }
+            isDropTarget={activeDropFolderId === entry.id}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (layout === "compact-folders") {
+    return (
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-4 sm:gap-x-4 sm:gap-y-5">
+        {entries.map((entry) => (
+          <EntryCard
+            key={entry.id}
+            entry={entry}
+            entryTypeLabels={entryTypeLabels}
+            availableFolders={availableFolders}
+            onSelect={() => onSelect(entry)}
+            onDelete={() => onDelete(entry.id, entry.title)}
+            onDuplicate={() => onDuplicate(entry.id)}
+            onTogglePin={() => onTogglePin(entry.id, entry.isPinned)}
+            onArchive={() => onArchive(entry.id)}
             onMoveToFolder={(folderId) => onMoveToFolder(entry.id, folderId)}
             onRename={() => onRename(entry)}
             onToggleSelected={() => onToggleSelected(entry)}

@@ -10,7 +10,7 @@ import {
   propFirm,
   trade,
 } from "../db/schema/trading";
-import { eq, and, desc, gte, sql } from "drizzle-orm";
+import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
 import {
   detectPropFirm,
   getAccessiblePropFirms,
@@ -226,6 +226,134 @@ const customFundedPhaseSchema = z.object({
   minTradingDays: z.number().int().min(0).default(0),
 });
 
+async function buildTrackerDashboardForUser(userId: string, accountId: string) {
+  const account = await db.query.tradingAccount.findFirst({
+    where: and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)),
+  });
+
+  if (!account || !account.isPropAccount) {
+    throw new Error("Account not found or is not a prop account");
+  }
+
+  const currentPropFirm = account.propFirmId
+    ? await getPropFirmById(account.propFirmId, userId)
+    : null;
+  const challengeRule = account.propChallengeRuleId
+    ? await getChallengeRuleById(account.propChallengeRuleId, userId)
+    : null;
+
+  const ruleCheck =
+    (await syncPropAccountState(accountId)) ?? (await checkPropRules(accountId));
+  const challengeLineage = await getPropChallengeLineageForAccount(accountId);
+
+  const alerts = await db.query.propAlert.findMany({
+    where: eq(propAlert.accountId, accountId),
+    orderBy: desc(propAlert.createdAt),
+    limit: 20,
+  });
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const snapshots = await db.query.propDailySnapshot.findMany({
+    where: and(
+      eq(propDailySnapshot.accountId, accountId),
+      gte(propDailySnapshot.date, thirtyDaysAgo.toISOString().split("T")[0])
+    ),
+    orderBy: desc(propDailySnapshot.date),
+  });
+
+  const phases = (challengeRule?.phases as any[]) || [];
+  const currentPhase =
+    phases.find((phase: any) => phase.order === account.propCurrentPhase) ||
+    phases[0] ||
+    null;
+  const targetPct = toNumber(currentPhase?.profitTarget);
+  const dailyLossLimit = toNumber(currentPhase?.dailyLossLimit);
+  const maxLossLimit = toNumber(currentPhase?.maxLoss);
+  const targetRemainingPct = Math.max(
+    0,
+    targetPct - toNumber(ruleCheck.metrics.currentProfitPercent)
+  );
+  const dailyHeadroomPct = Math.max(
+    0,
+    dailyLossLimit - toNumber(ruleCheck.metrics.dailyDrawdownPercent)
+  );
+  const maxHeadroomPct = Math.max(
+    0,
+    maxLossLimit - toNumber(ruleCheck.metrics.maxDrawdownPercent)
+  );
+  const minTradingDaysRemaining = Math.max(
+    0,
+    toNumber(currentPhase?.minTradingDays) - toNumber(ruleCheck.metrics.tradingDays)
+  );
+  const requiredDailyPacePct =
+    ruleCheck.metrics.daysRemaining && ruleCheck.metrics.daysRemaining > 0
+      ? targetRemainingPct / ruleCheck.metrics.daysRemaining
+      : null;
+  const headroomFloor = Math.min(
+    dailyLossLimit > 0 ? (dailyHeadroomPct / dailyLossLimit) * 100 : 100,
+    maxLossLimit > 0 ? (maxHeadroomPct / maxLossLimit) * 100 : 100
+  );
+  const survivalState =
+    ruleCheck.alerts.some((alert) => alert.type === "breach") ||
+    headroomFloor <= 0
+      ? "critical"
+      : headroomFloor <= 20
+      ? "fragile"
+      : headroomFloor <= 40
+      ? "tight"
+      : "stable";
+
+  const nextActions: string[] = [];
+  if (dailyHeadroomPct <= Math.max(0.5, dailyLossLimit * 0.2)) {
+    nextActions.push(
+      "Daily loss headroom is tight. Trade smaller or stand down until the reset."
+    );
+  }
+  if (maxHeadroomPct <= Math.max(1, maxLossLimit * 0.2)) {
+    nextActions.push(
+      "Overall challenge survival is fragile. Protect the account before chasing the target."
+    );
+  }
+  if (minTradingDaysRemaining > 0) {
+    nextActions.push(
+      `You still need ${minTradingDaysRemaining} trading day(s). Do not force size just to accelerate the clock.`
+    );
+  }
+  if (requiredDailyPacePct && requiredDailyPacePct > 1.5) {
+    nextActions.push(
+      `Required pace is ${requiredDailyPacePct.toFixed(2)}% per remaining day. That is aggressive; tighten execution instead of stretching risk.`
+    );
+  }
+  if (nextActions.length === 0) {
+    nextActions.push(
+      "Risk state is controlled. Keep the same pace and avoid unnecessary size increases."
+    );
+  }
+
+  return {
+    account,
+    propFirm: currentPropFirm,
+    challengeRule,
+    currentPhase,
+    ruleCheck,
+    effectivePhaseStatus: ruleCheck.phaseStatus,
+    challengeLineage,
+    alerts,
+    snapshots,
+    commandCenter: {
+      targetRemainingPct,
+      dailyHeadroomPct,
+      maxHeadroomPct,
+      minTradingDaysRemaining,
+      requiredDailyPacePct,
+      survivalState,
+      nextActions,
+    },
+  };
+}
+
 /**
  * Prop Firms tRPC Router
  * Handles prop firm management, detection, and challenge tracking
@@ -370,34 +498,57 @@ export const propFirmsRouter = router({
       return detectPropFirm(input.broker, input.brokerServer);
     }),
 
+  getTrackerDashboards: protectedProcedure
+    .input(z.object({ accountIds: z.array(z.string()).min(1).max(20) }))
+    .query(async ({ input, ctx }) => {
+      const dashboards = await Promise.all(
+        input.accountIds.map((accountId) =>
+          buildTrackerDashboardForUser(ctx.session.user.id, accountId)
+        )
+      );
+
+      return dashboards;
+    }),
+
   /**
    * List existing challenge instances that can be continued with a new account
    */
   listContinuableChallenges: protectedProcedure.query(async ({ ctx }) => {
     const instances = await listContinuablePropChallenges(ctx.session.user.id);
-
-    return Promise.all(
-      instances.map(async (instance) => {
-        const [propFirm, challengeRule] = await Promise.all([
-          getPropFirmById(instance.propFirmId, ctx.session.user.id),
-          getChallengeRuleById(
-            instance.propChallengeRuleId,
-            ctx.session.user.id
-          ),
-        ]);
-        const phases = (challengeRule?.phases as any[]) || [];
-        const currentPhase =
-          phases.find((phase: any) => phase.order === instance.currentPhase) ||
-          null;
-
-        return {
-          ...instance,
-          propFirm,
-          challengeRule,
-          currentPhase,
-        };
-      })
+    const propFirmIds = Array.from(new Set(instances.map((instance) => instance.propFirmId)));
+    const challengeRuleIds = Array.from(
+      new Set(instances.map((instance) => instance.propChallengeRuleId))
     );
+    const [propFirms, challengeRules] = await Promise.all([
+      propFirmIds.length > 0
+        ? db.select().from(propFirm).where(inArray(propFirm.id, propFirmIds))
+        : Promise.resolve([]),
+      challengeRuleIds.length > 0
+        ? db
+            .select()
+            .from(propChallengeRule)
+            .where(inArray(propChallengeRule.id, challengeRuleIds))
+        : Promise.resolve([]),
+    ]);
+    const propFirmById = new Map(propFirms.map((row) => [row.id, row]));
+    const challengeRuleById = new Map(
+      challengeRules.map((row) => [row.id, row])
+    );
+
+    return instances.map((instance) => {
+      const currentChallengeRule =
+        challengeRuleById.get(instance.propChallengeRuleId) ?? null;
+      const phases = (currentChallengeRule?.phases as any[]) || [];
+      const currentPhase =
+        phases.find((phase: any) => phase.order === instance.currentPhase) || null;
+
+      return {
+        ...instance,
+        propFirm: propFirmById.get(instance.propFirmId) ?? null,
+        challengeRule: currentChallengeRule,
+        currentPhase,
+      };
+    });
   }),
 
   /**
@@ -483,21 +634,13 @@ export const propFirmsRouter = router({
       }
 
       if (!input.challengeInstanceId && resolvedCurrentPhase === 1) {
-        const tradeRows = await db.query.trade.findMany({
-          where: eq(trade.accountId, account.id),
-          columns: {
-            openTime: true,
-            closeTime: true,
-          },
-        });
-
-        const tradingDayKeys = new Set<string>();
-
-        for (const row of tradeRows) {
-          const sourceDate = row.closeTime || row.openTime;
-          if (!sourceDate) continue;
-          tradingDayKeys.add(sourceDate.toISOString().split("T")[0]!);
-        }
+        const [tradingDayRow] = await db
+          .select({
+            tradingDays:
+              sql<number>`count(distinct date(coalesce(${trade.closeTime}, ${trade.openTime})))::int`,
+          })
+          .from(trade)
+          .where(eq(trade.accountId, account.id));
 
         const progress = getOverallAccountProgress({
           initialBalance: account.initialBalance,
@@ -508,7 +651,7 @@ export const propFirmsRouter = router({
           phases: normalizeChallengePhases(challengeRule.phases),
           currentProfit: progress.currentProfit,
           currentProfitPercent: progress.currentProfitPercent,
-          tradingDays: tradingDayKeys.size,
+          tradingDays: Number(tradingDayRow?.tradingDays ?? 0),
         });
       }
 
@@ -620,150 +763,9 @@ export const propFirmsRouter = router({
    */
   getTrackerDashboard: protectedProcedure
     .input(z.object({ accountId: z.string() }))
-    .query(async ({ input, ctx }) => {
-      // Verify account belongs to user
-      const account = await db.query.tradingAccount.findFirst({
-        where: and(
-          eq(tradingAccount.id, input.accountId),
-          eq(tradingAccount.userId, ctx.session.user.id)
-        ),
-      });
-
-      if (!account || !account.isPropAccount) {
-        throw new Error("Account not found or is not a prop account");
-      }
-
-      // Get prop firm and challenge rules
-      const propFirm = account.propFirmId
-        ? await getPropFirmById(account.propFirmId, ctx.session.user.id)
-        : null;
-      const challengeRule = account.propChallengeRuleId
-        ? await getChallengeRuleById(
-            account.propChallengeRuleId,
-            ctx.session.user.id
-          )
-        : null;
-
-      // Check rules and get current metrics
-      const ruleCheck =
-        (await syncPropAccountState(input.accountId)) ??
-        (await checkPropRules(input.accountId));
-      const challengeLineage = await getPropChallengeLineageForAccount(
-        input.accountId
-      );
-
-      // Get recent alerts
-      const alerts = await db.query.propAlert.findMany({
-        where: eq(propAlert.accountId, input.accountId),
-        orderBy: desc(propAlert.createdAt),
-        limit: 20,
-      });
-
-      // Get daily snapshots for last 30 days
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const snapshots = await db.query.propDailySnapshot.findMany({
-        where: and(
-          eq(propDailySnapshot.accountId, input.accountId),
-          gte(propDailySnapshot.date, thirtyDaysAgo.toISOString().split("T")[0])
-        ),
-        orderBy: desc(propDailySnapshot.date),
-      });
-
-      const phases = (challengeRule?.phases as any[]) || [];
-      const currentPhase =
-        phases.find((phase: any) => phase.order === account.propCurrentPhase) ||
-        phases[0] ||
-        null;
-      const targetPct = toNumber(currentPhase?.profitTarget);
-      const dailyLossLimit = toNumber(currentPhase?.dailyLossLimit);
-      const maxLossLimit = toNumber(currentPhase?.maxLoss);
-      const targetRemainingPct = Math.max(
-        0,
-        targetPct - toNumber(ruleCheck.metrics.currentProfitPercent)
-      );
-      const dailyHeadroomPct = Math.max(
-        0,
-        dailyLossLimit - toNumber(ruleCheck.metrics.dailyDrawdownPercent)
-      );
-      const maxHeadroomPct = Math.max(
-        0,
-        maxLossLimit - toNumber(ruleCheck.metrics.maxDrawdownPercent)
-      );
-      const minTradingDaysRemaining = Math.max(
-        0,
-        toNumber(currentPhase?.minTradingDays) -
-          toNumber(ruleCheck.metrics.tradingDays)
-      );
-      const requiredDailyPacePct =
-        ruleCheck.metrics.daysRemaining && ruleCheck.metrics.daysRemaining > 0
-          ? targetRemainingPct / ruleCheck.metrics.daysRemaining
-          : null;
-      const headroomFloor = Math.min(
-        dailyLossLimit > 0 ? (dailyHeadroomPct / dailyLossLimit) * 100 : 100,
-        maxLossLimit > 0 ? (maxHeadroomPct / maxLossLimit) * 100 : 100
-      );
-      const survivalState =
-        ruleCheck.alerts.some((alert) => alert.type === "breach") ||
-        headroomFloor <= 0
-          ? "critical"
-          : headroomFloor <= 20
-          ? "fragile"
-          : headroomFloor <= 40
-          ? "tight"
-          : "stable";
-
-      const nextActions: string[] = [];
-      if (dailyHeadroomPct <= Math.max(0.5, dailyLossLimit * 0.2)) {
-        nextActions.push(
-          "Daily loss headroom is tight. Trade smaller or stand down until the reset."
-        );
-      }
-      if (maxHeadroomPct <= Math.max(1, maxLossLimit * 0.2)) {
-        nextActions.push(
-          "Overall challenge survival is fragile. Protect the account before chasing the target."
-        );
-      }
-      if (minTradingDaysRemaining > 0) {
-        nextActions.push(
-          `You still need ${minTradingDaysRemaining} trading day(s). Do not force size just to accelerate the clock.`
-        );
-      }
-      if (requiredDailyPacePct && requiredDailyPacePct > 1.5) {
-        nextActions.push(
-          `Required pace is ${requiredDailyPacePct.toFixed(
-            2
-          )}% per remaining day. That is aggressive; tighten execution instead of stretching risk.`
-        );
-      }
-      if (nextActions.length === 0) {
-        nextActions.push(
-          "Risk state is controlled. Keep the same pace and avoid unnecessary size increases."
-        );
-      }
-
-      return {
-        account,
-        propFirm,
-        challengeRule,
-        currentPhase,
-        ruleCheck,
-        effectivePhaseStatus: ruleCheck.phaseStatus,
-        challengeLineage,
-        alerts,
-        snapshots,
-        commandCenter: {
-          targetRemainingPct,
-          dailyHeadroomPct,
-          maxHeadroomPct,
-          minTradingDaysRemaining,
-          requiredDailyPacePct,
-          survivalState,
-          nextActions,
-        },
-      };
-    }),
+    .query(async ({ input, ctx }) =>
+      buildTrackerDashboardForUser(ctx.session.user.id, input.accountId)
+    ),
 
   /**
    * Get alerts for an account

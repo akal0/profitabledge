@@ -117,6 +117,10 @@ export const brokerDealEvent = pgTable(
     connectionIdx: index("idx_broker_deal_event_connection").on(
       table.connectionId
     ),
+    connectionEventIdx: index("idx_broker_deal_event_connection_time").on(
+      table.connectionId,
+      table.eventTime
+    ),
     positionIdx: index("idx_broker_deal_event_position").on(
       table.accountId,
       table.positionId
@@ -166,6 +170,10 @@ export const brokerOrderEvent = pgTable(
     ),
     connectionIdx: index("idx_broker_order_event_connection").on(
       table.connectionId
+    ),
+    connectionEventIdx: index("idx_broker_order_event_connection_time").on(
+      table.connectionId,
+      table.eventTime
     ),
     remoteUniqueIdx: uniqueIndex("idx_broker_order_event_remote").on(
       table.platform,

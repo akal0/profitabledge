@@ -84,7 +84,22 @@ export function JournalSharesTab({ accountId }: { accountId?: string }) {
   });
   const { data: ownerShares = [] } =
     trpc.journal.shares.listOwnerShares.useQuery(undefined, {
-      refetchInterval: 15_000,
+      refetchInterval: (query): number | false => {
+        const shares =
+          (query.state.data as
+            | Array<{
+                pendingInviteCount?: number;
+                pendingRequestCount?: number;
+              }>
+            | undefined) ?? [];
+        return shares.some(
+          (share) =>
+            (share.pendingInviteCount ?? 0) > 0 ||
+            (share.pendingRequestCount ?? 0) > 0
+        )
+          ? 15_000
+          : false;
+      },
     });
   const { data: ownerShareDetail } = trpc.journal.shares.getOwnerShare.useQuery(
     { shareId: selectedShareId! },

@@ -134,14 +134,15 @@ export function JournalListContent({
         <>
           {folders.length > 0 ? (
             <div className="mb-6">
-              <div className="mb-3 flex items-center gap-2">
+              {/*<div className="mb-3 flex items-center gap-2">
                 <span className="text-sm font-medium text-white/60">
                   Folders
                 </span>
-              </div>
+              </div>*/}
               <EntriesGrid
                 entries={folders}
                 viewMode={viewMode}
+                layout="compact-folders"
                 entryTypeLabels={entryTypeLabels}
                 availableFolders={availableFolders}
                 onSelect={onSelectEntry}

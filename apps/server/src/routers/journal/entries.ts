@@ -20,7 +20,7 @@ import {
   recordAppEvent,
 } from '../../lib/ops/event-log';
 import { protectedProcedure } from '../../lib/trpc';
-import { isAllAccountsScope } from '../../lib/account-scope';
+import { isAllAccountsScope, resolveScopedAccountIds } from '../../lib/account-scope';
 import {
   calculateWordCount,
   getJournalAccountScopeCondition,
@@ -215,11 +215,11 @@ export const journalEntryProcedures = {
         conditions.push(eq(journalEntry.tradePhase, tradePhase));
       }
 
-      if (accountId && !isAllAccountsScope(accountId)) {
-        const { condition: accountScopeCondition, isEmpty } = await getJournalAccountScopeCondition(
-          ctx.session.user.id,
-          accountId
-        );
+        if (accountId && !isAllAccountsScope(accountId)) {
+          const { condition: accountScopeCondition, isEmpty } = await getJournalAccountScopeCondition(
+            ctx.session.user.id,
+            accountId
+          );
 
         if (isEmpty) {
           return {
@@ -228,10 +228,10 @@ export const journalEntryProcedures = {
           };
         }
 
-        if (accountScopeCondition) {
-          conditions.push(accountScopeCondition);
+          if (accountScopeCondition) {
+            conditions.push(accountScopeCondition);
+          }
         }
-      }
 
       if (tags && tags.length > 0) {
         conditions.push(
@@ -667,7 +667,27 @@ export const journalEntryProcedures = {
         })
         .optional()
     )
-    .query(async ({ ctx }) => {
+    .query(async ({ ctx, input }) => {
+      const { condition: accountScopeCondition, isEmpty } = await getJournalAccountScopeCondition(
+        ctx.session.user.id,
+        input?.accountId
+      );
+
+      if (isEmpty) {
+        return [];
+      }
+
+      const conditions = [
+        eq(journalEntry.userId, ctx.session.user.id),
+        eq(journalEntry.itemType, "folder"),
+        eq(journalEntry.isArchived, false),
+        isNull(journalEntry.folderId),
+      ];
+
+      if (accountScopeCondition) {
+        conditions.push(accountScopeCondition);
+      }
+
       const folders = await db
         .select({
           id: journalEntry.id,
@@ -675,14 +695,7 @@ export const journalEntryProcedures = {
           updatedAt: journalEntry.updatedAt,
         })
         .from(journalEntry)
-        .where(
-          and(
-            eq(journalEntry.userId, ctx.session.user.id),
-            eq(journalEntry.itemType, "folder"),
-            eq(journalEntry.isArchived, false),
-            isNull(journalEntry.folderId)
-          )
-        )
+        .where(and(...conditions))
         .orderBy(asc(journalEntry.title));
 
       return folders;
@@ -692,9 +705,15 @@ export const journalEntryProcedures = {
     .input(
       z.object({
         title: z.string().trim().min(1).max(120),
+        accountId: z.string().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      const scopedAccountIds =
+        input.accountId && !isAllAccountsScope(input.accountId)
+          ? await resolveScopedAccountIds(ctx.session.user.id, input.accountId)
+          : [];
+
       const [folder] = await db
         .insert(journalEntry)
         .values({
@@ -703,6 +722,7 @@ export const journalEntryProcedures = {
           folderId: null,
           title: input.title,
           content: [],
+          accountIds: scopedAccountIds,
           entryType: "general",
           tags: [],
           wordCount: 0,

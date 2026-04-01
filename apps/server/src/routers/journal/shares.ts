@@ -22,7 +22,9 @@ import {
   sendJournalShareApprovedEmail,
   sendJournalShareInviteEmail,
 } from "../../lib/journal-share-email";
-import { getEffectiveBillingState } from "../../lib/billing/growth";
+import {
+  getEffectiveBillingPlanKeys,
+} from "../../lib/billing/growth";
 import { createNotification } from "../../lib/notifications";
 import { protectedProcedure, router } from "../../lib/trpc";
 
@@ -735,52 +737,82 @@ export const journalSharesRouter = router({
       .where(eq(journalShare.ownerUserId, ctx.session.user.id))
       .orderBy(desc(journalShare.createdAt));
 
-    return Promise.all(
-      shares.map(async (share) => {
-        const [selectedEntries, invites, viewers, pendingRequests] =
-          await Promise.all([
-            db
-              .select({ id: journalShareEntry.id })
-              .from(journalShareEntry)
-              .where(eq(journalShareEntry.shareId, share.id)),
-            db
-              .select({ id: journalShareInvite.id })
-              .from(journalShareInvite)
-              .where(
-                and(
-                  eq(journalShareInvite.shareId, share.id),
-                  eq(journalShareInvite.status, "pending")
-                )
-              ),
-            db
-              .select({ id: journalShareViewer.id })
-              .from(journalShareViewer)
-              .where(
-                and(
-                  eq(journalShareViewer.shareId, share.id),
-                  eq(journalShareViewer.status, "approved")
-                )
-              ),
-            db
-              .select({ id: journalShareAccessRequest.id })
-              .from(journalShareAccessRequest)
-              .where(
-                and(
-                  eq(journalShareAccessRequest.shareId, share.id),
-                  eq(journalShareAccessRequest.status, "pending")
-                )
-              ),
-          ]);
+    const shareIds = shares.map((share) => share.id);
+    if (shareIds.length === 0) {
+      return [];
+    }
 
-        return {
-          ...buildShareSummary(share),
-          selectedEntryCount: selectedEntries.length,
-          pendingInviteCount: invites.length,
-          approvedViewerCount: viewers.length,
-          pendingRequestCount: pendingRequests.length,
-        };
-      })
+    const [selectedEntryCounts, pendingInviteCounts, approvedViewerCounts, pendingRequestCounts] =
+      await Promise.all([
+        db
+          .select({
+            shareId: journalShareEntry.shareId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(journalShareEntry)
+          .where(inArray(journalShareEntry.shareId, shareIds))
+          .groupBy(journalShareEntry.shareId),
+        db
+          .select({
+            shareId: journalShareInvite.shareId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(journalShareInvite)
+          .where(
+            and(
+              inArray(journalShareInvite.shareId, shareIds),
+              eq(journalShareInvite.status, "pending")
+            )
+          )
+          .groupBy(journalShareInvite.shareId),
+        db
+          .select({
+            shareId: journalShareViewer.shareId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(journalShareViewer)
+          .where(
+            and(
+              inArray(journalShareViewer.shareId, shareIds),
+              eq(journalShareViewer.status, "approved")
+            )
+          )
+          .groupBy(journalShareViewer.shareId),
+        db
+          .select({
+            shareId: journalShareAccessRequest.shareId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(journalShareAccessRequest)
+          .where(
+            and(
+              inArray(journalShareAccessRequest.shareId, shareIds),
+              eq(journalShareAccessRequest.status, "pending")
+            )
+          )
+          .groupBy(journalShareAccessRequest.shareId),
+      ]);
+
+    const selectedEntryCountByShareId = new Map(
+      selectedEntryCounts.map((row) => [row.shareId, Number(row.count ?? 0)])
     );
+    const pendingInviteCountByShareId = new Map(
+      pendingInviteCounts.map((row) => [row.shareId, Number(row.count ?? 0)])
+    );
+    const approvedViewerCountByShareId = new Map(
+      approvedViewerCounts.map((row) => [row.shareId, Number(row.count ?? 0)])
+    );
+    const pendingRequestCountByShareId = new Map(
+      pendingRequestCounts.map((row) => [row.shareId, Number(row.count ?? 0)])
+    );
+
+    return shares.map((share) => ({
+      ...buildShareSummary(share),
+      selectedEntryCount: selectedEntryCountByShareId.get(share.id) ?? 0,
+      pendingInviteCount: pendingInviteCountByShareId.get(share.id) ?? 0,
+      approvedViewerCount: approvedViewerCountByShareId.get(share.id) ?? 0,
+      pendingRequestCount: pendingRequestCountByShareId.get(share.id) ?? 0,
+    }));
   }),
 
   getOwnerShare: protectedProcedure
@@ -1024,18 +1056,11 @@ export const journalSharesRouter = router({
         )
         .slice(0, 10);
 
-      const candidatesWithPlan = await Promise.all(
-        visibleCandidates.map(async (candidate) => {
-          const billingState = await getEffectiveBillingState(candidate.id);
-
-          return {
-            candidate,
-            planKey: billingState.activePlanKey,
-          };
-        })
+      const billingPlanByUserId = await getEffectiveBillingPlanKeys(
+        visibleCandidates.map((candidate) => candidate.id)
       );
 
-      return candidatesWithPlan.map(({ candidate, planKey }) => ({
+      return visibleCandidates.map((candidate) => ({
           id: candidate.id,
           username: candidate.username!,
           name: candidate.name,
@@ -1043,7 +1068,7 @@ export const journalSharesRouter = router({
           image: candidate.image,
           isVerified: Boolean(candidate.isVerified),
           isPremium: Boolean(candidate.isPremium),
-          planKey,
+          planKey: billingPlanByUserId.get(candidate.id) ?? "student",
         }));
     }),
 

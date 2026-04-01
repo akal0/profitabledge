@@ -3,6 +3,25 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
+const iconSvgCache = new Map<string, Promise<string>>();
+
+function fetchIconSvg(icon: string) {
+  const cached = iconSvgCache.get(icon);
+  if (cached) {
+    return cached;
+  }
+
+  const request = fetch(`/icons/${icon}.svg`)
+    .then((response) => response.text())
+    .catch((error) => {
+      iconSvgCache.delete(icon);
+      throw error;
+    });
+
+  iconSvgCache.set(icon, request);
+  return request;
+}
+
 interface IconProps {
   icon: string;
   className?: string;
@@ -70,8 +89,7 @@ export const Icon = ({
       return;
     }
 
-    fetch(`/icons/${icon}.svg`)
-      .then((response) => response.text())
+    fetchIconSvg(icon)
       .then((svg) => {
         // Determine fill color with fallback to main color
         const currentFillColor = isActive

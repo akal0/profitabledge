@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
 import { useTabAttentionStore } from "@/stores/tab-attention";
-import { useTRPC } from "@/utils/trpc";
+import { queryClient, trpcOptions } from "@/utils/trpc";
 
 const AWAY_TITLE = "Come back to find your profitabledge";
 const BADGE_COLORS = {
@@ -50,28 +50,57 @@ function isTauriDesktop() {
 }
 
 export function TabAttentionController() {
-  const trpc = useTRPC();
   const { data: session, isPending: isSessionPending } =
     authClient.useSession();
   const activeActivityCount = useTabAttentionStore(
     (state) => state.activeActivityCount
   );
   const realTitleRef = useRef("");
+  const unreadSummaryQueryKey =
+    trpcOptions.notifications.unreadSummary.queryOptions().queryKey;
+  const notificationsListQueryKey = trpcOptions.notifications.list.queryOptions({
+    limit: 25,
+  }).queryKey;
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const { data: unreadNotifications = [] } = trpc.notifications.list.useQuery(
-    { limit: 1, unreadOnly: true },
-    {
-      enabled: !isSessionPending && Boolean(session?.user?.id),
-      refetchInterval: 60_000,
-      refetchIntervalInBackground: true,
-      refetchOnWindowFocus: true,
+  useEffect(() => {
+    if (isSessionPending || !session?.user?.id) {
+      setUnreadCount(0);
+      return;
     }
-  );
+
+    const syncUnreadCount = () => {
+      const summary = queryClient.getQueryData<{ unreadCount: number }>(
+        unreadSummaryQueryKey
+      );
+      if (summary) {
+        setUnreadCount(summary.unreadCount ?? 0);
+        return;
+      }
+
+      const items = queryClient.getQueryData<Array<{ readAt: string | null }>>(
+        notificationsListQueryKey
+      );
+      if (items) {
+        setUnreadCount(items.filter((item) => !item.readAt).length);
+      }
+    };
+
+    syncUnreadCount();
+    return queryClient.getQueryCache().subscribe(() => {
+      syncUnreadCount();
+    });
+  }, [
+    isSessionPending,
+    notificationsListQueryKey,
+    session?.user?.id,
+    unreadSummaryQueryKey,
+  ]);
 
   const badgeVariant =
     activeActivityCount > 0
       ? "running"
-      : unreadNotifications.length > 0
+      : unreadCount > 0
       ? "unread"
       : "idle";
 

@@ -72,6 +72,14 @@ export const platformConnection = pgTable(
   },
   (table) => ({
     userIdx: index("idx_platform_conn_user").on(table.userId),
+    userCreatedIdx: index("idx_platform_conn_user_created").on(
+      table.userId,
+      table.createdAt
+    ),
+    userUpdatedIdx: index("idx_platform_conn_user_updated").on(
+      table.userId,
+      table.updatedAt
+    ),
     providerIdx: index("idx_platform_conn_provider").on(table.provider),
     statusIdx: index("idx_platform_conn_status").on(table.status),
     userProviderIdx: uniqueIndex("idx_platform_conn_user_provider_name").on(
@@ -152,6 +160,10 @@ export const syncLog = pgTable(
   },
   (table) => ({
     connectionIdx: index("idx_sync_log_connection").on(table.connectionId),
+    connectionCreatedIdx: index("idx_sync_log_connection_created").on(
+      table.connectionId,
+      table.createdAt
+    ),
     createdIdx: index("idx_sync_log_created").on(table.createdAt),
   })
 );

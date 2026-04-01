@@ -75,6 +75,7 @@ import {
   updateAffiliateProfileEffects,
   approveAffiliateWithdrawal,
   getAffiliatePublicProfile,
+  grantAffiliateAccess,
   AFFILIATE_TIER_KEYS,
   AFFILIATE_TIER_MODES,
   AFFILIATE_TIER_EFFECT_VARIANTS,
@@ -2982,6 +2983,24 @@ export const billingRouter = router({
         applicationId: input.applicationId,
         reviewedByUserId: user.id,
         adminNotes: input.adminNotes ?? null,
+      });
+    }),
+
+  grantAffiliate: protectedProcedure
+    .input(
+      z.object({
+        identifier: z.string().trim().min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin({ role: user.role, email: user.email });
+
+      const targetUser = await findUserByBillingAccessIdentifier(input.identifier);
+
+      return grantAffiliateAccess({
+        userId: targetUser.id,
+        grantedByUserId: user.id,
       });
     }),
 

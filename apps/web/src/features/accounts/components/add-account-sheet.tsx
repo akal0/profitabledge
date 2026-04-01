@@ -20,14 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Plus,
-  ExternalLink,
-  Sparkles,
-  Plug,
-  Cpu,
-  Loader2,
-} from "lucide-react";
+import { Plus, ExternalLink, Sparkles, Plug, Cpu, Loader2 } from "lucide-react";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -638,8 +631,8 @@ export function AddAccountSheet({
       }
 
       hydrationStarted = true;
-      void trpcClient.accounts
-        .hydrateDemoWorkspace.mutate({ accountId: createdAccount.id })
+      void trpcClient.accounts.hydrateDemoWorkspace
+        .mutate({ accountId: createdAccount.id })
         .then(async () => {
           if (demoProgressToastId) {
             toast.dismiss(demoProgressToastId);
@@ -716,9 +709,7 @@ export function AddAccountSheet({
     demoAccounts.length > 0 || demoCreated || addAccountSheetCompleted;
   const demoWorkspaceDescription = hasDemoWorkspace
     ? demoAccounts.length > 0
-      ? `Replace ${
-          demoAccounts.length
-        } seeded demo workspace${
+      ? `Replace ${demoAccounts.length} seeded demo workspace${
           demoAccounts.length === 1 ? "" : "s"
         } with a fresh demo environment. The account is available immediately while the new trades and stats finish loading in the background.`
       : "Regenerate the seeded demo workspace with a fresh demo environment. The account is available immediately while the new trades and stats finish loading in the background."
@@ -745,7 +736,7 @@ export function AddAccountSheet({
       : step === 2 && form.method === "csv"
       ? "Upload your CSV, XML, or XLSX file and enter the details for this trading account."
       : step === 2 && form.method === "manual"
-      ? "Create a blank account and log trades manually inside ProfitEdge."
+      ? "Create a blank account and log trades manually inside Profitabledge."
       : step === 2 && form.method === "broker"
       ? "Use Connections to sync supported broker and platform accounts directly."
       : step === 2 && form.method === "ea"
@@ -1451,7 +1442,7 @@ export function AddAccountSheet({
               <div className="px-6 py-5">
                 <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
                   <p className="text-sm font-medium text-white">
-                    Log trades directly in ProfitEdge
+                    Log trades directly in Profitabledge
                   </p>
                   <p className="text-xs leading-relaxed text-white/45">
                     After creating the account, use the manual trade entry flow
@@ -1506,7 +1497,7 @@ export function AddAccountSheet({
                       </div>
                       <p className="text-xs leading-relaxed text-white/45">
                         Connect MetaTrader 5, cTrader, Match-Trader, or
-                        TradeLocker from the Connections page. ProfitEdge
+                        TradeLocker from the Connections page. Profitabledge
                         handles the sync workflow from there.
                       </p>
                     </div>
@@ -1701,23 +1692,23 @@ export function AddAccountSheet({
 
               <Separator />
               <div className="px-6 py-5">
-                  <Button
-                    className={cn(
-                      TRADE_ACTION_BUTTON_PRIMARY_CLASS,
-                      "h-9 w-full"
-                    )}
-                    disabled={isPreparingDemoWorkspace}
-                    onClick={() => handleOpenChange(false)}
-                  >
-                    {isPreparingDemoWorkspace ? (
-                      <>
-                        <Loader2 className="size-3.5 animate-spin" />
-                        Preparing demo workspace...
-                      </>
-                    ) : (
-                      "Done"
-                    )}
-                  </Button>
+                <Button
+                  className={cn(
+                    TRADE_ACTION_BUTTON_PRIMARY_CLASS,
+                    "h-9 w-full"
+                  )}
+                  disabled={isPreparingDemoWorkspace}
+                  onClick={() => handleOpenChange(false)}
+                >
+                  {isPreparingDemoWorkspace ? (
+                    <>
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Preparing demo workspace...
+                    </>
+                  ) : (
+                    "Done"
+                  )}
+                </Button>
               </div>
             </>
           )}

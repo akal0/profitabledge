@@ -70,6 +70,18 @@ export const notificationsRouter = router({
         .limit(limit);
     }),
 
+  unreadSummary: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.session.user.id;
+    const [row] = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(notification)
+      .where(and(eq(notification.userId, userId), isNull(notification.readAt)));
+
+    return {
+      unreadCount: Number(row?.count ?? 0),
+    };
+  }),
+
   desktopFeed: protectedProcedure
     .input(
       z

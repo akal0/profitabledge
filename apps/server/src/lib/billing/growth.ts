@@ -339,6 +339,120 @@ export async function getEffectiveBillingState(userId: string) {
   };
 }
 
+export async function getEffectiveBillingPlanKeys(userIds: string[]) {
+  const dedupedUserIds = Array.from(new Set(userIds.filter(Boolean)));
+  const planByUserId = new Map<string, BillingPlanKey>();
+
+  if (dedupedUserIds.length === 0) {
+    return planByUserId;
+  }
+
+  const [subscriptions, paidOrders, overrides] = await Promise.all([
+    db
+      .select()
+      .from(billingSubscription)
+      .where(inArray(billingSubscription.userId, dedupedUserIds))
+      .orderBy(desc(billingSubscription.currentPeriodEnd), desc(billingSubscription.updatedAt)),
+    db
+      .select()
+      .from(billingOrder)
+      .where(
+        and(
+          inArray(billingOrder.userId, dedupedUserIds),
+          eq(billingOrder.paid, true)
+        )
+      )
+      .orderBy(
+        desc(billingOrder.paidAt),
+        desc(billingOrder.updatedAt),
+        desc(billingOrder.createdAt)
+      ),
+    db
+      .select()
+      .from(billingEntitlementOverride)
+      .where(
+        and(
+          inArray(billingEntitlementOverride.userId, dedupedUserIds),
+          lte(billingEntitlementOverride.startsAt, new Date()),
+          gte(billingEntitlementOverride.endsAt, new Date())
+        )
+      )
+      .orderBy(desc(billingEntitlementOverride.endsAt)),
+  ]);
+
+  const subscriptionsByUserId = new Map<string, typeof subscriptions>();
+  for (const subscription of subscriptions) {
+    const bucket = subscriptionsByUserId.get(subscription.userId) ?? [];
+    bucket.push(subscription);
+    subscriptionsByUserId.set(subscription.userId, bucket);
+  }
+
+  const paidOrdersByUserId = new Map<string, typeof paidOrders>();
+  for (const order of paidOrders) {
+    const bucket = paidOrdersByUserId.get(order.userId) ?? [];
+    bucket.push(order);
+    paidOrdersByUserId.set(order.userId, bucket);
+  }
+
+  const overrideByUserId = new Map<string, (typeof overrides)[number]>();
+  for (const override of overrides) {
+    if (!overrideByUserId.has(override.userId)) {
+      overrideByUserId.set(override.userId, override);
+    }
+  }
+
+  const now = new Date();
+  for (const userId of dedupedUserIds) {
+    const userSubscriptions = subscriptionsByUserId.get(userId) ?? [];
+    const userPaidOrders = paidOrdersByUserId.get(userId) ?? [];
+    const override = overrideByUserId.get(userId) ?? null;
+
+    const activeSubscriptions = userSubscriptions.filter((subscription) =>
+      isActiveSubscriptionStatus(subscription.status)
+    );
+    const subscriptionPlanKey = activeSubscriptions.reduce<BillingPlanKey>(
+      (highestPlanKey, currentSubscription) => {
+        const currentPlanKey = currentSubscription.planKey as BillingPlanKey;
+        return getBillingPlanDefinition(currentPlanKey)
+          ? getHigherBillingPlanKey(highestPlanKey, currentPlanKey)
+          : highestPlanKey;
+      },
+      "student"
+    );
+
+    const recentPaidOrderPlanKey = userPaidOrders.reduce<BillingPlanKey>(
+      (highestPlanKey, currentOrder) => {
+        const currentPlanKey = currentOrder.planKey as BillingPlanKey;
+        const planDefinition = getBillingPlanDefinition(currentPlanKey);
+        if (!planDefinition) {
+          return highestPlanKey;
+        }
+
+        const paidAt = currentOrder.paidAt ?? currentOrder.createdAt;
+        if (now.getTime() - paidAt.getTime() > CHECKOUT_ORDER_GRACE_WINDOW_MS) {
+          return highestPlanKey;
+        }
+
+        return getHigherBillingPlanKey(highestPlanKey, currentPlanKey);
+      },
+      "student"
+    );
+
+    const activePlanKey =
+      override?.planKey &&
+      getBillingPlanDefinition(override.planKey as BillingPlanKey)
+        ? getHigherBillingPlanKey(
+            getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey),
+            override.planKey as BillingPlanKey
+          )
+        : getHigherBillingPlanKey(subscriptionPlanKey, recentPaidOrderPlanKey);
+
+    planByUserId.set(userId, activePlanKey);
+  }
+
+  return planByUserId;
+}
+
 export async function syncUserPremiumFlag(userId: string) {
   const { activePlanKey, subscription, override } = await getEffectiveBillingState(userId);
   const isPremium =
@@ -1754,6 +1868,46 @@ export async function approveAffiliateApplication(input: {
 
   return {
     application: updatedApplication ?? application,
+    profile: synced?.profile ?? approvedProfile,
+    group,
+    offer: synced?.defaultOffer ?? offer,
+    trackingLink,
+    tier: synced?.tier ?? null,
+  };
+}
+
+export async function grantAffiliateAccess(input: {
+  userId: string;
+  grantedByUserId: string;
+}) {
+  const user = await getMinimalUser(input.userId);
+  const approvedProfile = await ensureAffiliateProfileApproved(
+    user,
+    input.grantedByUserId
+  );
+  const group = await ensureAffiliateGroupRow(approvedProfile.id, user);
+  const offer = await ensureAffiliateOfferRow(
+    approvedProfile,
+    input.grantedByUserId
+  );
+  const trackingLink = await ensureAffiliateTrackingLinkRow({
+    profile: approvedProfile,
+    group,
+    offer,
+  });
+
+  await db
+    .update(referralProfile)
+    .set({
+      isActive: false,
+      updatedAt: new Date(),
+    })
+    .where(eq(referralProfile.userId, user.id));
+
+  const synced = await syncAffiliateTierState(user.id);
+
+  return {
+    user,
     profile: synced?.profile ?? approvedProfile,
     group,
     offer: synced?.defaultOffer ?? offer,

@@ -303,7 +303,8 @@ const DEMO_EDGE_TEMPLATES: DemoEdgeTemplate[] = [
     entryRule: "Demand acceptance outside the opening range",
     entryRuleDescription:
       "A wick through the range is not enough. Price needs to hold outside the base before it becomes actionable.",
-    managementRule: "Stay with the breakout while range lows or highs keep holding",
+    managementRule:
+      "Stay with the breakout while range lows or highs keep holding",
     managementRuleDescription:
       "Once the breakout starts failing back through its launch point, the clean expansion thesis has gone.",
     exitRule: "Pay into the next session objective or measured move",
@@ -364,7 +365,8 @@ const DEMO_EDGE_TEMPLATES: DemoEdgeTemplate[] = [
     entryRule: "Anchor the idea to the prior session extreme",
     entryRuleDescription:
       "The sweep must take something obvious before the reclaim has real informational value.",
-    managementRule: "Stay aggressive only while the prior range keeps accepting the reclaim",
+    managementRule:
+      "Stay aggressive only while the prior range keeps accepting the reclaim",
     managementRuleDescription:
       "If price stalls right back at the range edge, the reversal is not yet proven.",
     exitRule: "Target the opposite side of the prior session range",
@@ -456,7 +458,8 @@ const DEMO_EDGE_TEMPLATES: DemoEdgeTemplate[] = [
     entryRule: "Wait until post-news spreads and structure normalize",
     entryRuleDescription:
       "The cleanup phase is part of the setup. If the tape is still disorderly, the edge is not ready.",
-    managementRule: "Stay with the continuation only while post-news structure holds",
+    managementRule:
+      "Stay with the continuation only while post-news structure holds",
     managementRuleDescription:
       "Once the normalized structure fails, the event-driven thesis is no longer behaving cleanly.",
     exitRule: "Book into the next obvious expansion target",
@@ -602,9 +605,9 @@ function buildDemoHtml(paragraphs: string[]) {
 }
 
 async function seedDemoEdgesForUser(userId: string) {
-  await db.delete(edge).where(
-    and(eq(edge.ownerUserId, userId), eq(edge.isDemoSeeded, true))
-  );
+  await db
+    .delete(edge)
+    .where(and(eq(edge.ownerUserId, userId), eq(edge.isDemoSeeded, true)));
 
   const createdEdges: Array<{
     id: string;
@@ -724,7 +727,9 @@ async function selectDemoWorkspaceAccount(
       accountNumber: tradingAccount.accountNumber,
     })
     .from(tradingAccount)
-    .where(and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)))
+    .where(
+      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+    )
     .limit(1);
 
   if (!account || !isDemoWorkspaceAccountRecord(account)) {
@@ -745,7 +750,9 @@ async function loadExistingDemoWorkspaceSeedState(
   const [account] = await db
     .select()
     .from(tradingAccount)
-    .where(and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)))
+    .where(
+      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+    )
     .limit(1);
 
   if (!account) {
@@ -781,9 +788,11 @@ export async function provisionDemoWorkspaceAccount(
   const nowDate = new Date();
 
   if (options.resetExistingAccount) {
-    await db.delete(tradingAccount).where(
-      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
-    );
+    await db
+      .delete(tradingAccount)
+      .where(
+        and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+      );
   }
 
   const [account] = await db
@@ -809,7 +818,9 @@ export async function provisionDemoWorkspaceAccount(
       propManualOverride: false,
       verificationLevel: "ea_synced",
       socialOptIn: true,
-      socialVisibleSince: new Date(nowDate.getTime() - 14 * 24 * 60 * 60 * 1000),
+      socialVisibleSince: new Date(
+        nowDate.getTime() - 14 * 24 * 60 * 60 * 1000
+      ),
       followerCount: 12,
       feedEventCount: 0,
     })
@@ -847,7 +858,9 @@ export async function seedSampleAccount(
   const sessions = ["London", "New York", "Asian"] as const;
   const alignments = ["aligned", "against", "discretionary"] as const;
   const seededTradeEdges = seededDemoEdges.filter(
-    (demoEdge): demoEdge is (typeof seededDemoEdges)[number] & {
+    (
+      demoEdge
+    ): demoEdge is (typeof seededDemoEdges)[number] & {
       seedProfile: DemoEdgeSeedProfile;
     } => Boolean(demoEdge.tradeSeed && demoEdge.seedProfile)
   );
@@ -957,9 +970,7 @@ export async function seedSampleAccount(
       longBias -= 0.18;
     }
 
-    return Math.random() < clampNumber(longBias, 0.15, 0.85)
-      ? "long"
-      : "short";
+    return Math.random() < clampNumber(longBias, 0.15, 0.85) ? "long" : "short";
   };
   const createDemoTradeImage = ({
     symbol,
@@ -1158,31 +1169,28 @@ export async function seedSampleAccount(
       session = previousSession;
     }
 
-    const selectedEdge = weightedPick(
-      seededTradeEdges,
-      (candidate) => {
-        let weight = phase.archetypeWeights[candidate.seedProfile.archetype] ?? 1;
+    const selectedEdge = weightedPick(seededTradeEdges, (candidate) => {
+      let weight = phase.archetypeWeights[candidate.seedProfile.archetype] ?? 1;
 
-        if (candidate.seedProfile.preferredSessions.includes(session)) {
-          weight *= 1.65;
-        } else {
-          weight *= 0.72;
-        }
-
-        if (candidate.seedProfile.disallowedSessions?.includes(session)) {
-          weight *= 0.12;
-        }
-
-        if (
-          phase.name === "refined-edge" &&
-          candidate.seedProfile.preferredSessions.includes("New York")
-        ) {
-          weight *= 1.08;
-        }
-
-        return weight;
+      if (candidate.seedProfile.preferredSessions.includes(session)) {
+        weight *= 1.65;
+      } else {
+        weight *= 0.72;
       }
-    );
+
+      if (candidate.seedProfile.disallowedSessions?.includes(session)) {
+        weight *= 0.12;
+      }
+
+      if (
+        phase.name === "refined-edge" &&
+        candidate.seedProfile.preferredSessions.includes("New York")
+      ) {
+        weight *= 1.08;
+      }
+
+      return weight;
+    });
     const model = selectedEdge.name;
     const alignment = weightedPick(
       alignments,
@@ -1223,7 +1231,10 @@ export async function seedSampleAccount(
       if (phase.name === "leak-cluster" && candidate === "GBPUSD") {
         weight += 0.45;
       }
-      if (selectedEdge.name === "News Fade Continuation" && candidate === "XAUUSD") {
+      if (
+        selectedEdge.name === "News Fade Continuation" &&
+        candidate === "XAUUSD"
+      ) {
         weight += 0.7;
       }
       if (selectedEdge.name === "NY Midday Reclaim" && candidate === "XAUUSD") {
@@ -1234,7 +1245,10 @@ export async function seedSampleAccount(
       }
       return Math.max(0.1, weight);
     });
-    const tradeDirection = pickDirectionForEdge(selectedEdge.seedProfile, session);
+    const tradeDirection = pickDirectionForEdge(
+      selectedEdge.seedProfile,
+      session
+    );
     const directionFactor = tradeDirection === "long" ? 1 : -1;
     const edgeArchetype = selectedEdge.seedProfile.archetype;
     const isGold = symbol === "XAUUSD";
@@ -1357,7 +1371,10 @@ export async function seedSampleAccount(
     if (selectedEdge.name === "Range Rotation" && session === "Asian") {
       edgeScore += 0.06;
     }
-    if (selectedEdge.name === "News Fade Continuation" && session === "New York") {
+    if (
+      selectedEdge.name === "News Fade Continuation" &&
+      session === "New York"
+    ) {
       edgeScore += 0.11;
     }
     if (selectedEdge.name === "NY Midday Reclaim" && session === "New York") {
@@ -1421,18 +1438,18 @@ export async function seedSampleAccount(
         phase.name === "refined-edge"
           ? 1.2
           : phase.name === "foundation"
-            ? 0.85
-            : phase.name === "recovery"
-              ? 0.95
-              : 0.65;
+          ? 0.85
+          : phase.name === "recovery"
+          ? 0.95
+          : 0.65;
       const maxWinRR =
         phase.name === "refined-edge"
           ? 2.8
           : phase.name === "foundation"
-            ? 2.15
-            : phase.name === "recovery"
-              ? 2.25
-              : 1.65;
+          ? 2.15
+          : phase.name === "recovery"
+          ? 2.25
+          : 1.65;
       realisedRRSeed = roundTo(
         randBetween(minWinRR, maxWinRR) +
           (alignment === "aligned" ? 0.1 : -0.06) +
@@ -1557,8 +1574,7 @@ export async function seedSampleAccount(
       1
     );
     const exitSpreadPips = roundTo(
-      entrySpreadPips +
-        (Math.random() - 0.3) * (poorExecutionBias ? 0.8 : 0.5),
+      entrySpreadPips + (Math.random() - 0.3) * (poorExecutionBias ? 0.8 : 0.5),
       1
     );
     const entrySlippagePips = roundTo(
@@ -1592,11 +1608,11 @@ export async function seedSampleAccount(
           ? "tp"
           : "expert"
         : outcomeBucket === "loss"
-          ? Math.random() > 0.18
-            ? "sl"
-            : "expert"
-          : "client";
-    const tradeComment = `[ProfitEdge] ${exitReason}`;
+        ? Math.random() > 0.18
+          ? "sl"
+          : "expert"
+        : "client";
+    const tradeComment = `[Profitabledge] ${exitReason}`;
     const tradeBrokerMeta = {
       comment: tradeComment,
       magicNumber: 11001,
@@ -1884,7 +1900,9 @@ export async function seedSampleAccount(
       followerCount: 12,
       feedEventCount: 0,
     })
-    .where(and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId)))
+    .where(
+      and(eq(tradingAccount.id, accountId), eq(tradingAccount.userId, userId))
+    )
     .returning();
 
   if (!seededAccountRow) {
@@ -2076,9 +2094,7 @@ export async function seedSampleAccount(
       : new Set<string>();
   const checklistRows: (typeof tradeChecklistResult.$inferInsert)[] =
     checklistSeedTrades
-      .filter(
-        (row) => row.id && !existingChecklistResultTradeIds.has(row.id)
-      )
+      .filter((row) => row.id && !existingChecklistResultTradeIds.has(row.id))
       .map((row, index) => {
         const openTime = row.openTime instanceof Date ? row.openTime : nowDate;
         const completionRate = Math.max(
@@ -2267,8 +2283,8 @@ export async function seedSampleAccount(
         pnl >= 0
           ? "execution_note"
           : index % 2 === 0
-            ? "rule_note"
-            : "learning_note",
+          ? "rule_note"
+          : "learning_note",
       isPublic: index < 6 && pnl >= 0,
       createdAt: new Date(closeTime.getTime() - 60 * 1000),
       editableUntil: new Date(closeTime.getTime() + 4 * 60 * 1000),
@@ -2356,10 +2372,10 @@ export async function seedSampleAccount(
 
   await runInBatches(reviewTradeIds, async (tradeId) => {
     await createAutoTradeReviewEntry({ userId, tradeId }).catch((error) => {
-      console.error(
-        "[hydrateDemoWorkspace] auto trade review seed failed",
-        { tradeId, error }
-      );
+      console.error("[hydrateDemoWorkspace] auto trade review seed failed", {
+        tradeId,
+        error,
+      });
     });
   });
 
@@ -2384,7 +2400,9 @@ export async function seedSampleAccount(
       .where(
         and(
           eq(journalEntry.userId, userId),
-          sql`${journalEntry.linkedTradeIds} @> ${JSON.stringify([tradeId])}::jsonb`
+          sql`${journalEntry.linkedTradeIds} @> ${JSON.stringify([
+            tradeId,
+          ])}::jsonb`
         )
       );
   });
@@ -2416,9 +2434,7 @@ export async function seedSampleAccount(
     if (!currentTrade || !nextTrade) continue;
     if (Number(currentTrade.profit || 0) >= 0) continue;
     const nextOpenTime =
-      nextTrade.openTime instanceof Date
-        ? nextTrade.openTime.getTime()
-        : 0;
+      nextTrade.openTime instanceof Date ? nextTrade.openTime.getTime() : 0;
     const currentCloseTime =
       currentTrade.closeTime instanceof Date
         ? currentTrade.closeTime.getTime()

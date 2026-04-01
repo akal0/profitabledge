@@ -113,12 +113,16 @@ export function getMt5BrokerNumber(
 }
 
 export async function invalidateTradeScopeCaches(accountIds: string[]) {
-  const cacheTags = new Set<string>([`account:${ALL_ACCOUNTS_ID}`]);
+  const cacheTags = new Set<string>();
 
   for (const accountId of accountIds) {
     if (accountId) {
       cacheTags.add(`account:${accountId}`);
     }
+  }
+
+  if (cacheTags.size === 0) {
+    cacheTags.add(`account:${ALL_ACCOUNTS_ID}`);
   }
 
   await enhancedCache.invalidateByTags([...cacheTags]);
@@ -150,21 +154,12 @@ export async function ensureTradeOwnership(userId: string, tradeId: string) {
       accountId: trade.accountId,
     })
     .from(trade)
-    .where(eq(trade.id, tradeId))
+    .innerJoin(tradingAccount, eq(tradingAccount.id, trade.accountId))
+    .where(and(eq(trade.id, tradeId), eq(tradingAccount.userId, userId)))
     .limit(1);
 
   if (!tradeRows[0]) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Trade not found" });
-  }
-
-  const accountRows = await db
-    .select({ userId: tradingAccount.userId })
-    .from(tradingAccount)
-    .where(eq(tradingAccount.id, tradeRows[0].accountId))
-    .limit(1);
-
-  if (!accountRows[0] || accountRows[0].userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
   }
 
   return tradeRows[0];
@@ -180,21 +175,12 @@ export async function ensureOpenTradeOwnership(
       accountId: openTrade.accountId,
     })
     .from(openTrade)
-    .where(eq(openTrade.id, openTradeId))
+    .innerJoin(tradingAccount, eq(tradingAccount.id, openTrade.accountId))
+    .where(and(eq(openTrade.id, openTradeId), eq(tradingAccount.userId, userId)))
     .limit(1);
 
   if (!openTradeRows[0]) {
     throw new TRPCError({ code: "NOT_FOUND", message: "Open trade not found" });
-  }
-
-  const accountRows = await db
-    .select({ userId: tradingAccount.userId })
-    .from(tradingAccount)
-    .where(eq(tradingAccount.id, openTradeRows[0].accountId))
-    .limit(1);
-
-  if (!accountRows[0] || accountRows[0].userId !== userId) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Not authorized" });
   }
 
   return openTradeRows[0];

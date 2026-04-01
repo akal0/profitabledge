@@ -47,6 +47,7 @@ export function GoalPanel({
   title,
   description,
   action,
+  className,
   bodyClassName,
   children,
 }: {
@@ -54,11 +55,12 @@ export function GoalPanel({
   title: string;
   description?: string;
   action?: ReactNode;
+  className?: string;
   bodyClassName?: string;
   children: ReactNode;
 }) {
   return (
-    <GoalSurface innerClassName="h-full overflow-hidden">
+    <GoalSurface className={className} innerClassName="h-full overflow-hidden">
       <div className={cn(GOAL_PANEL_HEADER_CLASS, "justify-between")}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {Icon ? <Icon className={GOAL_PANEL_ICON_CLASS} /> : null}

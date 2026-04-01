@@ -381,63 +381,26 @@ export default function RulesPage() {
   const [checklistStrategyTag, setChecklistStrategyTag] = useState("");
   const [checklistItems, setChecklistItems] = useState("");
 
-  const compliancePrefsQuery = trpc.users.getCompliancePreferences.useQuery(
+  const workspaceQuery = trpc.rules.getWorkspace.useQuery(
     { accountId: scopedAccountId || "" },
-    { enabled: Boolean(scopedAccountId) }
+    { enabled: Boolean(scopedAccountId), staleTime: 30_000 }
   );
-  const rulesQuery = trpc.ai.getRules.useQuery(
-    { accountId: scopedAccountId || "" },
-    { enabled: Boolean(scopedAccountId) }
-  );
-  const complianceQuery = trpc.ai.getDailyCompliance.useQuery(
-    { accountId: scopedAccountId || "" },
-    { enabled: Boolean(scopedAccountId) }
-  );
-  const suggestedRulesQuery = trpc.ai.getSuggestedRules.useQuery(
-    { accountId: scopedAccountId || "" },
-    { enabled: Boolean(scopedAccountId) }
-  );
-  const violationsQuery = trpc.ai.getRuleViolations.useQuery(
-    { accountId: scopedAccountId || "", limit: 8 },
-    { enabled: Boolean(scopedAccountId) }
-  );
-  const checklistTemplatesQuery = trpc.ai.getChecklistTemplates.useQuery(
-    { accountId: scopedAccountId || "" },
-    { enabled: Boolean(scopedAccountId) }
-  );
-  const ruleSetsQuery = trpc.rules.listRuleSets.useQuery(
-    { accountId: scopedAccountId || undefined },
-    { enabled: Boolean(scopedAccountId) }
-  );
-  const assignableEdgesQuery = trpc.edges.listAssignable.useQuery(undefined, {
-    enabled: Boolean(scopedAccountId),
-  });
 
   useEffect(() => {
-    setAuditRules((compliancePrefsQuery.data?.rules as ComplianceRules) || {});
-  }, [compliancePrefsQuery.data?.rules, accountId]);
+    setAuditRules(
+      (workspaceQuery.data?.compliancePreferences?.rules as ComplianceRules) || {}
+    );
+  }, [workspaceQuery.data?.compliancePreferences?.rules, accountId]);
 
   const refreshRulesWorkspace = async () => {
-    await Promise.allSettled([
-      compliancePrefsQuery.refetch(),
-      rulesQuery.refetch(),
-      complianceQuery.refetch(),
-      suggestedRulesQuery.refetch(),
-      violationsQuery.refetch(),
-      checklistTemplatesQuery.refetch(),
-      ruleSetsQuery.refetch(),
-      assignableEdgesQuery.refetch(),
-    ]);
+    await workspaceQuery.refetch();
   };
 
   const updateCompliancePrefs = trpc.users.updateCompliancePreferences.useMutation(
     {
       onSuccess: async () => {
         toast.success("Audit guardrails saved");
-        await Promise.allSettled([
-          compliancePrefsQuery.refetch(),
-          complianceQuery.refetch(),
-        ]);
+        await workspaceQuery.refetch();
       },
       onError: (error) => {
         toast.error(error.message || "Failed to save audit guardrails");
@@ -480,7 +443,7 @@ export default function RulesPage() {
       toast.success("Replay rulebook created");
       setRulebookName("");
       setRulebookDescription("");
-      await ruleSetsQuery.refetch();
+      await workspaceQuery.refetch();
     },
     onError: (error) => {
       toast.error(error.message);
@@ -490,7 +453,7 @@ export default function RulesPage() {
   const updateRuleSet = trpc.rules.updateRuleSet.useMutation({
     onSuccess: async () => {
       toast.success("Rulebook updated");
-      await ruleSetsQuery.refetch();
+      await workspaceQuery.refetch();
     },
     onError: (error) => {
       toast.error(error.message);
@@ -500,7 +463,7 @@ export default function RulesPage() {
   const deleteRuleSet = trpc.rules.deleteRuleSet.useMutation({
     onSuccess: async () => {
       toast.success("Rulebook removed");
-      await ruleSetsQuery.refetch();
+      await workspaceQuery.refetch();
     },
     onError: (error) => {
       toast.error(error.message);
@@ -514,7 +477,7 @@ export default function RulesPage() {
       setChecklistDescription("");
       setChecklistStrategyTag("");
       setChecklistItems("");
-      await checklistTemplatesQuery.refetch();
+      await workspaceQuery.refetch();
     },
     onError: (error) => {
       toast.error(error.message);
@@ -524,7 +487,7 @@ export default function RulesPage() {
   const deleteChecklistTemplate = trpc.ai.deleteChecklistTemplate.useMutation({
     onSuccess: async () => {
       toast.success("Checklist template removed");
-      await checklistTemplatesQuery.refetch();
+      await workspaceQuery.refetch();
     },
     onError: (error) => {
       toast.error(error.message);
@@ -558,24 +521,18 @@ export default function RulesPage() {
     );
   }
 
-  const isWorkspaceLoading =
-    compliancePrefsQuery.isLoading ||
-    rulesQuery.isLoading ||
-    complianceQuery.isLoading ||
-    suggestedRulesQuery.isLoading ||
-    violationsQuery.isLoading ||
-    checklistTemplatesQuery.isLoading ||
-    ruleSetsQuery.isLoading ||
-    assignableEdgesQuery.isLoading;
+  const isWorkspaceLoading = workspaceQuery.isLoading;
 
-  const activeRules = rulesQuery.data ?? [];
-  const suggestedRules = suggestedRulesQuery.data ?? [];
-  const checklistTemplates = checklistTemplatesQuery.data ?? [];
-  const recentViolations = violationsQuery.data ?? [];
-  const replayRulebooks = ruleSetsQuery.data ?? [];
-  const assignableEdges = assignableEdgesQuery.data ?? [];
-  const complianceRate = Math.round(complianceQuery.data?.complianceRate ?? 100);
-  const reviewedTrades = complianceQuery.data?.trades ?? 0;
+  const activeRules = workspaceQuery.data?.rules ?? [];
+  const suggestedRules = workspaceQuery.data?.suggestedRules ?? [];
+  const checklistTemplates = workspaceQuery.data?.checklistTemplates ?? [];
+  const recentViolations = workspaceQuery.data?.ruleViolations ?? [];
+  const replayRulebooks = workspaceQuery.data?.ruleSets ?? [];
+  const assignableEdges = workspaceQuery.data?.assignableEdges ?? [];
+  const complianceRate = Math.round(
+    workspaceQuery.data?.dailyCompliance?.complianceRate ?? 100
+  );
+  const reviewedTrades = workspaceQuery.data?.dailyCompliance?.trades ?? 0;
   const unresolvedViolations = recentViolations.length;
   const configuredGuardrailCount = Object.keys(cleanRules(auditRules)).length;
 

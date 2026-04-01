@@ -5,6 +5,18 @@ import { tradingRuleSet, tradeRuleEvaluation, tradingAccount, trade } from "../d
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { evaluateCompliance, type ComplianceRules } from "../lib/compliance-audits";
+import { user as userTable } from "../db/schema/auth";
+import {
+  ruleViolation,
+  tradeChecklistTemplate,
+  tradingRule,
+} from "../db/schema/coaching";
+import { getAssignableEdgesForUser } from "../lib/edges/service";
+import {
+  generateSuggestedRules,
+  getDailyComplianceReport,
+  getFullProfile,
+} from "../lib/ai/engine";
 
 const rulesSchema = z.object({
   requireSL: z.boolean().optional(),
@@ -39,6 +51,94 @@ const rulesSchema = z.object({
 });
 
 export const rulesRouter = router({
+  getWorkspace: protectedProcedure
+    .input(z.object({ accountId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      const account = await db
+        .select({ id: tradingAccount.id })
+        .from(tradingAccount)
+        .where(
+          and(eq(tradingAccount.id, input.accountId), eq(tradingAccount.userId, userId))
+        )
+        .limit(1);
+
+      if (!account[0]) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Account not found" });
+      }
+
+      const fullProfilePromise = getFullProfile(input.accountId, userId);
+      const dailyCompliancePromise = getDailyComplianceReport(input.accountId, userId);
+      const [
+        preferenceRows,
+        activeRules,
+        recentViolations,
+        checklistTemplates,
+        ruleSets,
+        assignableEdges,
+        fullProfile,
+        dailyCompliance,
+      ] = await Promise.all([
+        db
+          .select({ advancedMetricsPreferences: userTable.advancedMetricsPreferences })
+          .from(userTable)
+          .where(eq(userTable.id, userId))
+          .limit(1),
+        db
+          .select()
+          .from(tradingRule)
+          .where(and(eq(tradingRule.accountId, input.accountId), eq(tradingRule.userId, userId)))
+          .orderBy(desc(tradingRule.createdAt)),
+        db
+          .select()
+          .from(ruleViolation)
+          .where(and(eq(ruleViolation.accountId, input.accountId), eq(ruleViolation.userId, userId)))
+          .orderBy(desc(ruleViolation.createdAt))
+          .limit(8),
+        db
+          .select()
+          .from(tradeChecklistTemplate)
+          .where(
+            and(
+              eq(tradeChecklistTemplate.accountId, input.accountId),
+              eq(tradeChecklistTemplate.userId, userId)
+            )
+          )
+          .orderBy(desc(tradeChecklistTemplate.createdAt)),
+        db
+          .select()
+          .from(tradingRuleSet)
+          .where(and(eq(tradingRuleSet.userId, userId), eq(tradingRuleSet.accountId, input.accountId)))
+          .orderBy(desc(tradingRuleSet.createdAt)),
+        getAssignableEdgesForUser(userId),
+        fullProfilePromise,
+        dailyCompliancePromise,
+      ]);
+
+      const prefs = (preferenceRows[0]?.advancedMetricsPreferences as any) || {};
+      const rulesByAccount = (prefs.complianceRulesByAccount as any) || {};
+
+      return {
+        compliancePreferences: {
+          rules: rulesByAccount[input.accountId] || {},
+        },
+        rules: activeRules,
+        dailyCompliance,
+        suggestedRules: fullProfile
+          ? generateSuggestedRules(
+              fullProfile.profile,
+              fullProfile.edges,
+              fullProfile.leaks
+            )
+          : [],
+        ruleViolations: recentViolations,
+        checklistTemplates,
+        ruleSets,
+        assignableEdges,
+      };
+    }),
+
   // List rule sets for user
   listRuleSets: protectedProcedure
     .input(z.object({ accountId: z.string().optional() }).optional())

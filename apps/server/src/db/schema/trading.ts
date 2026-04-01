@@ -73,7 +73,16 @@ export const tradingAccount = pgTable("trading_account", {
   tags: jsonb("tags").$type<string[]>().default([]).notNull(),
 
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => ({
+  userIdx: index("idx_trading_account_user").on(table.userId),
+  userPropIdx: index("idx_trading_account_user_prop").on(
+    table.userId,
+    table.isPropAccount
+  ),
+  propInstanceIdx: index("idx_trading_account_prop_instance").on(
+    table.propChallengeInstanceId
+  ),
+}));
 
 export const symbolMapping = pgTable(
   "symbol_mapping",
@@ -220,6 +229,14 @@ export const trade = pgTable(
       table.accountId,
       table.createdAt,
       table.id
+    ),
+    accountCloseTimeIdx: index("idx_trade_account_close_time").on(
+      table.accountId,
+      table.closeTime
+    ),
+    accountOpenTimeIdx: index("idx_trade_account_open_time").on(
+      table.accountId,
+      table.openTime
     ),
     accountSymbolIdx: index("idx_trade_account_symbol").on(
       table.accountId,
@@ -1114,6 +1131,15 @@ export const propAlert = pgTable(
   },
   (table) => ({
     accountIdx: index("idx_prop_alert_account").on(table.accountId),
+    accountCreatedIdx: index("idx_prop_alert_account_created").on(
+      table.accountId,
+      table.createdAt
+    ),
+    accountAckCreatedIdx: index("idx_prop_alert_account_ack_created").on(
+      table.accountId,
+      table.acknowledged,
+      table.createdAt
+    ),
     severityIdx: index("idx_prop_alert_severity").on(table.severity),
     accountSeverityIdx: index("idx_prop_alert_account_severity").on(
       table.accountId,

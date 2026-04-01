@@ -55,13 +55,7 @@ export type BillingPlanDefinition = {
   isFree: boolean;
   upgradeOfferBasisPoints: number | null;
   stripePriceId?: string;
-  polarProductId?: string;
 };
-
-export function getBillingProvider() {
-  const env = getServerEnv();
-  return env.BILLING_PROVIDER ?? "stripe";
-}
 
 export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
   const env = getServerEnv();
@@ -111,7 +105,6 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
       isFree: false,
       upgradeOfferBasisPoints: 1000,
       stripePriceId: env.STRIPE_PRICE_PROFESSIONAL_MONTHLY_ID,
-      polarProductId: env.POLAR_PRODUCT_PRO_ID,
     },
     {
       key: "institutional",
@@ -134,25 +127,12 @@ export function getBillingPlanDefinitions(): BillingPlanDefinition[] {
       isFree: false,
       upgradeOfferBasisPoints: 1500,
       stripePriceId: env.STRIPE_PRICE_INSTITUTIONAL_MONTHLY_ID,
-      polarProductId: env.POLAR_PRODUCT_ELITE_ID,
     },
   ];
 }
 
 export function getBillingPlanDefinition(planKey: BillingPlanKey) {
   return getBillingPlanDefinitions().find((plan) => plan.key === planKey);
-}
-
-export function resolvePlanKeyFromProductId(productId?: string | null) {
-  if (!productId) {
-    return "student" as BillingPlanKey;
-  }
-
-  const plan = getBillingPlanDefinitions().find(
-    (item) => item.polarProductId && item.polarProductId === productId
-  );
-
-  return plan?.key ?? ("student" as BillingPlanKey);
 }
 
 export function resolvePlanKeyFromStripePriceId(priceId?: string | null) {

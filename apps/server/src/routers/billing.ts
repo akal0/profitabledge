@@ -15,7 +15,6 @@ import { activationMilestone } from "../db/schema/operations";
 import { tradingAccount } from "../db/schema/trading";
 import {
   getAffiliateCommissionBps as getServerAffiliateCommissionBps,
-  getBillingProvider,
   getBillingPlanDefinition,
   getBillingPlanDefinitions,
   getHigherBillingPlanKey,
@@ -27,7 +26,6 @@ import {
   REFERRAL_UPGRADE_TRIAL_DAYS,
   REFERRAL_UPGRADE_TRIAL_THRESHOLD,
   resolvePlanKeyFromStripePriceId,
-  resolvePlanKeyFromProductId,
   type BillingPlanKey,
 } from "../lib/billing/config";
 import { createUpgradeOfferDiscount } from "../lib/billing/discounts";
@@ -354,191 +352,6 @@ async function claimPendingGrowthAttributionIfOnboardingPending(input: {
   }
 
   return claimPendingGrowthAttribution(input);
-}
-
-async function upsertBillingCustomerFromPolar(input: {
-  userId: string;
-  polarCustomerId: string;
-  polarExternalId: string;
-  email?: string | null;
-  name?: string | null;
-  metadata?: Record<string, unknown>;
-}) {
-  const existing = await db
-    .select()
-    .from(billingCustomer)
-    .where(eq(billingCustomer.userId, input.userId))
-    .limit(1);
-
-  if (existing[0]) {
-    const [updated] = await db
-      .update(billingCustomer)
-      .set({
-        polarCustomerId: input.polarCustomerId,
-        polarExternalId: input.polarExternalId,
-        email: input.email ?? null,
-        name: input.name ?? null,
-        metadata: input.metadata ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(billingCustomer.id, existing[0].id))
-      .returning();
-
-    return updated;
-  }
-
-  const [inserted] = await db
-    .insert(billingCustomer)
-    .values({
-      id: crypto.randomUUID(),
-      userId: input.userId,
-      polarCustomerId: input.polarCustomerId,
-      polarExternalId: input.polarExternalId,
-      email: input.email ?? null,
-      name: input.name ?? null,
-      metadata: input.metadata ?? null,
-    })
-    .returning();
-
-  return inserted;
-}
-
-async function upsertBillingSubscriptionFromPolar(input: {
-  userId: string;
-  polarSubscriptionId: string;
-  polarCustomerId?: string | null;
-  polarCheckoutId?: string | null;
-  polarProductId?: string | null;
-  planKey: BillingPlanKey;
-  status: string;
-  currency?: string | null;
-  amount?: number | null;
-  recurringInterval?: string | null;
-  recurringIntervalCount?: number | null;
-  cancelAtPeriodEnd?: boolean;
-  currentPeriodStart?: Date | null;
-  currentPeriodEnd?: Date | null;
-  trialStart?: Date | null;
-  trialEnd?: Date | null;
-  startedAt?: Date | null;
-  endsAt?: Date | null;
-  endedAt?: Date | null;
-  canceledAt?: Date | null;
-  metadata?: Record<string, unknown>;
-}) {
-  const existing = await db
-    .select()
-    .from(billingSubscription)
-    .where(
-      eq(billingSubscription.polarSubscriptionId, input.polarSubscriptionId)
-    )
-    .limit(1);
-
-  const values = {
-    userId: input.userId,
-    polarSubscriptionId: input.polarSubscriptionId,
-    polarCustomerId: input.polarCustomerId ?? null,
-    polarCheckoutId: input.polarCheckoutId ?? null,
-    polarProductId: input.polarProductId ?? null,
-    planKey: input.planKey,
-    status: input.status,
-    currency: input.currency ?? null,
-    amount: input.amount ?? null,
-    recurringInterval: input.recurringInterval ?? null,
-    recurringIntervalCount: input.recurringIntervalCount ?? null,
-    cancelAtPeriodEnd: Boolean(input.cancelAtPeriodEnd),
-    currentPeriodStart: input.currentPeriodStart ?? null,
-    currentPeriodEnd: input.currentPeriodEnd ?? null,
-    trialStart: input.trialStart ?? null,
-    trialEnd: input.trialEnd ?? null,
-    startedAt: input.startedAt ?? null,
-    endsAt: input.endsAt ?? null,
-    endedAt: input.endedAt ?? null,
-    canceledAt: input.canceledAt ?? null,
-    metadata: input.metadata ?? null,
-    updatedAt: new Date(),
-  };
-
-  if (existing[0]) {
-    const [updated] = await db
-      .update(billingSubscription)
-      .set(values)
-      .where(eq(billingSubscription.id, existing[0].id))
-      .returning();
-    return updated;
-  }
-
-  const [inserted] = await db
-    .insert(billingSubscription)
-    .values({
-      id: crypto.randomUUID(),
-      ...values,
-    })
-    .returning();
-  return inserted;
-}
-
-async function upsertBillingOrderFromPolar(input: {
-  userId: string;
-  polarOrderId: string;
-  polarCustomerId?: string | null;
-  polarSubscriptionId?: string | null;
-  polarCheckoutId?: string | null;
-  polarProductId?: string | null;
-  planKey: BillingPlanKey;
-  status: string;
-  currency?: string | null;
-  subtotalAmount?: number | null;
-  discountAmount?: number | null;
-  taxAmount?: number | null;
-  totalAmount?: number | null;
-  paid?: boolean;
-  paidAt?: Date | null;
-  metadata?: Record<string, unknown>;
-}) {
-  const existing = await db
-    .select()
-    .from(billingOrder)
-    .where(eq(billingOrder.polarOrderId, input.polarOrderId))
-    .limit(1);
-
-  const values = {
-    userId: input.userId,
-    polarOrderId: input.polarOrderId,
-    polarCustomerId: input.polarCustomerId ?? null,
-    polarSubscriptionId: input.polarSubscriptionId ?? null,
-    polarCheckoutId: input.polarCheckoutId ?? null,
-    polarProductId: input.polarProductId ?? null,
-    planKey: input.planKey,
-    status: input.status,
-    currency: input.currency ?? null,
-    subtotalAmount: input.subtotalAmount ?? null,
-    discountAmount: input.discountAmount ?? null,
-    taxAmount: input.taxAmount ?? null,
-    totalAmount: input.totalAmount ?? null,
-    paid: Boolean(input.paid),
-    paidAt: input.paidAt ?? null,
-    metadata: input.metadata ?? null,
-    updatedAt: new Date(),
-  };
-
-  if (existing[0]) {
-    const [updated] = await db
-      .update(billingOrder)
-      .set(values)
-      .where(eq(billingOrder.id, existing[0].id))
-      .returning();
-    return updated;
-  }
-
-  const [inserted] = await db
-    .insert(billingOrder)
-    .values({
-      id: crypto.randomUUID(),
-      ...values,
-    })
-    .returning();
-  return inserted;
 }
 
 function fromStripeTimestamp(value?: number | null) {
@@ -2020,7 +1833,6 @@ async function completeGrowthAccessForUser(
 
 export const billingRouter = router({
   getPublicConfig: publicProcedure.query(() => {
-    const billingProvider = getBillingProvider();
     const plans = getBillingPlanDefinitions().map((plan) => ({
       key: plan.key,
       title: plan.title,
@@ -2034,11 +1846,7 @@ export const billingRouter = router({
       includedLiveSyncSlots: plan.includedLiveSyncSlots,
       includesPropTracker: plan.includesPropTracker,
       isFree: plan.isFree,
-      isConfigured:
-        plan.isFree ||
-        (billingProvider === "stripe"
-          ? Boolean(plan.stripePriceId)
-          : Boolean(plan.polarProductId)),
+      isConfigured: plan.isFree || Boolean(plan.stripePriceId),
     }));
 
     return {
@@ -2149,7 +1957,7 @@ export const billingRouter = router({
 
   getState: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
-    const [access, referral, affiliate, billing, onboarding, credits, legacyMigration] =
+    const [access, referral, affiliate, billing, onboarding, credits] =
       await Promise.all([
         getAccessStatus({
           userId: user.id,
@@ -2161,7 +1969,6 @@ export const billingRouter = router({
         getActiveBillingState(user.id),
         getOnboardingStatus(user.id),
         getUserEdgeCreditSnapshot(user.id),
-        getStripeBetaMigrationState(user.id),
       ]);
     const isAdmin = isGrowthAdmin({
       role: user.role,
@@ -2178,7 +1985,6 @@ export const billingRouter = router({
         customer: billing.customer,
         subscription: billing.subscription,
         override: billing.override,
-        legacyMigration,
         credits,
       },
       admin: {
@@ -2194,7 +2000,6 @@ export const billingRouter = router({
         provider: billingOrder.provider,
         providerOrderId: billingOrder.providerOrderId,
         stripeInvoiceId: billingOrder.stripeInvoiceId,
-        polarOrderId: billingOrder.polarOrderId,
         planKey: billingOrder.planKey,
         status: billingOrder.status,
         currency: billingOrder.currency,
@@ -2213,10 +2018,7 @@ export const billingRouter = router({
 
     return invoices.map((invoice) => ({
       ...invoice,
-      referenceId:
-        invoice.providerOrderId ??
-        invoice.stripeInvoiceId ??
-        invoice.polarOrderId,
+      referenceId: invoice.providerOrderId ?? invoice.stripeInvoiceId,
       planTitle:
         getBillingPlanDefinition(invoice.planKey as BillingPlanKey)?.title ??
         "Student",
@@ -2745,11 +2547,6 @@ export const billingRouter = router({
     return syncStripeBillingStateForUser(user);
   }),
 
-  syncFromPolar: protectedProcedure.mutation(async ({ ctx }) => {
-    const user = await getUserRow(ctx.session.user.id);
-    return syncStripeBillingStateForUser(user);
-  }),
-
   listAffiliateApplications: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);
     assertGrowthAdmin({ role: user.role, email: user.email });
@@ -2763,47 +2560,6 @@ export const billingRouter = router({
 
     return listAffiliatePayoutQueue();
   }),
-
-  listLegacyBillingCustomers: protectedProcedure.query(async ({ ctx }) => {
-    const user = await getUserRow(ctx.session.user.id);
-    assertGrowthAdmin({ role: user.role, email: user.email });
-
-    return listLegacyBillingCustomers();
-  }),
-
-  disconnectLegacyBillingCustomer: protectedProcedure
-    .input(
-      z.object({
-        userId: z.string(),
-        reason: z.string().max(500).optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin({ role: user.role, email: user.email });
-
-      return disconnectLegacyBillingCustomerByUserId({
-        userId: input.userId,
-        disconnectedByUserId: user.id,
-        reason: input.reason ?? null,
-      });
-    }),
-
-  disconnectAllLegacyBillingCustomers: protectedProcedure
-    .input(
-      z.object({
-        reason: z.string().max(500).optional(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const user = await getUserRow(ctx.session.user.id);
-      assertGrowthAdmin({ role: user.role, email: user.email });
-
-      return disconnectAllLegacyBillingCustomers({
-        disconnectedByUserId: user.id,
-        reason: input.reason ?? null,
-      });
-    }),
 
   approveAffiliateWithdrawal: protectedProcedure
     .input(
@@ -2940,190 +2696,6 @@ export const billingRouter = router({
     }),
 
 });
-
-export async function syncPolarWebhookEvent(event: any) {
-  const objectId = event?.data?.id ?? null;
-  const eventKey = `${event.type}:${objectId ?? "unknown"}:${new Date(
-    event.timestamp
-  ).toISOString()}`;
-
-  const seen = await db
-    .select()
-    .from(billingWebhookEvent)
-    .where(eq(billingWebhookEvent.eventKey, eventKey))
-    .limit(1);
-
-  if (seen[0]) {
-    return;
-  }
-
-  await db.insert(billingWebhookEvent).values({
-    id: crypto.randomUUID(),
-    eventKey,
-    eventType: event.type,
-    objectId,
-    payload: event,
-  });
-
-  if (event.type.startsWith("customer.")) {
-    const externalId = event.data.externalId ?? event.data.external_id ?? null;
-    if (!externalId) {
-      return;
-    }
-
-    await upsertBillingCustomerFromPolar({
-      userId: externalId,
-      polarCustomerId: event.data.id,
-      polarExternalId: externalId,
-      email: event.data.email ?? null,
-      name: event.data.name ?? null,
-      metadata: event.data.metadata ?? {},
-    });
-
-    return;
-  }
-
-  if (event.type.startsWith("subscription.")) {
-    const externalId = event.data.customer?.externalId ?? null;
-    const userId =
-      externalId ??
-      (
-        await db
-          .select()
-          .from(billingCustomer)
-          .where(eq(billingCustomer.polarCustomerId, event.data.customerId))
-          .limit(1)
-      )[0]?.userId;
-
-    if (!userId) {
-      return;
-    }
-
-    await upsertBillingCustomerFromPolar({
-      userId,
-      polarCustomerId: event.data.customer.id,
-      polarExternalId: event.data.customer.externalId ?? userId,
-      email: event.data.customer.email ?? null,
-      name: event.data.customer.name ?? null,
-      metadata: event.data.customer.metadata ?? {},
-    });
-
-    await upsertBillingSubscriptionFromPolar({
-      userId,
-      polarSubscriptionId: event.data.id,
-      polarCustomerId: event.data.customerId,
-      polarCheckoutId: event.data.checkoutId,
-      polarProductId: event.data.productId,
-      planKey: resolvePlanKeyFromProductId(event.data.productId),
-      status: event.data.status,
-      currency: event.data.currency,
-      amount: event.data.amount,
-      recurringInterval: event.data.recurringInterval,
-      recurringIntervalCount: event.data.recurringIntervalCount,
-      cancelAtPeriodEnd: event.data.cancelAtPeriodEnd,
-      currentPeriodStart: event.data.currentPeriodStart,
-      currentPeriodEnd: event.data.currentPeriodEnd,
-      trialStart: event.data.trialStart,
-      trialEnd: event.data.trialEnd,
-      startedAt: event.data.startedAt,
-      endsAt: event.data.endsAt,
-      endedAt: event.data.endedAt,
-      canceledAt: event.data.canceledAt,
-      metadata: event.data.metadata ?? {},
-    });
-
-    if (event.type === "subscription.active") {
-      await markAffiliateSubscriptionActive({
-        referredUserId: userId,
-        subscriptionId: event.data.id,
-        activatedAt: new Date(event.timestamp),
-      });
-    }
-
-    await updateUserPremiumFlag(userId);
-    return;
-  }
-
-  if (event.type.startsWith("order.")) {
-    const externalId = event.data.customer?.externalId ?? null;
-    const userId =
-      externalId ??
-      (
-        await db
-          .select()
-          .from(billingCustomer)
-          .where(eq(billingCustomer.polarCustomerId, event.data.customerId))
-          .limit(1)
-      )[0]?.userId;
-
-    if (!userId) {
-      return;
-    }
-
-    const orderMetadata = normalizeBillingMetadata(event.data.metadata);
-    const affiliateOrderMetadata = extractAffiliateOrderMetadata(orderMetadata);
-
-    await upsertBillingCustomerFromPolar({
-      userId,
-      polarCustomerId: event.data.customer.id,
-      polarExternalId: event.data.customer.externalId ?? userId,
-      email: event.data.customer.email ?? null,
-      name: event.data.customer.name ?? null,
-      metadata: event.data.customer.metadata ?? {},
-    });
-
-    await upsertBillingOrderFromPolar({
-      userId,
-      polarOrderId: event.data.id,
-      polarCustomerId: event.data.customerId,
-      polarSubscriptionId: event.data.subscriptionId,
-      polarCheckoutId: event.data.checkoutId,
-      polarProductId: event.data.productId,
-      planKey: resolvePlanKeyFromProductId(event.data.productId),
-      status: event.data.status,
-      currency: event.data.currency,
-      subtotalAmount: event.data.subtotalAmount,
-      discountAmount: event.data.discountAmount,
-      taxAmount: event.data.taxAmount,
-      totalAmount: event.data.totalAmount,
-      paid: event.data.paid,
-      paidAt: event.type === "order.paid" ? new Date(event.timestamp) : null,
-      metadata: orderMetadata ?? {},
-    });
-
-    if (event.type === "order.paid") {
-      await markReferralConversionPaid({
-        referredUserId: userId,
-        orderId: event.data.id,
-        subscriptionId: event.data.subscriptionId ?? null,
-        paidAt: new Date(event.timestamp),
-      });
-
-      await recordAffiliateCommissionEvent({
-        referredUserId: userId,
-        polarOrderId: event.data.id,
-        polarSubscriptionId: event.data.subscriptionId ?? null,
-        affiliateAttributionId: affiliateOrderMetadata.affiliateAttributionId,
-        planKey: resolvePlanKeyFromProductId(event.data.productId),
-        orderAmount: resolveCommissionableOrderAmount({
-          subtotalAmount: event.data.subtotalAmount,
-          discountAmount: event.data.discountAmount,
-          totalAmount: event.data.totalAmount,
-        }),
-        currency: event.data.currency ?? null,
-        commissionBps: affiliateOrderMetadata.commissionBps,
-        metadata: orderMetadata,
-        occurredAt: new Date(event.timestamp),
-      });
-
-      if (affiliateOrderMetadata.rewardGrantId) {
-        await markReferralRewardGrantConsumed(
-          affiliateOrderMetadata.rewardGrantId
-        );
-      }
-    }
-  }
-}
 
 export async function syncStripeWebhookEvent(event: Stripe.Event) {
   const objectId =

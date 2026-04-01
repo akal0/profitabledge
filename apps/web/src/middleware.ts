@@ -12,12 +12,21 @@ import {
   serializeStoredGrowthTouch,
 } from "@/features/growth/lib/growth-attribution";
 
-export function middleware(request: NextRequest) {
-  const response = NextResponse.next();
+const APEX_PRODUCTION_HOST = "profitabledge.com";
+const CANONICAL_PRODUCTION_HOST = "www.profitabledge.com";
 
+export function middleware(request: NextRequest) {
   if (request.method !== "GET" && request.method !== "HEAD") {
-    return response;
+    return NextResponse.next();
   }
+
+  if (request.nextUrl.hostname === APEX_PRODUCTION_HOST) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.hostname = CANONICAL_PRODUCTION_HOST;
+    return NextResponse.redirect(redirectUrl, 308);
+  }
+
+  const response = NextResponse.next();
 
   const existingTouch = parseStoredGrowthTouch(
     request.cookies.get(GROWTH_TOUCH_COOKIE)?.value

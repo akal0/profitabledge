@@ -1956,8 +1956,7 @@ export async function buildAffiliateState(userId: string) {
 
     return {
       ...row,
-      orderReference:
-        row.providerOrderId ?? row.stripeInvoiceId ?? row.polarOrderId ?? null,
+      orderReference: row.providerOrderId ?? row.stripeInvoiceId ?? null,
       referredUsername: row.referredUsernameSnapshot ?? row.referredUsername,
       referredEmail: row.referredEmailSnapshot ?? row.referredEmail,
       paymentPlanKey,
@@ -2363,7 +2362,6 @@ export async function saveAffiliateOffer(input: {
         discountProvider: "stripe",
         providerDiscountId: stripeCoupon.id,
         providerPromotionCodeId: null,
-        polarDiscountId: null,
         discountBasisPoints: basisPoints,
         isActive: true,
         updatedAt: new Date(),
@@ -2385,7 +2383,6 @@ export async function saveAffiliateOffer(input: {
         discountProvider: "stripe",
         providerDiscountId: stripeCoupon.id,
         providerPromotionCodeId: null,
-        polarDiscountId: null,
         discountBasisPoints: basisPoints,
         isActive: true,
         createdByUserId: input.createdByUserId,
@@ -4142,13 +4139,11 @@ function resolvePaidReferralOrderReference(order: {
   id: string;
   providerOrderId: string | null;
   providerInvoiceId: string | null;
-  polarOrderId: string | null;
   stripeInvoiceId: string | null;
 }) {
   return (
     order.providerOrderId ??
     order.providerInvoiceId ??
-    order.polarOrderId ??
     order.stripeInvoiceId ??
     order.id
   );
@@ -4160,7 +4155,6 @@ async function backfillReferralConversionPaidStatus(userId: string) {
       id: billingOrder.id,
       providerOrderId: billingOrder.providerOrderId,
       providerInvoiceId: billingOrder.providerInvoiceId,
-      polarOrderId: billingOrder.polarOrderId,
       stripeInvoiceId: billingOrder.stripeInvoiceId,
       providerSubscriptionId: billingOrder.providerSubscriptionId,
       paidAt: billingOrder.paidAt,
@@ -4590,8 +4584,6 @@ async function createReferralRewardGrant(input: {
   discountProvider?: string | null;
   providerDiscountId?: string | null;
   providerDiscountCode?: string | null;
-  polarDiscountId?: string | null;
-  polarDiscountCode?: string | null;
   targetPlanKey?: string | null;
   overrideStartsAt?: Date | null;
   overrideEndsAt?: Date | null;
@@ -4626,8 +4618,6 @@ async function createReferralRewardGrant(input: {
       discountProvider: input.discountProvider ?? null,
       providerDiscountId: input.providerDiscountId ?? null,
       providerDiscountCode: input.providerDiscountCode ?? null,
-      polarDiscountId: input.polarDiscountId ?? null,
-      polarDiscountCode: input.polarDiscountCode ?? null,
       targetPlanKey: input.targetPlanKey ?? null,
       overrideStartsAt: input.overrideStartsAt ?? null,
       overrideEndsAt: input.overrideEndsAt ?? null,
@@ -4750,7 +4740,6 @@ async function grantFreeMonthReward(userId: string, sequenceNumber: number) {
     status,
     discountProvider: "stripe",
     providerDiscountId: discount.id,
-    polarDiscountId: null,
     targetPlanKey,
   });
 }
@@ -4941,8 +4930,6 @@ export async function recordAffiliateCommissionEvent(input: {
   providerOrderId?: string | null;
   providerSubscriptionId?: string | null;
   billingOrderId?: string | null;
-  polarOrderId?: string | null;
-  polarSubscriptionId?: string | null;
   stripeInvoiceId?: string | null;
   stripeSubscriptionId?: string | null;
   affiliateAttributionId?: string | null;
@@ -5027,11 +5014,8 @@ export async function recordAffiliateCommissionEvent(input: {
     return null;
   }
 
-  const provider =
-    input.provider ??
-    (input.stripeInvoiceId || input.providerOrderId ? "stripe" : "polar");
-  const providerOrderId =
-    input.providerOrderId ?? input.stripeInvoiceId ?? input.polarOrderId ?? null;
+  const provider = input.provider ?? "stripe";
+  const providerOrderId = input.providerOrderId ?? input.stripeInvoiceId ?? null;
   if (!providerOrderId) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -5096,13 +5080,8 @@ export async function recordAffiliateCommissionEvent(input: {
       provider,
       providerOrderId,
       providerSubscriptionId:
-        input.providerSubscriptionId ??
-        input.stripeSubscriptionId ??
-        input.polarSubscriptionId ??
-        null,
+        input.providerSubscriptionId ?? input.stripeSubscriptionId ?? null,
       billingOrderId: input.billingOrderId ?? null,
-      polarOrderId: input.polarOrderId ?? null,
-      polarSubscriptionId: input.polarSubscriptionId ?? null,
       stripeInvoiceId: input.stripeInvoiceId ?? null,
       stripeSubscriptionId: input.stripeSubscriptionId ?? null,
       planKey: input.planKey ?? metadataPlanKey ?? null,
@@ -5124,7 +5103,6 @@ export async function recordAffiliateCommissionEvent(input: {
       convertedSubscriptionId:
         input.providerSubscriptionId ??
         input.stripeSubscriptionId ??
-        input.polarSubscriptionId ??
         attribution.convertedSubscriptionId,
       updatedAt: new Date(),
     })

@@ -11,12 +11,12 @@ export const metadata: Metadata = {
   },
   description:
     "Track, analyse, and improve your trading performance. Import trades from MT5 and other brokers, journal your setups, and discover the edge that makes you consistently profitable.",
-  metadataBase: new URL("https://profitabledge.com"),
+  metadataBase: new URL("https://www.profitabledge.com"),
   openGraph: {
     title: "profitabledge — Turn your trading data into your profitable edge",
     description:
       "Track, analyse, and improve your trading performance. Import trades from MT5 and other brokers, journal your setups, and discover the edge that makes you consistently profitable.",
-    url: "https://profitabledge.com",
+    url: "https://www.profitabledge.com",
     siteName: "profitabledge",
     images: [
       {

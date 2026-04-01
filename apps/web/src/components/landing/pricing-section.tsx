@@ -466,7 +466,7 @@ export function PricingSection() {
         </div>
       </div>
 
-      <div className="grid w-full gap-6 group/container xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         {plans.map((plan) => {
           const meta = BILLING_PLAN_CARD_META[plan.key];
           const isProfessional = plan.key === "professional";
@@ -508,7 +508,7 @@ export function PricingSection() {
             <div
               key={plan.key}
               className={cn(
-                "group flex flex-col overflow-hidden rounded-sm p-1.5 ring-1 shadow-sidebar-button transition-all duration-300 hover:scale-[103%] cursor-pointer",
+                "group flex flex-col rounded-sm p-1.5 ring-1 shadow-sidebar-button overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[103%]",
                 outerCn
               )}
               style={{
@@ -523,11 +523,11 @@ export function PricingSection() {
             >
               <div
                 className={cn(
-                  "flex flex-1 flex-col overflow-hidden rounded-sm transition-all duration-250 group-hover:brightness-110",
+                  "flex flex-1 flex-col rounded-sm overflow-hidden transition-all duration-250 group-hover:brightness-110",
                   innerCn
                 )}
               >
-                <div className="relative h-32 w-full overflow-hidden rounded-t-sm">
+                <div className="relative w-full h-32 overflow-hidden rounded-t-sm">
                   <Image
                     src={meta.imageSrc}
                     alt={plan.title}
@@ -548,15 +548,6 @@ export function PricingSection() {
                       >
                         {plan.title}
                       </p>
-                      <div className="flex items-center gap-2">
-                        {plan.highlight ? (
-                          <Badge
-                            className={cn("text-[11px]", meta.badgeClassName)}
-                          >
-                            {plan.highlight}
-                          </Badge>
-                        ) : null}
-                      </div>
                     </div>
 
                     <p className="text-xs font-medium tracking-[-0.04em] text-white/50 sm:text-xs">
@@ -564,41 +555,39 @@ export function PricingSection() {
                     </p>
                   </div>
 
-                  <Separator className="-mx-5 w-auto opacity-20" />
+                  <Separator className="-mx-5 w-auto opacity-15" />
 
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <p className="text-xl font-bold text-white sm:text-2xl">
-                          {pricing.amount}
-                          <span className="ml-1 text-sm font-medium text-white/35">
-                            {pricing.detail}
-                          </span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xl font-bold text-white">
+                        {pricing.amount}
+                        <span className="ml-1 text-sm font-normal text-white/35">
+                          {pricing.detail}
+                        </span>
+                      </p>
+                      {pricing.subdetail ? (
+                        <p className="text-xs text-white/35">
+                          {pricing.subdetail}
                         </p>
-                        {pricing.subdetail ? (
-                          <p className="text-xs text-white/35">
-                            {pricing.subdetail}
-                          </p>
-                        ) : null}
-                      </div>
-
-                      {pricing.savings ? (
-                        <Badge
-                          className={cn("text-[11px]", meta.badgeClassName)}
-                        >
-                          {pricing.savings}
-                        </Badge>
                       ) : null}
                     </div>
-
-                    {plan.tagline ? (
-                      <p className="font-medium text-right text-[11px] leading-5 text-white/35">
-                        {plan.tagline}
-                      </p>
+                    {pricing.savings ? (
+                      <span className="rounded px-3 py-1 text-[10px] font-semibold ring ring-teal-400/20 bg-teal-500/10 text-teal-300">
+                        {pricing.savings}
+                      </span>
+                    ) : plan.highlight ? (
+                      <span
+                        className={cn(
+                          "rounded px-3 py-1 text-[10px] font-semibold",
+                          meta.badgeClassName
+                        )}
+                      >
+                        {plan.highlight}
+                      </span>
                     ) : null}
                   </div>
 
-                  <Separator className="-mx-5 w-auto opacity-20" />
+                  <Separator className="-mx-5 w-auto opacity-15" />
 
                   <ul className="flex flex-1 flex-col gap-2.5">
                     {featureLines.map((line) => (

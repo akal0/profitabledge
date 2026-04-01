@@ -141,14 +141,14 @@ const Plans = ({
 
   return (
     <div className="flex flex-col w-full items-center justify-center antialiased">
-      <div className="mb-6 flex w-full max-w-md items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-1">
+      <div className="mb-6 flex items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-1">
         {(["monthly", "annual"] as const).map((interval) => (
           <button
             key={interval}
             type="button"
             onClick={() => onBillingIntervalChange(interval)}
             className={cn(
-              "flex-1 rounded-full px-4 py-2 text-sm transition-colors",
+              "min-w-[96px] cursor-pointer rounded-full px-4 py-2 text-sm transition-colors",
               billingInterval === interval
                 ? "bg-white text-black"
                 : "text-white/60 hover:text-white"
@@ -159,7 +159,7 @@ const Plans = ({
         ))}
       </div>
 
-      <div className="grid w-full gap-6 group/container xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         {plans.map((plan) => {
           const meta = CARD_META[plan.key];
           const isActive = activePlanKey === plan.key;

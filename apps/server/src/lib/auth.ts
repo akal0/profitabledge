@@ -180,7 +180,9 @@ const authOptions = {
       adminRoles: ["admin"],
       roles: {
         admin: adminAc,
+        ambassador: userAc,
         moderator: moderatorAc,
+        partner: userAc,
         user: userAc,
       },
     }),

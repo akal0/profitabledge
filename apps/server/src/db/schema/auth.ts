@@ -18,7 +18,7 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").notNull(),
   image: text("image"),
-  role: text("role").default("user"),
+  role: text("role").default("user"), // comma-separated app roles: user, ambassador, partner, moderator, admin
   banned: boolean("banned").default(false),
   banReason: text("ban_reason"),
   banExpires: timestamp("ban_expires"),

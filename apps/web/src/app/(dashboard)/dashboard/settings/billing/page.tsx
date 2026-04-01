@@ -56,6 +56,31 @@ type BillingPageState = {
   } | null;
 };
 
+type StaffAccessOverrideRow = {
+  id: string;
+  planKey: BillingPlanKey;
+  metadata?: {
+    presetKey?: string | null;
+    reason?: string | null;
+    grantedByEmail?: string | null;
+  } | null;
+  startsAt: string | Date;
+  endsAt: string | Date;
+  userId: string;
+  email: string;
+  username: string | null;
+  name: string;
+  role: string | null;
+};
+
+const STAFF_ACCESS_PRESETS = [
+  { key: "ambassador", label: "Ambassador year", durationDays: 365 },
+  { key: "partner", label: "Partner year", durationDays: 365 },
+  { key: "launch", label: "Launch month", durationDays: 30 },
+  { key: "lifetime", label: "Lifetime", durationDays: 3650 },
+  { key: "manual", label: "Custom days", durationDays: null },
+] as const;
+
 type ResolvedAffiliateProfile = {
   name: string;
   username: string | null;
@@ -291,6 +316,16 @@ export default function BillingSettingsPage() {
     useState<ResolvedAffiliateProfile | null>(null);
   const [appliedAffiliate, setAppliedAffiliate] =
     useState<ResolvedAffiliateProfile | null>(null);
+  const [staffAccessIdentifier, setStaffAccessIdentifier] = useState("");
+  const [staffAccessPlanKey, setStaffAccessPlanKey] =
+    useState<Extract<BillingPlanKey, "professional" | "institutional">>(
+      "professional"
+    );
+  const [staffAccessPresetKey, setStaffAccessPresetKey] = useState<
+    (typeof STAFF_ACCESS_PRESETS)[number]["key"]
+  >("ambassador");
+  const [staffAccessDurationDays, setStaffAccessDurationDays] = useState("365");
+  const [staffAccessReason, setStaffAccessReason] = useState("");
   const resolveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestAffiliateCodeRequestRef = useRef<string | null>(null);
   const plans = billingConfigQuery.data?.plans ?? [];
@@ -301,8 +336,13 @@ export default function BillingSettingsPage() {
   const activePlan =
     plans.find((plan) => plan.key === activePlanKey) ?? plans[0] ?? null;
   const access = billingStateQuery.data?.access;
+  const isAdmin = Boolean(billingStateQuery.data?.admin?.isAdmin);
   const subscription = billingData?.subscription;
   const creditState = billingData?.credits;
+  const staffOverridesQuery = useQuery({
+    ...trpcOptions.billing.listStaffAccessOverrides.queryOptions(),
+    enabled: isAdmin,
+  });
   const canManageSubscription = Boolean(
     billingData?.customer?.stripeCustomerId &&
       billingData?.subscription?.provider === "stripe"
@@ -312,6 +352,46 @@ export default function BillingSettingsPage() {
     activePlanKey !== "student" && canManageSubscription && !cancellationScheduled;
   const returnedFromStripeCheckout =
     searchParams?.get("checkout") === "success";
+  const refreshAdminAccessState = async () => {
+    await Promise.all([
+      billingStateQuery.refetch(),
+      isAdmin ? staffOverridesQuery.refetch() : Promise.resolve(),
+    ]);
+  };
+  const grantStaffAccess = useMutation<any, unknown, any>({
+    mutationFn: (input) =>
+      (trpcClient.billing as any).grantStaffAccessOverride.mutate(input),
+    onSuccess: async (result) => {
+      await refreshAdminAccessState();
+      setStaffAccessIdentifier("");
+      setStaffAccessReason("");
+      toast.success(
+        `Granted ${result.user.name} ${staffAccessPlanKey} access.`
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to grant access"
+      );
+    },
+  });
+  const revokeStaffAccess = useMutation<any, unknown, any>({
+    mutationFn: (input) =>
+      (trpcClient.billing as any).revokeStaffAccessOverride.mutate(input),
+    onSuccess: async (result) => {
+      await refreshAdminAccessState();
+      toast.success(
+        result.deletedCount > 0
+          ? `Removed manual access for ${result.user.name}.`
+          : `No manual access override was active for ${result.user.name}.`
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof Error ? error.message : "Unable to revoke access"
+      );
+    },
+  });
   const resolveAffiliateCode = async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) {
@@ -450,6 +530,43 @@ export default function BillingSettingsPage() {
         e instanceof Error ? e.message : "Unable to start cancellation"
       );
     }
+  };
+
+  const handleGrantStaffAccess = async () => {
+    const normalizedIdentifier = staffAccessIdentifier.trim();
+    const selectedPreset = STAFF_ACCESS_PRESETS.find(
+      (preset) => preset.key === staffAccessPresetKey
+    );
+    const durationDays =
+      selectedPreset?.durationDays ?? Number.parseInt(staffAccessDurationDays, 10);
+
+    if (!normalizedIdentifier) {
+      toast.error("Enter an email or @username first");
+      return;
+    }
+
+    if (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 3650) {
+      toast.error("Duration must be between 1 and 3650 days");
+      return;
+    }
+
+    await grantStaffAccess.mutateAsync({
+      userIdentifier: normalizedIdentifier,
+      planKey: staffAccessPlanKey,
+      presetKey: staffAccessPresetKey,
+      durationDays,
+      reason: staffAccessReason.trim() || undefined,
+    });
+  };
+
+  const handleRevokeStaffAccess = async (
+    userIdentifier: string,
+    reason?: string | null
+  ) => {
+    await revokeStaffAccess.mutateAsync({
+      userIdentifier,
+      reason: reason ?? "Manual revocation",
+    });
   };
 
   useEffect(() => {
@@ -917,6 +1034,190 @@ export default function BillingSettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {isAdmin ? (
+        <>
+          <Separator />
+
+          <div className="px-6 py-5 sm:px-8">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="flex size-8 items-center justify-center rounded-sm bg-emerald-500/10 text-emerald-300 ring ring-emerald-500/20">
+                <Shield className="size-4" />
+              </div>
+              <div>
+                <SectionLabel>Admin access overrides</SectionLabel>
+                <p className="mt-1 text-xs text-white/35">
+                  Grant full app access without Stripe checkout for staff, ambassadors, and partners.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-sm bg-sidebar p-1.5 ring ring-white/5">
+              <div className="rounded-sm bg-sidebar-accent p-4 sm:p-5">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_180px_180px_140px_auto] lg:items-end">
+                  <div className="space-y-2">
+                    <SectionLabel>User</SectionLabel>
+                    <Input
+                      value={staffAccessIdentifier}
+                      onChange={(event) => setStaffAccessIdentifier(event.target.value)}
+                      placeholder="name@profitabledge.com or @username"
+                      className="h-11 border-white/10 bg-sidebar text-sm text-white placeholder:text-white/28"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <SectionLabel>Preset</SectionLabel>
+                    <select
+                      value={staffAccessPresetKey}
+                      onChange={(event) => {
+                        const preset = STAFF_ACCESS_PRESETS.find(
+                          (entry) => entry.key === event.target.value
+                        );
+                        setStaffAccessPresetKey(
+                          event.target.value as (typeof STAFF_ACCESS_PRESETS)[number]["key"]
+                        );
+                        if (preset?.durationDays) {
+                          setStaffAccessDurationDays(String(preset.durationDays));
+                        }
+                      }}
+                      className="flex h-11 w-full rounded-sm border border-white/10 bg-sidebar px-3 text-sm text-white outline-none transition-colors focus:border-white/20"
+                    >
+                      {STAFF_ACCESS_PRESETS.map((preset) => (
+                        <option key={preset.key} value={preset.key}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <SectionLabel>Plan</SectionLabel>
+                    <select
+                      value={staffAccessPlanKey}
+                      onChange={(event) =>
+                        setStaffAccessPlanKey(
+                          event.target.value as Extract<
+                            BillingPlanKey,
+                            "professional" | "institutional"
+                          >
+                        )
+                      }
+                      className="flex h-11 w-full rounded-sm border border-white/10 bg-sidebar px-3 text-sm text-white outline-none transition-colors focus:border-white/20"
+                    >
+                      <option value="professional">Professional</option>
+                      <option value="institutional">Institutional</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <SectionLabel>Days</SectionLabel>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={3650}
+                      value={staffAccessDurationDays}
+                      onChange={(event) =>
+                        setStaffAccessDurationDays(event.target.value)
+                      }
+                      className="h-11 border-white/10 bg-sidebar text-sm text-white placeholder:text-white/28"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={handleGrantStaffAccess}
+                    disabled={grantStaffAccess.isPending}
+                    className="h-11 rounded-sm bg-white text-sm font-medium text-black hover:bg-white/90"
+                  >
+                    {grantStaffAccess.isPending ? "Granting..." : "Grant access"}
+                  </Button>
+                </div>
+
+                <div className="mt-3 space-y-2">
+                  <SectionLabel>Reason</SectionLabel>
+                  <Input
+                    value={staffAccessReason}
+                    onChange={(event) => setStaffAccessReason(event.target.value)}
+                    placeholder="Admin comp, ambassador access, partner onboarding..."
+                    className="h-11 border-white/10 bg-sidebar text-sm text-white placeholder:text-white/28"
+                  />
+                </div>
+
+                <p className="mt-3 text-xs text-white/30">
+                  This creates an app-level entitlement override. Use it for internal comps and ambassador access without charging the user.
+                </p>
+
+                <Separator className="my-4 opacity-15" />
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <SectionLabel>Active manual access</SectionLabel>
+                    {staffOverridesQuery.isFetching ? (
+                      <span className="text-xs text-white/30">Refreshing...</span>
+                    ) : null}
+                  </div>
+
+                  {staffOverridesQuery.data?.length ? (
+                    <div className="space-y-2">
+                      {(staffOverridesQuery.data as StaffAccessOverrideRow[]).map((override) => (
+                        <div
+                          key={override.id}
+                          className="flex flex-col gap-3 rounded-sm border border-white/8 bg-sidebar px-3 py-3 text-sm text-white/72 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div>
+                            <p className="font-medium text-white">
+                              {override.name}
+                              <span className="ml-2 text-white/35">
+                                {override.username ? `@${override.username}` : override.email}
+                              </span>
+                            </p>
+                            <p className="mt-1 text-xs text-white/38">
+                              {override.planKey === "institutional"
+                                ? "Institutional"
+                                : "Professional"}{" "}
+                              access until {formatDate(override.endsAt)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-white/30">
+                              {override.metadata?.presetKey
+                                ? `Preset: ${override.metadata.presetKey}`
+                                : "Manual duration"}
+                              {override.metadata?.reason
+                                ? ` • ${override.metadata.reason}`
+                                : ""}
+                              {override.metadata?.grantedByEmail
+                                ? ` • granted by ${override.metadata.grantedByEmail}`
+                                : ""}
+                            </p>
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() =>
+                              handleRevokeStaffAccess(
+                                override.username || override.email,
+                                override.metadata?.reason
+                              )
+                            }
+                            disabled={revokeStaffAccess.isPending}
+                            className="h-9 rounded-sm border border-white/10 bg-white/5 text-xs text-white hover:bg-white/10"
+                          >
+                            Revoke
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-sm border border-dashed border-white/10 bg-sidebar px-3 py-4 text-sm text-white/35">
+                      No active manual overrides.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

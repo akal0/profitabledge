@@ -414,6 +414,20 @@
       "when": 1775000000001,
       "tag": "0051_alert_rule_webhook_url",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1775000000002,
+      "tag": "0052_drop_legacy_polar_billing_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1775000000003,
+      "tag": "0053_staff_access_override_metadata",
+      "breakpoints": true
     }
   ]
 }

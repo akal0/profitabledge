@@ -993,6 +993,22 @@ export const billingEntitlementOverride = pgTable(
       }
     ),
     planKey: varchar("plan_key", { length: 40 }).notNull(),
+    metadata: jsonb("metadata").$type<{
+      presetKey?: string | null;
+      reason?: string | null;
+      grantedByUserId?: string | null;
+      grantedByEmail?: string | null;
+      grantedByRole?: string | null;
+      grantedAt?: string | null;
+      updatedByUserId?: string | null;
+      updatedByEmail?: string | null;
+      updatedByRole?: string | null;
+      updatedAt?: string | null;
+      revokedByUserId?: string | null;
+      revokedByEmail?: string | null;
+      revokedByRole?: string | null;
+      revokedAt?: string | null;
+    }>(),
     startsAt: timestamp("starts_at").notNull(),
     endsAt: timestamp("ends_at").notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),

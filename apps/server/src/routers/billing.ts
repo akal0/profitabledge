@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { db } from "../db";
@@ -92,6 +92,7 @@ import {
   isStripeMissingCustomerError,
   retrieveStripeCustomer,
 } from "../lib/billing/stripe";
+import { normalizeAuthUsername } from "../lib/auth-usernames";
 import {
   ensureActivationMilestone,
   recordAppEvent,
@@ -116,6 +117,21 @@ const AFFILIATE_PAYMENT_METHOD_TYPES = [
 ] as const;
 const BETA_STRIPE_MIGRATION_OVERRIDE_SOURCE = "beta_stripe_migration";
 const BETA_STRIPE_MIGRATION_GRACE_DAYS = 30;
+const STAFF_ACCESS_OVERRIDE_SOURCE = "staff_access_manual";
+const STAFF_ACCESS_PRESET_KEYS = [
+  "ambassador",
+  "partner",
+  "launch",
+  "lifetime",
+  "manual",
+] as const;
+const STAFF_ACCESS_PRESETS = {
+  ambassador: { label: "Ambassador year", durationDays: 365 },
+  partner: { label: "Partner year", durationDays: 365 },
+  launch: { label: "Launch month", durationDays: 30 },
+  lifetime: { label: "Lifetime", durationDays: 3650 },
+  manual: { label: "Custom", durationDays: null },
+} as const;
 
 function isGrowthAdmin(input: {
   role?: string | null;
@@ -160,6 +176,225 @@ function buildAppUrl(
   }
 
   return url.toString();
+}
+
+function normalizeBillingAccessIdentifier(value: string) {
+  return value.trim();
+}
+
+async function findUserByBillingAccessIdentifier(identifier: string) {
+  const normalizedIdentifier = normalizeBillingAccessIdentifier(identifier);
+  const normalizedEmail = normalizedIdentifier.toLowerCase();
+  const normalizedUsername = normalizeAuthUsername(normalizedIdentifier);
+
+  const [targetUser] = await db
+    .select({
+      id: userTable.id,
+      email: userTable.email,
+      role: userTable.role,
+      username: userTable.username,
+      name: userTable.name,
+    })
+    .from(userTable)
+    .where(
+      or(
+        sql`lower(${userTable.email}) = ${normalizedEmail}`,
+        eq(userTable.username, normalizedUsername)
+      )
+    )
+    .limit(1);
+
+  if (!targetUser) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "User not found",
+    });
+  }
+
+  return targetUser;
+}
+
+async function upsertStaffAccessOverride(input: {
+  targetUserId: string;
+  planKey: Extract<BillingPlanKey, "professional" | "institutional">;
+  durationDays: number;
+  actor: {
+    id: string;
+    email: string | null;
+    role: string | null;
+  };
+  presetKey: keyof typeof STAFF_ACCESS_PRESETS;
+  reason?: string | null;
+}) {
+  const now = new Date();
+  const endsAt = new Date(
+    now.getTime() + input.durationDays * 24 * 60 * 60 * 1000
+  );
+
+  const [existingOverride] = await db
+    .select({
+      id: billingEntitlementOverride.id,
+      metadata: billingEntitlementOverride.metadata,
+      startsAt: billingEntitlementOverride.startsAt,
+    })
+    .from(billingEntitlementOverride)
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, input.targetUserId),
+        eq(billingEntitlementOverride.sourceType, STAFF_ACCESS_OVERRIDE_SOURCE)
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt), desc(billingEntitlementOverride.createdAt))
+    .limit(1);
+
+  const metadata = {
+    ...(existingOverride?.metadata && typeof existingOverride.metadata === "object"
+      ? existingOverride.metadata
+      : {}),
+    presetKey: input.presetKey,
+    reason: input.reason ?? null,
+    grantedByUserId:
+      existingOverride?.metadata &&
+      typeof existingOverride.metadata === "object" &&
+      "grantedByUserId" in existingOverride.metadata
+        ? (existingOverride.metadata.grantedByUserId as string | null | undefined) ??
+          input.actor.id
+        : input.actor.id,
+    grantedByEmail:
+      existingOverride?.metadata &&
+      typeof existingOverride.metadata === "object" &&
+      "grantedByEmail" in existingOverride.metadata
+        ? (existingOverride.metadata.grantedByEmail as string | null | undefined) ??
+          input.actor.email
+        : input.actor.email,
+    grantedByRole:
+      existingOverride?.metadata &&
+      typeof existingOverride.metadata === "object" &&
+      "grantedByRole" in existingOverride.metadata
+        ? (existingOverride.metadata.grantedByRole as string | null | undefined) ??
+          input.actor.role
+        : input.actor.role,
+    grantedAt:
+      existingOverride?.metadata &&
+      typeof existingOverride.metadata === "object" &&
+      "grantedAt" in existingOverride.metadata
+        ? (existingOverride.metadata.grantedAt as string | null | undefined) ??
+          now.toISOString()
+        : now.toISOString(),
+    updatedByUserId: input.actor.id,
+    updatedByEmail: input.actor.email,
+    updatedByRole: input.actor.role,
+    updatedAt: now.toISOString(),
+    revokedByUserId: null,
+    revokedByEmail: null,
+    revokedByRole: null,
+    revokedAt: null,
+  };
+
+  if (existingOverride) {
+    const startsAt =
+      existingOverride.startsAt && existingOverride.startsAt.getTime() < now.getTime()
+        ? existingOverride.startsAt
+        : now;
+
+    const [updated] = await db
+      .update(billingEntitlementOverride)
+      .set({
+        planKey: input.planKey,
+        metadata,
+        startsAt,
+        endsAt,
+        updatedAt: now,
+      })
+      .where(eq(billingEntitlementOverride.id, existingOverride.id))
+      .returning();
+
+    return updated;
+  }
+
+  const [inserted] = await db
+    .insert(billingEntitlementOverride)
+    .values({
+      id: crypto.randomUUID(),
+      userId: input.targetUserId,
+      sourceType: STAFF_ACCESS_OVERRIDE_SOURCE,
+      planKey: input.planKey,
+      metadata,
+      startsAt: now,
+      endsAt,
+    })
+    .returning();
+
+  return inserted;
+}
+
+async function revokeStaffAccessOverride(input: {
+  targetUserId: string;
+  actor: {
+    id: string;
+    email: string | null;
+    role: string | null;
+  };
+  reason?: string | null;
+}) {
+  const now = new Date();
+
+  const updated = await db
+    .update(billingEntitlementOverride)
+    .set({
+      endsAt: now,
+      updatedAt: now,
+      metadata: sql`coalesce(${billingEntitlementOverride.metadata}, '{}'::jsonb) || ${JSON.stringify({
+        reason: input.reason ?? null,
+        updatedByUserId: input.actor.id,
+        updatedByEmail: input.actor.email,
+        updatedByRole: input.actor.role,
+        updatedAt: now.toISOString(),
+        revokedByUserId: input.actor.id,
+        revokedByEmail: input.actor.email,
+        revokedByRole: input.actor.role,
+        revokedAt: now.toISOString(),
+      })}::jsonb`,
+    })
+    .where(
+      and(
+        eq(billingEntitlementOverride.userId, input.targetUserId),
+        eq(billingEntitlementOverride.sourceType, STAFF_ACCESS_OVERRIDE_SOURCE),
+        gte(billingEntitlementOverride.endsAt, now)
+      )
+    )
+    .returning({
+      id: billingEntitlementOverride.id,
+    });
+
+  return updated.length;
+}
+
+async function listStaffAccessOverrides() {
+  const now = new Date();
+  return db
+    .select({
+      id: billingEntitlementOverride.id,
+      planKey: billingEntitlementOverride.planKey,
+      metadata: billingEntitlementOverride.metadata,
+      startsAt: billingEntitlementOverride.startsAt,
+      endsAt: billingEntitlementOverride.endsAt,
+      userId: userTable.id,
+      email: userTable.email,
+      username: userTable.username,
+      name: userTable.name,
+      role: userTable.role,
+    })
+    .from(billingEntitlementOverride)
+    .innerJoin(userTable, eq(userTable.id, billingEntitlementOverride.userId))
+    .where(
+      and(
+        eq(billingEntitlementOverride.sourceType, STAFF_ACCESS_OVERRIDE_SOURCE),
+        lte(billingEntitlementOverride.startsAt, now),
+        gte(billingEntitlementOverride.endsAt, now)
+      )
+    )
+    .orderBy(desc(billingEntitlementOverride.endsAt), userTable.email);
 }
 
 function getGrowthCookieContext(
@@ -2543,6 +2778,82 @@ export const billingRouter = router({
     const user = await getUserRow(ctx.session.user.id);
     return syncStripeBillingStateForUser(user);
   }),
+
+  listStaffAccessOverrides: protectedProcedure.query(async ({ ctx }) => {
+    const user = await getUserRow(ctx.session.user.id);
+    assertGrowthAdmin({ role: user.role, email: user.email });
+
+    return listStaffAccessOverrides();
+  }),
+
+  grantStaffAccessOverride: protectedProcedure
+    .input(
+      z.object({
+        userIdentifier: z.string().trim().min(3).max(160),
+        planKey: z.enum(["professional", "institutional"]),
+        presetKey: z.enum(STAFF_ACCESS_PRESET_KEYS),
+        durationDays: z.number().int().min(1).max(3650).default(365),
+        reason: z.string().trim().max(240).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin({ role: user.role, email: user.email });
+
+      const targetUser = await findUserByBillingAccessIdentifier(
+        input.userIdentifier
+      );
+      const override = await upsertStaffAccessOverride({
+        targetUserId: targetUser.id,
+        planKey: input.planKey,
+        durationDays: input.durationDays,
+        actor: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+        presetKey: input.presetKey,
+        reason: input.reason ?? null,
+      });
+
+      await syncUserPremiumFlag(targetUser.id);
+
+      return {
+        override,
+        user: targetUser,
+      };
+    }),
+
+  revokeStaffAccessOverride: protectedProcedure
+    .input(
+      z.object({
+        userIdentifier: z.string().trim().min(3).max(160),
+        reason: z.string().trim().max(240).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const user = await getUserRow(ctx.session.user.id);
+      assertGrowthAdmin({ role: user.role, email: user.email });
+
+      const targetUser = await findUserByBillingAccessIdentifier(
+        input.userIdentifier
+      );
+      const deletedCount = await revokeStaffAccessOverride({
+        targetUserId: targetUser.id,
+        actor: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+        reason: input.reason ?? null,
+      });
+      await syncUserPremiumFlag(targetUser.id);
+
+      return {
+        deletedCount,
+        user: targetUser,
+      };
+    }),
 
   listAffiliateApplications: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);

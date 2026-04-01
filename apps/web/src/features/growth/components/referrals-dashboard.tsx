@@ -2,9 +2,7 @@
 
 import Link from "next/link";
 import {
-  BadgePercent,
   CheckCircle2,
-  CircleHelp,
   Clock3,
   Copy,
   Gift,
@@ -21,17 +19,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
 import { Separator } from "@/components/ui/separator";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   GoalContentSeparator,
   GoalPanel,
   GoalSurface,
 } from "@/components/goals/goal-surface";
-import { getPropAssignActionButtonClassName } from "@/features/accounts/lib/prop-assign-action-button";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
 
@@ -218,7 +211,6 @@ export function ReferralsDashboard() {
   });
 
   const referral = billingStateQuery.data?.referral;
-  const affiliate = billingStateQuery.data?.affiliate;
   const paidConversions = referral?.progress.paidConversions ?? 0;
   const conversions = referral?.conversions ?? [];
 
@@ -243,7 +235,7 @@ export function ReferralsDashboard() {
   if (referral?.isHiddenBecauseAffiliate) {
     return (
       <main className="space-y-6 p-6 py-4">
-        <GoalPanel icon={BadgePercent} title="Referral program">
+        <GoalPanel icon={Users} title="Referral program">
           <div className="space-y-3">
             <p className="text-sm leading-6 text-white/55">
               This account is already an approved affiliate, so the standard
@@ -272,16 +264,6 @@ export function ReferralsDashboard() {
       label: "Paid conversions",
       value: String(referral?.stats.paidConversions ?? 0),
       icon: Users,
-    },
-    {
-      label: "Next edge credits",
-      value: `${referral?.progress.nextEdgeCreditIn ?? 5} to go`,
-      icon: Gift,
-    },
-    {
-      label: "Next free month",
-      value: `${referral?.progress.nextFreeMonthIn ?? 20} to go`,
-      icon: Clock3,
     },
   ];
   const rewardMilestones = [
@@ -349,7 +331,7 @@ export function ReferralsDashboard() {
 
   return (
     <main className="space-y-6 p-6 py-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-3">
         {statCards.map((stat) => (
           <StatCard
             key={stat.label}
@@ -358,95 +340,49 @@ export function ReferralsDashboard() {
             icon={stat.icon}
           />
         ))}
-
-        <GoalPanel
-          icon={BadgePercent}
-          title="Apply for affiliate access"
-          action={
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="flex size-6 items-center justify-center rounded-full text-white/35 transition-colors hover:text-white/60"
-                  aria-label="Affiliate application review criteria"
-                >
-                  <CircleHelp className="size-4" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={10} className="max-w-[280px]">
-                <p className="text-xs leading-5 text-white/75">
-                  We’ll review your promotion plan, audience size, current
-                  referral traction, and social presence before approval.
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          }
-          bodyClassName="flex h-full flex-col"
-        >
-          <Button
-            asChild
-            className={getPropAssignActionButtonClassName({
-              tone: "teal",
-              className: "mt-auto w-full justify-center",
-            })}
-          >
-            <Link href="/apply/affiliate">
-              {affiliate?.application
-                ? affiliate.application.status === "pending"
-                  ? "Review application"
-                  : "Update application"
-                : "Apply for affiliate access"}
-            </Link>
-          </Button>
-        </GoalPanel>
-      </div>
-
-      <GoalPanel
-        icon={Gift}
-        title="Referral share link"
-        bodyClassName="flex flex-col"
-      >
-        <div className="mt-auto flex flex-col gap-2 lg:flex-row lg:items-end">
-          <Input
-            readOnly
-            value={referral?.profile?.shareUrl ?? ""}
-            className="w-full! flex-1 text-xs bg-sidebar-accent! hover:brightness-120!"
-          />
-          <Button
-            onClick={() =>
-              referral?.profile?.shareUrl
-                ? copyToClipboard(
-                    referral.profile.shareUrl,
-                    "Referral link copied"
-                  )
-                : toast.error("Referral link is not ready yet")
-            }
-            className="h-9 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-xs text-white hover:bg-sidebar-accent hover:brightness-120"
-          >
-            <Copy className="size-3" />
-            Copy link
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="rounded-sm ring ring-white/5 bg-sidebar-accent px-3 py-2 text-xs font-medium text-white/75">
-              {referral?.profile?.code ?? "—"}
-            </div>
+        <GoalPanel icon={Gift} title="Referral share link" bodyClassName="flex flex-col">
+          <div className="mt-auto flex flex-col gap-2 lg:flex-row lg:items-end">
+            <Input
+              readOnly
+              value={referral?.profile?.shareUrl ?? ""}
+              className="w-full! flex-1 text-xs bg-sidebar-accent! hover:brightness-120!"
+            />
             <Button
               onClick={() =>
-                referral?.profile?.code
+                referral?.profile?.shareUrl
                   ? copyToClipboard(
-                      referral.profile.code,
-                      "Referral code copied"
+                      referral.profile.shareUrl,
+                      "Referral link copied"
                     )
-                  : toast.error("Referral code is not ready yet")
+                  : toast.error("Referral link is not ready yet")
               }
               className="h-9 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-xs text-white hover:bg-sidebar-accent hover:brightness-120"
             >
-              <Users className="size-3" />
-              Copy code
+              <Copy className="size-3" />
+              Copy link
             </Button>
+            <div className="flex items-center gap-2">
+              <div className="rounded-sm ring ring-white/5 bg-sidebar-accent px-3 py-2 text-xs font-medium text-white/75">
+                {referral?.profile?.code ?? "—"}
+              </div>
+              <Button
+                onClick={() =>
+                  referral?.profile?.code
+                    ? copyToClipboard(
+                        referral.profile.code,
+                        "Referral code copied"
+                      )
+                    : toast.error("Referral code is not ready yet")
+                }
+                className="h-9 cursor-pointer gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-xs text-white hover:bg-sidebar-accent hover:brightness-120"
+              >
+                <Users className="size-3" />
+                Copy code
+              </Button>
+            </div>
           </div>
-        </div>
-      </GoalPanel>
+        </GoalPanel>
+      </div>
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">

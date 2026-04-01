@@ -157,10 +157,10 @@ const COMPARISON_ROWS = [
 
 function segmentedButtonClassName(active: boolean) {
   return cn(
-    "cursor-pointer flex h-max w-max items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-all duration-250 active:scale-95",
+    "min-w-[96px] cursor-pointer rounded-full px-4 py-2 text-sm transition-colors",
     active
-      ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
-      : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
+      ? "bg-white text-black"
+      : "text-white/60 hover:text-white"
   );
 }
 
@@ -452,16 +452,16 @@ export function PricingSection() {
           </div>
         </div>
 
-        <div className="flex h-max w-max items-center gap-1 rounded-md bg-white p-[3px] ring ring-white/5 dark:bg-muted/15">
+        <div className="flex items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-1">
           {(["monthly", "annual"] as const).map((interval) => (
-            <Button
+            <button
               key={interval}
               type="button"
               className={segmentedButtonClassName(billingInterval === interval)}
               onClick={() => setBillingInterval(interval)}
             >
               {interval === "monthly" ? "Monthly" : "Annual"}
-            </Button>
+            </button>
           ))}
         </div>
       </div>

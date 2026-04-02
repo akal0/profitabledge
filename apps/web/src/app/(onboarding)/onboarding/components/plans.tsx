@@ -55,6 +55,14 @@ type PlansProps = {
   onSelectPlan: (planKey: BillingPlanKey) => void;
 };
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-sm font-medium tracking-[-0.04em] text-white/35">
+      {children}
+    </p>
+  );
+}
+
 const CARD_META: Record<
   BillingPlanKey,
   {
@@ -89,6 +97,15 @@ function splitPriceLabel(priceLabel: string) {
     amount,
     interval: interval ? `/ ${interval}` : null,
   };
+}
+
+function segmentedToggleButtonClassName(active: boolean) {
+  return cn(
+    "cursor-pointer flex h-max w-max items-center justify-center gap-2 rounded-md px-3 py-2 text-xs transition-all duration-250 active:scale-95",
+    active
+      ? "bg-[#222225] text-white hover:bg-[#222225] hover:!brightness-120 ring ring-white/5"
+      : "bg-[#222225]/25 text-white/25 hover:bg-[#222225] hover:!brightness-105 hover:text-white ring-0"
+  );
 }
 
 function getDisplayedPricing(plan: BillingPlan, billingInterval: BillingInterval) {
@@ -140,23 +157,25 @@ const Plans = ({
   const [hoveredCard, setHoveredCard] = useState<BillingPlanKey | null>(null);
 
   return (
-    <div className="flex flex-col w-full items-center justify-center antialiased">
-      <div className="mb-6 flex items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-1">
-        {(["monthly", "annual"] as const).map((interval) => (
-          <button
-            key={interval}
-            type="button"
-            onClick={() => onBillingIntervalChange(interval)}
-            className={cn(
-              "min-w-[96px] cursor-pointer rounded-full px-4 py-2 text-sm transition-colors",
-              billingInterval === interval
-                ? "bg-white text-black"
-                : "text-white/60 hover:text-white"
-            )}
-          >
-            {interval === "monthly" ? "Monthly" : "Annual"}
-          </button>
-        ))}
+    <div className="w-full px-6 py-5 antialiased sm:px-8">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between">
+          <SectionLabel>Plans</SectionLabel>
+        </div>
+        <div className="flex h-max w-max items-center gap-1 rounded-md bg-white p-[3px] ring ring-white/5 dark:bg-muted/15">
+          {(["monthly", "annual"] as const).map((interval) => (
+            <Button
+              key={interval}
+              type="button"
+              onClick={() => onBillingIntervalChange(interval)}
+              className={segmentedToggleButtonClassName(
+                billingInterval === interval
+              )}
+            >
+              {interval === "monthly" ? "Monthly" : "Annual"}
+            </Button>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -290,24 +309,28 @@ const Plans = ({
 
                   <Separator className="-mx-5 w-auto opacity-15" />
 
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <p className="text-xl font-bold text-white">
-                          {price.amount}
-                          {price.interval ? (
-                            <span className="ml-1 text-sm font-normal text-white/35">
-                              {price.interval}
-                            </span>
-                          ) : null}
-                        </p>
-                        {price.detail ? (
-                          <p className="text-xs text-white/35">{price.detail}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xl font-bold text-white">
+                        {price.amount}
+                        {price.interval ? (
+                          <span className="ml-1 text-sm font-normal text-white/35">
+                            {price.interval}
+                          </span>
                         ) : null}
-                      </div>
-                      {plan.highlight ? (
-                        <span
-                          className={cn(
-                            "rounded px-3 py-1 text-[10px] font-semibold",
+                      </p>
+                      {price.detail ? (
+                        <p className="text-xs text-white/35">{price.detail}</p>
+                      ) : null}
+                    </div>
+                    {price.savings ? (
+                      <span className="rounded px-3 py-1 text-[10px] font-semibold ring ring-teal-400/20 bg-teal-500/10 text-teal-300">
+                        {price.savings}
+                      </span>
+                    ) : plan.highlight ? (
+                      <span
+                        className={cn(
+                          "rounded px-3 py-1 text-[10px] font-semibold",
                           meta.badgeClassName
                         )}
                       >
@@ -315,12 +338,6 @@ const Plans = ({
                       </span>
                     ) : null}
                   </div>
-
-                  {price.savings ? (
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-teal-300">
-                      {price.savings}
-                    </p>
-                  ) : null}
 
                   <Separator className="-mx-5 w-auto opacity-15" />
 

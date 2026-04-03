@@ -34,6 +34,7 @@ import { type ChartTrade, useChartTrades } from "./use-chart-trades";
 
 interface EntryExitTimeProps {
   accountId?: string;
+  currencyCode?: string | null;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }
@@ -100,6 +101,7 @@ function getComparisonLabel(
 
 export function EntryExitTimeChart({
   accountId,
+  currencyCode: _currencyCode,
   ownerId = "entry-exit-time",
   comparisonMode,
 }: EntryExitTimeProps) {

@@ -24,12 +24,16 @@ import {
 
 interface MAEMFEScatterProps {
   accountId?: string;
+  currencyCode?: string | null;
 }
 
-export function MAEMFEScatterChart({ accountId }: MAEMFEScatterProps) {
+export function MAEMFEScatterChart({
+  accountId,
+  currencyCode,
+}: MAEMFEScatterProps) {
   const renderMode = useChartRenderMode();
   const { trades, isLoading } = useChartTrades(accountId);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   if (isLoading) {
     return (

@@ -133,17 +133,19 @@ function countUTCDaysInclusive(range: { start: Date; end: Date }) {
 
 export function PerformanceWeekdayChart({
   accountId,
+  currencyCode,
   ownerId = "performance-weekday",
   comparisonMode,
 }: {
   accountId?: string;
+  currencyCode?: string | null;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }) {
   const { start, end, min, max } = useChartDateRange();
   const comparisons = useComparisonStore((s) => s.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
   // Clipped area interaction state
   const chartRef = React.useRef<HTMLDivElement>(null);
   const [axis, setAxis] = React.useState(0);

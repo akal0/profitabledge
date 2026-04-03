@@ -45,11 +45,17 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function BellCurveChart({ accountId }: { accountId?: string }) {
+export function BellCurveChart({
+  accountId,
+  currencyCode,
+}: {
+  accountId?: string;
+  currencyCode?: string | null;
+}) {
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const chartData = useMemo(() => {
     if (trades.length < 5) return null;

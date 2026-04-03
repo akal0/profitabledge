@@ -92,6 +92,7 @@ export const DEFAULT_CHART_WIDGETS: ChartWidgetType[] = [
 export interface ChartWidgetsProps {
   enabledWidgets: ChartWidgetType[];
   accountId?: string;
+  currencyCode?: string | null;
   isEditing?: boolean;
   showPresets?: boolean;
   showShareButton?: boolean;
@@ -161,6 +162,7 @@ function clampRangeToBounds(
 export function ChartWidgets({
   enabledWidgets,
   accountId,
+  currencyCode,
   isEditing = false,
   showPresets = true,
   showShareButton = true,
@@ -478,6 +480,7 @@ export function ChartWidgets({
 
                         <CardComponent
                           accountId={accountId}
+                          currencyCode={currencyCode}
                           isEditing={isEditing}
                           className="h-full w-full"
                         />
@@ -566,6 +569,7 @@ export function ChartWidgets({
                       >
                         <CardComponent
                           accountId={accountId}
+                          currencyCode={currencyCode}
                           isEditing={true}
                           className="h-full w-full"
                         />

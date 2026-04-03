@@ -35,6 +35,7 @@ import { useChartTrades } from "./use-chart-trades";
 
 interface RMultipleDistributionProps {
   accountId?: string;
+  currencyCode?: string | null;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }
@@ -109,6 +110,7 @@ function getComparisonLabel(
 
 export function RMultipleDistributionChart({
   accountId,
+  currencyCode: _currencyCode,
   ownerId = "r-multiple-distribution",
   comparisonMode,
 }: RMultipleDistributionProps) {

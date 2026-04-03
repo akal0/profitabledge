@@ -34,6 +34,7 @@ import { type ChartTrade, useChartTrades } from "./use-chart-trades";
 
 interface StreakDistributionProps {
   accountId?: string;
+  currencyCode?: string | null;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }
@@ -155,6 +156,7 @@ function getComparisonLabel(
 
 export function StreakDistributionChart({
   accountId,
+  currencyCode: _currencyCode,
   ownerId = "streak-distribution",
   comparisonMode,
 }: StreakDistributionProps) {

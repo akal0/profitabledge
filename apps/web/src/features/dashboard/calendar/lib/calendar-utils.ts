@@ -114,6 +114,20 @@ export function formatTradePillMoney(value: number, currencyCode?: string | null
   });
 }
 
+export function formatSignedPercentValue(value: number) {
+  const absoluteValue = Math.abs(value).toFixed(2);
+
+  if (value > 0) {
+    return `+${absoluteValue}%`;
+  }
+
+  if (value < 0) {
+    return `-${absoluteValue}%`;
+  }
+
+  return `0.00%`;
+}
+
 export function formatTradeCount(value: number) {
   return formatNumberValue(value, {
     maximumFractionDigits: 0,

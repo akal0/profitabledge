@@ -74,17 +74,19 @@ function formatMetricValue(
 
 export function RollingPerformanceChart({
   accountId,
+  currencyCode,
   metric = "winRate",
   window = 20,
 }: {
   accountId?: string;
+  currencyCode?: string | null;
   metric?: RollingMetricKey;
   window?: 10 | 20 | 50;
 }) {
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const chartData = useMemo(() => {
     if (trades.length < window) return [];

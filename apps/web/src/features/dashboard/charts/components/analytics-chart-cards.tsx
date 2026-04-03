@@ -17,6 +17,7 @@ import {
 
 export function MonteCarloCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -48,7 +49,11 @@ export function MonteCarloCard({
       }
     >
       <div className="flex h-full flex-col p-3.5">
-        <MonteCarloChart accountId={accountId} simCount={simCount} />
+        <MonteCarloChart
+          accountId={accountId}
+          currencyCode={currencyCode}
+          simCount={simCount}
+        />
       </div>
     </ChartWidgetFrame>
   );
@@ -56,6 +61,7 @@ export function MonteCarloCard({
 
 export function RollingPerformanceCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -106,6 +112,7 @@ export function RollingPerformanceCard({
       <div className="flex h-full flex-col p-3.5">
         <RollingPerformanceChart
           accountId={accountId}
+          currencyCode={currencyCode}
           metric={metric}
           window={window}
         />
@@ -116,6 +123,7 @@ export function RollingPerformanceCard({
 
 export function CorrelationMatrixCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -181,6 +189,7 @@ export function CorrelationMatrixCard({
       <div className="h-full w-full pb-2 pl-1 pr-2 pt-2">
         <CorrelationMatrix
           accountId={accountId}
+          currencyCode={currencyCode}
           rowAxis={rowAxis}
           colAxis={colAxis}
           metric={metric}
@@ -192,6 +201,7 @@ export function CorrelationMatrixCard({
 
 export function RadarComparisonCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -223,7 +233,11 @@ export function RadarComparisonCard({
       }
     >
       <div className="h-full w-full p-3.5 pt-2">
-        <RadarComparisonChart accountId={accountId} groupBy={groupBy} />
+        <RadarComparisonChart
+          accountId={accountId}
+          currencyCode={currencyCode}
+          groupBy={groupBy}
+        />
       </div>
     </ChartWidgetFrame>
   );
@@ -231,6 +245,7 @@ export function RadarComparisonCard({
 
 export function RiskAdjustedCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -285,6 +300,7 @@ export function RiskAdjustedCard({
     >
       <RiskAdjustedChart
         accountId={accountId}
+        currencyCode={currencyCode}
         metric={metric}
         window={window}
       />
@@ -294,6 +310,7 @@ export function RiskAdjustedCard({
 
 export function BellCurveCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -305,7 +322,7 @@ export function BellCurveCard({
       contentClassName="min-h-0 flex-1"
     >
       <div className="h-full w-full p-3.5 pt-2">
-        <BellCurveChart accountId={accountId} />
+        <BellCurveChart accountId={accountId} currencyCode={currencyCode} />
       </div>
     </ChartWidgetFrame>
   );

@@ -215,6 +215,7 @@ function DashboardPageContent() {
             <div ref={calendarExportRef}>
               <Calendar
                 accountId={accountId}
+                currencyCode={currencyCode}
                 summaryWidgets={calendarWidgets}
                 summaryWidgetSpans={calendarWidgetSpans}
                 onApplyPreset={applyCalendarPreset}
@@ -224,6 +225,7 @@ function DashboardPageContent() {
             <div ref={chartWidgetsExportRef}>
               <ChartWidgets
                 accountId={accountId}
+                currencyCode={currencyCode}
                 enabledWidgets={chartWidgets}
                 isEditing={isChartWidgetsEditing}
                 onToggleWidget={toggleChartWidget}

@@ -110,6 +110,7 @@ async function loadLiveTrades(accountId: string) {
 
 type DashboardCalendarProps = {
   accountId?: string;
+  currencyCode?: string | null;
   initialRange?: CalendarRange | null;
   initialViewMode?: ViewMode;
   initialHeatmapEnabled?: boolean;
@@ -128,6 +129,7 @@ type DashboardCalendarProps = {
 
 export default function DashboardCalendar({
   accountId,
+  currencyCode,
   initialRange = null,
   initialViewMode = "month",
   initialHeatmapEnabled = false,
@@ -181,11 +183,11 @@ export default function DashboardCalendar({
 
     return resolveDashboardCurrencyCode({
       isAllAccounts: isAllAccountsScope(accountId),
-      preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+      preferredCurrencyCode: currencyCode ?? allAccountsPreferredCurrencyCode,
       availableCurrencyCodes,
       selectedAccountCurrency,
     });
-  }, [accountId, accounts, allAccountsPreferredCurrencyCode]);
+  }, [accountId, accounts, allAccountsPreferredCurrencyCode, currencyCode]);
 
   const calendarDays = useMemo(
     () => mergeDayRowsWithLiveTrades(days, liveTrades),
@@ -233,11 +235,18 @@ export default function DashboardCalendar({
   }, [range, showWeekends, viewMode]);
 
   const visibleWeekDays = useMemo(
-    () =>
-      showWeekends
-        ? calendarDays
-        : calendarDays.filter((day) => ![0, 6].includes(fromDateISO(day.dateISO).getDay())),
-    [calendarDays, showWeekends]
+    () => {
+      const scopedDays = range
+        ? calendarDays.filter(
+            (day) => day.dateISO >= toYMD(range.start) && day.dateISO <= toYMD(range.end)
+          )
+        : calendarDays;
+
+      return showWeekends
+        ? scopedDays
+        : scopedDays.filter((day) => ![0, 6].includes(fromDateISO(day.dateISO).getDay()));
+    },
+    [calendarDays, range, showWeekends]
   );
 
   const heatmapMaxAbs = useMemo(() => {

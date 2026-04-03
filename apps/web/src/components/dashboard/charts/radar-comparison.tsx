@@ -23,6 +23,7 @@ import {
   DashboardChartTooltipFrame,
   DashboardChartTooltipRow,
   formatSignedCurrency,
+  useChartCurrencyCode,
 } from "./dashboard-chart-ui";
 import { useChartTrades } from "./use-chart-trades";
 
@@ -49,7 +50,11 @@ function normalize(value: number, min: number, max: number): number {
   return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
 }
 
-function formatRadarRawValue(axis: string, value: number) {
+function formatRadarRawValue(
+  axis: string,
+  value: number,
+  currencyCode?: string | null
+) {
   switch (axis) {
     case "Win Rate":
     case "Consistency":
@@ -59,20 +64,23 @@ function formatRadarRawValue(axis: string, value: number) {
     case "Trade Count":
       return `${Math.round(value).toLocaleString()} trades`;
     default:
-      return value.toFixed(2);
+      return formatSignedCurrency(value, 2, currencyCode);
   }
 }
 
 export function RadarComparisonChart({
   accountId,
+  currencyCode,
   groupBy = "session",
 }: {
   accountId?: string;
+  currencyCode?: string | null;
   groupBy?: RadarGroupBy;
 }) {
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const { chartData, groups } = useMemo(() => {
     if (trades.length === 0) {
@@ -251,7 +259,11 @@ export function RadarComparisonChart({
                         <DashboardChartTooltipRow
                           key={String(item.dataKey)}
                           label={String(item.name)}
-                          value={formatRadarRawValue(axis, rawValue)}
+                          value={formatRadarRawValue(
+                            axis,
+                            rawValue,
+                            resolvedCurrencyCode
+                          )}
                           tone="default"
                         />
                       );

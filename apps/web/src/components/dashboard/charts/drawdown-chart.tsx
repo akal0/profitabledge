@@ -146,10 +146,12 @@ function buildDrawdownSeries(
 
 export function DrawdownChart({
   accountId,
+  currencyCode,
   ownerId = "drawdown-chart",
   comparisonMode,
 }: {
   accountId?: string;
+  currencyCode?: string | null;
   ownerId?: string;
   comparisonMode?: WidgetComparisonMode;
 }) {
@@ -157,7 +159,7 @@ export function DrawdownChart({
   const renderMode = useChartRenderMode();
   const comparisons = useComparisonStore((state) => state.comparisons);
   const myMode = comparisonMode ?? comparisons[ownerId] ?? "none";
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const resolvedRange = React.useMemo(() => {
     const minDate = min ? new Date(min) : undefined;

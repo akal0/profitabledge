@@ -74,10 +74,12 @@ function formatHourSlot(hour: number) {
 
 export function PerformanceHeatmap({
   accountId,
+  currencyCode,
 }: {
   accountId?: string;
+  currencyCode?: string | null;
 }) {
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
   const { start, end, min, max } = useChartDateRange();
 
   const resolvedRange = React.useMemo(() => {

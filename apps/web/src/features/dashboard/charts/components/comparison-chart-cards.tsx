@@ -21,6 +21,7 @@ import {
 
 export function DailyNetCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -39,6 +40,7 @@ export function DailyNetCard({
       <div className="flex h-full flex-col p-3.5">
         <DailyNetBarChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="daily-net"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -49,6 +51,7 @@ export function DailyNetCard({
 
 export function PerformanceWeekdayCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -109,6 +112,7 @@ export function PerformanceWeekdayCard({
       <div className="flex h-full flex-col p-3.5">
         <PerformanceWeekdayChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="performance-weekday"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -119,6 +123,7 @@ export function PerformanceWeekdayCard({
 
 export function PerformingAssetsCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -137,6 +142,7 @@ export function PerformingAssetsCard({
       <div className="flex h-full flex-col p-3.5">
         <PerformingAssetsBarChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="performing-assets"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -147,6 +153,7 @@ export function PerformingAssetsCard({
 
 export function EquityCurveCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -165,6 +172,7 @@ export function EquityCurveCard({
       <div className="flex h-full flex-col p-3.5">
         <EquityCurveChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="equity-curve"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -175,6 +183,7 @@ export function EquityCurveCard({
 
 export function DrawdownChartCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -193,6 +202,7 @@ export function DrawdownChartCard({
       <div className="flex h-full flex-col p-3.5">
         <DrawdownChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="drawdown-chart"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -203,6 +213,7 @@ export function DrawdownChartCard({
 
 export function PerformanceHeatmapCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -214,7 +225,7 @@ export function PerformanceHeatmapCard({
       contentClassName="min-h-0 flex-1 flex-col"
     >
       <div className="flex h-full min-h-0 w-full flex-1 flex-col p-2.5">
-        <PerformanceHeatmap accountId={accountId} />
+        <PerformanceHeatmap accountId={accountId} currencyCode={currencyCode} />
       </div>
     </ChartWidgetFrame>
   );
@@ -222,6 +233,7 @@ export function PerformanceHeatmapCard({
 
 export function StreakDistributionCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -240,6 +252,7 @@ export function StreakDistributionCard({
       <div className="flex h-full flex-col p-3.5">
         <StreakDistributionChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="streak-distribution"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -250,6 +263,7 @@ export function StreakDistributionCard({
 
 export function RMultipleDistributionCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -268,6 +282,7 @@ export function RMultipleDistributionCard({
       <div className="flex h-full flex-col p-3.5">
         <RMultipleDistributionChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="r-multiple-distribution"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -278,6 +293,7 @@ export function RMultipleDistributionCard({
 
 export function MAEMFEScatterCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -288,7 +304,7 @@ export function MAEMFEScatterCard({
       className={className}
     >
       <div className="flex h-full flex-col p-3.5">
-        <MAEMFEScatterChart accountId={accountId} />
+        <MAEMFEScatterChart accountId={accountId} currencyCode={currencyCode} />
       </div>
     </ChartWidgetFrame>
   );
@@ -296,6 +312,7 @@ export function MAEMFEScatterCard({
 
 export function EntryExitTimeCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
   hideComparison = false,
@@ -314,6 +331,7 @@ export function EntryExitTimeCard({
       <div className="flex h-full flex-col p-3.5">
         <EntryExitTimeChart
           accountId={accountId}
+          currencyCode={currencyCode}
           ownerId="entry-exit-time"
           comparisonMode={hideComparison ? "none" : undefined}
         />
@@ -324,6 +342,7 @@ export function EntryExitTimeCard({
 
 export function HoldTimeScatterCard({
   accountId,
+  currencyCode,
   isEditing = false,
   className,
 }: ChartWidgetCardProps) {
@@ -334,7 +353,7 @@ export function HoldTimeScatterCard({
       className={className}
       contentClassName="min-h-0 flex-1 p-3.5"
     >
-      <HoldTimeScatterChart accountId={accountId} />
+      <HoldTimeScatterChart accountId={accountId} currencyCode={currencyCode} />
     </ChartWidgetFrame>
   );
 }

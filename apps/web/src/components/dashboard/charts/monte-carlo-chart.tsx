@@ -197,15 +197,17 @@ function runMonteCarloSimulation(
 
 export function MonteCarloChart({
   accountId,
+  currencyCode,
   simCount = 100,
 }: {
   accountId?: string;
+  currencyCode?: string | null;
   simCount?: number;
 }) {
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const {
     percentiles,

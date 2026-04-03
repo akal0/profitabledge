@@ -42,12 +42,18 @@ function median(values: number[]) {
   return sorted[middle];
 }
 
-export function HoldTimeScatterChart({ accountId }: { accountId?: string }) {
+export function HoldTimeScatterChart({
+  accountId,
+  currencyCode,
+}: {
+  accountId?: string;
+  currencyCode?: string | null;
+}) {
   const storeAccountId = useAccountStore((state) => state.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const renderMode = useChartRenderMode();
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const scatterData = useMemo(() => {
     const maxPoints =

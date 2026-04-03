@@ -90,11 +90,13 @@ function getMatrixLayout(rows: string[], cols: string[]) {
 
 export function CorrelationMatrix({
   accountId,
+  currencyCode,
   rowAxis = "session",
   colAxis = "symbol",
   metric = "winRate",
 }: {
   accountId?: string;
+  currencyCode?: string | null;
   rowAxis?: CorrelationAxis;
   colAxis?: CorrelationAxis;
   metric?: CorrelationMetric;
@@ -102,7 +104,7 @@ export function CorrelationMatrix({
   const storeAccountId = useAccountStore((s) => s.selectedAccountId);
   const effectiveAccountId = accountId || storeAccountId;
   const { trades, isLoading } = useChartTrades(effectiveAccountId);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
   const [hoveredCell, setHoveredCell] = useState<{
     key: string;
     rect: { top: number; left: number; width: number };

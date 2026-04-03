@@ -22,6 +22,7 @@ import { ChevronDown } from "lucide-react";
 
 export type ChartWidgetCardProps = {
   accountId?: string;
+  currencyCode?: string | null;
   isEditing?: boolean;
   className?: string;
   hideComparison?: boolean;

@@ -29,6 +29,7 @@ import {
   Clock,
   Sparkles,
   FileText,
+  type LucideIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -46,7 +47,7 @@ interface JournalPromptsProps {
   buttonLabel?: string;
 }
 
-const PROMPT_ICONS: Record<string, React.ElementType> = {
+const PROMPT_ICONS: Record<string, LucideIcon> = {
   trade_review: Target,
   daily_reflection: Clock,
   pattern_inquiry: Brain,

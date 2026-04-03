@@ -22,6 +22,7 @@ import {
   GoalContentSeparator,
   GoalSurface,
 } from "@/components/goals/goal-surface";
+import { useFeatureGate } from "@/components/feature-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogClose, DialogContent } from "@/components/ui/dialog";
@@ -102,6 +103,10 @@ export default function APISettingsPage() {
   const [providerCredentialForm, setProviderCredentialForm] = useState<
     Record<string, string>
   >({});
+  const { hasAccess: hasLiveSyncAccess } = useFeatureGate(
+    "live-sync",
+    "professional"
+  );
 
   const { data: apiKeys, refetch: refetchKeys } = useQuery(
     trpcOptions.apiKeys.list.queryOptions()
@@ -237,6 +242,11 @@ export default function APISettingsPage() {
         : "";
 
   const handleGenerateKey = async () => {
+    if (!hasLiveSyncAccess) {
+      toast.error("EA sync requires Trader or Elite access");
+      return;
+    }
+
     if (!newApiKeyName.trim()) {
       toast.error("Please enter a name for your API key");
       return;
@@ -327,6 +337,11 @@ export default function APISettingsPage() {
   };
 
   const handleCreateProviderKey = async () => {
+    if (!hasLiveSyncAccess) {
+      toast.error("Broker sync requires Trader or Elite access");
+      return;
+    }
+
     if (!selectedTradingEntity || !selectedProviderInfo) {
       toast.error("Choose a prop firm or broker first");
       return;
@@ -406,25 +421,51 @@ export default function APISettingsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {hasLiveSyncAccess ? (
+            <Button
+              onClick={() => setShowGenerateDialog(true)}
+              className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+            >
+              <Key className="size-3.5" />
+              Generate key
+            </Button>
+          ) : (
+            <Button
+              asChild
+              className="ring ring-amber-500/25 bg-amber-600/15 hover:bg-amber-600/25 px-4 py-2 h-[38px] w-max text-xs text-amber-200 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
+            >
+              <Link href="/dashboard/settings/billing?sourceFeature=live-sync">
+                <Key className="size-3.5" />
+                Unlock EA sync
+              </Link>
+            </Button>
+          )}
           <Button
-            onClick={() => setShowGenerateDialog(true)}
-            className="ring ring-teal-500/25 bg-teal-600/25 hover:bg-teal-600/35 px-4 py-2 h-[38px] w-max text-xs text-teal-300 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
-          >
-            <Key className="size-3.5" />
-            Generate key
-          </Button>
-          <Button
-            onClick={() => setShowProviderDialog(true)}
+            asChild={!hasLiveSyncAccess}
+            onClick={hasLiveSyncAccess ? () => setShowProviderDialog(true) : undefined}
             className="ring ring-sky-500/25 bg-sky-600/20 hover:bg-sky-600/30 px-4 py-2 h-[38px] w-max text-xs text-sky-200 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
           >
-            <Link2 className="size-3.5" />
-            Add API key
+            {hasLiveSyncAccess ? (
+              <>
+                <Link2 className="size-3.5" />
+                Add API key
+              </>
+            ) : (
+              <Link href="/dashboard/settings/billing?sourceFeature=live-sync">
+                <Link2 className="size-3.5" />
+                Unlock broker sync
+              </Link>
+            )}
           </Button>
           <Link
-            href="/dashboard/settings/ea-setup"
+            href={
+              hasLiveSyncAccess
+                ? "/dashboard/settings/ea-setup"
+                : "/dashboard/settings/billing?sourceFeature=live-sync"
+            }
             className="flex items-center gap-2 px-4 py-2 h-[38px] bg-blue-900/20 ring ring-blue-500/30 rounded-md text-blue-300 text-xs hover:bg-blue-900/30 transition"
           >
-            <span>Setup EA</span>
+            <span>{hasLiveSyncAccess ? "Setup EA" : "EA plans"}</span>
             <ExternalLink className="size-3" />
           </Link>
         </div>
@@ -437,20 +478,43 @@ export default function APISettingsPage() {
           <div>
             <h2 className="text-sm font-semibold text-white">EA Keys</h2>
             <p className="mt-0.5 text-xs text-white/40">
-              Use these keys for MetaTrader EA integration.
+              {hasLiveSyncAccess
+                ? "Use these keys for MetaTrader EA integration."
+                : "Trader or Elite access is required for MetaTrader EA integration and MT5 EA sync."}
             </p>
           </div>
         </div>
+
+        {!hasLiveSyncAccess ? (
+          <p className="mb-4 text-[11px] text-amber-200/80">
+            Upgrade to Trader or Elite to generate new EA keys and use the EA bridge.
+            Existing keys stay listed so you can still revoke or delete them.
+          </p>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {apiKeys?.length === 0 ? (
             <GoalSurface className="lg:col-span-2 2xl:col-span-3">
               <div className="py-12 text-center text-white/40">
                 <Key className="mx-auto mb-2 size-8 opacity-50" />
-                <p className="text-sm">No EA API keys yet</p>
-                <p className="mt-1 text-xs">
-                  Generate one to connect your MetaTrader EA
+                <p className="text-sm">
+                  {hasLiveSyncAccess ? "No EA API keys yet" : "EA sync opens on Trader"}
                 </p>
+                <p className="mt-1 text-xs">
+                  {hasLiveSyncAccess
+                    ? "Generate one to connect your MetaTrader EA"
+                    : "Upgrade to generate MetaTrader keys and unlock the MT5 EA bridge"}
+                </p>
+                {!hasLiveSyncAccess ? (
+                  <Button
+                    asChild
+                    className="mt-4 h-8 rounded-sm bg-white text-black hover:bg-white/90"
+                  >
+                    <Link href="/dashboard/settings/billing?sourceFeature=live-sync">
+                      See plans
+                    </Link>
+                  </Button>
+                ) : null}
               </div>
             </GoalSurface>
           ) : (
@@ -545,27 +609,61 @@ export default function APISettingsPage() {
           <div>
             <h2 className="text-sm font-semibold text-white">Broker API Keys</h2>
             <p className="mt-0.5 text-xs text-white/40">
-              Store broker or prop-firm API credentials for connection-based sync.
+              {hasLiveSyncAccess
+                ? "Store broker or prop-firm API credentials for connection-based sync."
+                : "Trader or Elite access is required for connection-based broker sync."}
             </p>
           </div>
           <Button
-            onClick={() => setShowProviderDialog(true)}
+            asChild={!hasLiveSyncAccess}
+            onClick={hasLiveSyncAccess ? () => setShowProviderDialog(true) : undefined}
             className="ring ring-sky-500/25 bg-sky-600/20 hover:bg-sky-600/30 px-4 py-2 h-[34px] w-max text-xs text-sky-200 cursor-pointer justify-start gap-2 transition-all active:scale-95 duration-250"
           >
-            <Link2 className="size-3.5" />
-            Add API key
+            {hasLiveSyncAccess ? (
+              <>
+                <Link2 className="size-3.5" />
+                Add API key
+              </>
+            ) : (
+              <Link href="/dashboard/settings/billing?sourceFeature=live-sync">
+                <Link2 className="size-3.5" />
+                See plans
+              </Link>
+            )}
           </Button>
         </div>
+
+        {!hasLiveSyncAccess ? (
+          <p className="mb-4 text-[11px] text-amber-200/80">
+            Upgrade to Trader or Elite to add broker API keys, link accounts, and run platform sync.
+          </p>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3">
           {brokerApiKeyConnections.length === 0 ? (
             <GoalSurface className="lg:col-span-2 2xl:col-span-3">
               <div className="py-12 text-center text-white/40">
                 <Link2 className="mx-auto mb-2 size-8 opacity-50" />
-                <p className="text-sm">No broker API keys yet</p>
-                <p className="mt-1 text-xs">
-                  Add a platform API key like TopstepX to start account linking.
+                <p className="text-sm">
+                  {hasLiveSyncAccess
+                    ? "No broker API keys yet"
+                    : "Broker sync opens on Trader"}
                 </p>
+                <p className="mt-1 text-xs">
+                  {hasLiveSyncAccess
+                    ? "Add a platform API key like TopstepX to start account linking."
+                    : "Upgrade to add broker credentials, link accounts, and unlock live sync."}
+                </p>
+                {!hasLiveSyncAccess ? (
+                  <Button
+                    asChild
+                    className="mt-4 h-8 rounded-sm bg-white text-black hover:bg-white/90"
+                  >
+                    <Link href="/dashboard/settings/billing?sourceFeature=live-sync">
+                      See plans
+                    </Link>
+                  </Button>
+                ) : null}
               </div>
             </GoalSurface>
           ) : (
@@ -634,7 +732,7 @@ export default function APISettingsPage() {
                     <GoalContentSeparator className="mb-3.5 mt-3.5" />
 
                     <div className="flex flex-wrap items-center gap-2">
-                      {!connection.accountId && !isSavedCredentialConnection ? (
+                      {hasLiveSyncAccess && !connection.accountId && !isSavedCredentialConnection ? (
                         <Button
                           type="button"
                           onClick={() => setShowLinkDialog(connection.id)}
@@ -646,13 +744,30 @@ export default function APISettingsPage() {
                           <Link2 className="size-3.5" />
                           Link account
                         </Button>
+                      ) : !hasLiveSyncAccess && !isSavedCredentialConnection ? (
+                        <Button
+                          asChild
+                          className={getPropAssignActionButtonClassName({
+                            tone: "neutral",
+                            size: "sm",
+                          })}
+                        >
+                          <Link href="/dashboard/settings/billing?sourceFeature=live-sync">
+                            <Link2 className="size-3.5" />
+                            Unlock broker sync
+                          </Link>
+                        </Button>
                       ) : null}
 
                       <Link
-                        href="/dashboard/settings/connections"
+                        href={
+                          hasLiveSyncAccess
+                            ? "/dashboard/settings/connections"
+                            : "/dashboard/settings/billing?sourceFeature=live-sync"
+                        }
                         className="inline-flex h-8 items-center justify-center gap-2 rounded-sm border border-white/10 bg-white/5 px-3 text-xs text-white/70 transition hover:bg-white/10 hover:text-white"
                       >
-                        Open connections
+                        {hasLiveSyncAccess ? "Open connections" : "See plans"}
                       </Link>
 
                       <Button

@@ -20,6 +20,10 @@ import { syncPropAccountState } from "../prop-rule-monitor";
 import { isWorkerManagedProvider } from "../mt5/constants";
 import { nanoid } from "nanoid";
 import { cache, cacheKeys } from "../cache";
+import {
+  BROKER_SYNC_REQUIRED_PLAN_MESSAGE,
+  getLiveSyncAccessState,
+} from "../billing/ea-sync-access";
 
 export interface SyncResult {
   connectionId: string;
@@ -45,6 +49,19 @@ export async function syncConnection(
   });
 
   if (!conn) throw new Error(`Connection ${connectionId} not found`);
+
+  const liveSyncAccess = await getLiveSyncAccessState(conn.userId);
+  if (!liveSyncAccess.hasAccess) {
+    return {
+      connectionId,
+      status: "skipped",
+      tradesFound: 0,
+      tradesInserted: 0,
+      tradesDuplicated: 0,
+      errorMessage: BROKER_SYNC_REQUIRED_PLAN_MESSAGE,
+      durationMs: Date.now() - startTime,
+    };
+  }
 
   if (conn.isPaused) {
     return {

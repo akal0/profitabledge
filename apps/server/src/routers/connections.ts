@@ -67,6 +67,7 @@ import {
   buildDiscoveredAccountsMeta,
   getProviderAccountMetaKey,
 } from "../lib/connections/discovered-accounts";
+import { requireLiveSyncAccess } from "../lib/billing/ea-sync-access";
 
 const credentialsSchema = z.record(z.string(), z.string());
 const connectionMetaSchema = z
@@ -943,6 +944,8 @@ export const connectionsRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      await requireLiveSyncAccess(ctx.session.user.id);
+
       const state = Buffer.from(
         JSON.stringify({
           userId: ctx.session.user.id,
@@ -976,6 +979,8 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
+      await requireLiveSyncAccess(ctx.session.user.id);
+
       if (input.provider !== "ctrader" && input.provider !== "tradovate") {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -1041,6 +1046,8 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
+      await requireLiveSyncAccess(ctx.session.user.id);
+
       const providerInfo = PROVIDER_INFO[input.provider] ?? null;
       if (isWorkerManagedProvider(input.provider)) {
         assertAlphaFeatureEnabled("mt5Ingestion");
@@ -1282,6 +1289,8 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
+      await requireLiveSyncAccess(ctx.session.user.id);
+
       const [conn, acct] = await Promise.all([
         db.query.platformConnection.findFirst({
           where: and(
@@ -1346,6 +1355,8 @@ export const connectionsRouter = router({
     .input(z.object({ connectionId: z.string() }))
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
+      await requireLiveSyncAccess(ctx.session.user.id);
+
       const conn = await db.query.platformConnection.findFirst({
         where: and(
           eq(platformConnection.id, input.connectionId),
@@ -1457,6 +1468,8 @@ export const connectionsRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       assertAlphaFeatureEnabled("connections");
+      await requireLiveSyncAccess(ctx.session.user.id);
+
       const conn = await db.query.platformConnection.findFirst({
         where: and(
           eq(platformConnection.id, input.connectionId),

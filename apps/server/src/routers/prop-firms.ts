@@ -7,6 +7,7 @@ import {
   propDailySnapshot,
   propChallengeInstance,
   propChallengeRule,
+  propChallengeStageAccount,
   propFirm,
   trade,
 } from "../db/schema/trading";
@@ -35,8 +36,14 @@ type ChallengePhaseLike = {
   name?: string | null;
   profitTarget?: number | null;
   profitTargetType?: "percentage" | "absolute" | null;
+  dailyLossLimit?: number | null;
+  dailyLossLimitType?: "percentage" | "absolute" | null;
+  maxLoss?: number | null;
+  maxLossType?: "absolute" | "trailing" | null;
   minTradingDays?: number | null;
 };
+
+type ChallengeMetricMode = "currency" | "percent";
 
 function toNumber(value: unknown, fallback = 0): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -62,6 +69,24 @@ function normalizeChallengePhases(phases: unknown): ChallengePhaseLike[] {
           (phase as any)?.profitTargetType === "absolute"
             ? "absolute"
             : "percentage",
+        dailyLossLimit:
+          (phase as any)?.dailyLossLimit == null
+            ? null
+            : toNumber((phase as any)?.dailyLossLimit),
+        dailyLossLimitType:
+          (phase as any)?.dailyLossLimitType === "absolute"
+            ? "absolute"
+            : (phase as any)?.dailyLossLimitType === "percentage"
+              ? "percentage"
+              : (phase as any)?.profitTargetType === "absolute"
+                ? "absolute"
+                : "percentage",
+        maxLoss:
+          (phase as any)?.maxLoss == null
+            ? null
+            : toNumber((phase as any)?.maxLoss),
+        maxLossType:
+          (phase as any)?.maxLossType === "trailing" ? "trailing" : "absolute",
         minTradingDays:
           (phase as any)?.minTradingDays == null
             ? 0
@@ -88,6 +113,34 @@ function getOverallAccountProgress(input: {
     currentProfit,
     currentProfitPercent,
   };
+}
+
+function getPhaseMetricMode(phase: ChallengePhaseLike | null | undefined): ChallengeMetricMode {
+  return phase?.profitTargetType === "absolute" ? "currency" : "percent";
+}
+
+function getDailyLossMetricMode(
+  phase: ChallengePhaseLike | null | undefined
+): ChallengeMetricMode {
+  if (phase?.dailyLossLimitType === "absolute") return "currency";
+  if (phase?.dailyLossLimitType === "percentage") return "percent";
+  return getPhaseMetricMode(phase);
+}
+
+function formatChallengeMetricValue(
+  value: number,
+  mode: ChallengeMetricMode
+) {
+  if (mode === "currency") {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  return `${value.toFixed(2)}%`;
 }
 
 function inferImportedCurrentPhase(input: {
@@ -271,32 +324,52 @@ async function buildTrackerDashboardForUser(userId: string, accountId: string) {
     phases.find((phase: any) => phase.order === account.propCurrentPhase) ||
     phases[0] ||
     null;
+  const profitMetricMode = getPhaseMetricMode(currentPhase);
+  const dailyLossMetricMode = getDailyLossMetricMode(currentPhase);
   const targetPct = toNumber(currentPhase?.profitTarget);
   const dailyLossLimit = toNumber(currentPhase?.dailyLossLimit);
   const maxLossLimit = toNumber(currentPhase?.maxLoss);
-  const targetRemainingPct = Math.max(
+  const currentProgressValue =
+    profitMetricMode === "currency"
+      ? toNumber(ruleCheck.metrics.currentProfit)
+      : toNumber(ruleCheck.metrics.currentProfitPercent);
+  const currentDailyDrawdownValue =
+    dailyLossMetricMode === "currency"
+      ? toNumber(ruleCheck.metrics.dailyDrawdown)
+      : toNumber(ruleCheck.metrics.dailyDrawdownPercent);
+  const currentMaxDrawdownValue =
+    profitMetricMode === "currency"
+      ? toNumber(ruleCheck.metrics.maxDrawdown)
+      : toNumber(ruleCheck.metrics.maxDrawdownPercent);
+  const targetRemainingValue = Math.max(
     0,
-    targetPct - toNumber(ruleCheck.metrics.currentProfitPercent)
+    targetPct - currentProgressValue
   );
-  const dailyHeadroomPct = Math.max(
+  const dailyHeadroomValue = Math.max(
     0,
-    dailyLossLimit - toNumber(ruleCheck.metrics.dailyDrawdownPercent)
+    dailyLossLimit - currentDailyDrawdownValue
   );
-  const maxHeadroomPct = Math.max(
+  const maxHeadroomValue = Math.max(
     0,
-    maxLossLimit - toNumber(ruleCheck.metrics.maxDrawdownPercent)
+    maxLossLimit - currentMaxDrawdownValue
   );
+  const targetRemainingPct =
+    targetPct > 0 ? (targetRemainingValue / targetPct) * 100 : null;
+  const dailyHeadroomPct =
+    dailyLossLimit > 0 ? (dailyHeadroomValue / dailyLossLimit) * 100 : null;
+  const maxHeadroomPct =
+    maxLossLimit > 0 ? (maxHeadroomValue / maxLossLimit) * 100 : null;
   const minTradingDaysRemaining = Math.max(
     0,
     toNumber(currentPhase?.minTradingDays) - toNumber(ruleCheck.metrics.tradingDays)
   );
-  const requiredDailyPacePct =
+  const requiredDailyPaceValue =
     ruleCheck.metrics.daysRemaining && ruleCheck.metrics.daysRemaining > 0
-      ? targetRemainingPct / ruleCheck.metrics.daysRemaining
+      ? targetRemainingValue / ruleCheck.metrics.daysRemaining
       : null;
   const headroomFloor = Math.min(
-    dailyLossLimit > 0 ? (dailyHeadroomPct / dailyLossLimit) * 100 : 100,
-    maxLossLimit > 0 ? (maxHeadroomPct / maxLossLimit) * 100 : 100
+    dailyHeadroomPct ?? 100,
+    maxHeadroomPct ?? 100
   );
   const survivalState =
     ruleCheck.alerts.some((alert) => alert.type === "breach") ||
@@ -309,12 +382,12 @@ async function buildTrackerDashboardForUser(userId: string, accountId: string) {
       : "stable";
 
   const nextActions: string[] = [];
-  if (dailyHeadroomPct <= Math.max(0.5, dailyLossLimit * 0.2)) {
+  if (dailyHeadroomValue <= Math.max(0.5, dailyLossLimit * 0.2)) {
     nextActions.push(
       "Daily loss headroom is tight. Trade smaller or stand down until the reset."
     );
   }
-  if (maxHeadroomPct <= Math.max(1, maxLossLimit * 0.2)) {
+  if (maxHeadroomValue <= Math.max(1, maxLossLimit * 0.2)) {
     nextActions.push(
       "Overall challenge survival is fragile. Protect the account before chasing the target."
     );
@@ -324,9 +397,9 @@ async function buildTrackerDashboardForUser(userId: string, accountId: string) {
       `You still need ${minTradingDaysRemaining} trading day(s). Do not force size just to accelerate the clock.`
     );
   }
-  if (requiredDailyPacePct && requiredDailyPacePct > 1.5) {
+  if (requiredDailyPaceValue && requiredDailyPaceValue > 0) {
     nextActions.push(
-      `Required pace is ${requiredDailyPacePct.toFixed(2)}% per remaining day. That is aggressive; tighten execution instead of stretching risk.`
+      `Required pace is ${formatChallengeMetricValue(requiredDailyPaceValue, profitMetricMode)} per remaining day. Tighten execution instead of stretching risk.`
     );
   }
   if (nextActions.length === 0) {
@@ -346,11 +419,16 @@ async function buildTrackerDashboardForUser(userId: string, accountId: string) {
     alerts,
     snapshots,
     commandCenter: {
+      metricMode: profitMetricMode,
+      dailyLossMetricMode,
+      targetRemainingValue,
       targetRemainingPct,
+      dailyHeadroomValue,
       dailyHeadroomPct,
+      maxHeadroomValue,
       maxHeadroomPct,
       minTradingDaysRemaining,
-      requiredDailyPacePct,
+      requiredDailyPaceValue,
       survivalState,
       nextActions,
     },
@@ -742,6 +820,107 @@ export const propFirmsRouter = router({
       return {
         success: true,
         challengeInstanceId: challengeInstance.id,
+      };
+    }),
+
+  changeChallengeRule: protectedProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+        challengeRuleId: z.string(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const account = await db.query.tradingAccount.findFirst({
+        where: and(
+          eq(tradingAccount.id, input.accountId),
+          eq(tradingAccount.userId, ctx.session.user.id)
+        ),
+      });
+
+      if (!account || !account.isPropAccount || !account.propFirmId) {
+        throw new Error("Account not found or is not a prop account");
+      }
+
+      const challengeRule = await getChallengeRuleById(
+        input.challengeRuleId,
+        ctx.session.user.id
+      );
+
+      if (!challengeRule || !challengeRule.active) {
+        throw new Error("Challenge rule not found");
+      }
+
+      if (challengeRule.propFirmId !== account.propFirmId) {
+        throw new Error("Challenge rule does not belong to this prop firm");
+      }
+
+      const phases = normalizeChallengePhases(challengeRule.phases);
+      const currentPhaseExists = phases.some(
+        (phase) => phase.order === account.propCurrentPhase
+      );
+      const nextPhase = currentPhaseExists
+        ? account.propCurrentPhase ?? 1
+        : phases[0]?.order ?? 1;
+      const nextPhaseLabel =
+        phases.find((phase) => phase.order === nextPhase)?.name ||
+        (nextPhase === 0 ? "Funded" : `Phase ${nextPhase}`);
+      const nextStatus =
+        nextPhase === 0
+          ? "passed"
+          : account.propPhaseStatus === "failed"
+            ? "failed"
+            : account.propPhaseStatus === "paused"
+              ? "paused"
+              : "active";
+      const now = new Date();
+
+      await db
+        .update(tradingAccount)
+        .set({
+          propChallengeRuleId: challengeRule.id,
+          propCurrentPhase: nextPhase,
+          propPhaseStatus: nextStatus,
+          propManualOverride: true,
+        })
+        .where(eq(tradingAccount.id, account.id));
+
+      if (account.propChallengeInstanceId) {
+        await db
+          .update(propChallengeInstance)
+          .set({
+            propChallengeRuleId: challengeRule.id,
+            currentPhase: nextPhase,
+            status: nextStatus,
+            updatedAt: now,
+          })
+          .where(eq(propChallengeInstance.id, account.propChallengeInstanceId));
+
+        await db
+          .update(propChallengeStageAccount)
+          .set({
+            phaseOrder: nextPhase,
+            phaseLabel: nextPhaseLabel,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(
+                propChallengeStageAccount.challengeInstanceId,
+                account.propChallengeInstanceId
+              ),
+              eq(propChallengeStageAccount.accountId, account.id),
+              eq(propChallengeStageAccount.stageStatus, "active")
+            )
+          );
+      }
+
+      await syncPropAccountState(account.id);
+
+      return {
+        success: true,
+        challengeRuleId: challengeRule.id,
+        currentPhase: nextPhase,
       };
     }),
 

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import Color from "color";
 
 export const TRADE_IDENTIFIER_PILL_CLASS =
-  "inline-flex min-h-7 min-w-0 max-w-full shrink items-center gap-1.5 rounded-md ring-1 px-2.5 py-1 text-[11px] font-medium leading-none tracking-wide whitespace-nowrap transition-colors";
+  "inline-flex min-h-7 min-w-max max-w-full shrink items-center gap-1.5 rounded-md ring-1 px-2.5 py-1 text-[11px] font-medium leading-none tracking-wide whitespace-nowrap transition-colors";
 
 export const TRADE_IDENTIFIER_BUTTON_CLASS =
   "h-7 overflow-hidden rounded-md ring-1 ring-white/8 bg-white/[0.03] px-2.5 text-[11px] font-medium text-white/60 hover:bg-white/[0.06] hover:text-white";

@@ -74,20 +74,86 @@ export function getAffiliatePfpEffectClassName(pfpEffect?: string | null) {
       return "ring-4 ring-amber-400/50 shadow-[0_0_20px_rgba(251,191,36,0.45),0_0_40px_rgba(251,191,36,0.2)]";
     case "emerald_pulse":
       return "ring-4 ring-emerald-400/50 [--pfp-glow:rgba(16,185,129,0.45)] [--pfp-glow-outer:rgba(16,185,129,0.2)] shadow-[0_0_20px_rgba(16,185,129,0.45),0_0_40px_rgba(16,185,129,0.2)] motion-reduce:animate-none animate-[pfp-pulse_2.5s_ease-in-out_infinite]";
+    case "fire_ring":
+      return "ring-4 ring-orange-400/60 [--pfp-glow:rgba(251,146,60,0.72)] [--pfp-glow-outer:rgba(239,68,68,0.34)] shadow-[0_0_16px_rgba(251,146,60,0.68),0_0_38px_rgba(239,68,68,0.34)] motion-reduce:animate-none animate-[pfp-fire_2.2s_ease-in-out_infinite]";
     case "rainbow_ring":
       return "ring-4 ring-transparent [background:conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)_padding-box] motion-reduce:animate-none animate-[pfp-rainbow-spin_4s_linear_infinite]";
+    case "aurora_ring":
+      return "ring-4 ring-transparent [background:conic-gradient(from_0deg,#34d399,#22d3ee,#818cf8,#f472b6,#34d399)_padding-box] motion-reduce:animate-none animate-[pfp-rainbow-spin_5.5s_linear_infinite]";
     case "frost_aura":
       return "ring-4 ring-sky-300/50 shadow-[0_0_24px_rgba(56,189,248,0.5),0_0_48px_rgba(56,189,248,0.2)]";
+    case "ice_crystals":
+      return "ring-4 ring-cyan-100/70 [--pfp-glow:rgba(224,242,254,0.82)] [--pfp-glow-outer:rgba(56,189,248,0.26)] shadow-[0_0_16px_rgba(224,242,254,0.78),0_0_36px_rgba(56,189,248,0.24)] motion-reduce:animate-none animate-[pfp-pulse_3.2s_ease-in-out_infinite]";
     case "shadow_pulse":
       return "ring-4 ring-purple-500/40 [--pfp-glow:rgba(168,85,247,0.5)] [--pfp-glow-outer:rgba(88,28,135,0.3)] shadow-[0_0_20px_rgba(168,85,247,0.5),0_0_40px_rgba(88,28,135,0.3)] motion-reduce:animate-none animate-[pfp-pulse_3s_ease-in-out_infinite]";
     case "electric_spark":
       return "ring-4 ring-cyan-400/50 [--pfp-glow:rgba(34,211,238,0.6)] [--pfp-glow-outer:rgba(56,189,248,0.3)] shadow-[0_0_16px_rgba(34,211,238,0.6),0_0_32px_rgba(56,189,248,0.3)] motion-reduce:animate-none animate-[pfp-electric_1.5s_ease-in-out_infinite]";
+    case "lightning_ring":
+      return "ring-4 ring-indigo-300/60 [--pfp-glow:rgba(129,140,248,0.64)] [--pfp-glow-outer:rgba(34,211,238,0.3)] shadow-[0_0_16px_rgba(129,140,248,0.56),0_0_34px_rgba(34,211,238,0.28)] motion-reduce:animate-none animate-[pfp-electric_1.2s_ease-in-out_infinite]";
     case "sakura_ring":
       return "ring-4 ring-pink-300/50 [--pfp-glow:rgba(244,114,182,0.45)] [--pfp-glow-outer:rgba(251,113,133,0.2)] shadow-[0_0_18px_rgba(244,114,182,0.45),0_0_36px_rgba(251,113,133,0.2)] motion-reduce:animate-none animate-[pfp-sakura_3s_ease-in-out_infinite]";
+    case "cherry_bloom":
+      return "ring-4 ring-rose-300/60 [--pfp-glow:rgba(251,113,133,0.5)] [--pfp-glow-outer:rgba(244,114,182,0.24)] shadow-[0_0_18px_rgba(251,113,133,0.5),0_0_38px_rgba(244,114,182,0.24)] motion-reduce:animate-none animate-[pfp-sakura_2.8s_ease-in-out_infinite]";
+    case "pink_petals":
+      return "ring-4 ring-pink-200/70 [--pfp-glow:rgba(249,168,212,0.62)] [--pfp-glow-outer:rgba(251,113,133,0.2)] shadow-[0_0_14px_rgba(249,168,212,0.62),0_0_28px_rgba(251,113,133,0.22)] motion-reduce:animate-none animate-[pfp-sakura_3.4s_ease-in-out_infinite]";
     case "neon_pulse":
       return "ring-4 ring-green-400/60 [--pfp-glow:rgba(74,222,128,0.7)] [--pfp-glow-outer:rgba(34,197,94,0.4)] shadow-[0_0_12px_rgba(74,222,128,0.7),0_0_28px_rgba(34,197,94,0.4),0_0_56px_rgba(22,163,74,0.2)] motion-reduce:animate-none animate-[pfp-pulse_2s_ease-in-out_infinite]";
+    case "neon_pulse_pink":
+      return "ring-4 ring-fuchsia-400/60 [--pfp-glow:rgba(232,121,249,0.76)] [--pfp-glow-outer:rgba(217,70,239,0.34)] shadow-[0_0_14px_rgba(232,121,249,0.76),0_0_30px_rgba(217,70,239,0.34)] motion-reduce:animate-none animate-[pfp-pulse_2.1s_ease-in-out_infinite]";
+    case "neon_pulse_blue":
+      return "ring-4 ring-sky-400/60 [--pfp-glow:rgba(56,189,248,0.76)] [--pfp-glow-outer:rgba(59,130,246,0.32)] shadow-[0_0_14px_rgba(56,189,248,0.76),0_0_30px_rgba(59,130,246,0.32)] motion-reduce:animate-none animate-[pfp-pulse_2.1s_ease-in-out_infinite]";
+    case "glitch_frame":
+      return "ring-4 ring-cyan-300/50 [--pfp-glow:rgba(34,211,238,0.6)] [--pfp-glow-outer:rgba(16,185,129,0.24)] shadow-[0_0_14px_rgba(34,211,238,0.56),0_0_26px_rgba(16,185,129,0.24)] motion-reduce:animate-none animate-[pfp-glitch_2.6s_steps(2,end)_infinite]";
+    case "hud_ring":
+      return "ring-4 ring-cyan-300/60 [--pfp-glow:rgba(34,211,238,0.62)] [--pfp-glow-outer:rgba(14,165,233,0.24)] shadow-[0_0_14px_rgba(34,211,238,0.52),0_0_30px_rgba(14,165,233,0.24)] motion-reduce:animate-none animate-[pfp-electric_2.2s_ease-in-out_infinite]";
+    case "matrix_glow":
+      return "ring-4 ring-emerald-400/60 [--pfp-glow:rgba(74,222,128,0.74)] [--pfp-glow-outer:rgba(16,185,129,0.24)] shadow-[0_0_14px_rgba(74,222,128,0.74),0_0_32px_rgba(16,185,129,0.24)] motion-reduce:animate-none animate-[pfp-pulse_2.3s_ease-in-out_infinite]";
+    case "digital_pulse":
+      return "ring-4 ring-sky-400/55 [--pfp-glow:rgba(56,189,248,0.62)] [--pfp-glow-outer:rgba(129,140,248,0.24)] shadow-[0_0_14px_rgba(56,189,248,0.56),0_0_32px_rgba(129,140,248,0.24)] motion-reduce:animate-none animate-[pfp-electric_1.8s_ease-in-out_infinite]";
+    case "stardust":
+      return "ring-4 ring-violet-300/55 [--pfp-glow:rgba(196,181,253,0.62)] [--pfp-glow-outer:rgba(125,211,252,0.22)] shadow-[0_0_15px_rgba(196,181,253,0.58),0_0_36px_rgba(125,211,252,0.22)] motion-reduce:animate-none animate-[pfp-pulse_3.4s_ease-in-out_infinite]";
+    case "enchanted":
+      return "ring-4 ring-amber-300/60 [--pfp-glow:rgba(252,211,77,0.62)] [--pfp-glow-outer:rgba(244,114,182,0.22)] shadow-[0_0_14px_rgba(252,211,77,0.58),0_0_30px_rgba(244,114,182,0.22)] motion-reduce:animate-none animate-[pfp-pulse_2.5s_ease-in-out_infinite]";
     case "hearts":
       return "ring-4 ring-rose-400/50 [--pfp-glow:rgba(251,113,133,0.5)] [--pfp-glow-outer:rgba(244,63,94,0.25)] shadow-[0_0_20px_rgba(251,113,133,0.5),0_0_40px_rgba(244,63,94,0.25)] motion-reduce:animate-none animate-[pfp-hearts_2s_ease-in-out_infinite]";
+    case "rose_petals":
+      return "ring-4 ring-rose-400/60 [--pfp-glow:rgba(251,113,133,0.6)] [--pfp-glow-outer:rgba(190,24,93,0.24)] shadow-[0_0_16px_rgba(251,113,133,0.56),0_0_36px_rgba(190,24,93,0.24)] motion-reduce:animate-none animate-[pfp-hearts_2.4s_ease-in-out_infinite]";
+    case "love_glow":
+      return "ring-4 ring-pink-300/60 [--pfp-glow:rgba(244,114,182,0.66)] [--pfp-glow-outer:rgba(192,132,252,0.2)] shadow-[0_0_14px_rgba(244,114,182,0.62),0_0_30px_rgba(192,132,252,0.2)] motion-reduce:animate-none animate-[pfp-pulse_2.3s_ease-in-out_infinite]";
+    case "bull_ring":
+      return "ring-4 ring-emerald-400/65 [--pfp-glow:rgba(16,185,129,0.7)] [--pfp-glow-outer:rgba(45,212,191,0.24)] shadow-[0_0_16px_rgba(16,185,129,0.66),0_0_34px_rgba(45,212,191,0.24)] motion-reduce:animate-none animate-[pfp-pulse_2s_ease-in-out_infinite]";
+    case "bear_ring":
+      return "ring-4 ring-red-400/60 [--pfp-glow:rgba(248,113,113,0.68)] [--pfp-glow-outer:rgba(251,146,60,0.2)] shadow-[0_0_16px_rgba(248,113,113,0.64),0_0_34px_rgba(251,146,60,0.2)] motion-reduce:animate-none animate-[pfp-pulse_2s_ease-in-out_infinite]";
+    case "diamond_hands":
+      return "ring-4 ring-cyan-100/70 [--pfp-glow:rgba(224,242,254,0.82)] [--pfp-glow-outer:rgba(129,140,248,0.24)] shadow-[0_0_16px_rgba(224,242,254,0.8),0_0_38px_rgba(129,140,248,0.24)] motion-reduce:animate-none animate-[pfp-prism_3.2s_ease-in-out_infinite]";
+    case "moon_glow":
+      return "ring-4 ring-amber-200/60 [--pfp-glow:rgba(253,230,138,0.68)] [--pfp-glow-outer:rgba(129,140,248,0.18)] shadow-[0_0_14px_rgba(253,230,138,0.62),0_0_30px_rgba(129,140,248,0.18)] motion-reduce:animate-none animate-[pfp-pulse_3.2s_ease-in-out_infinite]";
+    case "gradient_spin_fire":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(251,146,60,0.34)]";
+    case "gradient_spin_ocean":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(34,211,238,0.3)]";
+    case "gradient_spin_toxic":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(74,222,128,0.3)]";
+    case "stroke_draw_single":
+    case "stroke_draw_double":
+    case "stroke_draw_dotted":
+      return "ring-4 ring-transparent shadow-[0_0_14px_rgba(129,140,248,0.24)]";
+    case "energy_flow":
+      return "ring-4 ring-transparent shadow-[0_0_14px_rgba(74,222,128,0.24)]";
+    case "multi_ring":
+      return "ring-4 ring-transparent shadow-[0_0_16px_rgba(34,211,238,0.2)]";
+    case "lightning_ring_v2":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(147,197,253,0.32)]";
+    case "flame_arc":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(251,146,60,0.4)]";
+    case "plasma_ring":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(168,85,247,0.36)]";
+    case "frost_shards":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(125,211,252,0.36)]";
+    case "void_rift":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(124,58,237,0.36)]";
+    case "solar_flare":
+      return "ring-4 ring-transparent shadow-[0_0_18px_rgba(251,191,36,0.38)]";
     case "custom":
       return "ring-4";
     default:
@@ -99,6 +165,8 @@ const CUSTOM_RING_ANIMATIONS: Record<string, string> = {
   none: "",
   pulse: "motion-reduce:animate-none animate-[pfp-pulse_2.5s_ease-in-out_infinite]",
   electric: "motion-reduce:animate-none animate-[pfp-electric_1.5s_ease-in-out_infinite]",
+  soft_pulse:
+    "motion-reduce:animate-none animate-[pfp-sakura_3s_ease-in-out_infinite]",
   sakura: "motion-reduce:animate-none animate-[pfp-sakura_3s_ease-in-out_infinite]",
   heartbeat: "motion-reduce:animate-none animate-[pfp-hearts_2s_ease-in-out_infinite]",
 };
@@ -113,7 +181,7 @@ export const CUSTOM_RING_EFFECT_PRESETS = [
   { value: "none", label: "Static" },
   { value: "pulse", label: "Pulse" },
   { value: "electric", label: "Electric" },
-  { value: "sakura", label: "Soft Pulse" },
+  { value: "soft_pulse", label: "Soft Pulse" },
   { value: "heartbeat", label: "Heartbeat" },
 ] as const;
 
@@ -145,6 +213,12 @@ export function getAffiliatePfpWrapperClassName(pfpEffect?: string | null) {
   }
   if (pfpEffect === "sakura_ring") {
     return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,#f9a8d4,#f472b6,#fb7185,#fda4af,#f9a8d4)] motion-reduce:animate-none animate-[pfp-rainbow-spin_6s_linear_infinite]";
+  }
+  if (pfpEffect === "aurora_ring") {
+    return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,#34d399,#22d3ee,#818cf8,#f472b6,#34d399)] motion-reduce:animate-none animate-[pfp-rainbow-spin_5.5s_linear_infinite]";
+  }
+  if (pfpEffect === "hud_ring") {
+    return "rounded-full p-[3px] bg-[conic-gradient(from_0deg,rgba(34,211,238,0.95),rgba(34,211,238,0.12)_18%,transparent_18%,transparent_28%,rgba(56,189,248,0.9)_28%,rgba(34,211,238,0.12)_42%,transparent_42%,transparent_56%,rgba(16,185,129,0.72)_56%,rgba(34,211,238,0.1)_70%,transparent_70%,transparent_82%,rgba(59,130,246,0.88)_82%,rgba(34,211,238,0.12)_100%)] motion-reduce:animate-none animate-[pfp-rainbow-spin_8s_linear_infinite]";
   }
   return "";
 }
@@ -281,6 +355,30 @@ export function getAffiliateNameEffectClassName(nameEffect?: string | null) {
       return "inline-block bg-clip-text text-transparent bg-[length:300%_100%] motion-reduce:animate-none animate-[name-gradient-shift_4s_ease_infinite]";
     case "breathe":
       return "motion-reduce:animate-none animate-[name-breathe_3s_ease-in-out_infinite]";
+    case "typewriter":
+      return "inline-block overflow-hidden whitespace-nowrap border-r border-current pr-0.5 motion-reduce:animate-none animate-[name-typewriter_4s_steps(24)_infinite]";
+    case "wave":
+      return "inline-flex items-end gap-[0.015em]";
+    case "glitch_text":
+      return "relative inline-block motion-reduce:animate-none animate-[name-glitch_2.8s_steps(2,end)_infinite]";
+    case "underline_draw":
+      return "relative inline-block after:absolute after:bottom-[-0.18em] after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-current after:opacity-70 motion-reduce:after:scale-x-100 motion-safe:animate-[name-underline-draw_2.6s_ease-in-out_infinite]";
+    case "name_neon_flicker":
+      return "motion-reduce:animate-none animate-[name-neon-flicker_2.8s_steps(1,end)_infinite]";
+    case "name_glitch_v2":
+      return "relative inline-block";
+    case "name_gradient_flow":
+      return "inline-block bg-clip-text text-transparent bg-[length:220%_100%] motion-reduce:animate-none animate-[name-gradient-flow_4.2s_linear_infinite]";
+    case "name_electric_crackle":
+      return "motion-reduce:animate-none animate-[name-electric-crackle_1.6s_steps(3,end)_infinite]";
+    case "name_flame_rise":
+      return "motion-reduce:animate-none animate-[name-flame-rise_2.5s_ease-in-out_infinite]";
+    case "name_frost_crawl":
+      return "motion-reduce:animate-none animate-[name-frost-crawl_3.2s_ease-in-out_infinite]";
+    case "name_void_pulse":
+      return "motion-reduce:animate-none animate-[name-void-pulse_2.8s_ease-in-out_infinite]";
+    case "name_plasma_shift":
+      return "inline-block bg-clip-text text-transparent bg-[length:250%_100%] motion-reduce:animate-none animate-[name-plasma-shift_3.5s_ease-in-out_infinite]";
     default:
       return "";
   }
@@ -413,6 +511,119 @@ export function getAffiliateNameEffectStyle(
       textShadow: `0 0 10px ${glowColor}, 0 0 20px ${glowColor}`,
     };
   }
+  if (nameEffect === "glitch_text") {
+    const baseColor =
+      nameColor === "custom" && customGradient?.from
+        ? customGradient.from
+        : getGlowColor(nameColor, 0.92);
+    const splitColor =
+      nameColor === "custom" && customGradient?.to
+        ? customGradient.to
+        : getGlowColor(nameColor, 0.72);
+    return {
+      textShadow: `0 0 8px ${getGlowColor(nameColor, 0.28)}`,
+      ["--name-glitch-primary" as string]: baseColor,
+      ["--name-glitch-secondary" as string]: splitColor,
+    };
+  }
+  if (nameEffect === "name_glitch_v2") {
+    const baseColor =
+      nameColor === "custom" && customGradient?.from
+        ? customGradient.from
+        : getGlowColor(nameColor, 0.94);
+    const splitColor =
+      nameColor === "custom" && customGradient?.to
+        ? customGradient.to
+        : getGlowColor(nameColor, 0.78);
+    return {
+      textShadow: `0 0 10px ${getGlowColor(nameColor, 0.24)}`,
+      ["--name-glitch-primary" as string]: baseColor,
+      ["--name-glitch-secondary" as string]: splitColor,
+    };
+  }
+  if (nameEffect === "name_neon_flicker") {
+    const glowColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.8)
+        : getGlowColor(nameColor, 0.8);
+    return {
+      textShadow: `0 0 4px ${glowColor}, 0 0 10px ${glowColor}, 0 0 20px ${glowColor}, 0 0 38px ${glowColor}`,
+    };
+  }
+  if (nameEffect === "name_gradient_flow") {
+    const style = getAffiliateNameColorStyle(nameColor, customGradient);
+    if (style?.backgroundImage) {
+      return {
+        backgroundImage: style.backgroundImage,
+        backgroundSize: "220% 100%",
+        WebkitBackgroundClip: "text",
+        WebkitTextFillColor: "transparent",
+        backgroundClip: "text",
+      } as React.CSSProperties;
+    }
+    return {
+      backgroundImage:
+        "linear-gradient(90deg, #22d3ee, #818cf8, #f472b6, #fbbf24, #22d3ee)",
+      backgroundSize: "220% 100%",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      backgroundClip: "text",
+    } as React.CSSProperties;
+  }
+  if (nameEffect === "name_electric_crackle") {
+    const glowColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.7)
+        : getGlowColor(nameColor, 0.7);
+    return {
+      textShadow: `0 0 4px ${glowColor}, 0 0 10px ${glowColor}, 0 0 20px ${glowColor}`,
+      ["--name-crackle-color" as string]: glowColor,
+    };
+  }
+  if (nameEffect === "name_flame_rise") {
+    const baseColor =
+      nameColor === "custom" && customGradient?.from
+        ? customGradient.from
+        : nameColor === "fire" || nameColor === "sunset"
+        ? "#fb923c"
+        : getGlowColor(nameColor, 0.8);
+    return {
+      textShadow: `0 -2px 6px ${hexToRgba(baseColor.startsWith("#") ? baseColor : "#fb923c", 0.5)}, 0 -4px 12px ${hexToRgba(baseColor.startsWith("#") ? baseColor : "#fbbf24", 0.3)}`,
+    };
+  }
+  if (nameEffect === "name_frost_crawl") {
+    const iceColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.5)
+        : nameColor === "ice"
+        ? "rgba(125,211,252,0.5)"
+        : getGlowColor(nameColor, 0.5);
+    return {
+      textShadow: `0 0 8px ${iceColor}, 0 0 16px ${iceColor}`,
+      ["--name-frost-color" as string]: iceColor,
+    };
+  }
+  if (nameEffect === "name_void_pulse") {
+    const voidColor =
+      nameColor === "custom" && customGradient?.from
+        ? hexToRgba(customGradient.from, 0.6)
+        : nameColor === "midnight"
+        ? "rgba(124,58,237,0.6)"
+        : getGlowColor(nameColor, 0.6);
+    return {
+      textShadow: `0 0 6px ${voidColor}, 0 0 14px ${voidColor}, 0 0 28px ${voidColor}`,
+    };
+  }
+  if (nameEffect === "name_plasma_shift") {
+    return {
+      backgroundImage:
+        "linear-gradient(90deg, #a855f7, #e879f9, #f472b6, #c084fc, #a855f7)",
+      backgroundSize: "250% 100%",
+      WebkitBackgroundClip: "text",
+      WebkitTextFillColor: "transparent",
+      backgroundClip: "text",
+    } as React.CSSProperties;
+  }
   return undefined;
 }
 
@@ -431,15 +642,39 @@ export const PFP_EFFECT_PRESETS = [
     preview: "bg-emerald-500/20 ring-1 ring-emerald-400/40",
   },
   {
-    value: "rainbow_ring",
-    label: "Rainbow Ring",
-    preview:
-      "bg-[conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)]",
-  },
-  {
     value: "frost_aura",
     label: "Frost Aura",
     preview: "bg-sky-500/20 ring-1 ring-sky-300/40",
+  },
+  {
+    value: "neon_pulse",
+    label: "Neon Pulse",
+    preview: "bg-green-500/20 ring-1 ring-green-400/50",
+  },
+  {
+    value: "neon_pulse_pink",
+    label: "Neon Pulse Pink",
+    preview: "bg-fuchsia-500/20 ring-1 ring-fuchsia-400/50",
+  },
+  {
+    value: "neon_pulse_blue",
+    label: "Neon Pulse Blue",
+    preview: "bg-sky-500/20 ring-1 ring-sky-400/50",
+  },
+  {
+    value: "electric_spark",
+    label: "Electric Spark",
+    preview: "bg-cyan-500/20 ring-1 ring-cyan-400/40",
+  },
+  {
+    value: "fire_ring",
+    label: "Fire Ring",
+    preview: "bg-orange-500/20 ring-1 ring-orange-400/45",
+  },
+  {
+    value: "ice_crystals",
+    label: "Ice Crystals",
+    preview: "bg-cyan-100/15 ring-1 ring-cyan-100/40",
   },
   {
     value: "shadow_pulse",
@@ -447,9 +682,9 @@ export const PFP_EFFECT_PRESETS = [
     preview: "bg-purple-500/20 ring-1 ring-purple-400/40",
   },
   {
-    value: "electric_spark",
-    label: "Electric Spark",
-    preview: "bg-cyan-500/20 ring-1 ring-cyan-400/40",
+    value: "lightning_ring",
+    label: "Lightning",
+    preview: "bg-indigo-500/20 ring-1 ring-indigo-300/50",
   },
   {
     value: "sakura_ring",
@@ -458,14 +693,165 @@ export const PFP_EFFECT_PRESETS = [
       "bg-[conic-gradient(from_0deg,#f9a8d4,#f472b6,#fb7185,#fda4af,#f9a8d4)]",
   },
   {
-    value: "neon_pulse",
-    label: "Neon Pulse",
-    preview: "bg-green-500/20 ring-1 ring-green-400/50",
+    value: "cherry_bloom",
+    label: "Cherry Bloom",
+    preview: "bg-rose-500/20 ring-1 ring-rose-300/45",
+  },
+  {
+    value: "pink_petals",
+    label: "Pink Petals",
+    preview: "bg-pink-300/20 ring-1 ring-pink-200/50",
+  },
+  {
+    value: "glitch_frame",
+    label: "Glitch Frame",
+    preview: "bg-teal-500/18 ring-1 ring-cyan-300/40",
+  },
+  {
+    value: "hud_ring",
+    label: "HUD Ring",
+    preview:
+      "bg-[conic-gradient(from_0deg,#22d3ee,#0ea5e9,#14b8a6,#22d3ee)]",
+  },
+  {
+    value: "matrix_glow",
+    label: "Matrix Glow",
+    preview: "bg-emerald-500/20 ring-1 ring-emerald-400/45",
+  },
+  {
+    value: "digital_pulse",
+    label: "Digital Pulse",
+    preview: "bg-sky-500/20 ring-1 ring-sky-400/45",
+  },
+  {
+    value: "rainbow_ring",
+    label: "Rainbow Ring",
+    preview:
+      "bg-[conic-gradient(from_0deg,#f97316,#eab308,#22c55e,#06b6d4,#8b5cf6,#ec4899,#f97316)]",
+  },
+  {
+    value: "aurora_ring",
+    label: "Aurora Ring",
+    preview:
+      "bg-[conic-gradient(from_0deg,#34d399,#22d3ee,#818cf8,#f472b6,#34d399)]",
+  },
+  {
+    value: "stardust",
+    label: "Stardust",
+    preview: "bg-violet-500/20 ring-1 ring-violet-300/45",
+  },
+  {
+    value: "enchanted",
+    label: "Enchanted",
+    preview: "bg-amber-500/20 ring-1 ring-pink-300/35",
   },
   {
     value: "hearts",
     label: "Hearts",
     preview: "bg-rose-500/20 ring-1 ring-rose-400/40",
+  },
+  {
+    value: "rose_petals",
+    label: "Rose Petals",
+    preview: "bg-rose-500/20 ring-1 ring-rose-500/45",
+  },
+  {
+    value: "love_glow",
+    label: "Love Glow",
+    preview: "bg-pink-400/20 ring-1 ring-pink-300/45",
+  },
+  {
+    value: "bull_ring",
+    label: "Bull Ring",
+    preview: "bg-emerald-500/20 ring-1 ring-emerald-400/45",
+  },
+  {
+    value: "bear_ring",
+    label: "Bear Ring",
+    preview: "bg-red-500/20 ring-1 ring-red-400/45",
+  },
+  {
+    value: "diamond_hands",
+    label: "Diamond Hands",
+    preview: "bg-cyan-100/15 ring-1 ring-cyan-100/45",
+  },
+  {
+    value: "moon_glow",
+    label: "Moon Glow",
+    preview: "bg-amber-200/15 ring-1 ring-amber-200/40",
+  },
+  {
+    value: "gradient_spin_fire",
+    label: "Gradient Spin Fire",
+    preview:
+      "bg-[conic-gradient(from_0deg,#fb923c,#ef4444,#fbbf24,#fb923c)]",
+  },
+  {
+    value: "gradient_spin_ocean",
+    label: "Gradient Spin Ocean",
+    preview:
+      "bg-[conic-gradient(from_0deg,#22d3ee,#0ea5e9,#818cf8,#22d3ee)]",
+  },
+  {
+    value: "gradient_spin_toxic",
+    label: "Gradient Spin Toxic",
+    preview:
+      "bg-[conic-gradient(from_0deg,#bef264,#4ade80,#22d3ee,#bef264)]",
+  },
+  {
+    value: "stroke_draw_single",
+    label: "Stroke Draw",
+    preview: "bg-indigo-500/15 ring-1 ring-indigo-300/40",
+  },
+  {
+    value: "stroke_draw_double",
+    label: "Double Stroke",
+    preview: "bg-fuchsia-500/15 ring-1 ring-fuchsia-300/40",
+  },
+  {
+    value: "stroke_draw_dotted",
+    label: "Dotted Stroke",
+    preview: "bg-amber-500/15 ring-1 ring-amber-300/40",
+  },
+  {
+    value: "energy_flow",
+    label: "Energy Flow",
+    preview: "bg-emerald-500/15 ring-1 ring-emerald-300/40",
+  },
+  {
+    value: "multi_ring",
+    label: "Multi Ring",
+    preview: "bg-cyan-500/15 ring-1 ring-cyan-300/40",
+  },
+  {
+    value: "lightning_ring_v2",
+    label: "Lightning Arc",
+    preview: "bg-sky-500/15 ring-1 ring-sky-200/40",
+  },
+  {
+    value: "flame_arc",
+    label: "Flame Arc",
+    preview: "bg-orange-500/15 ring-1 ring-orange-300/40",
+  },
+  {
+    value: "plasma_ring",
+    label: "Plasma Ring",
+    preview: "bg-purple-500/15 ring-1 ring-fuchsia-300/40",
+  },
+  {
+    value: "frost_shards",
+    label: "Frost Shards",
+    preview: "bg-sky-200/15 ring-1 ring-sky-100/40",
+  },
+  {
+    value: "void_rift",
+    label: "Void Rift",
+    preview: "bg-violet-600/15 ring-1 ring-violet-400/40",
+  },
+  {
+    value: "solar_flare",
+    label: "Solar Flare",
+    preview: "bg-amber-400/15 ring-1 ring-amber-200/40",
   },
   {
     value: "custom",
@@ -482,6 +868,21 @@ export const NAME_EFFECT_PRESETS = [
   { value: "shimmer", label: "Shimmer" },
   { value: "gradient_shift", label: "Gradient Shift" },
   { value: "breathe", label: "Breathe" },
+  { value: "typewriter", label: "Typewriter" },
+  { value: "wave", label: "Wave" },
+  { value: "glitch_text", label: "Glitch" },
+  { value: "underline_draw", label: "Underline Draw" },
+  { value: "name_scramble", label: "Decode" },
+  { value: "name_wave_v2", label: "Wave v2" },
+  { value: "name_neon_flicker", label: "Neon Flicker" },
+  { value: "name_glitch_v2", label: "Glitch v2" },
+  { value: "name_typewriter_v2", label: "Typewriter v2" },
+  { value: "name_gradient_flow", label: "Gradient Flow" },
+  { value: "name_electric_crackle", label: "Electric Crackle" },
+  { value: "name_flame_rise", label: "Flame Rise" },
+  { value: "name_frost_crawl", label: "Frost Crawl" },
+  { value: "name_void_pulse", label: "Void Pulse" },
+  { value: "name_plasma_shift", label: "Plasma Shift" },
 ] as const;
 
 export const NAME_FONT_PRESETS = [

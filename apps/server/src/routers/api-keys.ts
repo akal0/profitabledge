@@ -7,6 +7,7 @@ import { TRPCError } from "@trpc/server";
 import { nanoid } from "nanoid";
 import { createHash } from "crypto";
 import { createNotification } from "../lib/notifications";
+import { requireEaSyncAccess } from "../lib/billing/ea-sync-access";
 
 /**
  * Hash API key for secure storage
@@ -60,6 +61,8 @@ export const apiKeysRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      await requireEaSyncAccess(ctx.session.user.id);
+
       const { key, hash, prefix } = generateApiKey();
 
       // Calculate expiration date if specified

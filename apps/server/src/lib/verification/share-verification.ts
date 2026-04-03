@@ -83,14 +83,23 @@ const verificationTokenSchema = z.union([
     pe: z
       .object({
         pfpEffect: z.string().nullable().optional(),
+        avatarDecoration: z.string().nullable().optional(),
+        bannerEffect: z.string().nullable().optional(),
+        nameplate: z.string().nullable().optional(),
         nameEffect: z.string().nullable().optional(),
         nameFont: z.string().nullable().optional(),
         nameColor: z.string().nullable().optional(),
+        theme: z.string().nullable().optional(),
         customGradientFrom: z.string().nullable().optional(),
         customGradientTo: z.string().nullable().optional(),
         customRingFrom: z.string().nullable().optional(),
         customRingTo: z.string().nullable().optional(),
         customRingEffect: z.string().nullable().optional(),
+        customNameplateFrom: z.string().nullable().optional(),
+        customNameplateTo: z.string().nullable().optional(),
+        customThemeFrom: z.string().nullable().optional(),
+        customThemeTo: z.string().nullable().optional(),
+        themeAccent: z.string().nullable().optional(),
       })
       .nullable()
       .optional(),

@@ -61,6 +61,13 @@ import { PublicProofMonthlyReturnsCard } from "@/features/public-proof/component
 import { AffiliateNameEffectText } from "@/features/public-proof/components/affiliate-name-effect-text";
 import { PublicProofMetricCard } from "@/features/public-proof/components/public-proof-primitives";
 import { PublicProofTopSymbolsCard } from "@/features/public-proof/components/public-proof-top-symbols-card";
+import { AvatarRingEffect } from "@/features/shop/components/avatar-ring-effect";
+import { PixiAvatarOverlay } from "@/features/shop/components/pixi-avatar-overlay";
+import { ProfileBannerEffect } from "@/features/shop/components/profile-banner-effect";
+import {
+  normalizeProfileEffects,
+  resolveProfilePreviewTheme,
+} from "@/features/shop/lib/shop-effects-catalog";
 import { resolveAbsolutePublicUrl } from "@/components/verification/profitabledge-verification-card";
 import {
   PublicProofTradesTable,
@@ -316,12 +323,10 @@ export function PublicProofPage({
     page as PublicProofPageData & { affiliate?: PublicProofAffiliate }
   ).affiliate;
   const affiliateBadgeLabel = affiliate?.badgeLabel?.trim() || "Affiliate";
-  const profileEffects = (page.trader as any).profileEffects as {
-    pfpEffect?: string;
-    nameEffect?: string;
-    nameFont?: string;
-    nameColor?: string;
-  } | null;
+  const profileEffects = normalizeProfileEffects(
+    ((page.trader as any).profileEffects as Record<string, unknown> | null) ?? null
+  );
+  const previewTheme = resolveProfilePreviewTheme(profileEffects);
   const trustStartedAt = formatProofDate(page.proof.auditCoverageStartsAt);
   const proofConnectionKind = page.proof.connectionKind as string | null;
   const lastUpdatedTitle =
@@ -406,7 +411,14 @@ export function PublicProofPage({
         ) : null}
 
         {/* Full-bleed banner */}
-        <div className="relative h-52 md:h-64">
+        <div
+          className="relative h-52 md:h-64"
+          style={
+            !page.trader.profileBannerUrl
+              ? { backgroundImage: previewTheme.banner }
+              : undefined
+          }
+        >
           {page.trader.profileBannerUrl && (
             <img
               src={page.trader.profileBannerUrl}
@@ -418,38 +430,60 @@ export function PublicProofPage({
               loading="eager"
             />
           )}
+          <ProfileBannerEffect effect={profileEffects.bannerEffect} />
         </div>
 
         <div className="relative px-4 md:px-6 lg:px-8">
           {/* Avatar overlapping banner */}
           <div className="-mt-12 flex items-center justify-between gap-4 pb-4">
-            <div>
-              {profileEffects?.pfpEffect &&
-              profileEffects.pfpEffect !== "none" ? (
+            <div className="relative inline-flex">
+              {profileEffects.pfpEffect !== "none" ? (
                 <div
                   className={cn(
                     "inline-flex rounded-full",
                     getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
                   )}
                 >
-                  <Avatar
-                    className={cn(
-                      "size-[72px] rounded-full shadow-lg",
-                      getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
-                      profileEffects.pfpEffect === "custom" &&
-                        getCustomPfpAnimationClassName(
-                          (profileEffects as any).customRingEffect
-                        )
-                    )}
-                    style={
-                      profileEffects.pfpEffect === "custom"
-                        ? getAffiliatePfpEffectStyle("custom", {
-                            from: (profileEffects as any).customRingFrom,
-                            to: (profileEffects as any).customRingTo,
-                          })
-                        : undefined
-                    }
-                  >
+                  <div className="relative isolate">
+                    <Avatar
+                      className={cn(
+                        "size-[72px] rounded-full shadow-lg",
+                        getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
+                        profileEffects.pfpEffect === "custom" &&
+                          getCustomPfpAnimationClassName(
+                            profileEffects.customRingEffect
+                          )
+                      )}
+                      style={
+                        profileEffects.pfpEffect === "custom"
+                          ? getAffiliatePfpEffectStyle("custom", {
+                              from: profileEffects.customRingFrom,
+                              to: profileEffects.customRingTo,
+                            })
+                          : undefined
+                      }
+                    >
+                      {page.trader.image ? (
+                        <AvatarImage
+                          src={page.trader.image}
+                          alt={page.trader.name ?? page.trader.username}
+                          className="object-cover"
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
+                        {(page.trader.name ?? page.trader.username)
+                          ?.charAt(0)
+                          ?.toUpperCase() ?? "T"}
+                      </AvatarFallback>
+                    </Avatar>
+                    {profileEffects.avatarDecoration === "holographic_overlay" ? (
+                      <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <div className="relative isolate">
+                  <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
                     {page.trader.image ? (
                       <AvatarImage
                         src={page.trader.image}
@@ -463,23 +497,19 @@ export function PublicProofPage({
                         ?.toUpperCase() ?? "T"}
                     </AvatarFallback>
                   </Avatar>
-                </div>
-              ) : (
-                <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
-                  {page.trader.image ? (
-                    <AvatarImage
-                      src={page.trader.image}
-                      alt={page.trader.name ?? page.trader.username}
-                      className="object-cover"
-                    />
+                  {profileEffects.avatarDecoration === "holographic_overlay" ? (
+                    <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
                   ) : null}
-                  <AvatarFallback className="bg-sidebar-accent text-foreground text-xl font-semibold">
-                    {(page.trader.name ?? page.trader.username)
-                      ?.charAt(0)
-                      ?.toUpperCase() ?? "T"}
-                  </AvatarFallback>
-                </Avatar>
+                </div>
               )}
+              {profileEffects.avatarDecoration &&
+              profileEffects.avatarDecoration !== "none" &&
+              profileEffects.avatarDecoration !== "holographic_overlay" ? (
+                <div className="pointer-events-none absolute inset-[-16%]">
+                  <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
+                </div>
+              ) : null}
+              <AvatarRingEffect effect={profileEffects.pfpEffect} />
             </div>
 
             <Link
@@ -504,18 +534,32 @@ export function PublicProofPage({
               <div className="space-y-2">
                 <p className="text-xs ">
                   <AffiliateNameEffectText
-                    nameFont={profileEffects?.nameFont}
-                    nameEffect={profileEffects?.nameEffect}
-                    nameColor={profileEffects?.nameColor}
+                    nameFont={profileEffects.nameFont}
+                    nameEffect={profileEffects.nameEffect}
+                    nameColor={profileEffects.nameColor}
+                    nameplate={profileEffects.nameplate}
                     customGradient={
-                      profileEffects?.nameColor === "custom"
+                      profileEffects.nameColor === "custom"
                         ? {
-                            from: (profileEffects as any).customGradientFrom,
-                            to: (profileEffects as any).customGradientTo,
+                            from: profileEffects.customGradientFrom,
+                            to: profileEffects.customGradientTo,
                           }
                         : null
                     }
-                    className={!profileEffects ? "text-teal-300/80" : undefined}
+                    customNameplate={
+                      profileEffects.nameplate === "custom"
+                        ? {
+                            from: profileEffects.customNameplateFrom,
+                            to: profileEffects.customNameplateTo,
+                          }
+                        : null
+                    }
+                    className={
+                      profileEffects.nameColor === "default" &&
+                      profileEffects.nameEffect === "none"
+                        ? "text-teal-300/80"
+                        : undefined
+                    }
                   >
                     @{page.trader.username}'s
                   </AffiliateNameEffectText>{" "}

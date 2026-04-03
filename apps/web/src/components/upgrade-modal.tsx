@@ -52,6 +52,26 @@ const FEATURE_COPY: Record<
       "Compare performance over time without spreadsheet work",
     ],
   },
+  "live-sync": {
+    title: "Unlock EA sync",
+    description:
+      "Use the MT5 EA bridge for terminal-side sync, live account updates, and the extra execution detail the standard API path misses.",
+    bullets: [
+      "Generate MetaTrader keys for the EA bridge",
+      "Sync live positions and account health from MT5",
+      "Capture richer intratrade metrics for review",
+    ],
+  },
+  "ea-sync": {
+    title: "Unlock EA sync",
+    description:
+      "Use the MT5 EA bridge for terminal-side sync, live account updates, and the extra execution detail the standard API path misses.",
+    bullets: [
+      "Generate MetaTrader keys for the EA bridge",
+      "Sync live positions and account health from MT5",
+      "Capture richer intratrade metrics for review",
+    ],
+  },
 };
 
 type UpgradeModalProps = {

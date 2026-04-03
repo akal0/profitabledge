@@ -29,6 +29,7 @@ import {
   CreditCard,
   Sparkles,
   Waypoints,
+  ShoppingBag,
 } from "lucide-react";
 import { publicAlphaFlags } from "@/lib/alpha-flags";
 import { trpcOptions } from "@/utils/trpc";
@@ -51,9 +52,13 @@ type NavSection = {
 export function getSettingsNavSections({
   canViewSupport = false,
   hideSecurity = false,
+  canViewConnections = true,
+  canViewEaSetup = true,
 }: {
   canViewSupport?: boolean;
   hideSecurity?: boolean;
+  canViewConnections?: boolean;
+  canViewEaSetup?: boolean;
 } = {}): NavSection[] {
   return [
     {
@@ -63,6 +68,11 @@ export function getSettingsNavSections({
           title: "Edit profile",
           href: "/dashboard/settings/profile",
           icon: UserPen,
+        },
+        {
+          title: "Shop",
+          href: "/dashboard/settings/shop",
+          icon: ShoppingBag,
         },
         ...(!hideSecurity
           ? [
@@ -105,18 +115,22 @@ export function getSettingsNavSections({
       label: "Integrations",
       items: [
         ...(publicAlphaFlags.connections
-          ? [
-              {
-                title: "Connections",
-                href: "/dashboard/settings/connections",
-                icon: Plug,
-              },
-            ]
+          ? canViewConnections
+            ? [
+                {
+                  title: "Connections",
+                  href: "/dashboard/settings/connections",
+                  icon: Plug,
+                },
+              ]
+            : []
           : []),
         ...(publicAlphaFlags.aiAssistant
           ? [{ title: "AI", href: "/dashboard/settings/ai", icon: Sparkles }]
           : []),
-        { title: "EA Setup", href: "/dashboard/settings/ea-setup", icon: Cpu },
+        ...(canViewEaSetup
+          ? [{ title: "EA Setup", href: "/dashboard/settings/ea-setup", icon: Cpu }]
+          : []),
       ],
     },
     {
@@ -156,6 +170,12 @@ export function SettingsSidebar({
   const sections = getSettingsNavSections({
     canViewSupport: billingState?.admin?.isAdmin === true,
     hideSecurity: isTauriDesktop(),
+    canViewConnections:
+      billingState?.billing?.activePlanKey === "professional" ||
+      billingState?.billing?.activePlanKey === "institutional",
+    canViewEaSetup:
+      billingState?.billing?.activePlanKey === "professional" ||
+      billingState?.billing?.activePlanKey === "institutional",
   });
 
   return (

@@ -37,6 +37,13 @@ import {
   getAffiliatePfpWrapperClassName,
   getCustomPfpAnimationClassName,
 } from "@/features/public-proof/lib/public-proof-badges";
+import { AvatarRingEffect } from "@/features/shop/components/avatar-ring-effect";
+import { PixiAvatarOverlay } from "@/features/shop/components/pixi-avatar-overlay";
+import { ProfileBannerEffect } from "@/features/shop/components/profile-banner-effect";
+import {
+  normalizeProfileEffects,
+  resolveProfilePreviewTheme,
+} from "@/features/shop/lib/shop-effects-catalog";
 import { cn } from "@/lib/utils";
 import { useDateRangeStore } from "@/stores/date-range";
 import { trpc } from "@/utils/trpc";
@@ -616,25 +623,23 @@ function WidgetVerificationPanel({
   const traderName = resource.trader.name || resource.trader.username || "Trader";
   const traderInitial = traderName.charAt(0)?.toUpperCase() || "T";
   const currencyCode = resource.summary.currencyCode;
-  const profileEffects = resource.trader.profileEffects as
-    | {
-        pfpEffect?: string | null;
-        nameEffect?: string | null;
-        nameFont?: string | null;
-        nameColor?: string | null;
-        customGradientFrom?: string | null;
-        customGradientTo?: string | null;
-        customRingFrom?: string | null;
-        customRingTo?: string | null;
-        customRingEffect?: string | null;
-      }
-    | null;
+  const profileEffects = normalizeProfileEffects(
+    (resource.trader.profileEffects as Record<string, unknown> | null) ?? null
+  );
+  const previewTheme = resolveProfilePreviewTheme(profileEffects);
 
   return (
     <div className="space-y-4">
       <GoalSurface innerClassName="overflow-hidden">
         <div className="overflow-hidden">
-          <div className="relative h-40 bg-sidebar-accent md:h-48">
+          <div
+            className="relative h-40 bg-sidebar-accent md:h-48"
+            style={
+              !resource.trader.profileBannerUrl
+                ? { backgroundImage: previewTheme.banner }
+                : undefined
+            }
+          >
             {resource.trader.profileBannerUrl ? (
               <img
                 src={resource.trader.profileBannerUrl}
@@ -646,82 +651,115 @@ function WidgetVerificationPanel({
                 }}
               />
             ) : null}
+            <ProfileBannerEffect effect={profileEffects.bannerEffect} />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(18,209,185,0.12),transparent_35%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(10,14,20,0.48))]" />
           </div>
 
           <div className="px-5 pb-5">
             <div className="-mt-10 flex flex-col gap-4">
-              {profileEffects?.pfpEffect &&
-              profileEffects.pfpEffect !== "none" ? (
-                <div
-                  className={cn(
-                    "inline-flex rounded-full",
-                    getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
-                  )}
-                >
-                  <Avatar
+              <div className="relative inline-flex">
+                {profileEffects.pfpEffect !== "none" ? (
+                  <div
                     className={cn(
-                      "size-20 rounded-full shadow-2xl",
-                      getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
-                      profileEffects.pfpEffect === "custom" &&
-                        getCustomPfpAnimationClassName(
-                          profileEffects.customRingEffect
-                        )
+                      "inline-flex rounded-full",
+                      getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
                     )}
-                    style={
-                      profileEffects.pfpEffect === "custom"
-                        ? getAffiliatePfpEffectStyle("custom", {
-                            from: profileEffects.customRingFrom ?? undefined,
-                            to: profileEffects.customRingTo ?? undefined,
-                          })
-                        : undefined
-                    }
                   >
-                    {resource.trader.image ? (
-                      <AvatarImage
-                        src={resource.trader.image}
-                        alt={traderName}
-                        className="object-cover"
-                      />
+                    <div className="relative isolate">
+                      <Avatar
+                        className={cn(
+                          "size-20 rounded-full shadow-2xl",
+                          getAffiliatePfpEffectClassName(profileEffects.pfpEffect),
+                          profileEffects.pfpEffect === "custom" &&
+                            getCustomPfpAnimationClassName(
+                              profileEffects.customRingEffect
+                            )
+                        )}
+                        style={
+                          profileEffects.pfpEffect === "custom"
+                            ? getAffiliatePfpEffectStyle("custom", {
+                                from: profileEffects.customRingFrom,
+                                to: profileEffects.customRingTo,
+                              })
+                            : undefined
+                        }
+                      >
+                        {resource.trader.image ? (
+                          <AvatarImage
+                            src={resource.trader.image}
+                            alt={traderName}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-sidebar-accent text-xl font-semibold text-white">
+                          {traderInitial}
+                        </AvatarFallback>
+                      </Avatar>
+                      {profileEffects.avatarDecoration === "holographic_overlay" ? (
+                        <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative isolate">
+                    <Avatar className="size-20 rounded-full ring-4 ring-sidebar shadow-2xl">
+                      {resource.trader.image ? (
+                        <AvatarImage
+                          src={resource.trader.image}
+                          alt={traderName}
+                          className="object-cover"
+                        />
+                      ) : null}
+                      <AvatarFallback className="bg-sidebar-accent text-xl font-semibold text-white">
+                        {traderInitial}
+                      </AvatarFallback>
+                    </Avatar>
+                    {profileEffects.avatarDecoration === "holographic_overlay" ? (
+                      <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
                     ) : null}
-                    <AvatarFallback className="bg-sidebar-accent text-xl font-semibold text-white">
-                      {traderInitial}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
-              ) : (
-                <Avatar className="size-20 rounded-full ring-4 ring-sidebar shadow-2xl">
-                  {resource.trader.image ? (
-                    <AvatarImage
-                      src={resource.trader.image}
-                      alt={traderName}
-                      className="object-cover"
-                    />
-                  ) : null}
-                  <AvatarFallback className="bg-sidebar-accent text-xl font-semibold text-white">
-                    {traderInitial}
-                  </AvatarFallback>
-                </Avatar>
-              )}
+                  </div>
+                )}
+                {profileEffects.avatarDecoration &&
+                profileEffects.avatarDecoration !== "none" &&
+                profileEffects.avatarDecoration !== "holographic_overlay" ? (
+                  <div className="pointer-events-none absolute inset-[-16%]">
+                    <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
+                  </div>
+                ) : null}
+                <AvatarRingEffect effect={profileEffects.pfpEffect} />
+              </div>
 
               <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
                 <div className="min-w-0 space-y-2">
                   <p className="text-xs">
                     <AffiliateNameEffectText
-                      nameFont={profileEffects?.nameFont}
-                      nameEffect={profileEffects?.nameEffect}
-                      nameColor={profileEffects?.nameColor}
-                      customGradient={
-                        profileEffects?.nameColor === "custom"
-                          ? {
-                              from:
-                                profileEffects.customGradientFrom ?? undefined,
-                              to: profileEffects.customGradientTo ?? undefined,
-                            }
-                          : null
-                      }
-                      className={!profileEffects ? "text-teal-300/80" : undefined}
-                    >
+                       nameFont={profileEffects.nameFont}
+                       nameEffect={profileEffects.nameEffect}
+                       nameColor={profileEffects.nameColor}
+                       nameplate={profileEffects.nameplate}
+                       customGradient={
+                         profileEffects.nameColor === "custom"
+                           ? {
+                               from: profileEffects.customGradientFrom,
+                               to: profileEffects.customGradientTo,
+                             }
+                           : null
+                       }
+                       customNameplate={
+                         profileEffects.nameplate === "custom"
+                           ? {
+                               from: profileEffects.customNameplateFrom,
+                               to: profileEffects.customNameplateTo,
+                             }
+                           : null
+                       }
+                       className={
+                         profileEffects.nameColor === "default" &&
+                         profileEffects.nameEffect === "none"
+                           ? "text-teal-300/80"
+                           : undefined
+                       }
+                     >
                       {resource.trader.username
                         ? `@${resource.trader.username}'s`
                         : `${traderName}'s`}

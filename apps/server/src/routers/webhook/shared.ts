@@ -6,12 +6,17 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { apiKey } from "../../db/schema/auth";
 import { tradingAccount } from "../../db/schema/trading";
+import {
+  EA_SYNC_REQUIRED_PLAN_MESSAGE,
+  getLiveSyncAccessState,
+} from "../../lib/billing/ea-sync-access";
 
 type VerifiedApiKeyCacheEntry = {
   userId: string;
   isActive: boolean;
   expiresAt: Date | null;
   lastUsedAt: Date | null;
+  hasEaSyncAccess: boolean;
   cachedAt: number;
 };
 
@@ -84,11 +89,14 @@ async function loadVerifiedApiKey(
   }
 
   const { userId, isActive, expiresAt, lastUsedAt } = result[0];
+  const { hasAccess: hasEaSyncAccess } = await getLiveSyncAccessState(userId);
+
   return {
     userId,
     isActive,
     expiresAt: expiresAt ?? null,
     lastUsedAt: lastUsedAt ?? null,
+    hasEaSyncAccess,
   };
 }
 
@@ -161,6 +169,13 @@ export async function verifyApiKey(key: string): Promise<string> {
       });
     }
 
+    if (!cached.hasEaSyncAccess) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: EA_SYNC_REQUIRED_PLAN_MESSAGE,
+      });
+    }
+
     const shouldTouchLastUsed =
       !cached.lastUsedAt ||
       now - cached.lastUsedAt.getTime() >= API_KEY_LAST_USED_UPDATE_MS;
@@ -179,8 +194,18 @@ export async function verifyApiKey(key: string): Promise<string> {
     return cached.userId;
   }
 
-  const { userId, isActive, expiresAt, lastUsedAt } =
+  const { userId, isActive, expiresAt, lastUsedAt, hasEaSyncAccess } =
     await getVerifiedApiKeyRecord(hash);
+
+  cleanupVerifiedApiKeyCache(now);
+  verifiedApiKeyCache.set(hash, {
+    userId,
+    isActive,
+    expiresAt: expiresAt ?? null,
+    lastUsedAt: lastUsedAt ?? null,
+    hasEaSyncAccess,
+    cachedAt: now,
+  });
 
   if (!isActive) {
     throw new TRPCError({
@@ -196,18 +221,25 @@ export async function verifyApiKey(key: string): Promise<string> {
     });
   }
 
+  if (!hasEaSyncAccess) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: EA_SYNC_REQUIRED_PLAN_MESSAGE,
+    });
+  }
+
   const shouldTouchLastUsed =
     !lastUsedAt || now - lastUsedAt.getTime() >= API_KEY_LAST_USED_UPDATE_MS;
   const touchedAt = shouldTouchLastUsed
     ? await maybeTouchApiKeyLastUsed(hash, now, lastUsedAt)
     : lastUsedAt;
 
-  cleanupVerifiedApiKeyCache(now);
   verifiedApiKeyCache.set(hash, {
     userId,
     isActive,
     expiresAt: expiresAt ?? null,
     lastUsedAt: touchedAt ?? null,
+    hasEaSyncAccess,
     cachedAt: now,
   });
 

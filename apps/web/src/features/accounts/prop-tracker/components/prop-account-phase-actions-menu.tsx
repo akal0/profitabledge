@@ -16,7 +16,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ManualPropAccountDialog } from "@/features/accounts/components/manual-prop-account-dialog";
+import { ChangePropChallengeRulesSheet } from "@/features/accounts/prop-tracker/components/change-prop-challenge-rules-sheet";
 import { cn } from "@/lib/utils";
 import { queryClient, trpcClient, trpcOptions } from "@/utils/trpc";
 
@@ -177,11 +177,10 @@ export function PropAccountPhaseActionsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ManualPropAccountDialog
+      <ChangePropChallengeRulesSheet
         account={account}
         open={rulesDialogOpen}
         onOpenChange={setRulesDialogOpen}
-        hideTrigger
       />
     </>
   );

@@ -29,6 +29,7 @@ import { proofRouter } from "./proof";
 import { reportsRouter } from "./reports";
 import { verificationRouter } from "./verification";
 import { assistantRouter } from "./assistant";
+import { tradeIdeasRouter } from "./trade-ideas";
 
 export const appRouter = router({
   upload: uploadRouter,
@@ -61,5 +62,6 @@ export const appRouter = router({
   reports: reportsRouter,
   verification: verificationRouter,
   assistant: assistantRouter,
+  tradeIdeas: tradeIdeasRouter,
 });
 export type AppRouter = typeof appRouter;

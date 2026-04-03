@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import Link from "next/link";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,12 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { RouteLoadingFallback } from "@/components/ui/route-loading-fallback";
-import {
-  Tabs,
-  TabsContent,
-  TabsListUnderlined,
-  TabsTriggerUnderlined,
-} from "@/components/ui/tabs";
 import { trpcOptions, queryClient } from "@/utils/trpc";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,8 +26,25 @@ import {
   CoverImageCropDialog,
   type CoverFrameDimensions,
 } from "@/components/cover-image-crop-dialog";
-import { ProfileEffectsEditor } from "@/features/growth/components/affiliate-profile-effects";
 import { DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE } from "@/lib/default-profile-banner";
+
+function isGifFile(file: File) {
+  return file.type === "image/gif" || /\.gif$/i.test(file.name);
+}
+
+function isGifUrl(value?: string | null) {
+  if (!value) {
+    return false;
+  }
+
+  return /^data:image\/gif/i.test(value) || /\.gif(?:$|[?#])/i.test(value);
+}
+
+function revokeObjectUrl(value?: string | null) {
+  if (value?.startsWith("blob:")) {
+    URL.revokeObjectURL(value);
+  }
+}
 
 const XIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="currentColor">
@@ -43,6 +55,9 @@ const XIcon = ({ className }: { className?: string }) => (
 export default function EditProfilePage() {
   const { data: user, isLoading } = useQuery(
     trpcOptions.users.me.queryOptions()
+  );
+  const { data: billingState } = useQuery(
+    trpcOptions.billing.getState.queryOptions()
   );
 
   const updateProfile = useMutation(
@@ -76,6 +91,7 @@ export default function EditProfilePage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const bannerContainerRef = useRef<HTMLDivElement>(null);
   const formInitialized = useRef(false);
+  const avatarPreviewUrlRef = useRef<string>("");
 
   // Use refs for pending banner data to avoid stale closures entirely
   const pendingBannerFileRef = useRef<File | null>(null);
@@ -106,24 +122,60 @@ export default function EditProfilePage() {
     setAvatarFile(null);
   }, [user]);
 
+  useEffect(() => {
+    return () => {
+      revokeObjectUrl(avatarPreviewUrlRef.current);
+    };
+  }, []);
+
+  const activePlanKey = billingState?.billing?.activePlanKey;
+  const canUseAnimatedProfileMedia = activePlanKey === "institutional";
+  const bannerIsGif = isGifUrl(bannerUrl);
+
+  const ensureAnimatedMediaAllowed = () => {
+    if (!activePlanKey) {
+      toast.error("Still loading your plan details. Try again in a moment.");
+      return false;
+    }
+
+    if (activePlanKey !== "institutional") {
+      toast.error("Animated GIF avatars and banners are available on Elite.");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (isGifFile(file) && !ensureAnimatedMediaAllowed()) {
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+      return;
+    }
+
     if (file.size > 8 * 1024 * 1024) {
       toast.error("Image must be under 8MB");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarFile(file);
-      setForm((prev) => ({ ...prev, image: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+
+    revokeObjectUrl(avatarPreviewUrlRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    avatarPreviewUrlRef.current = previewUrl;
+    setAvatarFile(file);
+    setForm((prev) => ({ ...prev, image: previewUrl }));
   };
 
   const handleBannerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (isGifFile(file) && !ensureAnimatedMediaAllowed()) {
+      if (bannerInputRef.current) bannerInputRef.current.value = "";
+      return;
+    }
+
     if (file.size > 8 * 1024 * 1024) {
       toast.error("Image must be under 8MB");
       return;
@@ -137,6 +189,24 @@ export default function EditProfilePage() {
     // Set preview immediately — synchronous, no async
     const blobUrl = URL.createObjectURL(file);
     setBannerUrl(blobUrl);
+
+    if (isGifFile(file)) {
+      setBannerPosition("50% 50%");
+      void (async () => {
+        try {
+          const res = await startBannerUpload([file]);
+          const uploadedUrl = res?.[0]?.ufsUrl ?? res?.[0]?.url;
+          if (uploadedUrl) {
+            revokeObjectUrl(blobUrl);
+            setBannerUrl(uploadedUrl);
+            pendingBannerFileRef.current = null;
+          }
+        } catch {
+          toast.error("Failed to upload cover GIF");
+        }
+      })();
+      return;
+    }
 
     // Open crop dialog so user can set position
     openCropDialog(blobUrl);
@@ -173,6 +243,7 @@ export default function EditProfilePage() {
         const res = await startBannerUpload([fileToUpload]);
         const uploadedUrl = res?.[0]?.ufsUrl ?? res?.[0]?.url;
         if (uploadedUrl) {
+          revokeObjectUrl(bannerUrl);
           setBannerUrl(uploadedUrl);
           pendingBannerFileRef.current = null;
         }
@@ -185,6 +256,7 @@ export default function EditProfilePage() {
   const handleCropCancel = () => {
     // If a new file was picked but not yet uploaded, revert preview
     if (pendingBannerFileRef.current) {
+      revokeObjectUrl(bannerUrl);
       setBannerUrl(previousBannerUrlRef.current);
       pendingBannerFileRef.current = null;
     }
@@ -195,6 +267,8 @@ export default function EditProfilePage() {
   const handleRemoveAvatar = async () => {
     try {
       await clearImage.mutateAsync();
+      revokeObjectUrl(avatarPreviewUrlRef.current);
+      avatarPreviewUrlRef.current = "";
       setAvatarFile(null);
       setForm((prev) => ({ ...prev, image: "" }));
       queryClient.invalidateQueries({ queryKey: [["users", "me"]] });
@@ -223,6 +297,7 @@ export default function EditProfilePage() {
         const res = await startBannerUpload([pendingBannerFileRef.current]);
         const url = res?.[0]?.ufsUrl ?? res?.[0]?.url;
         if (url) {
+          revokeObjectUrl(bannerUrl);
           finalBannerUrl = url;
           setBannerUrl(url);
           pendingBannerFileRef.current = null;
@@ -233,6 +308,8 @@ export default function EditProfilePage() {
         const upload = await startAvatarUpload([avatarFile]);
         imageUrl = upload?.[0]?.ufsUrl ?? "";
         if (!imageUrl) throw new Error("Failed to upload profile photo");
+        revokeObjectUrl(avatarPreviewUrlRef.current);
+        avatarPreviewUrlRef.current = "";
       }
 
       await updateProfile.mutateAsync({
@@ -261,54 +338,32 @@ export default function EditProfilePage() {
     }
   };
 
-  const effectsPreviewUser = useMemo(
-    () => ({
-      name: form.fullName || user?.name || null,
-      username: form.username || user?.username || null,
-      image: form.image || user?.image || null,
-      bannerUrl: bannerUrl || null,
-      bannerPosition: bannerPosition || null,
-    }),
-    [
-      form.fullName,
-      form.username,
-      form.image,
-      user?.name,
-      user?.username,
-      user?.image,
-      bannerUrl,
-      bannerPosition,
-    ]
-  );
-
   if (isLoading) {
     return <RouteLoadingFallback route="settingsProfile" className="min-h-full" />;
   }
 
   return (
     <div className="flex flex-col w-full">
-      <Tabs defaultValue="profile" className="w-full">
-        <div className="px-6 sm:px-8 pt-4">
-          <TabsListUnderlined className="flex h-auto items-stretch gap-5 border-b-0">
-            <TabsTriggerUnderlined
-              value="profile"
-              className="h-10 pb-0 pt-0 text-xs font-medium text-neutral-400 hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
-            >
-              Edit profile
-            </TabsTriggerUnderlined>
-            <TabsTriggerUnderlined
-              value="effects"
-              className="h-10 pb-0 pt-0 text-xs font-medium text-neutral-400 hover:text-neutral-200 data-[state=active]:border-teal-400 data-[state=active]:text-teal-400"
-            >
-              Profile effects
-            </TabsTriggerUnderlined>
-          </TabsListUnderlined>
+      <div className="px-6 sm:px-8 pt-4">
+        <div className="flex flex-col gap-3 rounded-md border border-white/5 bg-sidebar p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-white">Edit profile</p>
+            <p className="mt-1 text-sm text-white/45">
+              Profile styling has moved into the customization shop.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/settings/shop"
+            className="inline-flex h-9 items-center justify-center rounded-sm border border-white/10 bg-white/[0.03] px-3 text-xs font-medium text-white transition-colors hover:border-white/20 hover:bg-white/[0.06]"
+          >
+            Open shop
+          </Link>
         </div>
-        <Separator />
+      </div>
+      <Separator />
 
-        <TabsContent value="profile" className="mt-0">
-          {/* Cover / Banner */}
-          <div
+      {/* Cover / Banner */}
+      <div
             ref={bannerContainerRef}
             className="relative h-52 md:h-64 bg-sidebar-accent"
             style={
@@ -351,9 +406,10 @@ export default function EditProfilePage() {
                     size="sm"
                     className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
                     onClick={openEditDialog}
+                    disabled={bannerIsGif}
                   >
                     <Pencil className="size-4 mr-1.5" />
-                    Edit cover
+                    {bannerIsGif ? "GIF covers can't be cropped" : "Edit cover"}
                   </Button>
                 )}
                 {bannerUrl && (
@@ -363,6 +419,7 @@ export default function EditProfilePage() {
                     className="text-white bg-black/50 hover:bg-black/70 cursor-pointer"
                     onClick={() => {
                       pendingBannerFileRef.current = null;
+                      revokeObjectUrl(bannerUrl);
                       setBannerUrl("");
                     }}
                   >
@@ -372,13 +429,19 @@ export default function EditProfilePage() {
               </div>
             )}
 
-            <input
+           <input
               ref={bannerInputRef}
               type="file"
               accept="image/*"
               className="hidden"
               onChange={handleBannerChange}
             />
+          </div>
+
+          <div className="px-6 sm:px-8 pt-2">
+            <p className="text-xs text-white/40">
+              Cover images support still images for everyone. Elite can upload animated GIF banners.
+            </p>
           </div>
 
           {/* Avatar overlapping banner */}
@@ -421,7 +484,7 @@ export default function EditProfilePage() {
                 Profile photo
               </Label>
               <p className="text-xs text-white/40 mt-0.5">
-                This photo will be visible to others.
+                This photo will be visible to others. Elite can upload animated GIFs.
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -647,26 +710,15 @@ export default function EditProfilePage() {
                 : "Save changes"}
             </Button>
           </div>
-        </TabsContent>
-
-        <TabsContent value="effects" className="mt-0">
-          <div className="px-6 sm:px-8 py-6">
-            <ProfileEffectsEditor
-              profileEffects={(user as any)?.profileEffects ?? null}
-              user={effectsPreviewUser}
-            />
-          </div>
-        </TabsContent>
-      </Tabs>
 
       {pendingBannerSrc && (
-      <CoverImageCropDialog
-        open={cropDialogOpen}
-        imageSrc={pendingBannerSrc}
-        frameDimensions={bannerDimensions}
-        onApply={handleCropApply}
-        onCancel={handleCropCancel}
-      />
+        <CoverImageCropDialog
+          open={cropDialogOpen}
+          imageSrc={pendingBannerSrc}
+          frameDimensions={bannerDimensions}
+          onApply={handleCropApply}
+          onCancel={handleCropCancel}
+        />
       )}
     </div>
   );

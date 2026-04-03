@@ -1,8 +1,11 @@
 "use client";
-
-import React from "react";
 import { cn } from "@/lib/utils";
-import { Lightbulb, Timer, CheckCircle2 } from "lucide-react";
+import {
+  Lightbulb,
+  Timer,
+  CheckCircle2,
+  type LucideIcon,
+} from "lucide-react";
 import type { TradePhase } from "@/components/journal/types";
 
 interface TradePhaseSelectorProps {
@@ -11,7 +14,12 @@ interface TradePhaseSelectorProps {
   className?: string;
 }
 
-const phases: { id: TradePhase; label: string; description: string; icon: React.ElementType }[] = [
+const phases: {
+  id: TradePhase;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}[] = [
   {
     id: "pre-trade",
     label: "Pre-Trade",
@@ -96,7 +104,7 @@ export function TradePhaseBadge({
   phase: TradePhase;
   className?: string;
 }) {
-  const config: Record<TradePhase, { icon: React.ElementType; color: string; bg: string }> = {
+  const config: Record<TradePhase, { icon: LucideIcon; color: string; bg: string }> = {
     "pre-trade": {
       icon: Lightbulb,
       color: "text-yellow-500",

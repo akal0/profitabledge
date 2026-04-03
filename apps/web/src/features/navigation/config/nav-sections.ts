@@ -100,8 +100,8 @@ export function getNavSections(
                 icon: Sparkles,
                 planRequirement: "professional" as PlanKey,
               },
-          ]
-        : []),
+            ]
+          : []),
       ] satisfies NavItem[],
     } satisfies NavSection,
     {

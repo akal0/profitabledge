@@ -1,8 +1,14 @@
 "use client";
 
-import type React from "react";
+import {
+  useState,
+  type ChangeEvent,
+  type KeyboardEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { format } from "date-fns";
-import { Brain, Calendar, Clock, Edit3, Image as ImageIcon, Lightbulb, Paperclip, Plus, Smile, Sparkles, Tag, Target, X } from "lucide-react";
+import { Brain, Calendar, Clock, Edit3, Image as ImageIcon, Lightbulb, Paperclip, Plus, Share2, Smile, Sparkles, Tag, Target, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
@@ -16,6 +22,8 @@ import { AIAnalysisDisplay } from "@/components/journal/ai-analysis-display";
 import { MediaDropzone, type MediaFile } from "@/components/media/media-dropzone";
 import type { JournalAICaptureResult } from "@/components/journal/ai-capture-types";
 import type { JournalBlock, PsychologySnapshot, TradePhase } from "@/components/journal/types";
+import { MySharedIdeasList } from "@/features/trade-ideas/components/my-shared-ideas-list";
+import { ShareTradeIdeaDialog } from "@/features/trade-ideas/components/share-trade-idea-dialog";
 
 export function JournalEntryMain({
   entryId,
@@ -82,7 +90,7 @@ export function JournalEntryMain({
   existingEntryLoaded: boolean;
   coverImageUrl: string | null;
   coverPosition: number;
-  coverContainerRef: React.RefObject<HTMLDivElement | null>;
+  coverContainerRef: RefObject<HTMLDivElement | null>;
   title: string;
   emoji: string | null;
   tradePhase: TradePhase | null;
@@ -92,7 +100,7 @@ export function JournalEntryMain({
   tags: string[];
   newTag: string;
   showTagInput: boolean;
-  coverImageRef: React.RefObject<HTMLInputElement | null>;
+  coverImageRef: RefObject<HTMLInputElement | null>;
   activeTab: string;
   mediaFiles: MediaFile[];
   plannedEntryPrice: string;
@@ -106,7 +114,7 @@ export function JournalEntryMain({
   actualPips: string;
   postTradeAnalysis: string;
   lessonsLearned: string;
-  onCoverImageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  onCoverImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onEditCover: () => void;
   onOpenEmojiPicker: () => void;
   onRemoveCover: () => void;
@@ -118,7 +126,7 @@ export function JournalEntryMain({
   onNewTagChange: (value: string) => void;
   onAddTag: () => void;
   onRemoveTag: (tag: string) => void;
-  onTagKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  onTagKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onActiveTabChange: (value: string) => void;
   onMediaSelected: (files: MediaFile[]) => void;
   onMediaRemove: (id: string) => void;
@@ -139,8 +147,10 @@ export function JournalEntryMain({
     capture: JournalAICaptureResult,
     nextContent?: JournalBlock[]
   ) => void;
-  editorRef: React.RefObject<JournalEditorHandle | null>;
+  editorRef: RefObject<JournalEditorHandle | null>;
 }) {
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+
   return (
     <div className="flex-1 overflow-y-auto">
       {coverImageUrl ? (
@@ -430,6 +440,51 @@ export function JournalEntryMain({
                 />
               </div>
             ) : null}
+
+            <div className="space-y-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-white/38">
+                    Shareable card
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-white/48">
+                    Generate a public trade idea page with a rich preview card. If your profile banner is uploaded, it will be woven into the preview too.
+                  </p>
+                </div>
+
+                {entryId && tradePhase === "pre-trade" ? (
+                  <Button
+                    onClick={() => setShareDialogOpen(true)}
+                    className="h-9 rounded-sm bg-teal-500 text-black hover:bg-teal-400"
+                  >
+                    <Share2 className="mr-2 size-4" />
+                    Share Trade Idea
+                  </Button>
+                ) : null}
+              </div>
+
+              {!entryId ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4 text-sm text-white/42">
+                  Save the journal entry first to create a shareable trade idea link.
+                </div>
+              ) : null}
+
+              {entryId && tradePhase !== "pre-trade" ? (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
+                  Trade idea sharing is available for pre-trade journal entries.
+                </div>
+              ) : null}
+            </div>
+
+            {entryId ? <MySharedIdeasList /> : null}
+
+            {entryId ? (
+              <ShareTradeIdeaDialog
+                entryId={entryId}
+                open={shareDialogOpen}
+                onOpenChange={setShareDialogOpen}
+              />
+            ) : null}
           </TabsContent>
 
           <TabsContent value="psychology" className="mt-0">
@@ -528,7 +583,7 @@ function EmptyTabState({
   icon,
   text,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   text: string;
 }) {
   return (

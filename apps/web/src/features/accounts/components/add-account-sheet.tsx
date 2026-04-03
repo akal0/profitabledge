@@ -11,6 +11,7 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+import { useFeatureGate } from "@/components/feature-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -210,6 +211,10 @@ export function AddAccountSheet({
   const lockGuidedSheetTransition = useTourStore(
     (s) => s.lockGuidedSheetTransition
   );
+  const { hasAccess: hasLiveSyncAccess } = useFeatureGate(
+    "live-sync",
+    "professional"
+  );
 
   const demoAccounts = useMemo(
     () => accounts.filter((account) => isDemoWorkspaceAccount(account)),
@@ -223,10 +228,14 @@ export function AddAccountSheet({
   const selectedManualPropFirmId = useMemo(() => {
     if (form.method !== "manual") return null;
     const normalizedBroker = form.broker.trim().toLowerCase();
-    const matched = (propFirms as Array<{ id: string; displayName?: string | null }>).find(
+    const matched = (
+      propFirms as Array<{ id: string; displayName?: string | null }>
+    ).find(
       (firm) =>
         firm.id.toLowerCase() === normalizedBroker ||
-        String(firm.displayName || "").trim().toLowerCase() === normalizedBroker
+        String(firm.displayName || "")
+          .trim()
+          .toLowerCase() === normalizedBroker
     );
     return matched?.id ?? null;
   }, [form.broker, form.method, propFirms]);
@@ -239,9 +248,13 @@ export function AddAccountSheet({
   const selectedManualPropFirmAccountSizes = useMemo(() => {
     const sizes = new Set<number>();
 
-    for (const rule of selectedManualPropFirmRules as Array<{ phases?: any[] | null }>) {
+    for (const rule of selectedManualPropFirmRules as Array<{
+      phases?: any[] | null;
+    }>) {
       for (const phase of Array.isArray(rule.phases) ? rule.phases : []) {
-        const phaseSizes = Array.isArray(phase?.customRules?.challengeAccountSizes)
+        const phaseSizes = Array.isArray(
+          phase?.customRules?.challengeAccountSizes
+        )
           ? phase.customRules.challengeAccountSizes
           : [];
 
@@ -257,10 +270,13 @@ export function AddAccountSheet({
     return Array.from(sizes).sort((left, right) => left - right);
   }, [selectedManualPropFirmRules]);
   const manualPropInitialBalanceMismatch = useMemo(() => {
-    if (!selectedManualPropFirmId || normalizedInitialBalance == null) return false;
+    if (!selectedManualPropFirmId || normalizedInitialBalance == null)
+      return false;
     if (selectedManualPropFirmAccountSizes.length === 0) return false;
 
-    return !selectedManualPropFirmAccountSizes.includes(normalizedInitialBalance);
+    return !selectedManualPropFirmAccountSizes.includes(
+      normalizedInitialBalance
+    );
   }, [
     normalizedInitialBalance,
     selectedManualPropFirmAccountSizes,
@@ -274,15 +290,15 @@ export function AddAccountSheet({
       );
     }
     if (form.method === "manual") {
-        return Boolean(
-          form.name.trim() &&
-            form.broker.trim() &&
-            form.brokerType &&
-            normalizedInitialBalance !== undefined &&
-            !manualPropInitialBalanceMismatch
-        );
-      }
-      return false;
+      return Boolean(
+        form.name.trim() &&
+          form.broker.trim() &&
+          form.brokerType &&
+          normalizedInitialBalance !== undefined &&
+          !manualPropInitialBalanceMismatch
+      );
+    }
+    return false;
   }, [form, manualPropInitialBalanceMismatch, normalizedInitialBalance]);
 
   const selectedBrokerSupportsMultiCsv = useMemo(
@@ -308,7 +324,9 @@ export function AddAccountSheet({
     setForm((f) => ({
       ...f,
       broker: value,
-      files: brokerSupportsMultiCsvImport(value) ? f.files : f.files.slice(0, 1),
+      files: brokerSupportsMultiCsvImport(value)
+        ? f.files
+        : f.files.slice(0, 1),
     }));
   }, []);
 
@@ -992,11 +1010,13 @@ export function AddAccountSheet({
                     <span
                       className={cn(
                         TRADE_IDENTIFIER_PILL_CLASS,
-                        TRADE_IDENTIFIER_TONES.info,
+                        hasLiveSyncAccess
+                          ? TRADE_IDENTIFIER_TONES.info
+                          : TRADE_IDENTIFIER_TONES.warning,
                         "min-h-6 px-2 py-0.5 text-[10px]"
                       )}
                     >
-                      Recommended
+                      {hasLiveSyncAccess ? "Recommended" : "Trader + Elite"}
                     </span>
                   </Button>
 
@@ -1031,11 +1051,13 @@ export function AddAccountSheet({
                     <span
                       className={cn(
                         TRADE_IDENTIFIER_PILL_CLASS,
-                        TRADE_IDENTIFIER_TONES.live,
+                        hasLiveSyncAccess
+                          ? TRADE_IDENTIFIER_TONES.live
+                          : TRADE_IDENTIFIER_TONES.warning,
                         "min-h-6 px-2 py-0.5 text-[10px]"
                       )}
                     >
-                      MT5 only
+                      {hasLiveSyncAccess ? "MT5 only" : "Trader + Elite"}
                     </span>
                   </Button>
                 </div>
@@ -1212,7 +1234,11 @@ export function AddAccountSheet({
                     </div>
                     {manualPropInitialBalanceMismatch ? (
                       <p className="text-xs leading-relaxed text-amber-200/80">
-                        This balance does not match the published challenge sizes for this prop firm. Use one of: {selectedManualPropFirmAccountSizes.map((size) => size.toLocaleString()).join(", ")}
+                        This balance does not match the published challenge
+                        sizes for this prop firm. Use one of:{" "}
+                        {selectedManualPropFirmAccountSizes
+                          .map((size) => size.toLocaleString())
+                          .join(", ")}
                       </p>
                     ) : null}
                   </div>
@@ -1411,7 +1437,8 @@ export function AddAccountSheet({
                             className="h-4 w-4 object-contain"
                           />
                           <span>
-                            Detected: {detectedBrokerOption.label} (high confidence)
+                            Detected: {detectedBrokerOption.label} (high
+                            confidence)
                           </span>
                         </div>
                       ) : null}
@@ -1543,25 +1570,34 @@ export function AddAccountSheet({
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <Plug className="size-4 text-blue-300" />
+                        <Plug
+                          className={cn(
+                            "size-4",
+                            hasLiveSyncAccess ? "text-blue-300" : "text-amber-300"
+                          )}
+                        />
                         <p className="text-sm font-medium text-white">
-                          Direct platform sync
+                          {hasLiveSyncAccess
+                            ? "Direct platform sync"
+                            : "Unlock broker sync on Trader or Elite"}
                         </p>
                       </div>
                       <p className="text-xs leading-relaxed text-white/45">
-                        Connect MetaTrader 5, cTrader, Match-Trader, or
-                        TradeLocker from the Connections page. Profitabledge
-                        handles the sync workflow from there.
+                        {hasLiveSyncAccess
+                          ? "Connect MetaTrader 5, cTrader, Match-Trader, or TradeLocker from the Connections page. Profitabledge handles the sync workflow from there."
+                          : "Broker sync is available on Trader and Elite access plans. Upgrade to connect MetaTrader, cTrader, Match-Trader, or TradeLocker from the Connections page."}
                       </p>
                     </div>
                     <span
                       className={cn(
                         TRADE_IDENTIFIER_PILL_CLASS,
-                        TRADE_IDENTIFIER_TONES.info,
+                        hasLiveSyncAccess
+                          ? TRADE_IDENTIFIER_TONES.info
+                          : TRADE_IDENTIFIER_TONES.warning,
                         "min-h-6 px-2 py-0.5 text-[10px]"
                       )}
                     >
-                      Recommended
+                      {hasLiveSyncAccess ? "Recommended" : "Trader + Elite"}
                     </span>
                   </div>
 
@@ -1573,11 +1609,15 @@ export function AddAccountSheet({
                     )}
                   >
                     <Link
-                      href="/dashboard/settings/connections"
+                      href={
+                        hasLiveSyncAccess
+                          ? "/dashboard/settings/connections"
+                          : "/dashboard/settings/billing?sourceFeature=live-sync"
+                      }
                       onClick={() => handleOpenChange(false)}
                     >
                       <ExternalLink className="size-3.5" />
-                      Go to Connections
+                      {hasLiveSyncAccess ? "Go to Connections" : "See plans"}
                     </Link>
                   </Button>
                 </div>
@@ -1591,16 +1631,27 @@ export function AddAccountSheet({
               <div className="px-6 py-5">
                 <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
                   <ol className="space-y-2 text-sm text-white/70">
-                    <li>1. Open Connections.</li>
-                    <li>2. Choose the provider you want to link.</li>
-                    <li>
-                      3. Complete the connection and let sync create or link the
-                      account.
-                    </li>
+                    {hasLiveSyncAccess ? (
+                      <>
+                        <li>1. Open Connections.</li>
+                        <li>2. Choose the provider you want to link.</li>
+                        <li>
+                          3. Complete the connection and let sync create or link the
+                          account.
+                        </li>
+                      </>
+                    ) : (
+                      <>
+                        <li>1. Open Billing.</li>
+                        <li>2. Start Trader or Elite access.</li>
+                        <li>3. Return here to connect your broker.</li>
+                      </>
+                    )}
                   </ol>
                   <p className="text-xs leading-relaxed text-white/40">
-                    Use this flow for supported direct platform and broker sync.
-                    It is the main path for non-EA account connections.
+                    {hasLiveSyncAccess
+                      ? "Use this flow for supported direct platform and broker sync. It is the main path for non-EA account connections."
+                      : "Upgrade first, then come back to unlock direct broker and platform sync from the Connections page."}
                   </p>
                 </div>
               </div>
@@ -1629,25 +1680,34 @@ export function AddAccountSheet({
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <Cpu className="size-4 text-teal-300" />
+                        <Cpu
+                          className={cn(
+                            "size-4",
+                            hasLiveSyncAccess ? "text-teal-300" : "text-amber-300"
+                          )}
+                        />
                         <p className="text-sm font-medium text-white">
-                          Terminal-side MT5 sync
+                          {hasLiveSyncAccess
+                            ? "Terminal-side MT5 sync"
+                            : "Unlock EA sync on Trader or Elite"}
                         </p>
                       </div>
                       <p className="text-xs leading-relaxed text-white/45">
-                        Use the EA bridge when you want MT5 terminal sync plus
-                        the advanced intratrade metrics the API path cannot
-                        capture.
+                        {hasLiveSyncAccess
+                          ? "Use the EA bridge when you want MT5 terminal sync plus the advanced intratrade metrics the API path cannot capture."
+                          : "EA sync is available on Trader and Elite access plans. Upgrade to use the MT5 bridge for terminal-side sync and the richer intratrade metrics it captures."}
                       </p>
                     </div>
                     <span
                       className={cn(
                         TRADE_IDENTIFIER_PILL_CLASS,
-                        TRADE_IDENTIFIER_TONES.live,
+                        hasLiveSyncAccess
+                          ? TRADE_IDENTIFIER_TONES.live
+                          : TRADE_IDENTIFIER_TONES.warning,
                         "min-h-6 px-2 py-0.5 text-[10px]"
                       )}
                     >
-                      MT5 only
+                      {hasLiveSyncAccess ? "MT5 only" : "Trader + Elite"}
                     </span>
                   </div>
 
@@ -1659,11 +1719,15 @@ export function AddAccountSheet({
                     )}
                   >
                     <Link
-                      href="/dashboard/settings/ea-setup"
+                      href={
+                        hasLiveSyncAccess
+                          ? "/dashboard/settings/ea-setup"
+                          : "/dashboard/settings/billing?sourceFeature=live-sync"
+                      }
                       onClick={() => handleOpenChange(false)}
                     >
                       <ExternalLink className="size-3.5" />
-                      Go to EA Setup
+                      {hasLiveSyncAccess ? "Go to EA Setup" : "See plans"}
                     </Link>
                   </Button>
                 </div>
@@ -1677,16 +1741,27 @@ export function AddAccountSheet({
               <div className="px-6 py-5">
                 <div className={cn(TRADE_SURFACE_CARD_CLASS, "space-y-3 p-4")}>
                   <ol className="space-y-2 text-sm text-white/70">
-                    <li>1. Open EA Setup.</li>
-                    <li>2. Generate the key and install the EA in MT5.</li>
-                    <li>
-                      3. Attach the EA and let the first sync register the
-                      account.
-                    </li>
+                    {hasLiveSyncAccess ? (
+                      <>
+                        <li>1. Open EA Setup.</li>
+                        <li>2. Generate the key and install the EA in MT5.</li>
+                        <li>
+                          3. Attach the EA and let the first sync register the
+                          account.
+                        </li>
+                      </>
+                    ) : (
+                      <>
+                        <li>1. Open Billing.</li>
+                        <li>2. Start Trader or Elite access.</li>
+                        <li>3. Return here to finish EA setup in MT5.</li>
+                      </>
+                    )}
                   </ol>
                   <p className="text-xs leading-relaxed text-white/40">
-                    Use this flow when you specifically want MT5 terminal-side
-                    sync and the richer analytics captured by the EA bridge.
+                    {hasLiveSyncAccess
+                      ? "Use this flow when you specifically want MT5 terminal-side sync and the richer analytics captured by the EA bridge."
+                      : "Upgrade first, then come back to connect the EA bridge and unlock MT5 terminal-side sync."}
                   </p>
                 </div>
               </div>

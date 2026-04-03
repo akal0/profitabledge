@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -15,7 +15,6 @@ import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { GoalContentSeparator } from "@/components/goals/goal-surface";
-import { DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE } from "@/lib/default-profile-banner";
 import { cn } from "@/lib/utils";
 import {
   PFP_EFFECT_PRESETS,
@@ -29,11 +28,21 @@ import {
   CUSTOM_RING_EFFECT_PRESETS,
 } from "@/features/public-proof/lib/public-proof-badges";
 import { AffiliateNameEffectText } from "@/features/public-proof/components/affiliate-name-effect-text";
+import { AvatarRingEffect } from "@/features/shop/components/avatar-ring-effect";
+import { PixiAvatarOverlay } from "@/features/shop/components/pixi-avatar-overlay";
+import { ProfileBannerEffect } from "@/features/shop/components/profile-banner-effect";
+import {
+  normalizeProfileEffects,
+  resolveProfilePreviewTheme,
+} from "@/features/shop/lib/shop-effects-catalog";
 import { trpcOptions } from "@/utils/trpc";
 
 export interface ProfileEffectsProps {
   profileEffects?: {
     pfpEffect?: string;
+    avatarDecoration?: string;
+    bannerEffect?: string;
+    nameplate?: string;
     nameEffect?: string;
     nameFont?: string;
     nameColor?: string;
@@ -42,120 +51,22 @@ export interface ProfileEffectsProps {
     customRingFrom?: string;
     customRingTo?: string;
     customRingEffect?: string;
+    customNameplateFrom?: string;
+    customNameplateTo?: string;
+    theme?: string;
+    customThemeFrom?: string;
+    customThemeTo?: string;
+    themeAccent?: string;
   } | null;
   user: {
     name?: string | null;
+    displayName?: string | null;
     username?: string | null;
     image?: string | null;
     bannerUrl?: string | null;
     bannerPosition?: string | null;
   };
 }
-
-const PROFILE_PREVIEW_THEMES: Record<
-  string,
-  { accent: string; banner: string }
-> = {
-  neutral: {
-    accent: "#94a3b8",
-    banner: DEFAULT_PROFILE_BANNER_BACKGROUND_IMAGE,
-  },
-  gold_glow: {
-    accent: "#fbbf24",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(251,191,36,0.38) 0%, transparent 26%), radial-gradient(circle at 72% 18%, rgba(245,158,11,0.28) 0%, transparent 24%), linear-gradient(135deg, rgba(120,53,15,0.94) 0%, rgba(15,23,42,0.96) 100%)",
-  },
-  emerald_pulse: {
-    accent: "#10b981",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(16,185,129,0.36) 0%, transparent 26%), radial-gradient(circle at 74% 16%, rgba(45,212,191,0.2) 0%, transparent 22%), linear-gradient(135deg, rgba(6,78,59,0.96) 0%, rgba(15,23,42,0.96) 100%)",
-  },
-  rainbow_ring: {
-    accent: "#ec4899",
-    banner:
-      "radial-gradient(circle at 15% 20%, rgba(251,146,60,0.35) 0%, transparent 22%), radial-gradient(circle at 50% 18%, rgba(34,211,238,0.28) 0%, transparent 24%), radial-gradient(circle at 82% 18%, rgba(236,72,153,0.28) 0%, transparent 24%), linear-gradient(135deg, rgba(17,24,39,0.94) 0%, rgba(79,70,229,0.7) 48%, rgba(190,24,93,0.72) 100%)",
-  },
-  frost_aura: {
-    accent: "#38bdf8",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(125,211,252,0.36) 0%, transparent 26%), radial-gradient(circle at 74% 16%, rgba(56,189,248,0.24) 0%, transparent 22%), linear-gradient(135deg, rgba(12,74,110,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  shadow_pulse: {
-    accent: "#a855f7",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(168,85,247,0.34) 0%, transparent 25%), radial-gradient(circle at 76% 18%, rgba(79,70,229,0.22) 0%, transparent 23%), linear-gradient(135deg, rgba(46,16,101,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  electric_spark: {
-    accent: "#22d3ee",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(34,211,238,0.34) 0%, transparent 24%), radial-gradient(circle at 76% 16%, rgba(59,130,246,0.24) 0%, transparent 22%), linear-gradient(135deg, rgba(8,47,73,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  sakura_ring: {
-    accent: "#fb7185",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(251,113,133,0.38) 0%, transparent 26%), radial-gradient(circle at 76% 16%, rgba(244,114,182,0.24) 0%, transparent 22%), linear-gradient(135deg, rgba(131,24,67,0.94) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  neon_pulse: {
-    accent: "#4ade80",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(74,222,128,0.38) 0%, transparent 24%), radial-gradient(circle at 78% 16%, rgba(34,197,94,0.2) 0%, transparent 20%), linear-gradient(135deg, rgba(20,83,45,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  hearts: {
-    accent: "#fb7185",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(251,113,133,0.38) 0%, transparent 24%), radial-gradient(circle at 78% 16%, rgba(244,63,94,0.24) 0%, transparent 22%), linear-gradient(135deg, rgba(136,19,55,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  gold: {
-    accent: "#fbbf24",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(251,191,36,0.36) 0%, transparent 24%), linear-gradient(135deg, rgba(120,53,15,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  emerald: {
-    accent: "#10b981",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(16,185,129,0.34) 0%, transparent 24%), linear-gradient(135deg, rgba(6,78,59,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  ocean: {
-    accent: "#0ea5e9",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(34,211,238,0.34) 0%, transparent 24%), linear-gradient(135deg, rgba(30,64,175,0.94) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  sunset: {
-    accent: "#fb923c",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(251,146,60,0.36) 0%, transparent 24%), linear-gradient(135deg, rgba(190,24,93,0.78) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  rose: {
-    accent: "#f472b6",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(244,114,182,0.36) 0%, transparent 24%), linear-gradient(135deg, rgba(157,23,77,0.86) 0%, rgba(88,28,135,0.76) 52%, rgba(15,23,42,0.98) 100%)",
-  },
-  aurora: {
-    accent: "#818cf8",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(52,211,153,0.3) 0%, transparent 24%), radial-gradient(circle at 78% 16%, rgba(129,140,248,0.24) 0%, transparent 22%), linear-gradient(135deg, rgba(8,47,73,0.94) 0%, rgba(79,70,229,0.72) 100%)",
-  },
-  ice: {
-    accent: "#7dd3fc",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(224,242,254,0.34) 0%, transparent 24%), linear-gradient(135deg, rgba(8,47,73,0.94) 0%, rgba(14,116,144,0.72) 100%)",
-  },
-  midnight: {
-    accent: "#6366f1",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(129,140,248,0.32) 0%, transparent 24%), linear-gradient(135deg, rgba(49,46,129,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  fire: {
-    accent: "#ef4444",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(251,191,36,0.36) 0%, transparent 22%), radial-gradient(circle at 76% 16%, rgba(239,68,68,0.24) 0%, transparent 20%), linear-gradient(135deg, rgba(153,27,27,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-  neon: {
-    accent: "#4ade80",
-    banner:
-      "radial-gradient(circle at 18% 22%, rgba(74,222,128,0.34) 0%, transparent 22%), radial-gradient(circle at 76% 16%, rgba(244,114,182,0.2) 0%, transparent 20%), linear-gradient(135deg, rgba(6,95,70,0.96) 0%, rgba(15,23,42,0.98) 100%)",
-  },
-};
 
 const OPTIONS_PER_PAGE = 3;
 const FULL_PAGE_SEPARATOR_CLASS = "-mx-6! sm:-mx-8!";
@@ -183,40 +94,6 @@ function toRgba(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function getPreviewToneKey(
-  pfpEffect?: string | null,
-  nameColor?: string | null
-) {
-  if (pfpEffect && pfpEffect !== "none") return pfpEffect;
-  if (nameColor && nameColor !== "default") return nameColor;
-  return "neutral";
-}
-
-function getPreviewTheme(
-  toneKey: string,
-  palette?: { from?: string; to?: string } | null
-) {
-  if (toneKey === "custom" && palette?.from && palette?.to) {
-    return {
-      accent: palette.from,
-      banner:
-        `radial-gradient(circle at 18% 22%, ${toRgba(
-          palette.to,
-          0.34
-        )} 0%, transparent 24%), ` +
-        `radial-gradient(circle at 76% 16%, ${toRgba(
-          palette.from,
-          0.22
-        )} 0%, transparent 20%), ` +
-        `linear-gradient(135deg, ${toRgba(palette.from, 0.9)} 0%, ${toRgba(
-          palette.to,
-          0.78
-        )} 100%)`,
-    };
-  }
-
-  return PROFILE_PREVIEW_THEMES[toneKey] ?? PROFILE_PREVIEW_THEMES.neutral;
-}
 
 function getOptionPageCount(items: readonly unknown[]) {
   return Math.max(1, Math.ceil(items.length / OPTIONS_PER_PAGE));
@@ -243,6 +120,12 @@ const RING_ANIMATION_PAGE_COUNT = getOptionPageCount(
 const NAME_COLOR_PAGE_COUNT = getOptionPageCount(NAME_COLOR_PRESETS);
 const NAME_FONT_PAGE_COUNT = getOptionPageCount(NAME_FONT_PRESETS);
 const NAME_EFFECT_PAGE_COUNT = getOptionPageCount(NAME_EFFECT_PRESETS);
+const PREVIEW_PFP_EFFECT_SET: Set<string> = new Set(
+  PFP_EFFECT_PRESETS.map((item) => item.value)
+);
+const PREVIEW_NAME_COLOR_SET: Set<string> = new Set(
+  NAME_COLOR_PRESETS.map((item) => item.value)
+);
 
 function stripUppercaseAndTracking(className: string) {
   return className
@@ -265,181 +148,370 @@ function PreviewSkeleton({ className }: { className?: string }) {
   );
 }
 
-const PublicProfilePreviewCard = memo(function PublicProfilePreviewCard({
+export const PublicProfilePreviewCard = memo(function PublicProfilePreviewCard({
   user,
   pfpEffect,
+  avatarDecoration,
+  bannerEffect,
+  nameplate,
   customRingEffect,
   nameEffect,
   nameFont,
   nameColor,
+  theme,
+  customNameplate,
+  customTheme,
+  themeAccent,
   customGradient,
   customRing,
   compact = false,
+  animateAvatarRing = !compact,
+  renderAvatarDecoration = !compact,
+  renderBannerEffect = Boolean(bannerEffect && bannerEffect !== "none"),
+  animateBannerEffect = !compact,
+  animateNameEffect = !compact,
   toneKey,
   tonePalette,
   className,
 }: {
   user: ProfileEffectsProps["user"];
   pfpEffect: string;
+  avatarDecoration?: string;
+  bannerEffect?: string;
+  nameplate?: string;
   customRingEffect?: string;
   nameEffect: string;
   nameFont: string;
   nameColor: string;
+  theme?: string;
+  customNameplate?: { from: string; to: string };
+  customTheme?: { from: string; to: string; accent?: string };
+  themeAccent?: string;
   customGradient: { from: string; to: string };
   customRing: { from: string; to: string };
   compact?: boolean;
+  animateAvatarRing?: boolean;
+  renderAvatarDecoration?: boolean;
+  renderBannerEffect?: boolean;
+  animateBannerEffect?: boolean;
+  animateNameEffect?: boolean;
   toneKey?: string;
   tonePalette?: { from?: string; to?: string } | null;
   className?: string;
 }) {
-  const displayName = user.username ?? user.name ?? "Trader";
+  const displayName = user.displayName ?? user.name ?? user.username ?? "Trader";
   const previewUsername = user.username?.trim() || "trader";
   const imageLoading = compact ? "lazy" : "eager";
   const imageFetchPriority = compact ? "low" : "high";
-  const theme = getPreviewTheme(
-    toneKey ?? getPreviewToneKey(pfpEffect, nameColor),
-    tonePalette
+  const showAvatarDecoration = Boolean(
+    renderAvatarDecoration && avatarDecoration && avatarDecoration !== "none"
   );
-  const accentStrong = toRgba(theme.accent, 0.36);
+  const showHolographicAvatar = avatarDecoration === "holographic_overlay";
+  const themeKey = theme ?? "default";
+  const holographicInteractive = !compact && bannerEffect === "holographic_card";
+  const [tiltState, setTiltState] = useState({
+    rotateX: 0,
+    rotateY: 0,
+    shineX: 50,
+    shineY: 50,
+  });
+  const previewTheme = resolveProfilePreviewTheme(
+    normalizeProfileEffects({
+      pfpEffect:
+        toneKey && PREVIEW_PFP_EFFECT_SET.has(toneKey)
+          ? toneKey
+          : toneKey && PREVIEW_NAME_COLOR_SET.has(toneKey)
+          ? "none"
+          : pfpEffect,
+      bannerEffect,
+      nameplate,
+      nameEffect,
+      nameFont,
+      nameColor:
+        toneKey && PREVIEW_NAME_COLOR_SET.has(toneKey) ? toneKey : nameColor,
+      theme,
+      customGradientFrom:
+        toneKey === "custom" && nameColor === "custom"
+          ? tonePalette?.from
+          : customGradient.from,
+      customGradientTo:
+        toneKey === "custom" && nameColor === "custom"
+          ? tonePalette?.to
+          : customGradient.to,
+      customRingFrom:
+        toneKey === "custom" && pfpEffect === "custom"
+          ? tonePalette?.from
+          : customRing.from,
+      customRingTo:
+        toneKey === "custom" && pfpEffect === "custom"
+          ? tonePalette?.to
+          : customRing.to,
+      customRingEffect,
+      customNameplateFrom: customNameplate?.from,
+      customNameplateTo: customNameplate?.to,
+      customThemeFrom: customTheme?.from,
+      customThemeTo: customTheme?.to,
+      themeAccent: customTheme?.accent ?? themeAccent,
+    })
+  );
+  const accentStrong = toRgba(previewTheme.accent, 0.36);
+  const cardShellStyle = {
+    transform: holographicInteractive
+      ? `perspective(800px) rotateX(${tiltState.rotateX}deg) rotateY(${tiltState.rotateY}deg)`
+      : undefined,
+    transition: holographicInteractive ? "transform 160ms ease-out" : undefined,
+  };
+
+  const handleCardPointerMove = (event: MouseEvent<HTMLDivElement>) => {
+    if (!holographicInteractive) {
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / rect.width;
+    const py = (event.clientY - rect.top) / rect.height;
+    setTiltState({
+      rotateX: (0.5 - py) * 8,
+      rotateY: (px - 0.5) * 10,
+      shineX: px * 100,
+      shineY: py * 100,
+    });
+  };
+
+  const handleCardPointerLeave = () => {
+    if (!holographicInteractive) {
+      return;
+    }
+
+    setTiltState({ rotateX: 0, rotateY: 0, shineX: 50, shineY: 50 });
+  };
 
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[20px] border border-white/10 bg-[#050507] text-left",
-        compact ? "min-h-[168px]" : "min-h-[228px]",
+        "w-full rounded-lg border border-white/5 bg-sidebar p-1",
+        compact ? "min-h-[176px]" : "min-h-[236px]",
         className
       )}
-      style={{
-        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 22px 60px ${toRgba(
-          theme.accent,
-          compact ? 0.16 : 0.22
-        )}`,
-      }}
+      onMouseMove={handleCardPointerMove}
+      onMouseLeave={handleCardPointerLeave}
+      style={cardShellStyle}
     >
       <div
         className={cn(
-          "relative overflow-hidden border-b border-white/6",
-          compact ? "h-24" : "h-36"
-        )}
-        style={!user.bannerUrl ? { backgroundImage: theme.banner } : undefined}
-      >
-        {user.bannerUrl ? (
-          <img
-            src={user.bannerUrl}
-            alt={`${displayName} banner`}
-            className="absolute inset-0 h-full w-full object-cover"
-            style={{ objectPosition: user.bannerPosition ?? "50% 50%" }}
-            loading={imageLoading}
-            fetchPriority={imageFetchPriority}
-            decoding="async"
-            draggable={false}
-          />
-        ) : null}
-      </div>
-
-      <div
-        className={cn(
-          "relative",
-          compact ? "px-3 pb-3 pt-8" : "px-5 pb-5 pt-9"
+          "relative overflow-hidden rounded-sm ring ring-white/5",
+          "bg-white dark:bg-sidebar-accent dark:group-hover:brightness-120 transition-all duration-250"
         )}
       >
         <div
           className={cn(
-            "absolute",
-            compact ? "left-3 top-[-22px]" : "left-5 top-[-28px]"
+            "relative overflow-hidden bg-sidebar-accent text-left",
+            compact ? "min-h-[168px]" : "min-h-[228px]"
           )}
-        >
+          style={{
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 22px 60px ${toRgba(
+              previewTheme.accent,
+              compact ? 0.16 : 0.22
+            )}`,
+          }}
+          >
+            {themeKey === "cyberpunk" ? (
+              <div className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(180deg,rgba(34,211,238,0.04)_0_1px,transparent_1px_7px),radial-gradient(circle_at_top_right,rgba(34,211,238,0.14),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(244,114,182,0.1),transparent_28%)]" />
+            ) : null}
+            {themeKey === "sakura" || themeKey === "rose_garden" ? (
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(251,191,202,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.1),transparent_24%)]" />
+            ) : null}
+            {themeKey === "midnight" ? (
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_20%,rgba(255,255,255,0.08)_0_2px,transparent_3px),radial-gradient(circle_at_74%_28%,rgba(255,255,255,0.06)_0_2px,transparent_3px),radial-gradient(circle_at_82%_66%,rgba(129,140,248,0.12),transparent_22%)]" />
+            ) : null}
+            {themeKey === "volcanic" ? (
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(251,146,60,0.14),transparent_30%),radial-gradient(circle_at_top_right,rgba(239,68,68,0.12),transparent_26%)]" />
+            ) : null}
+            {themeKey === "arctic" ? (
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(224,242,254,0.18),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(125,211,252,0.1),transparent_24%)]" />
+            ) : null}
+            {bannerEffect === "holographic_card" ? (
+              <div
+                className="pointer-events-none absolute inset-0 mix-blend-screen"
+                style={{
+                  background: `radial-gradient(circle at ${tiltState.shineX}% ${tiltState.shineY}%, rgba(255,255,255,0.22), transparent 18%), linear-gradient(115deg, transparent 18%, rgba(103,232,249,0.16) 34%, transparent 50%, rgba(244,114,182,0.14) 66%, rgba(251,191,36,0.12) 78%, transparent 88%)`,
+                }}
+              />
+            ) : null}
+            <div
+              className={cn(
+                "relative overflow-hidden border-b border-white/6",
+              compact ? "h-24" : "h-36"
+            )}
+            style={
+              !user.bannerUrl ? { backgroundImage: previewTheme.banner } : undefined
+            }
+          >
+            {user.bannerUrl ? (
+              <img
+                src={user.bannerUrl}
+                alt={`${displayName} banner`}
+                className="absolute inset-0 h-full w-full object-cover"
+                style={{ objectPosition: user.bannerPosition ?? "50% 50%" }}
+                loading={imageLoading}
+                fetchPriority={imageFetchPriority}
+                decoding="async"
+                draggable={false}
+              />
+            ) : null}
+            {renderBannerEffect ? (
+              <ProfileBannerEffect
+                effect={bannerEffect}
+                compact={compact}
+                animate={animateBannerEffect}
+              />
+            ) : null}
+          </div>
+
           <div
             className={cn(
-              "inline-flex rounded-full",
-              getAffiliatePfpWrapperClassName(pfpEffect)
+              "relative",
+              compact ? "px-3 pb-3 pt-8" : "px-5 pb-5 pt-9"
             )}
           >
-            <Avatar
+            <div
               className={cn(
-                compact
-                  ? "size-12 rounded-full shadow-lg"
-                  : "size-16 rounded-full shadow-lg",
-                pfpEffect !== "none"
-                  ? getAffiliatePfpEffectClassName(pfpEffect)
-                  : "ring-4 ring-black/45",
-                pfpEffect === "custom" &&
-                  getCustomPfpAnimationClassName(customRingEffect)
+                "absolute",
+                compact ? "left-3 top-[-22px]" : "left-5 top-[-28px]"
               )}
-              style={
-                pfpEffect === "custom"
-                  ? getAffiliatePfpEffectStyle("custom", customRing)
-                  : undefined
-              }
             >
-              {user.image ? (
-                <AvatarImage
-                  src={user.image}
-                  alt={displayName}
-                  className="object-cover"
-                  loading={imageLoading}
-                  fetchPriority={imageFetchPriority}
-                  decoding="async"
-                  draggable={false}
-                />
-              ) : null}
-              <AvatarFallback
+              <div
                 className={cn(
-                  "bg-sidebar-accent text-foreground font-semibold",
-                  compact ? "text-sm" : "text-lg"
+                  "inline-flex rounded-full",
+                  getAffiliatePfpWrapperClassName(pfpEffect)
                 )}
               >
-                {displayName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-          </div>
-        </div>
+                <div className="relative isolate">
+                  <Avatar
+                    className={cn(
+                      compact
+                        ? "size-12 rounded-full shadow-lg"
+                        : "size-16 rounded-full shadow-lg",
+                      pfpEffect !== "none"
+                        ? getAffiliatePfpEffectClassName(pfpEffect)
+                        : "ring-4 ring-black/45",
+                      pfpEffect === "custom" &&
+                        getCustomPfpAnimationClassName(customRingEffect)
+                    )}
+                    style={
+                      pfpEffect === "custom"
+                        ? getAffiliatePfpEffectStyle("custom", customRing)
+                        : undefined
+                    }
+                  >
+                    {user.image ? (
+                      <AvatarImage
+                        src={user.image}
+                        alt={displayName}
+                        className="object-cover"
+                        loading={imageLoading}
+                        fetchPriority={imageFetchPriority}
+                        decoding="async"
+                        draggable={false}
+                      />
+                    ) : null}
+                    <AvatarFallback
+                      className={cn(
+                        "bg-sidebar-accent text-foreground font-semibold",
+                        compact ? "text-sm" : "text-lg"
+                      )}
+                    >
+                      {displayName.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  {showAvatarDecoration && showHolographicAvatar ? (
+                    <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
+                  ) : null}
+                </div>
+              </div>
+              {showAvatarDecoration && !showHolographicAvatar ? (
+                <div className="pointer-events-none absolute inset-[-18%]">
+                  <PixiAvatarOverlay effect={avatarDecoration} />
+                </div>
+              ) : null}
+              <AvatarRingEffect effect={pfpEffect} compact={compact} animate={animateAvatarRing} />
+            </div>
 
-        <div className={cn("space-y-3", compact ? "pt-1" : "pt-2")}>
-          <p
-            className={cn(
-              "pr-8 leading-4 text-white/50",
-              compact ? "text-[10px]" : "text-xs"
-            )}
-          >
-            <AffiliateNameEffectText
-              nameFont={nameFont}
-              nameEffect={nameEffect}
-              nameColor={nameColor}
-              customGradient={nameColor === "custom" ? customGradient : null}
-              fontClassTransform={stripUppercaseAndTracking}
-            >
-              @{previewUsername}'s
-            </AffiliateNameEffectText>{" "}
-            <span className="text-white/35">public proof page</span>
-          </p>
+            <div className={cn("space-y-3", compact ? "pt-1" : "pt-2")}>
+              <div className="space-y-1">
+                <div className={cn("text-white/92", compact ? "text-sm" : "text-lg")}>
+                  <AffiliateNameEffectText
+                    nameFont={nameFont}
+                    nameEffect={nameEffect}
+                    nameColor={nameColor}
+                    nameplate={nameplate}
+                    customGradient={nameColor === "custom" ? customGradient : null}
+                    customNameplate={
+                      nameplate === "custom" ? customNameplate ?? null : null
+                    }
+                    animateEffect={animateNameEffect}
+                    fontClassTransform={stripUppercaseAndTracking}
+                  >
+                    {displayName}
+                  </AffiliateNameEffectText>
+                </div>
+                <p
+                  className={cn("text-white/45", compact ? "text-[10px]" : "text-xs")}
+                >
+                  Theme: {previewTheme.label}
+                </p>
+              </div>
+              <p
+                className={cn(
+                  "pr-8 leading-4 text-white/50",
+                  compact ? "text-[10px]" : "text-xs"
+                )}
+              >
+                <AffiliateNameEffectText
+                  nameFont={nameFont}
+                  nameEffect={nameEffect}
+                  nameColor={nameColor}
+                  nameplate={nameplate}
+                  customGradient={nameColor === "custom" ? customGradient : null}
+                    customNameplate={
+                      nameplate === "custom" ? customNameplate ?? null : null
+                    }
+                    animateEffect={animateNameEffect}
+                    fontClassTransform={stripUppercaseAndTracking}
+                  >
+                  @{previewUsername}'s
+                </AffiliateNameEffectText>{" "}
+                <span className="text-white/35">public proof page</span>
+              </p>
 
-          <div className="space-y-2">
-            <PreviewSkeleton
-              className={compact ? "h-2.5 w-[30%]" : "h-4 w-52"}
-            />
-            <div className="flex items-center gap-2">
-              <PreviewSkeleton
-                className={compact ? "h-2.5 w-12" : "h-3 w-28"}
-              />
-              <PreviewSkeleton
-                className={compact ? "h-2.5 w-12" : "h-3 w-28"}
-              />
-              <PreviewSkeleton
-                className={compact ? "h-2.5 w-12" : "h-3 w-28"}
-              />
-              <PreviewSkeleton
-                className={compact ? "h-2.5 w-12" : "h-3 w-28"}
-              />
+              <div className="space-y-2">
+                <PreviewSkeleton
+                  className={compact ? "h-2.5 w-[30%]" : "h-4 w-52"}
+                />
+                <div className="flex items-center gap-2">
+                  <PreviewSkeleton
+                    className={compact ? "h-2.5 w-12" : "h-3 w-28"}
+                  />
+                  <PreviewSkeleton
+                    className={compact ? "h-2.5 w-12" : "h-3 w-28"}
+                  />
+                  <PreviewSkeleton
+                    className={compact ? "h-2.5 w-12" : "h-3 w-28"}
+                  />
+                  <PreviewSkeleton
+                    className={compact ? "h-2.5 w-12" : "h-3 w-28"}
+                  />
+                </div>
+              </div>
             </div>
           </div>
+
+          <div
+            className="pointer-events-none absolute inset-0 rounded-sm"
+            style={{ boxShadow: `inset 0 0 0 1px ${accentStrong}` }}
+          />
         </div>
       </div>
-
-      <div
-        className="pointer-events-none absolute inset-0 rounded-[20px]"
-        style={{ boxShadow: `inset 0 0 0 1px ${accentStrong}` }}
-      />
     </div>
   );
 });
@@ -619,12 +691,20 @@ export function ProfileEffectsEditor({
   const stableUser = useMemo(
     () => ({
       name: user.name ?? null,
+      displayName: user.displayName ?? null,
       username: user.username ?? null,
       image: user.image ?? null,
       bannerUrl: user.bannerUrl ?? null,
       bannerPosition: user.bannerPosition ?? null,
     }),
-    [user.name, user.username, user.image, user.bannerUrl, user.bannerPosition]
+    [
+      user.name,
+      user.displayName,
+      user.username,
+      user.image,
+      user.bannerUrl,
+      user.bannerPosition,
+    ]
   );
   const customGradient = useMemo(
     () => ({ from: gradientFrom, to: gradientTo }),

@@ -21,6 +21,8 @@ const FEATURE_REQUIREMENTS: Record<string, BillingPlanKey> = {
   "ai-assistant": "professional",
   "prop-tracker": "professional",
   "advanced-reports": "professional",
+  "live-sync": "professional",
+  "ea-sync": "professional",
 };
 
 export function useFeatureGate(feature: string, requiredPlanKey?: BillingPlanKey) {
@@ -64,6 +66,9 @@ export function FeatureGate({
         return "Monitor challenge rules, drawdown pressure, and pass probability from one dashboard.";
       case "advanced-reports":
         return "Unlock richer reporting, polished exports, and deeper filtering for weekly review.";
+      case "live-sync":
+      case "ea-sync":
+        return "Unlock the MT5 EA bridge, live account updates, and the richer execution detail captured from terminal-side sync.";
       default:
         return "Upgrade when you need more depth, automation, or advanced analysis.";
     }

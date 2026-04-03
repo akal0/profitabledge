@@ -6,6 +6,7 @@ export * from './notifications';
 export * from './operations';
 export * from './social-redesign';
 export * from './journal';
+export * from './trade-ideas';
 export * from './connections';
 export * from './mt5-sync';
 export * from './trader-brain';

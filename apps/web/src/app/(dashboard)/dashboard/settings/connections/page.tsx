@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { normalizeOriginUrl } from "@profitabledge/platform";
 import { toast } from "sonner";
+import { FeatureGate } from "@/components/feature-gate";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -61,7 +62,7 @@ import { trpcOptions } from "@/utils/trpc";
 
 type ConnectionsSettingsTab = "connections" | "admin";
 
-export default function ConnectionsSettingsPage() {
+function ConnectionsSettingsPageContent() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -699,5 +700,13 @@ export default function ConnectionsSettingsPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function ConnectionsSettingsPage() {
+  return (
+    <FeatureGate feature="live-sync" requiredPlanKey="professional">
+      <ConnectionsSettingsPageContent />
+    </FeatureGate>
   );
 }

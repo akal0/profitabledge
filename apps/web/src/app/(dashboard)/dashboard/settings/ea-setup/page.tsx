@@ -1,5 +1,6 @@
 "use client";
 
+import { FeatureGate } from "@/components/feature-gate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,7 +24,7 @@ import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
 import { ReportBugDialog } from "@/features/navigation/components/report-bug-dialog";
 
-export default function EASetupPage() {
+function EASetupPageContent() {
   const [copiedApiUrl, setCopiedApiUrl] = useState(false);
   const [copiedBaseUrl, setCopiedBaseUrl] = useState(false);
   const [customNgrokUrl, setCustomNgrokUrl] = useState("");
@@ -579,5 +580,13 @@ export default function EASetupPage() {
         pagePath={pathname || "/dashboard/settings/ea-setup"}
       />
     </div>
+  );
+}
+
+export default function EASetupPage() {
+  return (
+    <FeatureGate feature="live-sync" requiredPlanKey="professional">
+      <EASetupPageContent />
+    </FeatureGate>
   );
 }

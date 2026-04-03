@@ -9,6 +9,7 @@ import type {
 import { resolveUniqueConnectionDisplayName } from "./display-name";
 import { getServerEnv } from "../env";
 import { buildDiscoveredAccountsMeta } from "./discovered-accounts";
+import { requireLiveSyncAccess } from "../billing/ea-sync-access";
 
 export type SupportedOAuthConnectionProvider = "ctrader" | "tradovate";
 
@@ -19,6 +20,8 @@ export async function createOAuthConnection(params: {
   displayName: string;
   meta?: Record<string, unknown> | null | undefined;
 }) {
+  await requireLiveSyncAccess(params.userId);
+
   const provider = await getProvider(params.provider);
 
   if (!provider.exchangeCode) {

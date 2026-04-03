@@ -12,6 +12,7 @@ import {
   resolveTradeOriginType,
   type TradeOriginType,
 } from "./trust";
+import type { StoredProfileEffects } from "../profile-effects";
 
 type PublicProofShare = {
   accountId: string;
@@ -26,12 +27,7 @@ type PublicProofShare = {
   traderImage?: string | null;
   traderBannerUrl?: string | null;
   traderBannerPosition?: string | null;
-  traderProfileEffects?: {
-    pfpEffect?: string;
-    nameEffect?: string;
-    nameFont?: string;
-    nameColor?: string;
-  } | null;
+  traderProfileEffects?: StoredProfileEffects | null;
   verificationLevel: string | null;
   isVerified: number | boolean | null;
   lastSyncedAt?: Date | null;

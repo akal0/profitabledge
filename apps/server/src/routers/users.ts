@@ -17,6 +17,19 @@ import {
   isValidNormalizedAuthUsername,
   normalizeAuthUsername,
 } from "../lib/auth-usernames";
+import {
+  updateProfileEffectsInputSchema,
+  type StoredProfileEffects,
+} from "../lib/profile-effects";
+import { getEffectiveBillingState } from "../lib/billing/growth";
+
+function isGifAssetUrl(value?: string | null) {
+  if (!value) {
+    return false;
+  }
+
+  return /^data:image\/gif/i.test(value) || /\.gif(?:$|[?#])/i.test(value);
+}
 
 const DASHBOARD_WIDGET_IDS = [
   "account-balance",
@@ -830,6 +843,19 @@ export const usersRouter = router({
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       const normalizedUsername = normalizeAuthUsername(input.username);
+      const usesAnimatedProfileMedia =
+        isGifAssetUrl(input.image) || isGifAssetUrl(input.profileBannerUrl);
+
+      if (usesAnimatedProfileMedia) {
+        const billing = await getEffectiveBillingState(userId);
+
+        if (billing.activePlanKey !== "institutional") {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Animated GIF avatars and banners require the Elite plan",
+          });
+        }
+      }
 
       if (
         normalizedUsername.length < 2 ||
@@ -910,25 +936,7 @@ export const usersRouter = router({
     }),
 
   updateProfileEffects: protectedProcedure
-    .input(
-      z.object({
-        pfpEffect: z
-          .enum(["none", "gold_glow", "emerald_pulse", "rainbow_ring", "frost_aura", "shadow_pulse", "electric_spark", "sakura_ring", "neon_pulse", "hearts", "custom"])
-          .optional(),
-        customRingFrom: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-        customRingTo: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-        customRingEffect: z.enum(["none", "pulse", "electric", "sakura", "heartbeat"]).optional(),
-        nameEffect: z.enum(["none", "sparkle", "glow", "shimmer", "gradient_shift", "breathe"]).optional(),
-        nameFont: z
-          .enum(["default", "serif", "mono", "display", "handwriting", "gothic", "thin", "rounded"])
-          .optional(),
-        nameColor: z
-          .enum(["default", "gold", "emerald", "ocean", "sunset", "rose", "aurora", "ice", "midnight", "fire", "neon", "custom"])
-          .optional(),
-        customGradientFrom: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-        customGradientTo: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-      })
-    )
+    .input(updateProfileEffectsInputSchema)
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       const [row] = await db
@@ -937,17 +945,35 @@ export const usersRouter = router({
         .where(eq(userTable.id, userId))
         .limit(1);
 
-      const existing = row?.profileEffects ?? {};
-      const updated = { ...existing };
+      const existing = (row?.profileEffects ?? {}) as StoredProfileEffects;
+      const updated: StoredProfileEffects = { ...existing };
       if (input.pfpEffect !== undefined) updated.pfpEffect = input.pfpEffect;
+      if (input.avatarDecoration !== undefined)
+        updated.avatarDecoration = input.avatarDecoration;
+      if (input.bannerEffect !== undefined) updated.bannerEffect = input.bannerEffect;
+      if (input.nameplate !== undefined) updated.nameplate = input.nameplate;
       if (input.nameEffect !== undefined) updated.nameEffect = input.nameEffect;
       if (input.nameFont !== undefined) updated.nameFont = input.nameFont;
       if (input.nameColor !== undefined) updated.nameColor = input.nameColor;
-      if (input.customGradientFrom !== undefined) (updated as any).customGradientFrom = input.customGradientFrom;
-      if (input.customGradientTo !== undefined) (updated as any).customGradientTo = input.customGradientTo;
-      if (input.customRingFrom !== undefined) (updated as any).customRingFrom = input.customRingFrom;
-      if (input.customRingTo !== undefined) (updated as any).customRingTo = input.customRingTo;
-      if (input.customRingEffect !== undefined) (updated as any).customRingEffect = input.customRingEffect;
+      if (input.theme !== undefined) updated.theme = input.theme;
+      if (input.customGradientFrom !== undefined)
+        updated.customGradientFrom = input.customGradientFrom;
+      if (input.customGradientTo !== undefined)
+        updated.customGradientTo = input.customGradientTo;
+      if (input.customRingFrom !== undefined)
+        updated.customRingFrom = input.customRingFrom;
+      if (input.customRingTo !== undefined) updated.customRingTo = input.customRingTo;
+      if (input.customRingEffect !== undefined)
+        updated.customRingEffect = input.customRingEffect;
+      if (input.customNameplateFrom !== undefined)
+        updated.customNameplateFrom = input.customNameplateFrom;
+      if (input.customNameplateTo !== undefined)
+        updated.customNameplateTo = input.customNameplateTo;
+      if (input.customThemeFrom !== undefined)
+        updated.customThemeFrom = input.customThemeFrom;
+      if (input.customThemeTo !== undefined)
+        updated.customThemeTo = input.customThemeTo;
+      if (input.themeAccent !== undefined) updated.themeAccent = input.themeAccent;
 
       await db
         .update(userTable)

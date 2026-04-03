@@ -1052,7 +1052,7 @@ export default function NotificationsHub() {
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
-        className="rounded-sm bg-sidebar ring ring-white/5 p-0 w-[420px] h-[480px] overflow-hidden flex flex-col"
+        className="rounded-sm bg-sidebar ring ring-white/5 p-0 w-[420px] h-[560px] max-h-[calc(100vh-2rem)] overflow-hidden flex flex-col"
         align="end"
       >
         {/* Header */}

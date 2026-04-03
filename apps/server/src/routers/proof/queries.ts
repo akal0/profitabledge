@@ -23,6 +23,7 @@ import {
 } from "../../db/schema/trading";
 import { listPublicProofLiveTrades } from "../../lib/public-proof/live-trades";
 import { buildPublicProofPageData } from "../../lib/public-proof/page-data";
+import type { StoredProfileEffects } from "../../lib/profile-effects";
 import { issuePublicProofVerification } from "../../lib/verification/share-verification";
 import {
   getTradeOriginLabel,
@@ -120,12 +121,7 @@ async function getOwnedProofContext(userId: string, accountId: string) {
       traderBannerUrl: account.traderBannerUrl ?? null,
       traderBannerPosition: account.traderBannerPosition ?? null,
       traderProfileEffects: (account.traderProfileEffects ?? null) as
-        | {
-            pfpEffect?: string;
-            nameEffect?: string;
-            nameFont?: string;
-            nameColor?: string;
-          }
+        | StoredProfileEffects
         | null,
       verificationLevel: account.verificationLevel,
       isVerified: account.isVerified,

@@ -606,15 +606,16 @@ export default function PropTrackerIndexPage() {
     );
     const nearTargetAccounts = activeAccounts.filter(
       ({ dashboard }) =>
-        (dashboard?.commandCenter?.targetRemainingPct ?? Infinity) <= 1
+        (dashboard?.commandCenter?.targetRemainingPct ?? Infinity) <= 10
     );
-    const totalTargetRemaining =
+    const avgTargetRemaining =
       activeAccounts.length > 0
         ? activeAccounts.reduce(
             (sum, { dashboard }) =>
               sum + (dashboard?.commandCenter?.targetRemainingPct ?? 0),
             0
           )
+          / activeAccounts.length
         : null;
     const closestTargetAccount =
       activeAccounts.length > 0
@@ -700,7 +701,7 @@ export default function PropTrackerIndexPage() {
       funded: fundedAccounts.length,
       urgent: urgentAccounts.length,
       nearTarget: nearTargetAccounts.length,
-      totalTargetRemaining,
+      avgTargetRemaining,
       closestTargetAccount,
       avgDailyHeadroom,
       avgMaxHeadroom,
@@ -751,9 +752,9 @@ export default function PropTrackerIndexPage() {
             />
             <OverviewStatCard
               icon={Target}
-              label="Total target left"
-              value={formatPct(portfolioCommandCenter.totalTargetRemaining)}
-              hint="Combined across active challenges"
+              label="Average target left"
+              value={formatPct(portfolioCommandCenter.avgTargetRemaining)}
+              hint="Average share of target still remaining"
               iconClassName="text-amber-300"
             />
             <OverviewStatCard
@@ -764,7 +765,7 @@ export default function PropTrackerIndexPage() {
               )}
               hint={
                 portfolioCommandCenter.closestTargetAccount
-                  ? `${portfolioCommandCenter.closestTargetAccount.accountName} is closest to target`
+                  ? `${portfolioCommandCenter.closestTargetAccount.accountName} has the least target left`
                   : "No active challenges"
               }
               iconClassName="text-yellow-300"
@@ -773,7 +774,7 @@ export default function PropTrackerIndexPage() {
               icon={Shield}
               label="Near pass"
               value={`${portfolioCommandCenter.nearTarget}`}
-              hint="Challenge accounts within 1.00% of target"
+              hint="Challenge accounts within the final 10% of target"
               iconClassName="text-teal-400"
             />
           </section>
@@ -799,14 +800,14 @@ export default function PropTrackerIndexPage() {
                 <CommandMetricCard
                   label="Average Daily Headroom"
                   value={formatPct(portfolioCommandCenter.avgDailyHeadroom)}
-                  hint="Room before daily breach"
+                  hint="Average share of daily limit still available"
                 />
                 <Separator className="my-4 md:hidden" />
                 <VerticalSeparator className="mx-5 hidden self-stretch md:block" />
                 <CommandMetricCard
                   label="Average Max Headroom"
                   value={formatPct(portfolioCommandCenter.avgMaxHeadroom)}
-                  hint="Overall challenge survival room"
+                  hint="Average share of max loss still available"
                 />
                 <Separator className="my-4 md:hidden" />
                 <VerticalSeparator className="mx-5 hidden self-stretch md:block" />

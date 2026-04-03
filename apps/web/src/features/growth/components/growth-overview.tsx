@@ -81,7 +81,7 @@ export function GrowthOverview() {
     {
       title: "Referrals",
       description:
-        "Share your invite link, monitor milestone rewards, and apply for affiliate access from the referrals route.",
+        "Share your invite link, monitor milestone rewards, and manage referral traction from the referrals route.",
       href: "/dashboard/referrals",
       cta: "Open referrals",
       icon: Gift,

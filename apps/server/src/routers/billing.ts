@@ -37,7 +37,6 @@ import {
   BILLING_PLAN_LIMITS,
 } from "../lib/billing/feature-gates";
 import {
-  applyForAffiliate,
   approveAffiliateApplication,
   attachAffiliateAttributionToUser,
   attachReferralConversionToUser,
@@ -2553,31 +2552,6 @@ export const billingRouter = router({
         "Explorer",
     }));
   }),
-
-  applyForAffiliate: protectedProcedure
-    .input(
-      z.object({
-        whyApply: z.string().trim().min(24).max(1200),
-        promotionPlan: z.string().trim().min(16).max(1200),
-        estimatedMonthlyReferrals: z.number().int().min(0).max(100000),
-        audienceSize: z.number().int().min(0).max(100000000).optional().nullable(),
-        twitter: z.string().max(200).optional().nullable(),
-        discord: z.string().max(200).optional().nullable(),
-        website: z.string().max(200).optional().nullable(),
-        location: z.string().max(100).optional().nullable(),
-        otherSocials: z.string().max(500).optional().nullable(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      const application = await applyForAffiliate({
-        userId: ctx.session.user.id,
-        details: input,
-      });
-
-      return {
-        application,
-      };
-    }),
 
   getAffiliateDashboard: protectedProcedure.query(async ({ ctx }) => {
     const user = await getUserRow(ctx.session.user.id);

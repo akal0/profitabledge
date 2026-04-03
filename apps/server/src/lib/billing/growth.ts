@@ -26,7 +26,6 @@ import {
   referralConversion,
   referralProfile,
   referralRewardGrant,
-  type AffiliateApplicationDetails,
 } from "../../db/schema/billing";
 import {
   getAffiliateCommissionBps,
@@ -1923,95 +1922,6 @@ export async function getLatestAffiliateApplication(userId: string) {
     .limit(1);
 
   return rows[0] ?? null;
-}
-
-function normalizeAffiliateApplicationText(value?: string | null) {
-  const normalized = value?.trim() ?? "";
-  return normalized || null;
-}
-
-function normalizeAffiliateApplicationNumber(value?: number | null) {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function sanitizeAffiliateApplicationDetails(input: {
-  whyApply: string;
-  promotionPlan: string;
-  estimatedMonthlyReferrals: number;
-  audienceSize?: number | null;
-  twitter?: string | null;
-  discord?: string | null;
-  website?: string | null;
-  location?: string | null;
-  otherSocials?: string | null;
-}): AffiliateApplicationDetails {
-  return {
-    whyApply: input.whyApply.trim(),
-    promotionPlan: input.promotionPlan.trim(),
-    estimatedMonthlyReferrals: input.estimatedMonthlyReferrals,
-    audienceSize: normalizeAffiliateApplicationNumber(input.audienceSize),
-    twitter: normalizeAffiliateApplicationText(input.twitter),
-    discord: normalizeAffiliateApplicationText(input.discord),
-    website: normalizeAffiliateApplicationText(input.website),
-    location: normalizeAffiliateApplicationText(input.location),
-    otherSocials: normalizeAffiliateApplicationText(input.otherSocials),
-  };
-}
-
-export async function applyForAffiliate(input: {
-  userId: string;
-  details: {
-    whyApply: string;
-    promotionPlan: string;
-    estimatedMonthlyReferrals: number;
-    audienceSize?: number | null;
-    twitter?: string | null;
-    discord?: string | null;
-    website?: string | null;
-    location?: string | null;
-    otherSocials?: string | null;
-  };
-}) {
-  const profile = await getApprovedAffiliateProfile(input.userId);
-  if (profile) {
-    throw new TRPCError({
-      code: "BAD_REQUEST",
-      message: "You are already an approved affiliate",
-    });
-  }
-
-  const details = sanitizeAffiliateApplicationDetails(input.details);
-
-  const existing = await getLatestAffiliateApplication(input.userId);
-  if (existing) {
-    const [updated] = await db
-      .update(affiliateApplication)
-      .set({
-        status: "pending",
-        message: details.whyApply,
-        details,
-        adminNotes: null,
-        reviewedAt: null,
-        reviewedByUserId: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(affiliateApplication.id, existing.id))
-      .returning();
-
-    return updated ?? existing;
-  }
-
-  const [inserted] = await db
-    .insert(affiliateApplication)
-    .values({
-      id: crypto.randomUUID(),
-      userId: input.userId,
-      message: details.whyApply,
-      details,
-    })
-    .returning();
-
-  return inserted;
 }
 
 export async function listAffiliateApplications() {

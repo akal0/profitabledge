@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  BadgePercent,
   CheckCircle2,
   Clock3,
   Copy,
@@ -361,22 +360,11 @@ export function ReferralsDashboard() {
           title="Referral share link"
           bodyClassName="flex flex-col"
           className="w-full md:col-span-2 xl:col-span-3"
-          action={
-            <Button
-              asChild
-              className="h-8 rounded-sm ring ring-white/10 bg-sidebar px-3 text-[11px] text-white hover:bg-sidebar-accent hover:brightness-120"
-            >
-              <Link href="/apply/affiliate">
-                <BadgePercent className="mr-1 size-3" />
-                Apply for affiliate
-              </Link>
-            </Button>
-          }
         >
           <div className="mt-auto flex flex-col gap-3">
             <p className="text-xs leading-5 text-white/40">
-              Share your invite link, then move into the affiliate program once
-              you have traction and want recurring commission.
+              Share your invite link and track referral traction here. Affiliate
+              access is granted directly by the team when needed.
             </p>
             <div className="flex flex-col gap-2 lg:flex-row lg:items-end">
             <Input

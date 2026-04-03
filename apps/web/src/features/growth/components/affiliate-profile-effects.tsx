@@ -386,7 +386,12 @@ export const PublicProfilePreviewCard = memo(function PublicProfilePreviewCard({
                   getAffiliatePfpWrapperClassName(pfpEffect)
                 )}
               >
-                <div className="relative isolate">
+                <div
+                  className={cn(
+                    "relative isolate",
+                    compact ? "size-12" : "size-16"
+                  )}
+                >
                   <Avatar
                     className={cn(
                       compact
@@ -427,13 +432,13 @@ export const PublicProfilePreviewCard = memo(function PublicProfilePreviewCard({
                   {showAvatarDecoration && showHolographicAvatar ? (
                     <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
                   ) : null}
+                  {showAvatarDecoration && !showHolographicAvatar ? (
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+                      <PixiAvatarOverlay effect={avatarDecoration} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
-              {showAvatarDecoration && !showHolographicAvatar ? (
-                <div className="pointer-events-none absolute inset-[-18%]">
-                  <PixiAvatarOverlay effect={avatarDecoration} />
-                </div>
-              ) : null}
               <AvatarRingEffect effect={pfpEffect} compact={compact} animate={animateAvatarRing} />
             </div>
 

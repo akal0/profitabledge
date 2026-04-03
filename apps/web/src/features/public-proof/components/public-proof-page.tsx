@@ -444,7 +444,7 @@ export function PublicProofPage({
                     getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
                   )}
                 >
-                  <div className="relative isolate">
+                  <div className="relative isolate size-[72px]">
                     <Avatar
                       className={cn(
                         "size-[72px] rounded-full shadow-lg",
@@ -479,10 +479,17 @@ export function PublicProofPage({
                     {profileEffects.avatarDecoration === "holographic_overlay" ? (
                       <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
                     ) : null}
+                    {profileEffects.avatarDecoration &&
+                    profileEffects.avatarDecoration !== "none" &&
+                    profileEffects.avatarDecoration !== "holographic_overlay" ? (
+                      <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+                        <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : (
-                <div className="relative isolate">
+                <div className="relative isolate size-[72px]">
                   <Avatar className="size-[72px] rounded-full ring-4 ring-sidebar shadow-lg">
                     {page.trader.image ? (
                       <AvatarImage
@@ -500,15 +507,15 @@ export function PublicProofPage({
                   {profileEffects.avatarDecoration === "holographic_overlay" ? (
                     <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
                   ) : null}
+                  {profileEffects.avatarDecoration &&
+                  profileEffects.avatarDecoration !== "none" &&
+                  profileEffects.avatarDecoration !== "holographic_overlay" ? (
+                    <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+                      <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
+                    </div>
+                  ) : null}
                 </div>
               )}
-              {profileEffects.avatarDecoration &&
-              profileEffects.avatarDecoration !== "none" &&
-              profileEffects.avatarDecoration !== "holographic_overlay" ? (
-                <div className="pointer-events-none absolute inset-[-16%]">
-                  <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
-                </div>
-              ) : null}
               <AvatarRingEffect effect={profileEffects.pfpEffect} />
             </div>
 

@@ -390,9 +390,8 @@ export function AffiliatePaymentMethodsSection() {
             bodyClassName="p-5"
           >
             <p className="mt-3 text-sm leading-6 text-white/45">
-              Payment methods unlock after your affiliate application is
-              approved, so payout instructions only appear on active affiliate
-              accounts.
+              Payment methods unlock after affiliate access is granted, so
+              payout instructions only appear on active affiliate accounts.
             </p>
             <Button
               asChild

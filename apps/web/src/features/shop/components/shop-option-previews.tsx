@@ -38,7 +38,7 @@ function AvatarSurface({
           getAffiliatePfpWrapperClassName(profileEffects.pfpEffect)
         )}
       >
-        <div className="relative isolate">
+        <div className="relative isolate size-20">
           <Avatar
             className={cn(
               "size-20 rounded-full shadow-lg",
@@ -67,13 +67,13 @@ function AvatarSurface({
           {showHolographic ? (
             <div className="avatar-holographic-overlay pointer-events-none absolute inset-0 rounded-full" />
           ) : null}
+          {decorationActive && profileEffects.avatarDecoration !== "none" ? (
+            <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-full">
+              <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
+            </div>
+          ) : null}
         </div>
       </div>
-      {decorationActive && profileEffects.avatarDecoration !== "none" ? (
-        <div className="pointer-events-none absolute inset-[-18%]">
-          <PixiAvatarOverlay effect={profileEffects.avatarDecoration} />
-        </div>
-      ) : null}
       <AvatarRingEffect effect={profileEffects.pfpEffect} compact animate={ringActive} />
     </div>
   );

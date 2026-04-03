@@ -1,10 +1,10 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "../../db";
 import { aiReport } from "../../db/schema/ai";
 import { message } from "../../db/schema/assistant";
 import { aiCreditUsage } from "../../db/schema/billing";
-import { eaCandleDataSet } from "../../db/schema/backtest";
+import { eaCandle, eaCandleDataSet } from "../../db/schema/backtest";
 import {
   platformConnection,
   equitySnapshot,
@@ -21,6 +21,8 @@ import {
   brokerSyncCheckpoint,
 } from "../../db/schema/mt5-sync";
 import { notification } from "../../db/schema/notifications";
+import { journalEntry } from "../../db/schema/journal";
+import { activity, bookmark, feedEvent } from "../../db/schema/social-redesign";
 import {
   deletedImportedTrade,
   edgeMissedTrade,
@@ -40,14 +42,141 @@ import {
   tradingRuleSet,
 } from "../../db/schema/trading";
 
+function isUndefinedTableError(error: unknown, tableName: string) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const maybeError = error as {
+    code?: string;
+    message?: string;
+    cause?: { code?: string; message?: string };
+  };
+
+  return (
+    maybeError.code === "42P01" ||
+    maybeError.cause?.code === "42P01" ||
+    maybeError.message?.includes(`relation \"${tableName}\" does not exist`) ||
+    maybeError.cause?.message?.includes(`relation \"${tableName}\" does not exist`)
+  );
+}
+
 export async function deleteAccountAndRelatedData(accountId: string) {
+  let eaCandleDataSetIds: Array<{ id: string }> = [];
+
+  try {
+    eaCandleDataSetIds = await db
+      .select({ id: eaCandleDataSet.id })
+      .from(eaCandleDataSet)
+      .where(eq(eaCandleDataSet.accountId, accountId));
+  } catch (error) {
+    if (!isUndefinedTableError(error, "ea_candle_data_set")) {
+      throw error;
+    }
+  }
+
   // drizzle's neon-http driver does not support transactions, so account
   // teardown runs as an ordered sequence of deletes instead.
   await db.delete(notification).where(eq(notification.accountId, accountId));
   await db.delete(message).where(eq(message.accountId, accountId));
   await db.delete(aiReport).where(eq(aiReport.accountId, accountId));
   await db.delete(aiCreditUsage).where(eq(aiCreditUsage.accountId, accountId));
-  await db.delete(eaCandleDataSet).where(eq(eaCandleDataSet.accountId, accountId));
+
+  await db.execute(sql`
+    update ${journalEntry}
+    set account_ids = coalesce(
+      (
+        select jsonb_agg(entry_account_id)
+        from jsonb_array_elements_text(coalesce(${journalEntry.accountIds}, '[]'::jsonb)) as entry_account_id
+        where entry_account_id <> ${accountId}
+      ),
+      '[]'::jsonb
+    )
+    where coalesce(${journalEntry.accountIds}, '[]'::jsonb) @> ${JSON.stringify([accountId])}::jsonb
+  `);
+  await db.execute(sql`
+    update ${journalEntry}
+    set linked_trade_ids = coalesce(
+      (
+        select jsonb_agg(entry_trade_id)
+        from jsonb_array_elements_text(coalesce(${journalEntry.linkedTradeIds}, '[]'::jsonb)) as entry_trade_id
+        where entry_trade_id not in (
+          select id
+          from ${trade}
+          where ${trade.accountId} = ${accountId}
+        )
+      ),
+      '[]'::jsonb
+    )
+    where exists (
+      select 1
+      from jsonb_array_elements_text(coalesce(${journalEntry.linkedTradeIds}, '[]'::jsonb)) as entry_trade_id
+      where entry_trade_id in (
+        select id
+        from ${trade}
+        where ${trade.accountId} = ${accountId}
+      )
+    )
+  `);
+  await db.execute(sql`
+    update ${journalEntry}
+    set linked_goal_ids = coalesce(
+      (
+        select jsonb_agg(entry_goal_id)
+        from jsonb_array_elements_text(coalesce(${journalEntry.linkedGoalIds}, '[]'::jsonb)) as entry_goal_id
+        where entry_goal_id not in (
+          select id
+          from ${goal}
+          where ${goal.accountId} = ${accountId}
+        )
+      ),
+      '[]'::jsonb
+    )
+    where exists (
+      select 1
+      from jsonb_array_elements_text(coalesce(${journalEntry.linkedGoalIds}, '[]'::jsonb)) as entry_goal_id
+      where entry_goal_id in (
+        select id
+        from ${goal}
+        where ${goal.accountId} = ${accountId}
+      )
+    )
+  `);
+  await db.execute(sql`
+    delete from ${bookmark}
+    where (${bookmark.contentType} = 'account' and ${bookmark.contentId} = ${accountId})
+      or (${bookmark.contentType} = 'trade' and ${bookmark.contentId} in (
+        select id
+        from ${trade}
+        where ${trade.accountId} = ${accountId}
+      ))
+      or (${bookmark.contentType} = 'feed_event' and ${bookmark.contentId} in (
+        select id
+        from ${feedEvent}
+        where ${feedEvent.accountId} = ${accountId}
+      ))
+  `);
+  await db.execute(sql`
+    delete from ${activity}
+    where ${activity.activityType} = 'account_follow'
+      and ${activity.contentId} = ${accountId}
+  `);
+
+  try {
+    if (eaCandleDataSetIds.length > 0) {
+      await db
+        .delete(eaCandle)
+        .where(inArray(eaCandle.dataSetId, eaCandleDataSetIds.map(({ id }) => id)));
+    }
+    await db.delete(eaCandleDataSet).where(eq(eaCandleDataSet.accountId, accountId));
+  } catch (error) {
+    if (
+      !isUndefinedTableError(error, "ea_candle") &&
+      !isUndefinedTableError(error, "ea_candle_data_set")
+    ) {
+      throw error;
+    }
+  }
 
   await db
     .update(propChallengeInstance)

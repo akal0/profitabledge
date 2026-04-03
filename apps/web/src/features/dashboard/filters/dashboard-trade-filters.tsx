@@ -155,6 +155,54 @@ function formatFilterDateValue(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
+function isSameFilterDate(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+function resolveDashboardDateBounds(boundsRaw: unknown) {
+  if (
+    !boundsRaw ||
+    typeof boundsRaw !== "object" ||
+    !("minISO" in boundsRaw) ||
+    !("maxISO" in boundsRaw) ||
+    !boundsRaw.minISO ||
+    !boundsRaw.maxISO
+  ) {
+    return null;
+  }
+
+  return {
+    min: new Date(boundsRaw.minISO as string),
+    max: new Date(boundsRaw.maxISO as string),
+  };
+}
+
+function hasExplicitDashboardDateFilter(
+  startDate: string,
+  endDate: string,
+  bounds: { min: Date; max: Date } | null
+) {
+  if (!startDate && !endDate) {
+    return false;
+  }
+
+  if (!bounds) {
+    return true;
+  }
+
+  const resolvedStart = parseFilterDateValue(startDate) ?? bounds.min;
+  const resolvedEnd = parseFilterDateValue(endDate) ?? bounds.max;
+
+  return (
+    !isSameFilterDate(resolvedStart, bounds.min) ||
+    !isSameFilterDate(resolvedEnd, bounds.max)
+  );
+}
+
 
 export function DashboardTradeFiltersProvider({
   accountId,
@@ -238,9 +286,26 @@ export function DashboardTradeFiltersProvider({
     () => splitParam(accountTagsParam),
     [accountTagsParam]
   );
+  const dateBoundsQuery = useQuery({
+    ...trpcOptions.accounts.opensBounds.queryOptions({
+      accountId: accountId || "",
+    }),
+    enabled: Boolean(accountId),
+    staleTime: 30_000,
+  });
+  const dateBounds = useMemo(
+    () => resolveDashboardDateBounds(dateBoundsQuery.data),
+    [dateBoundsQuery.data]
+  );
+  const hasActiveDateFilter = useMemo(
+    () => hasExplicitDashboardDateFilter(startDate, endDate, dateBounds),
+    [dateBounds, endDate, startDate]
+  );
+  const normalizedStartDate = hasActiveDateFilter ? startDate : "";
+  const normalizedEndDate = hasActiveDateFilter ? endDate : "";
   const hasActiveFilters = Boolean(
-    startDate ||
-      endDate ||
+    normalizedStartDate ||
+      normalizedEndDate ||
       symbols.length ||
       sessionTags.length ||
       modelTags.length ||
@@ -290,8 +355,8 @@ export function DashboardTradeFiltersProvider({
     queryKey: [
       "dashboard-filtered-trades",
       accountId ?? null,
-      startDate,
-      endDate,
+      normalizedStartDate,
+      normalizedEndDate,
       symbolsParam,
       sessionTagsParam,
       modelTagsParam,
@@ -302,8 +367,8 @@ export function DashboardTradeFiltersProvider({
     queryFn: async () =>
       fetchDashboardTrades({
         accountId: accountId || "",
-        startDate,
-        endDate,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
         symbols,
         sessionTags,
         modelTags,
@@ -483,8 +548,8 @@ export function DashboardTradeFiltersProvider({
       filteredStats,
       accountBreakdown,
       filters: {
-        startDate,
-        endDate,
+        startDate: normalizedStartDate,
+        endDate: normalizedEndDate,
         symbols,
         sessionTags,
         modelTags,
@@ -534,12 +599,13 @@ export function DashboardTradeFiltersProvider({
       accountTags,
       customTagSuggestionsQuery.data,
       customTags,
-      endDate,
       filteredStats,
       displayFilteredTrades,
       hasActiveFilters,
       modelTagSuggestionsQuery.data,
       modelTags,
+      normalizedEndDate,
+      normalizedStartDate,
       sessionTagSuggestionsQuery.data,
       sessionTags,
       setAccountTagsParam,
@@ -549,7 +615,6 @@ export function DashboardTradeFiltersProvider({
       setSessionTagsParam,
       setStartDate,
       setSymbolsParam,
-      startDate,
       symbolSuggestionsQuery.data,
       symbols,
       shouldFetchTradeDataset,
@@ -806,18 +871,7 @@ export function DashboardTradeFiltersBar({
         }`
       : null,
   ].filter((value): value is string => Boolean(value));
-  const bounds =
-    boundsRaw &&
-    typeof boundsRaw === "object" &&
-    "minISO" in boundsRaw &&
-    "maxISO" in boundsRaw &&
-    boundsRaw.minISO &&
-    boundsRaw.maxISO
-      ? {
-          min: new Date(boundsRaw.minISO as string),
-          max: new Date(boundsRaw.maxISO as string),
-        }
-      : null;
+  const bounds = resolveDashboardDateBounds(boundsRaw);
   const pickerRange = bounds
     ? {
         start: parseFilterDateValue(filters.startDate) ?? bounds.min,
@@ -999,10 +1053,19 @@ export function DashboardTradeFiltersBar({
                     calendarClassName="w-full"
                     calendarFullWidth
                     onRangeChange={(start, end) => {
-                      void Promise.all([
-                        context.setStartDate(formatFilterDateValue(start)),
-                        context.setEndDate(formatFilterDateValue(end)),
-                      ]);
+                      const isAllTimeSelection =
+                        bounds &&
+                        isSameFilterDate(start, bounds.min) &&
+                        isSameFilterDate(end, bounds.max);
+
+                      void Promise.all(
+                        isAllTimeSelection
+                          ? [context.setStartDate(""), context.setEndDate("")]
+                          : [
+                              context.setStartDate(formatFilterDateValue(start)),
+                              context.setEndDate(formatFilterDateValue(end)),
+                            ]
+                      );
                     }}
                   />
                   <div className="grid gap-2 sm:grid-cols-2">

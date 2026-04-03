@@ -1,17 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Copy, ExternalLink, ImageIcon, Link2, Share2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEventHandler, type ReactNode } from "react";
+import {
+  Copy,
+  ExternalLink,
+  Link2,
+  Loader2,
+  Share2,
+  Upload,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,16 +29,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { journalActionIconButtonClassName } from "@/components/journal/action-button-styles";
 import { TradeIdeaCardPreview } from "@/features/trade-ideas/components/trade-idea-card-preview";
 import {
-  TRADE_IDEA_EXPIRY_OPTIONS,
-  TRADE_IDEA_SESSIONS,
-  TRADE_IDEA_TIMEFRAMES,
+  TRADE_IDEA_PHASES,
+  computeRiskReward,
+  getTradeIdeaPhase,
+  getTradeIdeaPhaseLabel,
+  type TradeIdeaDirection,
+  type TradeIdeaPhase,
   type TradeIdeaPresentation,
 } from "@/features/trade-ideas/lib/trade-idea-utils";
+import { cn } from "@/lib/utils";
 import { trpc } from "@/utils/trpc";
+import { useUploadThing } from "@/utils/uploadthing";
 
 type ShareTradeIdeaDialogProps = {
   entryId: string;
@@ -38,7 +54,19 @@ type ShareTradeIdeaDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type ExpiryValue = (typeof TRADE_IDEA_EXPIRY_OPTIONS)[number]["value"];
+const MAX_UPLOAD_SIZE_BYTES = 8 * 1024 * 1024;
+
+function getDefaultStageFields(phase: TradeIdeaPhase) {
+  if (phase === "post-trade") {
+    return ["entryPrice", "stopLoss", "exitPrice", "riskReward"] as const;
+  }
+
+  return ["entryPrice", "stopLoss", "takeProfit", "riskReward"] as const;
+}
+
+function resolveSessionValue(session: string, customSession: string) {
+  return session === "Custom" ? customSession.trim() : session;
+}
 
 export function ShareTradeIdeaDialog({
   entryId,
@@ -46,38 +74,52 @@ export function ShareTradeIdeaDialog({
   onOpenChange,
 }: ShareTradeIdeaDialogProps) {
   const utils = trpc.useUtils() as any;
-  const draftQuery = trpc.tradeIdeas.getJournalDraft.useQuery(
-    { journalEntryId: entryId },
-    { enabled: open }
-  );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const originalChartUrlRef = useRef("");
+  const [symbol, setSymbol] = useState("");
+  const [direction, setDirection] = useState<TradeIdeaDirection>("long");
+  const [tradePhase, setTradePhase] = useState<TradeIdeaPhase>("pre-trade");
+  const [entryPrice, setEntryPrice] = useState("");
+  const [stopLoss, setStopLoss] = useState("");
+  const [takeProfit, setTakeProfit] = useState("");
+  const [exitPrice, setExitPrice] = useState("");
+  const [riskReward, setRiskReward] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [timeframe, setTimeframe] = useState("");
-  const [session, setSession] = useState("");
-  const [customSession, setCustomSession] = useState("");
   const [chartImageUrl, setChartImageUrl] = useState("");
+  const [chartImageFile, setChartImageFile] = useState<File | null>(null);
+  const [chartImagePreviewUrl, setChartImagePreviewUrl] = useState<string | null>(null);
   const [showUsername, setShowUsername] = useState(true);
   const [showPrices, setShowPrices] = useState(true);
   const [showRR, setShowRR] = useState(true);
-  const [expiry, setExpiry] = useState<ExpiryValue>("never");
   const [shareResult, setShareResult] = useState<null | {
     shareUrl: string;
     sharePath: string;
   }>(null);
+
+  const draftQuery = trpc.tradeIdeas.getJournalDraft.useQuery(
+    { journalEntryId: entryId },
+    { enabled: open }
+  );
+  const {
+    startUpload: startChartUpload,
+    isUploading: isUploadingChartImage,
+  } = useUploadThing((routeRegistry) => routeRegistry.imageUploader);
 
   const createMutation = trpc.tradeIdeas.createFromJournal.useMutation({
     onSuccess: async (result) => {
       await utils.tradeIdeas.listMine.invalidate();
       setShareResult({
         sharePath: result.sharePath,
-        shareUrl: typeof window === "undefined"
-          ? result.shareUrl
-          : `${window.location.origin}${result.shareUrl}`,
+        shareUrl:
+          typeof window === "undefined"
+            ? result.shareUrl
+            : `${window.location.origin}${result.shareUrl}`,
       });
-      toast.success("Trade idea link created");
+      toast.success("Trade share link created");
     },
     onError: (error) => {
-      toast.error(error.message || "Failed to create trade idea link");
+      toast.error(error.message || "Failed to create trade share link");
     },
   });
 
@@ -86,65 +128,142 @@ export function ShareTradeIdeaDialog({
       return;
     }
 
+    const nextPhase = getTradeIdeaPhase(draftQuery.data as any);
+    const nextDirection = (draftQuery.data.direction || "long") as TradeIdeaDirection;
+
+    setSymbol(draftQuery.data.symbol || "");
+    setDirection(nextDirection);
+    setTradePhase(nextPhase);
+    setEntryPrice(draftQuery.data.entryPrice || "");
+    setStopLoss(draftQuery.data.stopLoss || "");
+    setTakeProfit(draftQuery.data.takeProfit || "");
+    setExitPrice(draftQuery.data.exitPrice || "");
+    setRiskReward(draftQuery.data.riskReward || "");
     setTitle(draftQuery.data.title || "");
     setDescription(draftQuery.data.description || "");
-    setTimeframe("");
-    setSession("");
-    setCustomSession("");
     setChartImageUrl(draftQuery.data.chartImageUrl || "");
+    originalChartUrlRef.current = draftQuery.data.chartImageUrl || "";
+    setChartImageFile(null);
+    setChartImagePreviewUrl(null);
     setShowUsername(true);
     setShowPrices(true);
     setShowRR(true);
-    setExpiry("never");
     setShareResult(null);
   }, [draftQuery.data, open]);
 
-  const selectedExpiry = useMemo(
-    () => TRADE_IDEA_EXPIRY_OPTIONS.find((option) => option.value === expiry),
-    [expiry]
-  );
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
 
-  const resolvedSession = session === "Custom" ? customSession.trim() : session;
+    const nextRiskReward = computeRiskReward({
+      direction,
+      entryPrice,
+      stopLoss,
+      takeProfit,
+    });
+
+    if (nextRiskReward && tradePhase !== "post-trade") {
+      setRiskReward(nextRiskReward);
+    }
+  }, [direction, entryPrice, open, stopLoss, takeProfit, tradePhase]);
+
+  useEffect(() => {
+    return () => {
+      if (chartImagePreviewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(chartImagePreviewUrl);
+      }
+    };
+  }, [chartImagePreviewUrl]);
+
   const previewIdea = useMemo<TradeIdeaPresentation | null>(() => {
-    if (!draftQuery.data?.symbol || !draftQuery.data?.direction) {
+    if (!symbol.trim()) {
       return null;
     }
 
     return {
-      symbol: draftQuery.data.symbol,
-      direction: draftQuery.data.direction,
-      entryPrice: draftQuery.data.entryPrice,
-      stopLoss: draftQuery.data.stopLoss,
-      takeProfit: draftQuery.data.takeProfit,
-      riskReward: draftQuery.data.riskReward,
+      symbol: symbol.trim().toUpperCase(),
+      direction,
+      tradePhase,
+      entryPrice,
+      stopLoss,
+      takeProfit,
+      exitPrice,
+      riskReward,
       title,
       description,
-      strategyName: draftQuery.data.strategyName,
-      timeframe: timeframe || null,
-      session: resolvedSession || null,
-      chartImageUrl: chartImageUrl || null,
-      chartImageWidth: draftQuery.data.chartImageWidth,
-      chartImageHeight: draftQuery.data.chartImageHeight,
+      strategyName: draftQuery.data?.strategyName,
+      chartImageUrl: chartImagePreviewUrl || chartImageUrl || null,
+      chartImageWidth: draftQuery.data?.chartImageWidth,
+      chartImageHeight: draftQuery.data?.chartImageHeight,
       showUsername,
       showPrices,
       showRR,
-      authorDisplayName: draftQuery.data.authorDisplayName,
-      authorUsername: draftQuery.data.authorUsername,
-      authorAvatarUrl: draftQuery.data.authorAvatarUrl,
-      authorBannerUrl: draftQuery.data.authorBannerUrl,
-      authorProfileEffects: draftQuery.data.authorProfileEffects,
+      authorDisplayName: draftQuery.data?.authorDisplayName,
+      authorUsername: draftQuery.data?.authorUsername,
+      authorAvatarUrl: draftQuery.data?.authorAvatarUrl,
+      authorBannerUrl: draftQuery.data?.authorBannerUrl,
+      authorProfileEffects: draftQuery.data?.authorProfileEffects,
     };
   }, [
+    chartImagePreviewUrl,
     chartImageUrl,
     description,
+    direction,
     draftQuery.data,
-    resolvedSession,
+    entryPrice,
+    exitPrice,
+    riskReward,
     showPrices,
     showRR,
     showUsername,
-    timeframe,
+    stopLoss,
+    symbol,
+    takeProfit,
     title,
+    tradePhase,
   ]);
+
+  const fieldKeys = getDefaultStageFields(tradePhase);
+
+  const handlePickImage = () => fileInputRef.current?.click();
+
+  const handleChartImageChange: ChangeEventHandler<HTMLInputElement> = (
+    event
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file for the trade preview.");
+      return;
+    }
+
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      toast.error("Preview image must be 8MB or smaller.");
+      return;
+    }
+
+    if (chartImagePreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(chartImagePreviewUrl);
+    }
+
+    setChartImageFile(file);
+    setChartImagePreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handleRemoveUploadedImage = () => {
+    if (chartImagePreviewUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(chartImagePreviewUrl);
+    }
+    setChartImageFile(null);
+    setChartImagePreviewUrl(null);
+    setChartImageUrl(originalChartUrlRef.current);
+  };
 
   const handleCopy = async () => {
     if (!shareResult?.shareUrl) return;
@@ -152,284 +271,413 @@ export function ShareTradeIdeaDialog({
     toast.success("Link copied");
   };
 
+  const uploadChartImageIfNeeded = async () => {
+    if (!chartImageFile) {
+      return chartImageUrl.trim();
+    }
+
+    const uploadResult = await startChartUpload([chartImageFile]);
+    const uploadedUrl = uploadResult?.[0]?.ufsUrl ?? uploadResult?.[0]?.url ?? "";
+    if (!uploadedUrl) {
+      throw new Error("Failed to upload the trade image.");
+    }
+
+    setChartImageUrl(uploadedUrl);
+    originalChartUrlRef.current = uploadedUrl;
+    setChartImageFile(null);
+    return uploadedUrl;
+  };
+
   const handleCreate = async () => {
-    const input = {
+    if (!symbol.trim()) {
+      toast.error("Add a symbol before sharing.");
+      return;
+    }
+
+    let resolvedChartImageUrl = chartImageUrl.trim();
+
+    try {
+      resolvedChartImageUrl = await uploadChartImageIfNeeded();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to upload the trade image."
+      );
+      return;
+    }
+
+    if (!resolvedChartImageUrl) {
+      toast.error("Upload a chart image or paste a chart image URL before sharing.");
+      return;
+    }
+
+    await createMutation.mutateAsync({
       journalEntryId: entryId,
+      symbol: symbol.trim().toUpperCase(),
+      direction,
+      tradePhase,
+      entryPrice: entryPrice.trim() || undefined,
+      stopLoss: stopLoss.trim() || undefined,
+      takeProfit:
+        tradePhase === "post-trade" ? undefined : takeProfit.trim() || undefined,
+      exitPrice:
+        tradePhase === "post-trade" ? exitPrice.trim() || undefined : undefined,
+      riskReward: riskReward.trim() || undefined,
       title: title.trim() || undefined,
       description: description.trim() || undefined,
-      timeframe: timeframe || undefined,
-      session: resolvedSession || undefined,
-      chartImageUrl: chartImageUrl.trim() || undefined,
+      chartImageUrl: resolvedChartImageUrl,
       showUsername,
       showPrices,
       showRR,
-      expiresInHours: selectedExpiry?.hours,
-    };
-
-    await createMutation.mutateAsync(input);
+    });
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        aria-label="Share trade idea"
-        className="border-white/10 bg-[#090b11] text-white shadow-2xl sm:max-w-[1120px]"
+        showCloseButton={false}
+        aria-label="Share trade"
+        className="flex flex-col gap-0 overflow-hidden rounded-md border border-white/5 bg-sidebar/5 p-2 shadow-2xl backdrop-blur-lg sm:max-w-6xl"
       >
-        <DialogHeader>
-          <DialogTitle className="text-2xl tracking-tight text-white">
-            Share as Trade Idea
-          </DialogTitle>
-          <DialogDescription className="text-white/55">
-            Generate a public trade setup page with a rich preview image for Discord, Telegram, and X.
-          </DialogDescription>
-        </DialogHeader>
-
-        {draftQuery.isLoading ? (
-          <div className="rounded-2xl border border-white/8 bg-white/[0.03] px-5 py-10 text-center text-sm text-white/45">
-            Preparing your trade idea preview...
+        <div className="flex max-h-[90vh] flex-col overflow-hidden rounded-sm border border-white/5 bg-sidebar-accent/80">
+          <div className="sticky top-0 z-10 flex items-start gap-3 bg-sidebar-accent/80 px-5 py-4">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-white/5 bg-sidebar-accent">
+              <Share2 className="size-3.5 text-teal-300" />
+            </div>
+            <div className="min-w-0">
+              <DialogTitle className="text-sm font-medium text-white">
+                Share trade
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-xs leading-relaxed text-white/40">
+                Create a public trade page with a Discord, Telegram, and X preview card. If you have a profile banner, it will be blended into the preview too.
+              </DialogDescription>
+            </div>
+            <DialogClose asChild>
+              <Button type="button" className={cn(journalActionIconButtonClassName, "ml-auto size-8")}>
+                <X className="size-3.5" />
+                <span className="sr-only">Close</span>
+              </Button>
+            </DialogClose>
           </div>
-        ) : draftQuery.error ? (
-          <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-5 py-4 text-sm text-rose-100">
-            {draftQuery.error.message}
-          </div>
-        ) : (
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-            <div className="space-y-5">
-              <section className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-white/42">
-                  <ImageIcon className="size-3.5" />
-                  Trade snapshot
+
+          <Separator />
+
+          {draftQuery.isLoading ? (
+            <div className="px-5 py-10 text-center text-sm text-white/45">
+              Preparing your trade preview...
+            </div>
+          ) : draftQuery.error ? (
+            <div className="px-5 py-5">
+              <div className="rounded-sm border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+                {draftQuery.error.message}
+              </div>
+            </div>
+          ) : (
+            <>
+              <Tabs defaultValue="setup" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <div className="px-5 py-4">
+                  <TabsList className="h-auto gap-2 rounded-sm border border-white/8 bg-sidebar/70 p-1">
+                    <TabsTrigger
+                      value="setup"
+                      className="rounded-sm px-3 py-1.5 text-xs text-white/60 data-[state=active]:bg-sidebar-accent data-[state=active]:text-white"
+                    >
+                      Setup
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="preview"
+                      className="rounded-sm px-3 py-1.5 text-xs text-white/60 data-[state=active]:bg-sidebar-accent data-[state=active]:text-white"
+                    >
+                      Preview
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <ReadOnlyField label="Symbol" value={draftQuery.data?.symbol || "Missing"} />
-                  <ReadOnlyField
-                    label="Direction"
-                    value={draftQuery.data?.direction || "Missing"}
-                  />
-                  <ReadOnlyField
-                    label="Entry"
-                    value={draftQuery.data?.entryPrice || "-"}
-                  />
-                  <ReadOnlyField
-                    label="Stop loss"
-                    value={draftQuery.data?.stopLoss || "-"}
-                  />
-                  <ReadOnlyField
-                    label="Take profit"
-                    value={draftQuery.data?.takeProfit || "-"}
-                  />
-                  <ReadOnlyField
-                    label="R:R"
-                    value={draftQuery.data?.riskReward || "-"}
-                  />
-                </div>
-              </section>
+                <Separator />
 
-              <section className="space-y-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                    Title
-                  </Label>
-                  <Input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    maxLength={120}
-                    className="border-white/10 bg-white/[0.04] text-white placeholder:text-white/24"
-                  />
-                </div>
+                <TabsContent value="setup" className="mt-0 min-h-0 flex-1 overflow-y-auto">
+                  <div className="space-y-5 px-5 py-5">
+                  <section className="space-y-4 rounded-sm border border-white/8 bg-sidebar/60 px-4 py-4">
+                    <div className="text-sm font-medium text-white">Trade setup</div>
+                    <p className="text-xs leading-relaxed text-white/40">
+                      Pick the stage, symbol, and prices you want frozen into the shared card.
+                    </p>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                    Description
-                  </Label>
-                  <Textarea
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    maxLength={500}
-                    className="min-h-[120px] border-white/10 bg-white/[0.04] text-white placeholder:text-white/24"
-                  />
-                </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field label="Stage">
+                        <Select
+                          value={tradePhase}
+                          onValueChange={(value) => setTradePhase(value as TradeIdeaPhase)}
+                        >
+                          <SelectTrigger className="h-9 w-full border-white/10 bg-white/[0.03] text-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="border-white/10 bg-sidebar text-white">
+                            {TRADE_IDEA_PHASES.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </Field>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                      Timeframe
-                    </Label>
-                    <Select value={timeframe || undefined} onValueChange={setTimeframe}>
-                      <SelectTrigger className="w-full border-white/10 bg-white/[0.04] text-white">
-                        <SelectValue placeholder="Select timeframe" />
-                      </SelectTrigger>
-                      <SelectContent className="border-white/10 bg-[#10131b] text-white">
-                        {TRADE_IDEA_TIMEFRAMES.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      <Field label="Direction">
+                        <Select
+                          value={direction}
+                          onValueChange={(value) => setDirection(value as TradeIdeaDirection)}
+                        >
+                          <SelectTrigger className="h-9 w-full border-white/10 bg-white/[0.03] text-white">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="border-white/10 bg-sidebar text-white">
+                            <SelectItem value="long">Long</SelectItem>
+                            <SelectItem value="short">Short</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                      Session
-                    </Label>
-                    <Select value={session || undefined} onValueChange={setSession}>
-                      <SelectTrigger className="w-full border-white/10 bg-white/[0.04] text-white">
-                        <SelectValue placeholder="Select session" />
-                      </SelectTrigger>
-                      <SelectContent className="border-white/10 bg-[#10131b] text-white">
-                        {TRADE_IDEA_SESSIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <Field label="Symbol">
+                      <Input
+                        value={symbol}
+                        onChange={(event) => setSymbol(event.target.value.toUpperCase())}
+                        placeholder="EURUSD"
+                        className="border-white/10 bg-white/[0.03] text-white placeholder:text-white/25"
+                      />
+                    </Field>
 
-                {session === "Custom" ? (
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                      Custom session label
-                    </Label>
-                    <Input
-                      value={customSession}
-                      onChange={(event) => setCustomSession(event.target.value)}
-                      placeholder="e.g. London Open"
-                      className="border-white/10 bg-white/[0.04] text-white placeholder:text-white/24"
-                    />
-                  </div>
-                ) : null}
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                    Chart image URL
-                  </Label>
-                  <Input
-                    value={chartImageUrl}
-                    onChange={(event) => setChartImageUrl(event.target.value)}
-                    placeholder="https://..."
-                    className="border-white/10 bg-white/[0.04] text-white placeholder:text-white/24"
-                  />
-                </div>
-
-                <div className="space-y-3 rounded-2xl border border-white/8 bg-black/20 p-3">
-                  <ToggleRow
-                    label="Show username"
-                    description="Display your handle in the embed card and page metadata."
-                    checked={showUsername}
-                    onCheckedChange={setShowUsername}
-                  />
-                  <ToggleRow
-                    label="Show prices"
-                    description="Hide exact entry, stop, and target levels from the preview."
-                    checked={showPrices}
-                    onCheckedChange={setShowPrices}
-                  />
-                  <ToggleRow
-                    label="Show R:R"
-                    description="Display the planned risk-to-reward ratio on the card."
-                    checked={showRR}
-                    onCheckedChange={setShowRR}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-                    Expiry
-                  </Label>
-                  <Select value={expiry} onValueChange={(value) => setExpiry(value as ExpiryValue)}>
-                    <SelectTrigger className="w-full border-white/10 bg-white/[0.04] text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="border-white/10 bg-[#10131b] text-white">
-                      {TRADE_IDEA_EXPIRY_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {fieldKeys.map((fieldKey) => (
+                        <TradeNumberField
+                          key={fieldKey}
+                          fieldKey={fieldKey}
+                          value={
+                            fieldKey === "entryPrice"
+                              ? entryPrice
+                              : fieldKey === "stopLoss"
+                                ? stopLoss
+                                : fieldKey === "takeProfit"
+                                  ? takeProfit
+                                  : fieldKey === "exitPrice"
+                                    ? exitPrice
+                                    : riskReward
+                          }
+                          onChange={(value) => {
+                            if (fieldKey === "entryPrice") setEntryPrice(value);
+                            if (fieldKey === "stopLoss") setStopLoss(value);
+                            if (fieldKey === "takeProfit") setTakeProfit(value);
+                            if (fieldKey === "exitPrice") setExitPrice(value);
+                            if (fieldKey === "riskReward") setRiskReward(value);
+                          }}
+                        />
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    </div>
+                  </section>
 
-                <div className="flex flex-wrap gap-3">
+                  <section className="space-y-4 rounded-sm border border-white/8 bg-sidebar/60 px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-white">Preview image</div>
+                        <p className="mt-1 text-xs leading-relaxed text-white/40">
+                          This image is what Discord, Telegram, and X will pull into the card preview.
+                        </p>
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleChartImageChange}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handlePickImage}
+                        className="h-8 rounded-sm border border-white/5 bg-sidebar px-3 text-xs text-white/75 transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+                      >
+                        <Upload className="mr-2 size-3.5" />
+                        Upload image
+                      </Button>
+                    </div>
+
+                    <Field label="Chart image URL">
+                      <Input
+                        value={chartImageUrl}
+                        onChange={(event) => setChartImageUrl(event.target.value)}
+                        placeholder="https://..."
+                        className="border-white/10 bg-white/[0.03] text-white placeholder:text-white/25"
+                      />
+                    </Field>
+
+                    {chartImagePreviewUrl || chartImageUrl ? (
+                      <div className="space-y-3 rounded-sm border border-white/8 bg-black/20 p-3">
+                        <div className="overflow-hidden rounded-sm border border-white/8 bg-[#0c1018]">
+                          <img
+                            src={chartImagePreviewUrl || chartImageUrl}
+                            alt="Trade preview"
+                            className="h-40 w-full object-cover"
+                          />
+                        </div>
+                        {chartImageFile ? (
+                          <div className="flex items-center justify-between gap-3 text-xs text-white/45">
+                            <div className="truncate">{chartImageFile.name}</div>
+                            <Button
+                              type="button"
+                              onClick={handleRemoveUploadedImage}
+                              className="h-7 rounded-sm border border-white/5 bg-sidebar px-2.5 text-xs text-white/70 hover:bg-sidebar-accent hover:text-white"
+                            >
+                              <X className="mr-1 size-3.5" />
+                              Remove
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </section>
+
+                  <section className="space-y-3 rounded-sm border border-white/8 bg-sidebar/60 px-4 py-4">
+                    <ToggleRow
+                      label="Show username"
+                      description="Display your handle in the card and page metadata."
+                      checked={showUsername}
+                      onCheckedChange={setShowUsername}
+                    />
+                    <ToggleRow
+                      label="Show prices"
+                      description="Hide entry, stop, target, and exit levels from the preview."
+                      checked={showPrices}
+                      onCheckedChange={setShowPrices}
+                    />
+                  </section>
+
+                  {shareResult ? (
+                    <section className="space-y-3 rounded-sm border border-teal-500/20 bg-teal-500/8 px-4 py-4">
+                      <div className="text-sm font-medium text-teal-100">Share ready</div>
+                      <Input
+                        readOnly
+                        value={shareResult.shareUrl}
+                        className="border-teal-500/20 bg-black/20 text-white"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <ActionButton onClick={handleCopy} tone="light">
+                          <Copy className="size-3.5" />
+                          Copy link
+                        </ActionButton>
+                        <ActionButton
+                          onClick={() =>
+                            window.open(shareResult.sharePath, "_blank", "noopener,noreferrer")
+                          }
+                          tone="muted"
+                        >
+                          <ExternalLink className="size-3.5" />
+                          Open
+                        </ActionButton>
+                      </div>
+                    </section>
+                  ) : null}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="preview" className="mt-0 min-h-0 flex-1 overflow-y-auto">
+                  <div className="px-5 py-5">
+                    <div className="flex flex-col gap-4">
+                    <div>
+                      <div className="text-sm font-medium text-white">Preview</div>
+                      <p className="mt-1 text-xs leading-relaxed text-white/40">
+                        {getTradeIdeaPhaseLabel(tradePhase)} preview with your selected stage, prices, and image.
+                      </p>
+                    </div>
+
+                    {previewIdea ? (
+                      <TradeIdeaCardPreview idea={previewIdea} />
+                    ) : (
+                      <div className="rounded-sm border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                        Add a symbol to generate the preview card.
+                      </div>
+                    )}
+                  </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              <Separator />
+
+              <div className="flex flex-col-reverse gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs leading-relaxed text-white/40">
+                  The image you upload here becomes the public preview image for Discord, Telegram, and X.
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <DialogClose asChild>
+                    <Button
+                      type="button"
+                      className="cursor-pointer justify-center rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white/70 transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110"
+                    >
+                      Cancel
+                    </Button>
+                  </DialogClose>
+
                   <Button
-                    onClick={handleCreate}
-                    disabled={
-                      createMutation.isPending ||
-                      !draftQuery.data?.symbol ||
-                      !draftQuery.data?.direction ||
-                      !chartImageUrl.trim()
-                    }
-                    className="h-10 rounded-sm bg-teal-500 text-black hover:bg-teal-400"
+                    type="button"
+                    onClick={() => void handleCreate()}
+                    disabled={createMutation.isPending || isUploadingChartImage}
+                    className="cursor-pointer justify-center gap-2 rounded-sm border border-white/5 bg-white px-3 py-2 text-xs text-black transition-all duration-250 hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <Link2 className="mr-2 size-4" />
-                    Create share link
+                    {createMutation.isPending || isUploadingChartImage ? (
+                      <>
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Creating link...
+                      </>
+                    ) : (
+                      <>
+                        <Link2 className="size-3.5" />
+                        Create share link
+                      </>
+                    )}
                   </Button>
                 </div>
-
-                {shareResult ? (
-                  <div className="space-y-3 rounded-2xl border border-teal-500/20 bg-teal-500/8 p-4">
-                    <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-200/70">
-                      Share ready
-                    </div>
-                    <Input
-                      readOnly
-                      value={shareResult.shareUrl}
-                      className="border-teal-500/20 bg-black/20 text-white"
-                    />
-                    <div className="flex flex-wrap gap-3">
-                      <Button
-                        onClick={handleCopy}
-                        className="h-9 rounded-sm bg-white text-black hover:bg-white/90"
-                      >
-                        <Copy className="mr-2 size-4" />
-                        Copy
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => window.open(shareResult.sharePath, "_blank", "noopener,noreferrer")}
-                        className="h-9 rounded-sm border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
-                      >
-                        <ExternalLink className="mr-2 size-4" />
-                        Open
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-              </section>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-white/42">
-                <Share2 className="size-3.5" />
-                Preview
               </div>
-              {previewIdea ? (
-                <TradeIdeaCardPreview idea={previewIdea} />
-              ) : (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
-                  This entry still needs a symbol and direction before it can be shared.
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-white/8 bg-black/20 px-3 py-3">
-      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/34">
-        {label}
-      </div>
-      <div className="mt-2 text-sm font-medium text-white">{value}</div>
+    <div className="space-y-2">
+      <Label className="text-xs text-white/60">{label}</Label>
+      {children}
     </div>
+  );
+}
+
+function TradeNumberField({
+  fieldKey,
+  value,
+  onChange,
+}: {
+  fieldKey: ReturnType<typeof getDefaultStageFields>[number];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const labels: Record<ReturnType<typeof getDefaultStageFields>[number], string> = {
+    entryPrice: "Entry price",
+    stopLoss: "Stop loss",
+    takeProfit: "Take profit",
+    exitPrice: "Exit price",
+    riskReward: "Risk to reward",
+  };
+
+  return (
+    <Field label={labels[fieldKey]}>
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={fieldKey === "riskReward" ? "1:3" : "1.0842"}
+        className="border-white/10 bg-white/[0.03] text-white placeholder:text-white/25"
+      />
+    </Field>
   );
 }
 
@@ -445,12 +693,37 @@ function ToggleRow({
   onCheckedChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
+    <div className="flex items-start justify-between gap-4 rounded-sm border border-white/8 bg-black/20 px-3 py-3">
       <div className="space-y-1">
         <div className="text-sm font-medium text-white">{label}</div>
         <div className="text-xs leading-5 text-white/42">{description}</div>
       </div>
       <Switch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
+  );
+}
+
+function ActionButton({
+  children,
+  onClick,
+  tone,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  tone: "light" | "muted";
+}) {
+  return (
+    <Button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-8 gap-2 rounded-sm border px-3 text-xs transition-all duration-250",
+        tone === "light"
+          ? "border-white/5 bg-white text-black hover:bg-white/90"
+          : "border-white/5 bg-sidebar text-white/75 hover:bg-sidebar-accent hover:text-white"
+      )}
+    >
+      {children}
+    </Button>
   );
 }

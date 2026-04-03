@@ -38,6 +38,7 @@ export const tradeIdeaShare = pgTable(
     entryPrice: numeric("entry_price"),
     stopLoss: numeric("stop_loss"),
     takeProfit: numeric("take_profit"),
+    exitPrice: numeric("exit_price"),
     riskReward: numeric("risk_reward"),
 
     title: text("title"),

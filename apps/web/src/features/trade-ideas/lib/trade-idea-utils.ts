@@ -1,12 +1,15 @@
 export type TradeIdeaDirection = "long" | "short";
+export type TradeIdeaPhase = "pre-trade" | "during-trade" | "post-trade";
 
 export type TradeIdeaPresentation = {
   shareToken?: string;
   symbol: string;
   direction: TradeIdeaDirection;
+  tradePhase?: TradeIdeaPhase | null;
   entryPrice?: string | null;
   stopLoss?: string | null;
   takeProfit?: string | null;
+  exitPrice?: string | null;
   riskReward?: string | null;
   title?: string | null;
   description?: string | null;
@@ -41,6 +44,12 @@ export const TRADE_IDEA_TIMEFRAMES = [
   "1M",
 ] as const;
 
+export const TRADE_IDEA_PHASES = [
+  { label: "Pre-trade", value: "pre-trade" },
+  { label: "During trade", value: "during-trade" },
+  { label: "Post-trade", value: "post-trade" },
+] as const;
+
 export const TRADE_IDEA_SESSIONS = [
   "Asian",
   "London",
@@ -67,6 +76,22 @@ export function truncateText(value: string | null | undefined, maxLength: number
 
 export function formatDirectionLabel(direction: TradeIdeaDirection) {
   return direction === "short" ? "Short" : "Long";
+}
+
+export function getTradeIdeaPhase(idea: Pick<TradeIdeaPresentation, "tradePhase">) {
+  return idea.tradePhase ?? "pre-trade";
+}
+
+export function getTradeIdeaPhaseLabel(phase: TradeIdeaPhase | null | undefined) {
+  switch (phase) {
+    case "during-trade":
+      return "During-trade update";
+    case "post-trade":
+      return "Post-trade review";
+    case "pre-trade":
+    default:
+      return "Pre-trade analysis";
+  }
 }
 
 export function formatDirectionArrow(direction: TradeIdeaDirection) {
@@ -136,6 +161,24 @@ export function formatRiskReward(value: string | null | undefined) {
   return `1:${parsed.toFixed(parsed >= 10 ? 1 : 2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}`;
 }
 
+export function buildTradeIdeaFieldRows(idea: TradeIdeaPresentation) {
+  const phase = getTradeIdeaPhase(idea);
+
+  if (phase === "post-trade") {
+    return [
+      { label: "Entry", value: idea.entryPrice },
+      { label: "Stop loss", value: idea.stopLoss },
+      { label: "Exit", value: idea.exitPrice },
+    ] as const;
+  }
+
+  return [
+    { label: "Entry", value: idea.entryPrice },
+    { label: "Stop loss", value: idea.stopLoss },
+    { label: "Take profit", value: idea.takeProfit },
+  ] as const;
+}
+
 export function computeRiskReward(input: {
   direction: TradeIdeaDirection;
   entryPrice?: string | null;
@@ -164,7 +207,7 @@ export function generateTradeIdeaTitle(idea: Pick<TradeIdeaPresentation, "title"
     return truncateText(idea.title.trim(), 120);
   }
 
-  return `${idea.symbol} ${formatDirectionLabel(idea.direction)} Setup`;
+  return `${idea.symbol} ${idea.direction} setup`;
 }
 
 export function buildTradeIdeaDescription(idea: TradeIdeaPresentation) {
@@ -176,25 +219,25 @@ export function buildTradeIdeaDescription(idea: TradeIdeaPresentation) {
   const direction = `${formatDirectionArrow(idea.direction)} ${formatDirectionLabel(
     idea.direction
   )}`;
-  const priceBits = idea.showPrices === false
-    ? []
-    : [
-        idea.entryPrice ? `Entry ${formatPrice(idea.entryPrice)}` : null,
-        idea.stopLoss ? `SL ${formatPrice(idea.stopLoss)}` : null,
-        idea.takeProfit ? `TP ${formatPrice(idea.takeProfit)}` : null,
-      ].filter(Boolean);
+  const priceBits =
+    idea.showPrices === false
+      ? []
+      : buildTradeIdeaFieldRows(idea).map((row) =>
+          row.value ? `${row.label} ${formatPrice(row.value)}` : null
+        ).filter(Boolean);
   const rrBit =
     idea.showRR === false || !idea.riskReward
       ? null
       : `${formatRiskReward(idea.riskReward)} R:R`;
   const sessionBits = [idea.session, idea.timeframe, idea.strategyName].filter(Boolean);
   const author = getIdeaAuthorName(idea);
+  const phaseLabel = getTradeIdeaPhaseLabel(getTradeIdeaPhase(idea));
 
   const sentence = [
     `${idea.symbol} ${direction}`,
     [...priceBits, rrBit].filter(Boolean).join(", "),
     sessionBits.join(". "),
-    `Pre-trade analysis by ${author} on profitabledge.`,
+    `${phaseLabel} by ${author} on profitabledge.`,
   ]
     .filter(Boolean)
     .join(". ");
@@ -211,9 +254,7 @@ export function buildTradeIdeaMetaTitle(idea: TradeIdeaPresentation) {
 
   return truncateText(
     [
-      `${idea.symbol} ${formatDirectionArrow(idea.direction)} ${formatDirectionLabel(
-        idea.direction
-      )}`,
+      `${idea.symbol} ${formatDirectionArrow(idea.direction)} ${idea.direction}`,
       rrBit,
       handle,
     ]

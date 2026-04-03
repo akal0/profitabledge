@@ -78,6 +78,14 @@ export const tradeIdeasRouter = router({
     .input(
       z.object({
         journalEntryId: z.string().min(1),
+        symbol: z.string().trim().min(1).max(20).optional(),
+        direction: directionSchema.optional(),
+        tradePhase: tradeIdeaPhaseSchema.optional(),
+        entryPrice: z.string().optional(),
+        stopLoss: z.string().optional(),
+        takeProfit: z.string().optional(),
+        exitPrice: z.string().optional(),
+        riskReward: z.string().optional(),
         title: z.string().trim().max(120).optional(),
         description: z.string().trim().max(500).optional(),
         timeframe: z.string().trim().max(10).optional(),
@@ -96,14 +104,26 @@ export const tradeIdeasRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Journal entry not found" });
       }
 
-      if (!draft.symbol) {
+      const symbol = input.symbol?.trim().toUpperCase() || draft.symbol;
+      const direction = input.direction || draft.direction;
+      const tradePhase =
+        (input.tradePhase || draft.tradePhase || "pre-trade") as TradeIdeaPhase;
+      const entryPrice = normalizeOptionalNumberString(input.entryPrice) ?? draft.entryPrice;
+      const stopLoss = normalizeOptionalNumberString(input.stopLoss) ?? draft.stopLoss;
+      const takeProfit =
+        normalizeOptionalNumberString(input.takeProfit) ?? draft.takeProfit;
+      const exitPrice = normalizeOptionalNumberString(input.exitPrice) ?? draft.exitPrice;
+      const riskReward =
+        normalizeOptionalNumberString(input.riskReward) ?? draft.riskReward;
+
+      if (!symbol) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Could not infer the symbol. Add a linked trade or include the symbol in the entry title.",
         });
       }
 
-      if (!draft.direction) {
+      if (!direction) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Could not infer the direction. Add long or short to the entry title or notes.",
@@ -129,21 +149,22 @@ export const tradeIdeasRouter = router({
           userId: ctx.session.user.id,
           journalEntryId: input.journalEntryId,
           shareToken: shareTokenGenerator(),
-          symbol: draft.symbol,
-          direction: draft.direction,
-          entryPrice: draft.entryPrice,
-          stopLoss: draft.stopLoss,
-          takeProfit: draft.takeProfit,
-          riskReward: draft.riskReward,
+          symbol,
+          direction,
+          entryPrice,
+          stopLoss,
+          takeProfit,
+          exitPrice,
+          riskReward,
           title: generateTradeIdeaTitle({
             title: input.title ?? draft.title,
-            symbol: draft.symbol,
-            direction: draft.direction,
+            symbol,
+            direction,
           }),
           description: generateTradeIdeaDescription(
             input.description ?? draft.description
           ),
-          tradePhase: draft.tradePhase,
+          tradePhase,
           strategyName: draft.strategyName,
           timeframe: normalizeOptionalText(input.timeframe),
           session: normalizeOptionalText(input.session),
@@ -188,6 +209,7 @@ export const tradeIdeasRouter = router({
         entryPrice: z.string().optional(),
         stopLoss: z.string().optional(),
         takeProfit: z.string().optional(),
+        exitPrice: z.string().optional(),
         riskReward: z.string().optional(),
         title: z.string().trim().max(120).optional(),
         description: z.string().trim().max(500).optional(),
@@ -231,6 +253,7 @@ export const tradeIdeasRouter = router({
           entryPrice: normalizeOptionalNumberString(input.entryPrice),
           stopLoss: normalizeOptionalNumberString(input.stopLoss),
           takeProfit: normalizeOptionalNumberString(input.takeProfit),
+          exitPrice: normalizeOptionalNumberString(input.exitPrice),
           riskReward: normalizeOptionalNumberString(input.riskReward),
           title: generateTradeIdeaTitle({
             title: input.title,

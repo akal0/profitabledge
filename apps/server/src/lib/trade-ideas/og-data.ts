@@ -18,6 +18,7 @@ export type TradeIdeaDraft = {
   entryPrice: string | null;
   stopLoss: string | null;
   takeProfit: string | null;
+  exitPrice: string | null;
   riskReward: string | null;
   title: string;
   description: string;
@@ -141,8 +142,8 @@ export function generateTradeIdeaTitle(input: {
   }
 
   const symbol = normalizeText(input.symbol) ?? "Trade";
-  const directionLabel = input.direction === "short" ? "Short" : "Long";
-  return truncate(`${symbol} ${directionLabel} Setup`, 120);
+  const directionLabel = input.direction === "short" ? "short" : "long";
+  return truncate(`${symbol} ${directionLabel} setup`, 120);
 }
 
 export function generateTradeIdeaDescription(value?: string | null) {
@@ -178,6 +179,7 @@ export async function buildTradeIdeaDraft(userId: string, journalEntryId: string
         plannedStopLoss: journalEntry.plannedStopLoss,
         plannedTakeProfit: journalEntry.plannedTakeProfit,
         plannedRiskReward: journalEntry.plannedRiskReward,
+        plannedExitPrice: journalEntry.plannedExitPrice,
         plannedNotes: journalEntry.plannedNotes,
         linkedTradeIds: journalEntry.linkedTradeIds,
         linkedEdgeId: journalEntry.linkedEdgeId,
@@ -223,6 +225,10 @@ export async function buildTradeIdeaDraft(userId: string, journalEntryId: string
           .select({
             symbol: trade.symbol,
             tradeType: trade.tradeType,
+            openPrice: trade.openPrice,
+            closePrice: trade.closePrice,
+            sl: trade.sl,
+            tp: trade.tp,
           })
           .from(trade)
           .where(eq(trade.id, linkedTradeIds[0]!))
@@ -253,12 +259,13 @@ export async function buildTradeIdeaDraft(userId: string, journalEntryId: string
 
   return {
     journalEntryId: entry.id,
-    tradePhase: entry.tradePhase,
+    tradePhase: (entry.tradePhase as TradeIdeaPhase | null) ?? null,
     symbol,
     direction,
-    entryPrice: normalizeText(entry.plannedEntryPrice),
-    stopLoss: normalizeText(entry.plannedStopLoss),
-    takeProfit: normalizeText(entry.plannedTakeProfit),
+    entryPrice: normalizeText(entry.plannedEntryPrice) ?? normalizeText(linkedTrade?.openPrice),
+    stopLoss: normalizeText(entry.plannedStopLoss) ?? normalizeText(linkedTrade?.sl),
+    takeProfit: normalizeText(entry.plannedTakeProfit) ?? normalizeText(linkedTrade?.tp),
+    exitPrice: normalizeText(linkedTrade?.closePrice) ?? normalizeText(entry.plannedExitPrice),
     riskReward: normalizeText(entry.plannedRiskReward),
     title: generateTradeIdeaTitle({
       title: entry.title,

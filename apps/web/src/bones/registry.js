@@ -3,7 +3,9 @@
 import { registerBones } from 'boneyard-js/react'
 
 import _trades_route from './trades-route.bones.json'
+import _trades_inline from './trades-inline.bones.json'
 
 registerBones({
   "trades-route": _trades_route,
+  "trades-inline": _trades_inline,
 })

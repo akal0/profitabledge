@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "trade_idea_share" (
   "entry_price" numeric,
   "stop_loss" numeric,
   "take_profit" numeric,
+  "exit_price" numeric,
   "risk_reward" numeric,
   "title" text,
   "description" text,

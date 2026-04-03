@@ -444,34 +444,28 @@ export function JournalEntryMain({
             <div className="space-y-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <div className="text-xs font-medium uppercase tracking-[0.18em] text-white/38">
+                  <div className="text-xs font-medium text-white/38">
                     Shareable card
                   </div>
                   <p className="mt-2 text-sm leading-6 text-white/48">
-                    Generate a public trade idea page with a rich preview card. If your profile banner is uploaded, it will be woven into the preview too.
+                    Generate a public trade page with a rich preview card. You can choose the trade stage, edit symbol and direction, and upload a different preview image right in the dialog.
                   </p>
                 </div>
 
-                {entryId && tradePhase === "pre-trade" ? (
+                {entryId ? (
                   <Button
                     onClick={() => setShareDialogOpen(true)}
-                    className="h-9 rounded-sm bg-teal-500 text-black hover:bg-teal-400"
+                    className="cursor-pointer flex items-center justify-center gap-1 rounded-md ring ring-white/5 bg-sidebar px-3 py-2 h-9 text-xs text-white transition-all duration-250 active:scale-95 hover:bg-sidebar-accent hover:brightness-110 shadow-none"
                   >
                     <Share2 className="mr-2 size-4" />
-                    Share Trade Idea
+                    Share trade
                   </Button>
                 ) : null}
               </div>
 
               {!entryId ? (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 px-4 py-4 text-sm text-white/42">
-                  Save the journal entry first to create a shareable trade idea link.
-                </div>
-              ) : null}
-
-              {entryId && tradePhase !== "pre-trade" ? (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-4 text-sm text-amber-100">
-                  Trade idea sharing is available for pre-trade journal entries.
+                  Save the journal entry first to create a shareable trade link.
                 </div>
               ) : null}
             </div>

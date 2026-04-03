@@ -26,6 +26,34 @@ async function loadGoogleFont(fontFamily: string, weight: number, text: string) 
   return fetch(match[1]).then((response) => response.arrayBuffer());
 }
 
+async function loadSansFonts(text: string) {
+  try {
+    const [regular, semiBold, bold] = await Promise.all([
+      loadGoogleFont("Geist", 400, text),
+      loadGoogleFont("Geist", 600, text),
+      loadGoogleFont("Geist", 700, text),
+    ]);
+
+    return [
+      { name: "Geist", data: regular, weight: 400 as const, style: "normal" as const },
+      { name: "Geist", data: semiBold, weight: 600 as const, style: "normal" as const },
+      { name: "Geist", data: bold, weight: 700 as const, style: "normal" as const },
+    ];
+  } catch {
+    const [regular, semiBold, bold] = await Promise.all([
+      loadGoogleFont("Inter", 400, text),
+      loadGoogleFont("Inter", 600, text),
+      loadGoogleFont("Inter", 700, text),
+    ]);
+
+    return [
+      { name: "Geist", data: regular, weight: 400 as const, style: "normal" as const },
+      { name: "Geist", data: semiBold, weight: 600 as const, style: "normal" as const },
+      { name: "Geist", data: bold, weight: 700 as const, style: "normal" as const },
+    ];
+  }
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ token: string }> }
@@ -59,20 +87,7 @@ export async function GET(
   let fonts: ImageResponseOptions["fonts"];
 
   try {
-    const [manrope, jetBrainsMono] = await Promise.all([
-      loadGoogleFont("Manrope", 800, fontText),
-      loadGoogleFont("JetBrains Mono", 500, fontText),
-    ]);
-
-    fonts = [
-      { name: "Manrope", data: manrope, weight: 800 as const, style: "normal" },
-      {
-        name: "JetBrains Mono",
-        data: jetBrainsMono,
-        weight: 500 as const,
-        style: "normal",
-      },
-    ];
+    fonts = await loadSansFonts(fontText);
   } catch {
     fonts = undefined;
   }

@@ -60,6 +60,7 @@ import {
   tradeTableOrchestrationReducer,
 } from "./trade-table-orchestration";
 import { TradeTablePagination } from "./trade-table-pagination";
+import { TradeTableInlineSkeleton } from "./trade-table-route-skeleton";
 import { TradeTableSheets } from "./trade-table-sheets";
 import { TradeTableUtilityBar } from "./trade-table-utility-bar";
 
@@ -1160,6 +1161,8 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
     [setEffParam, setMaeParam, setMfeParam, setRrParam, statFilters]
   );
 
+  const showWorkspaceSkeleton = isLoading && displayRows.length === 0;
+
   const handleToolbarRangeChange = React.useCallback(
     (startValue?: Date, endValue?: Date) => {
       if (!startValue || !endValue) {
@@ -1307,6 +1310,10 @@ function TradeTableInfiniteContent({ accountId }: { accountId: string }) {
       volumeHistogram,
     ]
   );
+
+  if (showWorkspaceSkeleton) {
+    return <TradeTableInlineSkeleton />;
+  }
 
   return (
     <div className="w-full overflow-hidden">

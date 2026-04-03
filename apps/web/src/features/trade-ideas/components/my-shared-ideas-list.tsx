@@ -1,14 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Copy, Eye, Link2, Slash } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { QuickTradeIdeaForm } from "@/features/trade-ideas/components/quick-trade-idea-form";
 import {
   formatDirectionArrow,
   formatDirectionLabel,
+  getTradeIdeaPhase,
+  getTradeIdeaPhaseLabel,
   getTradeIdeaStatus,
 } from "@/features/trade-ideas/lib/trade-idea-utils";
 import { trpc } from "@/utils/trpc";
@@ -25,6 +29,7 @@ function getStatusBadgeClassName(status: string) {
 }
 
 export function MySharedIdeasList() {
+  const [quickShareOpen, setQuickShareOpen] = useState(false);
   const utils = trpc.useUtils() as any;
   const { data: ideas = [], isLoading } = trpc.tradeIdeas.listMine.useQuery();
   const deactivateMutation = trpc.tradeIdeas.deactivate.useMutation({
@@ -47,16 +52,24 @@ export function MySharedIdeasList() {
     <section className="space-y-4 rounded-2xl border border-white/8 bg-white/[0.03] p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-white/38">
+          <div className="text-xs font-medium text-white/38">
             My shared ideas
           </div>
           <p className="mt-2 text-sm text-white/46">
             Manage your active trade idea links and keep an eye on view counts.
           </p>
         </div>
-        <Badge variant="outline" className="border-white/10 bg-white/[0.04] text-white/65">
-          {ideas.length} total
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="border-white/10 bg-white/[0.04] text-white/65">
+            {ideas.length} total
+          </Badge>
+          <Button
+            onClick={() => setQuickShareOpen(true)}
+            className="cursor-pointer rounded-sm border border-white/5 bg-sidebar px-3 py-2 text-xs text-white/75 transition-all duration-250 hover:bg-sidebar-accent hover:brightness-110 hover:text-white"
+          >
+            Share without journal
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -100,6 +113,7 @@ export function MySharedIdeasList() {
                       {idea.title || idea.description || "Shared trade idea"}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-white/38">
+                      <span>{getTradeIdeaPhaseLabel(getTradeIdeaPhase(idea as any))}</span>
                       <span className="inline-flex items-center gap-1.5">
                         <Eye className="size-3.5" />
                         {idea.viewCount} views
@@ -144,6 +158,8 @@ export function MySharedIdeasList() {
           })}
         </div>
       )}
+
+      <QuickTradeIdeaForm open={quickShareOpen} onOpenChange={setQuickShareOpen} />
     </section>
   );
 }

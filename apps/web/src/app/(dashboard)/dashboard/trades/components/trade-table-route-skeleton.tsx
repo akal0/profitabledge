@@ -13,6 +13,10 @@ type TradeTableRouteSkeletonProps = {
   timeoutMs?: number;
 };
 
+type TradeTableInlineSkeletonProps = {
+  className?: string;
+};
+
 const TRADE_TABLE_HEADERS = [
   "Instrument",
   "Opened",
@@ -103,6 +107,18 @@ const TRADE_SUMMARY_METRICS = [
   { label: "Best trade", value: "+2.10R" },
   { label: "Current streak", value: "3 wins" },
 ] as const;
+
+const TRADE_INLINE_STATUS_CHIPS = [
+  "Refreshing filters",
+  "Rebuilding view",
+  "Syncing account context",
+] as const;
+
+const TRADE_INLINE_METRICS = TRADE_SUMMARY_METRICS.slice(0, 4);
+
+const TRADE_BONEYARD_SNAPSHOT_CONFIG = {
+  leafTags: ["span"],
+};
 
 function TradeTableRouteFixture() {
   return (
@@ -301,6 +317,172 @@ function TradeTableRouteFallbackFrame() {
   );
 }
 
+function TradeTableInlineFixture() {
+  return (
+    <div className="space-y-3">
+      <section className="rounded-md border border-white/5 bg-sidebar/80 p-3">
+        <div className="flex flex-wrap items-start gap-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.24em] text-white/40">
+              Updating workspace
+            </p>
+            <p className="mt-1 text-sm text-white/68">
+              Applying the selected account, filters, and saved view.
+            </p>
+          </div>
+
+          <div className="ml-auto flex flex-wrap gap-2">
+            {TRADE_INLINE_STATUS_CHIPS.map((chip) => (
+              <span
+                key={chip}
+                className="rounded-sm border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-white/52"
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-md border border-white/5 bg-sidebar">
+        <div className="h-1 w-full bg-white/5">
+          <div className="h-full w-1/3 rounded-full bg-teal-400/70" />
+        </div>
+
+        <div className="border-b border-white/5 px-4 py-3">
+          <div className="grid grid-cols-8 gap-3">
+            {TRADE_TABLE_HEADERS.map((header) => (
+              <p
+                key={header}
+                className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/42"
+              >
+                {header}
+              </p>
+            ))}
+          </div>
+        </div>
+
+        <div className="divide-y divide-white/5">
+          {TRADE_TABLE_ROWS.slice(0, 4).map((row) => (
+            <div
+              key={`inline-${row.instrument}-${row.opened}`}
+              className="grid grid-cols-8 gap-3 px-4 py-3"
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-white/88">{row.instrument}</p>
+                <p className="text-xs text-white/42">Execution review</p>
+              </div>
+              <p className="text-sm text-white/68">{row.opened}</p>
+              <p className="text-sm text-white/68">{row.direction}</p>
+              <p className="text-sm text-white/72">{row.setup}</p>
+              <p className="text-sm text-white/68">{row.risk}</p>
+              <p className="text-sm font-medium text-white/84">{row.pnl}</p>
+              <p className="text-sm text-white/64">{row.outcome}</p>
+              <p className="text-sm text-white/48">{row.tags}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-md border border-white/5 bg-sidebar px-4 py-3">
+        <div className="flex flex-wrap gap-4 overflow-hidden">
+          {TRADE_INLINE_METRICS.map((metric) => (
+            <div key={metric.label} className="min-w-32 space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/38">
+                {metric.label}
+              </p>
+              <p className="text-base font-semibold text-white/84">{metric.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function TradeTableInlineFallbackFrame() {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-white/5 bg-sidebar/80 p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <UiSkeleton className="h-3 w-28 rounded-sm bg-sidebar-accent" />
+          <UiSkeleton className="h-5 w-72 rounded-sm bg-sidebar-accent" />
+          <div className="ml-auto flex flex-wrap gap-2">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <UiSkeleton
+                key={index}
+                className="h-7 w-28 rounded-sm bg-sidebar-accent"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-md border border-white/5 bg-sidebar">
+        <div className="h-1 w-full overflow-hidden bg-white/5">
+          <div className="h-full w-1/3 animate-pulse bg-teal-400/70" />
+        </div>
+        <div className="border-b border-white/5 px-4 py-3">
+          <div className="grid grid-cols-8 gap-3">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <UiSkeleton
+                key={index}
+                className="h-3 w-full rounded-sm bg-sidebar-accent"
+              />
+            ))}
+          </div>
+        </div>
+        <div className="divide-y divide-white/5">
+          {Array.from({ length: 4 }).map((_, rowIndex) => (
+            <div key={rowIndex} className="grid grid-cols-8 gap-3 px-4 py-3">
+              {Array.from({ length: 8 }).map((_, colIndex) => (
+                <UiSkeleton
+                  key={`${rowIndex}-${colIndex}`}
+                  className={cn(
+                    "h-5 rounded-sm bg-sidebar-accent",
+                    colIndex === 0 ? "w-12" : colIndex === 1 ? "w-20" : "w-full"
+                  )}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-md border border-white/5 bg-sidebar px-4 py-3">
+        <div className="flex flex-wrap gap-4 overflow-hidden">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="min-w-32 space-y-2">
+              <UiSkeleton className="h-3 w-16 rounded-sm bg-sidebar-accent" />
+              <UiSkeleton className="h-5 w-20 rounded-sm bg-sidebar-accent" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TradeTableInlineSkeleton({
+  className,
+}: TradeTableInlineSkeletonProps) {
+  return (
+    <div className={cn("space-y-3", className)}>
+      <BoneyardSkeleton
+        name="trades-inline"
+        loading
+        color="rgba(255,255,255,0.08)"
+        darkColor="rgba(255,255,255,0.08)"
+        fallback={<TradeTableInlineFallbackFrame />}
+        fixture={<TradeTableInlineFixture />}
+        snapshotConfig={TRADE_BONEYARD_SNAPSHOT_CONFIG}
+      >
+        <TradeTableInlineFixture />
+      </BoneyardSkeleton>
+    </div>
+  );
+}
+
 export function TradeTableRouteSkeleton({
   className,
   timeoutMs = 30_000,
@@ -322,9 +504,7 @@ export function TradeTableRouteSkeleton({
         darkColor="rgba(255,255,255,0.08)"
         fallback={<TradeTableRouteFallbackFrame />}
         fixture={<TradeTableRouteFixture />}
-        snapshotConfig={{
-          leafTags: ["span"],
-        }}
+        snapshotConfig={TRADE_BONEYARD_SNAPSHOT_CONFIG}
       >
         <TradeTableRouteFixture />
       </BoneyardSkeleton>

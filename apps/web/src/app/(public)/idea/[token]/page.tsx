@@ -14,7 +14,7 @@ function UnavailableState() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#06080d] px-6 text-white">
       <div className="w-full max-w-xl rounded-[28px] border border-white/8 bg-white/[0.03] px-6 py-8 text-center">
-        <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-white/34">
+        <div className="text-[10px] font-medium text-white/34">
           Trade idea unavailable
         </div>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white">

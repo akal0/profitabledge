@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { TradeTableRouteSkeleton } from "@/app/(dashboard)/dashboard/trades/components/trade-table-route-skeleton";
+import {
+  TradeTableInlineSkeleton,
+  TradeTableRouteSkeleton,
+} from "@/app/(dashboard)/dashboard/trades/components/trade-table-route-skeleton";
 
 export const metadata: Metadata = {
   title: "Trades Boneyard Capture",
@@ -18,7 +21,10 @@ export default function TradesBoneyardCapturePage() {
 
   return (
     <main className="min-h-screen w-full bg-background px-6 py-4">
-      <TradeTableRouteSkeleton timeoutMs={60_000} />
+      <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-10">
+        <TradeTableRouteSkeleton timeoutMs={60_000} />
+        <TradeTableInlineSkeleton />
+      </div>
     </main>
   );
 }

@@ -248,6 +248,7 @@ export function PerformanceWeekdayChart({
           accountId,
           startISO: resolvedRange.start.toISOString(),
           endISO: resolvedRange.end.toISOString(),
+          currencyCode: resolvedCurrencyCode,
         }),
         staleTime: 30_000,
       })) as DayPoint[];
@@ -277,6 +278,7 @@ export function PerformanceWeekdayChart({
           accountId,
           startISO: comparisonRange.start.toISOString(),
           endISO: comparisonRange.end.toISOString(),
+          currencyCode: resolvedCurrencyCode,
         }),
         staleTime: 30_000,
       })) as DayPoint[];
@@ -295,7 +297,7 @@ export function PerformanceWeekdayChart({
       }
       setCompareAgg(nextCompareAgg);
     })();
-  }, [accountId, comparisonRange, resolvedRange]);
+  }, [accountId, comparisonRange, resolvedCurrencyCode, resolvedRange]);
 
   const dataForChart = React.useMemo(() => {
     return WEEKDAY_ORDER.map((weekday) => ({

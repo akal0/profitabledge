@@ -203,7 +203,10 @@ export function EquityCurveChart({
   });
 
   const { data: statsData, isLoading: statsLoading } = useQuery({
-    ...trpcOptions.accounts.stats.queryOptions({ accountId: accountId || "" }),
+    ...trpcOptions.accounts.stats.queryOptions({
+      accountId: accountId || "",
+      currencyCode: resolvedCurrencyCode,
+    }),
     enabled: !!accountId,
   });
 

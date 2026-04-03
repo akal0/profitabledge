@@ -1,9 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { useAccountStore } from "@/stores/account";
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import {
+  getAvailableDashboardCurrencyCodes,
+  resolveDashboardCurrencyCode,
+} from "@/features/dashboard/home/lib/dashboard-currency";
+import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { useAccountTransitionStore } from "@/stores/account-transition";
 import { useDateRangeStore } from "@/stores/date-range";
 import { queryClient, trpcOptions } from "@/utils/trpc";
@@ -155,12 +160,32 @@ export default function DashboardCalendar({
   const [previews, setPreviews] = useState<CalendarPreviewState>({});
   const [liveTrades, setLiveTrades] = useState<TradePreview[]>([]);
   const router = useRouter();
+  const externalRangeStart = useDateRangeStore((state) => state.start);
+  const externalRangeEnd = useDateRangeStore((state) => state.end);
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
   const setSelectedAccountId = useAccountStore(
     (state) => state.setSelectedAccountId
   );
   const beginAccountTransition = useAccountTransitionStore(
     (state) => state.beginAccountTransition
   );
+  const { accounts } = useAccountCatalog({ enabled: Boolean(accountId) });
+
+  const calendarCurrencyCode = useMemo(() => {
+    const availableCurrencyCodes = getAvailableDashboardCurrencyCodes(accounts);
+    const selectedAccountCurrency =
+      accounts.find((account) => account.id === accountId)?.initialCurrency ??
+      null;
+
+    return resolveDashboardCurrencyCode({
+      isAllAccounts: isAllAccountsScope(accountId),
+      preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+      availableCurrencyCodes,
+      selectedAccountCurrency,
+    });
+  }, [accountId, accounts, allAccountsPreferredCurrencyCode]);
 
   const calendarDays = useMemo(
     () => mergeDayRowsWithLiveTrades(days, liveTrades),
@@ -350,6 +375,7 @@ export default function DashboardCalendar({
             accountId,
             startISO: range.start.toISOString(),
             endISO: range.end.toISOString(),
+            currencyCode: calendarCurrencyCode,
           }),
           staleTime: 30_000,
         });
@@ -459,6 +485,7 @@ export default function DashboardCalendar({
             accountId,
             startISO: fetchRange.start.toISOString(),
             endISO: fetchRange.end.toISOString(),
+            currencyCode: calendarCurrencyCode,
           }),
           staleTime: 30_000,
         });
@@ -576,55 +603,87 @@ export default function DashboardCalendar({
     }
   };
 
-  const handleRangeChange = async (
-    start: Date,
-    end: Date,
-    nextViewMode: ViewMode = viewMode
-  ) => {
-    if (readOnly) return;
-    if (!accountId) return;
+  const handleRangeChange = useCallback(
+    async (
+      start: Date,
+      end: Date,
+      nextViewMode: ViewMode = viewMode
+    ) => {
+      if (readOnly) return;
+      if (!accountId) return;
 
-    let nextStart = new Date(start);
-    let nextEnd = new Date(end);
+      let nextStart = new Date(start);
+      let nextEnd = new Date(end);
 
-    if (effectiveBounds) {
-      const clampedRange = clampRange(
-        nextStart,
-        nextEnd,
-        new Date(effectiveBounds.minISO),
-        new Date(effectiveBounds.maxISO)
-      );
-      nextStart = clampedRange.start;
-      nextEnd = clampedRange.end;
+      if (effectiveBounds) {
+        const clampedRange = clampRange(
+          nextStart,
+          nextEnd,
+          new Date(effectiveBounds.minISO),
+          new Date(effectiveBounds.maxISO)
+        );
+        nextStart = clampedRange.start;
+        nextEnd = clampedRange.end;
+      }
+
+      let fetchStart = new Date(nextStart);
+      let fetchEnd = new Date(nextEnd);
+
+      if (nextViewMode === "month") {
+        fetchStart = startOfMonth(nextStart);
+        fetchEnd = addDays(endOfMonth(nextStart), 14);
+      }
+
+      setRange({ start: nextStart, end: nextEnd });
+      useDateRangeStore.getState().setRange(nextStart, nextEnd);
+      setLoading(true);
+
+      try {
+        const data = await queryClient.fetchQuery({
+          ...trpcOptions.accounts.recentByDay.queryOptions({
+            accountId,
+            startISO: fetchStart.toISOString(),
+            endISO: fetchEnd.toISOString(),
+            currencyCode: calendarCurrencyCode,
+          }),
+          staleTime: 30_000,
+        });
+
+        setDays(normalizeRecentDayRows(data as DayRow[]));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [accountId, calendarCurrencyCode, effectiveBounds, readOnly, viewMode]
+  );
+
+  useEffect(() => {
+    if (readOnly || !accountId || !externalRangeStart || !externalRangeEnd) {
+      return;
     }
 
-    let fetchStart = new Date(nextStart);
-    let fetchEnd = new Date(nextEnd);
-
-    if (nextViewMode === "month") {
-      fetchStart = startOfMonth(nextStart);
-      fetchEnd = addDays(endOfMonth(nextStart), 14);
+    if (
+      range &&
+      range.start.getTime() === new Date(externalRangeStart).getTime() &&
+      range.end.getTime() === new Date(externalRangeEnd).getTime()
+    ) {
+      return;
     }
 
-    setRange({ start: nextStart, end: nextEnd });
-    useDateRangeStore.getState().setRange(nextStart, nextEnd);
-    setLoading(true);
-
-    try {
-      const data = await queryClient.fetchQuery({
-        ...trpcOptions.accounts.recentByDay.queryOptions({
-          accountId,
-          startISO: fetchStart.toISOString(),
-          endISO: fetchEnd.toISOString(),
-        }),
-        staleTime: 30_000,
-      });
-
-      setDays(normalizeRecentDayRows(data as DayRow[]));
-    } finally {
-      setLoading(false);
-    }
-  };
+    void handleRangeChange(
+      new Date(externalRangeStart),
+      new Date(externalRangeEnd),
+      viewMode
+    );
+  }, [
+    accountId,
+    externalRangeEnd,
+    externalRangeStart,
+    handleRangeChange,
+    range,
+    readOnly,
+    viewMode,
+  ]);
 
   const handleViewChange = (mode: ViewMode) => {
     if (readOnly) return;
@@ -775,6 +834,7 @@ export default function DashboardCalendar({
           <CalendarMonthView
             monthGrid={monthGrid}
             activeMonth={range?.start.getMonth() ?? null}
+            currencyCode={calendarCurrencyCode}
             showWeekends={showWeekends}
             dayMap={dayMap}
             goalMap={goalMap}
@@ -789,6 +849,7 @@ export default function DashboardCalendar({
             onLeaveDay={handleLeaveDay}
           />
           <CalendarSummarySidebar
+            currencyCode={calendarCurrencyCode}
             summaryWidgets={summaryWidgets}
             summaryWidgetSpans={summaryWidgetSpans}
             monthSummary={monthSummary}
@@ -799,6 +860,7 @@ export default function DashboardCalendar({
         </div>
       ) : (
         <CalendarWeekView
+          currencyCode={calendarCurrencyCode}
           days={visibleWeekDays}
           goalMap={goalMap}
           goalOverlay={goalOverlay}

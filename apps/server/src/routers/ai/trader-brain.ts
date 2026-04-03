@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { protectedProcedure } from "../../lib/trpc";
 import { z } from "zod";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
@@ -47,6 +48,26 @@ function condenseForQuickQuery(markdown: string): string {
   const answer = meaningful.slice(0, 2).join(" · ");
 
   return answer || text.slice(0, 200) || "No result found.";
+}
+
+async function getClosedTradeCount(accountId: string, userId: string) {
+  const scopedAccountIds = await resolveScopedAccountIds(userId, accountId);
+
+  if (scopedAccountIds.length === 0) {
+    return 0;
+  }
+
+  const [result] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tradeTable)
+    .where(
+      and(
+        buildAccountScopeCondition(tradeTable.accountId, scopedAccountIds),
+        sql`${tradeTable.closeTime} IS NOT NULL`
+      )
+    );
+
+  return Number(result?.count ?? 0);
 }
 
 export const aiTraderBrainProcedures = {
@@ -487,6 +508,18 @@ If you need clarification:
   generateInsightsManual: protectedProcedure
     .input(z.object({ accountId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      const closedTradeCount = await getClosedTradeCount(
+        input.accountId,
+        ctx.session.user.id
+      );
+
+      if (closedTradeCount === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This account has no closed trades yet.",
+        });
+      }
+
       const insights = await generateInsights(
         input.accountId,
         ctx.session.user.id,

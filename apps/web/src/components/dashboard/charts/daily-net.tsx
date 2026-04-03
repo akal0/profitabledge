@@ -116,6 +116,7 @@ export function DailyNetBarChart({
       maxDate: max,
     });
   }, [max, min, myMode, resolvedRange]);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -128,6 +129,7 @@ export function DailyNetBarChart({
           accountId,
           startISO: resolvedRange.start.toISOString(),
           endISO: resolvedRange.end.toISOString(),
+          currencyCode: resolvedCurrencyCode,
         }),
         staleTime: 30_000,
       });
@@ -137,6 +139,7 @@ export function DailyNetBarChart({
               accountId,
               startISO: comparisonRange.start.toISOString(),
               endISO: comparisonRange.end.toISOString(),
+              currencyCode: resolvedCurrencyCode,
             }),
             staleTime: 30_000,
           })
@@ -175,7 +178,7 @@ export function DailyNetBarChart({
     return () => {
       cancelled = true;
     };
-  }, [accountId, comparisonRange, resolvedRange, rows]);
+  }, [accountId, comparisonRange, resolvedCurrencyCode, resolvedRange, rows]);
 
   const [activeIndex, setActiveIndex] = React.useState<number | undefined>(
     undefined
@@ -183,7 +186,6 @@ export function DailyNetBarChart({
   const [activeDataset, setActiveDataset] = React.useState<
     "profit" | "compare" | undefined
   >(undefined);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const primarySeries = rows ?? series;
   const secondarySeries = comparisonRows ?? comparisonSeries;

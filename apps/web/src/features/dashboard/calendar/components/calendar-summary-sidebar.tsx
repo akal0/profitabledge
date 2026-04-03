@@ -16,6 +16,7 @@ import {
 } from "../lib/calendar-utils";
 
 type CalendarSummarySidebarProps = {
+  currencyCode?: string | null;
   summaryWidgets: CalendarWidgetType[];
   summaryWidgetSpans: Partial<Record<CalendarWidgetType, number>>;
   monthSummary: MonthSummary | null;
@@ -95,6 +96,7 @@ function expandSummaryWidgets(
 
 function renderSummaryWidget(
   type: CalendarWidgetType,
+  currencyCode: string | null | undefined,
   monthSummary: MonthSummary | null,
   rangeSummary: RangeSummary | null,
   summaryLoading: boolean,
@@ -107,7 +109,7 @@ function renderSummaryWidget(
       return (
         <SummaryCard
           title="Net P/L"
-          value={monthSummary ? formatMoney(total) : "—"}
+          value={monthSummary ? formatMoney(total, currencyCode) : "—"}
           subtext={rangeLabel}
           accentClass={total >= 0 ? "text-teal-400" : "text-rose-400"}
           loading={!monthSummary}
@@ -133,7 +135,7 @@ function renderSummaryWidget(
       return (
         <SummaryCard
           title={week.label}
-          value={formatMoney(week.totalProfit)}
+          value={formatMoney(week.totalProfit, currencyCode)}
           subtext={formatWeekSubtext(week)}
           accentClass={getProfitTone(week.totalProfit)}
         />
@@ -153,9 +155,9 @@ function renderSummaryWidget(
         />
       );
     case "avg-active-day": {
-      const value =
-        monthSummary && monthSummary.activeDays > 0
-          ? formatMoney(monthSummary.avgPerActiveDay)
+        const value =
+          monthSummary && monthSummary.activeDays > 0
+          ? formatMoney(monthSummary.avgPerActiveDay, currencyCode)
           : "—";
       return (
         <SummaryCard
@@ -180,7 +182,7 @@ function renderSummaryWidget(
       return (
         <SummaryCard
           title="Best day"
-          value={bestDay ? formatMoney(bestDay.totalProfit) : "—"}
+          value={bestDay ? formatMoney(bestDay.totalProfit, currencyCode) : "—"}
           subtext={
             bestDay ? formatShortDate(fromDateISO(bestDay.dateISO)) : "—"
           }
@@ -194,7 +196,7 @@ function renderSummaryWidget(
       return (
         <SummaryCard
           title="Worst day"
-          value={worstDay ? formatMoney(worstDay.totalProfit) : "—"}
+          value={worstDay ? formatMoney(worstDay.totalProfit, currencyCode) : "—"}
           subtext={
             worstDay ? formatShortDate(fromDateISO(worstDay.dateISO)) : "—"
           }
@@ -215,9 +217,9 @@ function renderSummaryWidget(
         />
       );
     case "largest-trade": {
-      const value =
-        rangeSummary?.largestTrade != null
-          ? formatMoney(rangeSummary.largestTrade)
+        const value =
+          rangeSummary?.largestTrade != null
+          ? formatMoney(rangeSummary.largestTrade, currencyCode)
           : "—";
       return (
         <SummaryCard
@@ -232,9 +234,9 @@ function renderSummaryWidget(
       );
     }
     case "largest-loss": {
-      const value =
-        rangeSummary?.largestLoss != null
-          ? formatMoney(rangeSummary.largestLoss)
+        const value =
+          rangeSummary?.largestLoss != null
+          ? formatMoney(rangeSummary.largestLoss, currencyCode)
           : "—";
       return (
         <SummaryCard
@@ -265,7 +267,9 @@ function renderSummaryWidget(
       );
     case "avg-trade": {
       const hasTrades = (monthSummary?.totalTrades ?? 0) > 0;
-      const avgValue = hasTrades ? formatMoney(monthSummary?.avgPerTrade ?? 0) : "—";
+      const avgValue = hasTrades
+        ? formatMoney(monthSummary?.avgPerTrade ?? 0, currencyCode)
+        : "—";
       return (
         <SummaryCard
           title="Avg per trade"
@@ -288,6 +292,7 @@ function renderSummaryWidget(
 }
 
 export function CalendarSummarySidebar({
+  currencyCode,
   summaryWidgets,
   summaryWidgetSpans,
   monthSummary,
@@ -312,6 +317,7 @@ export function CalendarSummarySidebar({
           >
             {renderSummaryWidget(
               widget.type,
+              currencyCode,
               monthSummary,
               rangeSummary,
               summaryLoading,

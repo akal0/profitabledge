@@ -8,6 +8,10 @@ import {
   getPlanFeatureLines,
   type BillingPlanCopySource,
 } from "@/features/settings/billing/lib/plan-copy";
+import {
+  getBillingPlanTitle,
+  getNextBillingPlanKey,
+} from "@/features/settings/billing/lib/plan-labels";
 import CircleCheck from "@/public/icons/circle-check.svg";
 import Image from "next/image";
 import { useState } from "react";
@@ -82,6 +86,12 @@ const CARD_META: Record<
     imageSrc: "/plans/institutional.png",
     badgeClassName: "ring ring-emerald-500/20 bg-emerald-500/10 text-white",
   },
+};
+
+const BILLING_PLAN_TIER: Record<BillingPlanKey, number> = {
+  student: 0,
+  professional: 1,
+  institutional: 2,
 };
 
 function splitPriceLabel(priceLabel: string) {
@@ -185,6 +195,14 @@ const Plans = ({
           const isLockedCurrentPlan = isActive && !plan.isFree;
           const isSelected = selectedPlanKey === plan.key;
           const isPending = pendingPlanKey === plan.key;
+          const nextPlanKey = getNextBillingPlanKey(activePlanKey);
+          const activePlanTier = BILLING_PLAN_TIER[activePlanKey] ?? 0;
+          const planTier = BILLING_PLAN_TIER[plan.key] ?? 0;
+          const requiresIntermediateUpgrade =
+            !plan.isFree &&
+            planTier > activePlanTier &&
+            nextPlanKey !== null &&
+            plan.key !== nextPlanKey;
           const hasSelectedIntervalConfigured = plan.isFree
             ? true
             : billingInterval === "annual"
@@ -194,6 +212,8 @@ const Plans = ({
             ? "Redirecting..."
             : isLockedCurrentPlan
             ? "Current plan"
+            : requiresIntermediateUpgrade && nextPlanKey
+            ? `Upgrade to ${getBillingPlanTitle(nextPlanKey)} first`
             : !hasSelectedIntervalConfigured
             ? `${billingInterval} not configured`
             : plan.isFree
@@ -202,12 +222,16 @@ const Plans = ({
           const isButtonDisabled =
             isPending ||
             isLockedCurrentPlan ||
-            !hasSelectedIntervalConfigured;
+            !hasSelectedIntervalConfigured ||
+            requiresIntermediateUpgrade;
           const isProfessional = plan.key === "professional";
           const isInstitutional = plan.key === "institutional";
           const price = getDisplayedPricing(plan, billingInterval);
           const featureLines = getPlanFeatureLines(plan);
-          const canCheckout = !plan.isFree && hasSelectedIntervalConfigured;
+          const canCheckout =
+            !plan.isFree &&
+            hasSelectedIntervalConfigured &&
+            !requiresIntermediateUpgrade;
           const outerCn = isProfessional
             ? "bg-blue-500/10 ring-blue-500/25"
             : isInstitutional
@@ -389,7 +413,7 @@ const Plans = ({
                       >
                         Current plan
                       </div>
-                    ) : !hasSelectedIntervalConfigured ? (
+                    ) : !hasSelectedIntervalConfigured || requiresIntermediateUpgrade ? (
                       <div
                         className={cn(
                           "flex h-9 w-full items-center justify-center rounded-sm text-xs",

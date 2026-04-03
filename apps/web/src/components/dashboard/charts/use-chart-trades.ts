@@ -1,8 +1,15 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { convertCurrencyAmount } from "@profitabledge/contracts/currency";
 import React from "react";
 
+import { useAccountCatalog } from "@/features/accounts/hooks/use-account-catalog";
+import {
+  getAvailableDashboardCurrencyCodes,
+  resolveDashboardCurrencyCode,
+} from "@/features/dashboard/home/lib/dashboard-currency";
+import { isAllAccountsScope, useAccountStore } from "@/stores/account";
 import { trpcClient } from "@/utils/trpc";
 
 import { useChartRenderMode } from "./chart-render-mode";
@@ -27,6 +34,7 @@ function getEmbeddedDefaultRange() {
 
 export type ChartTrade = {
   id: string;
+  accountId?: string | null;
   open?: string | null;
   close?: string | null;
   openTime?: string | null;
@@ -40,6 +48,8 @@ export type ChartTrade = {
   volume?: number | null;
   profit?: number | null;
   netPnl?: number | null;
+  commissions?: number | null;
+  swap?: number | null;
   sl?: number | null;
   tp?: number | null;
   openPrice?: number | null;
@@ -84,9 +94,33 @@ export function useChartTrades(
 ) {
   const renderMode = useChartRenderMode();
   const globalRange = useChartRangeQueryParams();
+  const { accounts } = useAccountCatalog({ enabled: Boolean(accountId) });
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
   const embeddedFallbackRange = React.useMemo(
     () => (renderMode === "embedded" ? getEmbeddedDefaultRange() : null),
     [renderMode]
+  );
+  const resolvedCurrencyCode = React.useMemo(() => {
+    const availableCurrencyCodes = getAvailableDashboardCurrencyCodes(accounts);
+    const selectedAccountCurrency =
+      accounts.find((account) => account.id === accountId)?.initialCurrency ??
+      null;
+
+    return resolveDashboardCurrencyCode({
+      isAllAccounts: isAllAccountsScope(accountId),
+      preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+      availableCurrencyCodes,
+      selectedAccountCurrency,
+    });
+  }, [accountId, accounts, allAccountsPreferredCurrencyCode]);
+  const accountCurrencyById = React.useMemo(
+    () =>
+      new Map(
+        accounts.map((account) => [account.id, account.initialCurrency ?? null])
+      ),
+    [accounts]
   );
   const startISO =
     rangeOverride?.startISO ??
@@ -146,8 +180,69 @@ export function useChartTrades(
     },
   });
 
+  const trades = React.useMemo(() => {
+    const rawTrades = (query.data ?? []) as ChartTrade[];
+
+    if (!isAllAccountsScope(accountId) || !resolvedCurrencyCode) {
+      return rawTrades;
+    }
+
+    return rawTrades.map((trade) => {
+      const sourceCurrency = accountCurrencyById.get(String(trade.accountId || ""));
+      const convertedProfit =
+        trade.profit == null
+          ? trade.profit
+          : convertCurrencyAmount(
+              Number(trade.profit ?? 0),
+              sourceCurrency,
+              resolvedCurrencyCode
+            );
+      const convertedNetPnl =
+        trade.netPnl == null
+          ? trade.netPnl
+          : convertCurrencyAmount(
+              Number(trade.netPnl ?? 0),
+              sourceCurrency,
+              resolvedCurrencyCode
+            );
+      const convertedCommissions =
+        trade.commissions == null
+          ? trade.commissions
+          : convertCurrencyAmount(
+              Number(trade.commissions ?? 0),
+              sourceCurrency,
+              resolvedCurrencyCode
+            );
+      const convertedSwap =
+        trade.swap == null
+          ? trade.swap
+          : convertCurrencyAmount(
+              Number(trade.swap ?? 0),
+              sourceCurrency,
+              resolvedCurrencyCode
+            );
+
+      if (
+        convertedProfit === trade.profit &&
+        convertedNetPnl === trade.netPnl &&
+        convertedCommissions === trade.commissions &&
+        convertedSwap === trade.swap
+      ) {
+        return trade;
+      }
+
+      return {
+        ...trade,
+        profit: convertedProfit,
+        netPnl: convertedNetPnl,
+        commissions: convertedCommissions,
+        swap: convertedSwap,
+      };
+    });
+  }, [accountCurrencyById, accountId, query.data, resolvedCurrencyCode]);
+
   return {
     ...query,
-    trades: (query.data ?? []) as ChartTrade[],
+    trades,
   };
 }

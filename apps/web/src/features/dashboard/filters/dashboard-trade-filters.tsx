@@ -33,26 +33,18 @@ import {
 } from "@/features/dashboard/home/lib/dashboard-currency";
 import { formatTriggerLabel } from "@/features/trades/table-toolbar/lib/trades-toolbar-utils";
 import { tradesToolbarStyles } from "@/features/trades/table-toolbar/lib/trades-toolbar-styles";
+import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
 import { cn } from "@/lib/utils";
 import { isAllAccountsScope, useAccountStore } from "@/stores/account";
-import { trpcClient, trpcOptions } from "@/utils/trpc";
+import { trpcOptions } from "@/utils/trpc";
 import type { AccountStats } from "@/stores/stats";
-
-type DashboardFilteredTrade = {
-  id: string;
-  accountId?: string | null;
-  open?: string | null;
-  close?: string | null;
-  symbol?: string | null;
-  rawSymbol?: string | null;
-  symbolGroup?: string | null;
-  profit?: number | null;
-  holdSeconds?: number | null;
-  sessionTag?: string | null;
-  modelTag?: string | null;
-  customTags?: string[];
-  realisedRR?: number | null;
-};
+import {
+  buildSessionPerformanceFromTrades,
+  buildTradeStreakCalendarFromTrades,
+  deriveFilteredStats,
+  fetchDashboardTrades,
+  type DashboardFilteredTrade,
+} from "./dashboard-trade-metrics";
 
 type DashboardTradeFiltersContextValue = {
   accountId?: string;
@@ -116,9 +108,6 @@ const EMPTY_DASHBOARD_SUGGESTIONS = {
   accountTags: [] as string[],
 };
 
-const TRADE_PAGE_LIMIT = 200;
-const TRADE_PAGE_MAX = 100;
-
 function splitParam(value: string) {
   return value
     .split(",")
@@ -139,16 +128,6 @@ function getSortedFilterValues(values: string[]) {
       sensitivity: "base",
     })
   );
-}
-
-function startDateToIso(value: string) {
-  if (!value) return undefined;
-  return new Date(`${value}T00:00:00.000`).toISOString();
-}
-
-function endDateToIso(value: string) {
-  if (!value) return undefined;
-  return new Date(`${value}T23:59:59.999`).toISOString();
 }
 
 function parseFilterDateValue(value: string) {
@@ -176,122 +155,6 @@ function formatFilterDateValue(value: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function getTradeTimestamp(trade: DashboardFilteredTrade) {
-  return trade.open || trade.close || null;
-}
-
-function deriveFilteredStats(trades: DashboardFilteredTrade[]) {
-  const profits = trades.map((trade) => Number(trade.profit ?? 0));
-  const totalTrades = profits.length;
-  const wins = profits.filter((profit) => profit > 0).length;
-  const losses = profits.filter((profit) => profit < 0).length;
-  const breakeven = totalTrades - wins - losses;
-  const totalProfit = profits.reduce((sum, profit) => sum + profit, 0);
-  const grossProfit = profits
-    .filter((profit) => profit > 0)
-    .reduce((sum, profit) => sum + profit, 0);
-  const grossLossAbs = Math.abs(
-    profits
-      .filter((profit) => profit < 0)
-      .reduce((sum, profit) => sum + profit, 0)
-  );
-  const holdValues = trades
-    .map((trade) => Number(trade.holdSeconds ?? 0))
-    .filter((value) => Number.isFinite(value) && value >= 0);
-  const rrValues = trades
-    .map((trade) => Number(trade.realisedRR))
-    .filter((value) => Number.isFinite(value));
-  const outcomeSequence = [...trades]
-    .sort((left, right) => {
-      const leftTime = new Date(getTradeTimestamp(left) || 0).getTime();
-      const rightTime = new Date(getTradeTimestamp(right) || 0).getTime();
-      return rightTime - leftTime;
-    })
-    .map((trade) => Number(trade.profit ?? 0))
-    .filter((profit) => profit !== 0)
-    .map((profit) => (profit > 0 ? "W" : "L")) as ("W" | "L")[];
-
-  let winStreak = 0;
-  for (const outcome of outcomeSequence) {
-    if (outcome !== "W") {
-      break;
-    }
-    winStreak += 1;
-  }
-
-  return {
-    totalProfit,
-    grossProfit,
-    wins,
-    losses,
-    breakeven,
-    winrate: totalTrades > 0 ? (wins / totalTrades) * 100 : 0,
-    averageHoldSeconds:
-      holdValues.length > 0
-        ? holdValues.reduce((sum, value) => sum + value, 0) / holdValues.length
-        : 0,
-    averageRMultiple:
-      rrValues.length > 0
-        ? rrValues.reduce((sum, value) => sum + value, 0) / rrValues.length
-        : null,
-    profitFactor:
-      grossLossAbs > 0
-        ? grossProfit / grossLossAbs
-        : grossProfit > 0
-        ? null
-        : 0,
-    expectancy: totalTrades > 0 ? totalProfit / totalTrades : 0,
-    winStreak,
-    recentOutcomes: outcomeSequence.slice(0, 5),
-    recentTrades: trades.slice(0, 5),
-  } satisfies Partial<AccountStats> & {
-    recentTrades: DashboardFilteredTrade[];
-  };
-}
-
-function calculateSessionLabel(trade: DashboardFilteredTrade) {
-  const timestamp = getTradeTimestamp(trade);
-  if (!timestamp) return "Unknown";
-
-  const hour = new Date(timestamp).getUTCHours();
-  if (hour >= 0 && hour < 8) return "Asian";
-  if (hour >= 8 && hour < 16) return "London";
-  return "New York";
-}
-
-async function fetchFilteredTrades(input: {
-  accountId: string;
-  startDate: string;
-  endDate: string;
-  symbols: string[];
-  sessionTags: string[];
-  modelTags: string[];
-  customTags: string[];
-}) {
-  const trades: DashboardFilteredTrade[] = [];
-  let cursor: { createdAtISO: string; id: string } | undefined;
-  let pageCount = 0;
-
-  do {
-    const page = await trpcClient.trades.listInfinite.query({
-      accountId: input.accountId,
-      limit: TRADE_PAGE_LIMIT,
-      startISO: startDateToIso(input.startDate),
-      endISO: endDateToIso(input.endDate),
-      symbols: input.symbols.length ? input.symbols : undefined,
-      sessionTags: input.sessionTags.length ? input.sessionTags : undefined,
-      modelTags: input.modelTags.length ? input.modelTags : undefined,
-      customTags: input.customTags.length ? input.customTags : undefined,
-      cursor,
-    });
-
-    trades.push(...(page.items as DashboardFilteredTrade[]));
-    cursor = "nextCursor" in page ? page.nextCursor ?? undefined : undefined;
-    pageCount += 1;
-  } while (cursor && pageCount < TRADE_PAGE_MAX);
-
-  return trades;
-}
 
 export function DashboardTradeFiltersProvider({
   accountId,
@@ -437,7 +300,7 @@ export function DashboardTradeFiltersProvider({
     enabled: shouldFetchTradeDataset,
     staleTime: 30_000,
     queryFn: async () =>
-      fetchFilteredTrades({
+      fetchDashboardTrades({
         accountId: accountId || "",
         startDate,
         endDate,
@@ -492,23 +355,45 @@ export function DashboardTradeFiltersProvider({
     }
 
     return filteredTrades.map((trade) => {
-      if (trade.profit == null) {
-        return trade;
-      }
+      const sourceCurrency = accountCurrencyById.get(String(trade.accountId || ""));
+      const convertedProfit =
+        trade.profit == null
+          ? trade.profit
+          : convertCurrencyAmount(
+              Number(trade.profit ?? 0),
+              sourceCurrency,
+              currencyCode
+            );
+      const convertedCommissions =
+        trade.commissions == null
+          ? trade.commissions
+          : convertCurrencyAmount(
+              Number(trade.commissions ?? 0),
+              sourceCurrency,
+              currencyCode
+            );
+      const convertedSwap =
+        trade.swap == null
+          ? trade.swap
+          : convertCurrencyAmount(
+              Number(trade.swap ?? 0),
+              sourceCurrency,
+              currencyCode
+            );
 
-      const convertedProfit = convertCurrencyAmount(
-        Number(trade.profit ?? 0),
-        accountCurrencyById.get(String(trade.accountId || "")),
-        currencyCode
-      );
-
-      if (convertedProfit === Number(trade.profit ?? 0)) {
+      if (
+        convertedProfit === trade.profit &&
+        convertedCommissions === trade.commissions &&
+        convertedSwap === trade.swap
+      ) {
         return trade;
       }
 
       return {
         ...trade,
         profit: convertedProfit,
+        commissions: convertedCommissions,
+        swap: convertedSwap,
       };
     });
   }, [
@@ -810,6 +695,10 @@ export function DashboardTradeFiltersBar({
 }) {
   const context = useDashboardTradeFilters();
   const accountId = context?.accountId;
+  const { accounts } = useAccountCatalog({ enabled: Boolean(accountId) });
+  const allAccountsPreferredCurrencyCode = useAccountStore(
+    (state) => state.allAccountsPreferredCurrencyCode
+  );
   const filters = context?.filters ?? EMPTY_DASHBOARD_FILTERS;
   const suggestions = context?.suggestions ?? EMPTY_DASHBOARD_SUGGESTIONS;
   const { data: boundsRaw } = useQuery({
@@ -983,6 +872,39 @@ export function DashboardTradeFiltersBar({
           },
         ]
       : [];
+  const availableCurrencyCodes = useMemo(
+    () => getAvailableDashboardCurrencyCodes(accounts),
+    [accounts]
+  );
+  const selectedAccountCurrency = useMemo(
+    () =>
+      accounts.find((account) => account.id === accountId)?.initialCurrency ??
+      null,
+    [accountId, accounts]
+  );
+  const currencyCode = useMemo(
+    () =>
+      resolveDashboardCurrencyCode({
+        isAllAccounts: isAllAccountsScope(accountId),
+        preferredCurrencyCode: allAccountsPreferredCurrencyCode,
+        availableCurrencyCodes,
+        selectedAccountCurrency,
+      }),
+    [
+      accountId,
+      allAccountsPreferredCurrencyCode,
+      availableCurrencyCodes,
+      selectedAccountCurrency,
+    ]
+  );
+  const formattedFilteredNet = formatSignedCurrencyValue(
+    context?.filteredStats?.totalProfit ?? 0,
+    currencyCode,
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }
+  );
 
   if (!context || !accountId) {
     return null;
@@ -1211,13 +1133,7 @@ export function DashboardTradeFiltersBar({
                 <span>
                   Net P&amp;L{" "}
                   <span className="font-medium text-white/80">
-                    {(context.filteredStats?.totalProfit ?? 0).toLocaleString(
-                      undefined,
-                      {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }
-                    )}
+                    {formattedFilteredNet}
                   </span>
                 </span>
                 <span>•</span>
@@ -1284,13 +1200,7 @@ export function DashboardTradeFiltersBar({
           <span>
             Net{" "}
             <span className="font-medium text-white/80">
-              {(context.filteredStats?.totalProfit ?? 0).toLocaleString(
-                undefined,
-                {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                }
-              )}
+              {formattedFilteredNet}
             </span>
           </span>
           <span>•</span>
@@ -1306,107 +1216,7 @@ export function DashboardTradeFiltersBar({
   );
 }
 
-export function buildSessionPerformanceFromTrades(
-  trades: DashboardFilteredTrade[]
-) {
-  if (trades.length === 0) {
-    return null;
-  }
-
-  const sessions: Record<
-    string,
-    { trades: number; profit: number; wins: number }
-  > = {
-    Asian: { trades: 0, profit: 0, wins: 0 },
-    London: { trades: 0, profit: 0, wins: 0 },
-    "New York": { trades: 0, profit: 0, wins: 0 },
-  };
-
-  for (const trade of trades) {
-    const session = calculateSessionLabel(trade);
-    const profit = Number(trade.profit ?? 0);
-
-    if (!sessions[session]) {
-      sessions[session] = { trades: 0, profit: 0, wins: 0 };
-    }
-
-    sessions[session].trades += 1;
-    sessions[session].profit += profit;
-    if (profit > 0) {
-      sessions[session].wins += 1;
-    }
-  }
-
-  return Object.entries(sessions).map(([name, value]) => ({
-    name,
-    trades: value.trades,
-    profit: value.profit,
-    winRate: value.trades > 0 ? (value.wins / value.trades) * 100 : 0,
-  }));
-}
-
-export function buildTradeStreakCalendarFromTrades(
-  trades: DashboardFilteredTrade[]
-) {
-  if (trades.length === 0) {
-    return null;
-  }
-
-  const tradesByDate: Record<string, { profit: number; count: number }> = {};
-
-  for (const trade of trades) {
-    const timestamp = getTradeTimestamp(trade);
-    if (!timestamp) continue;
-
-    const date = new Date(timestamp).toISOString().split("T")[0];
-    if (!date) continue;
-
-    if (!tradesByDate[date]) {
-      tradesByDate[date] = { profit: 0, count: 0 };
-    }
-
-    tradesByDate[date].profit += Number(trade.profit ?? 0);
-    tradesByDate[date].count += 1;
-  }
-
-  const sortedDates = Object.keys(tradesByDate).sort();
-  let maxWinStreak = 0;
-  let maxLoseStreak = 0;
-  let currentWinStreak = 0;
-  let currentLoseStreak = 0;
-
-  for (const date of sortedDates) {
-    const dayProfit = tradesByDate[date].profit;
-    if (dayProfit >= 0) {
-      currentWinStreak += 1;
-      currentLoseStreak = 0;
-      maxWinStreak = Math.max(maxWinStreak, currentWinStreak);
-    } else {
-      currentLoseStreak += 1;
-      currentWinStreak = 0;
-      maxLoseStreak = Math.max(maxLoseStreak, currentLoseStreak);
-    }
-  }
-
-  const today = new Date();
-  const calendar: Array<{ date: string; profit: number; count: number }> = [];
-  for (let index = 29; index >= 0; index -= 1) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - index);
-    const key = date.toISOString().split("T")[0];
-    const dayData = tradesByDate[key] || { profit: 0, count: 0 };
-    calendar.push({
-      date: key,
-      profit: dayData.profit,
-      count: dayData.count,
-    });
-  }
-
-  return {
-    maxWinStreak,
-    maxLoseStreak,
-    calendar,
-    totalGreenDays: calendar.filter((day) => day.profit > 0).length,
-    totalRedDays: calendar.filter((day) => day.profit < 0).length,
-  };
-}
+export {
+  buildSessionPerformanceFromTrades,
+  buildTradeStreakCalendarFromTrades,
+};

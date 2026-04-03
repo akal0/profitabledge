@@ -393,7 +393,6 @@ export function AccountEquityCard({
                 : formatSignedCurrencyValue(totalFloatingPL, currencyCode, {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
-                    showPositiveSign: true,
                   })}
             </span>
           </div>

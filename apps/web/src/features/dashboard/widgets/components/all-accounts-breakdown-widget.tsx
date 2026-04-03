@@ -189,7 +189,6 @@ export function AllAccountsBreakdownWidget({
                             {
                               minimumFractionDigits: 0,
                               maximumFractionDigits: 0,
-                              showPositiveSign: true,
                             }
                           )}
                         </p>

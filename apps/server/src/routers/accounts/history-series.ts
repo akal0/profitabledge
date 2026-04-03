@@ -1,10 +1,15 @@
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  convertCurrencyAmount,
+  normalizeCurrencyCode,
+} from "@profitabledge/contracts/currency";
 import { z } from "zod";
 
 import { db } from "../../db";
-import { trade } from "../../db/schema/trading";
+import { trade, tradingAccount } from "../../db/schema/trading";
 import {
   buildAccountScopeCondition,
+  isAllAccountsScope,
   resolveScopedAccountIds,
 } from "../../lib/account-scope";
 import {
@@ -122,6 +127,28 @@ async function resolveAccountTradeScope(userId: string, accountId: string) {
   return buildAccountScopeCondition(trade.accountId, accountIds);
 }
 
+async function getAccountCurrencyById(accountIds: string[]) {
+  if (accountIds.length === 0) {
+    return new Map<string, string | undefined>();
+  }
+
+  const accountRows = await db
+    .select({
+      id: tradingAccount.id,
+      initialCurrency: tradingAccount.initialCurrency,
+    })
+    .from(tradingAccount)
+    .where(
+      accountIds.length === 1
+        ? eq(tradingAccount.id, accountIds[0])
+        : inArray(tradingAccount.id, accountIds)
+    );
+
+  return new Map(
+    accountRows.map((row) => [row.id, normalizeCurrencyCode(row.initialCurrency)])
+  );
+}
+
 export const recentByDayProcedure = protectedProcedure
   .input(
     z.object({
@@ -129,17 +156,34 @@ export const recentByDayProcedure = protectedProcedure
       days: z.number().min(1).max(31).optional(),
       startISO: z.string().optional(),
       endISO: z.string().optional(),
+      currencyCode: z.string().trim().min(1).optional(),
     })
   )
   .query(async ({ input, ctx }) => {
-    const tradeScope = await resolveAccountTradeScope(
+    const accountIds = await resolveScopedAccountIds(
       ctx.session.user.id,
       input.accountId
     );
+
+    if (accountIds.length === 0) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Account not found",
+      });
+    }
+
+    const tradeScope = buildAccountScopeCondition(trade.accountId, accountIds);
+    const targetCurrencyCode = isAllAccountsScope(input.accountId)
+      ? normalizeCurrencyCode(input.currencyCode)
+      : undefined;
+    const accountCurrencyById = targetCurrencyCode
+      ? await getAccountCurrencyById(accountIds)
+      : null;
     const maxWindowDays = input.days ?? 42;
 
     const rows = await db
       .select({
+        accountId: trade.accountId,
         profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
         commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
         swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
@@ -154,10 +198,13 @@ export const recentByDayProcedure = protectedProcedure
 
     const tradeDays = rows.map((row) => ({
       ymd: extractTradeYmd(row),
-      profit:
+      profit: convertCurrencyAmount(
         Number(row.profit || 0) +
-        Number(row.commissions || 0) +
-        Number(row.swap || 0),
+          Number(row.commissions || 0) +
+          Number(row.swap || 0),
+        accountCurrencyById?.get(row.accountId),
+        targetCurrencyCode
+      ),
     }));
 
     if (tradeDays.length === 0) {
@@ -247,19 +294,38 @@ export const rangeSummaryProcedure = protectedProcedure
       accountId: z.string().min(1),
       startISO: z.string().min(1),
       endISO: z.string().min(1),
+      currencyCode: z.string().trim().min(1).optional(),
     })
   )
   .query(async ({ input, ctx }) => {
-    const tradeScope = await resolveAccountTradeScope(
+    const accountIds = await resolveScopedAccountIds(
       ctx.session.user.id,
       input.accountId
     );
+
+    if (accountIds.length === 0) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Account not found",
+      });
+    }
+
+    const tradeScope = buildAccountScopeCondition(trade.accountId, accountIds);
+    const targetCurrencyCode = isAllAccountsScope(input.accountId)
+      ? normalizeCurrencyCode(input.currencyCode)
+      : undefined;
+    const accountCurrencyById = targetCurrencyCode
+      ? await getAccountCurrencyById(accountIds)
+      : null;
     const startYmd = String(input.startISO).slice(0, 10);
     const endYmd = String(input.endISO).slice(0, 10);
 
     const rows = await db
       .select({
+        accountId: trade.accountId,
         profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
+        commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
+        swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
         openRaw: sql<string | null>`${trade.open}`,
         closeRaw: sql<string | null>`${trade.close}`,
         openTime: trade.openTime,
@@ -295,7 +361,13 @@ export const rangeSummaryProcedure = protectedProcedure
       const ymd = extractTradeYmd(row);
       if (ymd < startYmd || ymd > endYmd) continue;
 
-      const profit = Number(row.profit || 0);
+      const profit = convertCurrencyAmount(
+        Number(row.profit || 0) +
+          Number(row.commissions || 0) +
+          Number(row.swap || 0),
+        accountCurrencyById?.get(row.accountId),
+        targetCurrencyCode
+      );
       totalTrades += 1;
       if (profit > 0) wins += 1;
       if (profit < 0) losses += 1;
@@ -340,18 +412,35 @@ export const profitByAssetRangeProcedure = protectedProcedure
       accountId: z.string().min(1),
       startISO: z.string().optional(),
       endISO: z.string().optional(),
+      currencyCode: z.string().trim().min(1).optional(),
     })
   )
   .query(async ({ input, ctx }) => {
-    const tradeScope = await resolveAccountTradeScope(
+    const accountIds = await resolveScopedAccountIds(
       ctx.session.user.id,
       input.accountId
     );
+
+    if (accountIds.length === 0) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Account not found",
+      });
+    }
+
+    const tradeScope = buildAccountScopeCondition(trade.accountId, accountIds);
+    const targetCurrencyCode = isAllAccountsScope(input.accountId)
+      ? normalizeCurrencyCode(input.currencyCode)
+      : undefined;
+    const accountCurrencyById = targetCurrencyCode
+      ? await getAccountCurrencyById(accountIds)
+      : null;
     const userMappings = await listUserSymbolMappings(ctx.session.user.id);
     const symbolResolver = createSymbolResolver(userMappings);
 
     const rows = await db
       .select({
+        accountId: trade.accountId,
         profit: sql<number>`CAST(${trade.profit} AS NUMERIC)`,
         commissions: sql<number | null>`CAST(${trade.commissions} AS NUMERIC)`,
         swap: sql<number | null>`CAST(${trade.swap} AS NUMERIC)`,
@@ -398,10 +487,13 @@ export const profitByAssetRangeProcedure = protectedProcedure
         totalProfit: 0,
         displaySymbol: groupDisplay.get(key) ?? row.symbol ?? "(UNKNOWN)",
       };
-      existing.totalProfit +=
+      existing.totalProfit += convertCurrencyAmount(
         Number(row.profit || 0) +
-        Number(row.commissions || 0) +
-        Number(row.swap || 0);
+          Number(row.commissions || 0) +
+          Number(row.swap || 0),
+        accountCurrencyById?.get(row.accountId),
+        targetCurrencyCode
+      );
       bySymbol.set(key, existing);
     }
 

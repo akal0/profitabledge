@@ -4,6 +4,10 @@ import { queryClient, trpcOptions } from "@/utils/trpc";
 import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
 import { useDateRangeStore } from "@/stores/date-range";
 import {
+  getAvailableDashboardCurrencyCodes,
+  resolveDashboardCurrencyCode,
+} from "@/features/dashboard/home/lib/dashboard-currency";
+import {
   addDays,
   clampRange,
   endOfMonth,
@@ -15,6 +19,7 @@ const DEFERRED_WARMUP_TIMEOUT_MS = 1200;
 
 type WarmupAccount = {
   id: string;
+  initialCurrency?: string | null;
 };
 
 type OpenBounds = {
@@ -91,6 +96,20 @@ function deriveDashboardRangeState(bounds: OpenBounds | null | undefined) {
     visibleRange,
     calendarFetchRange,
   };
+}
+
+function resolveDashboardWorkspaceCurrencyCode(
+  accounts: WarmupAccount[],
+  selectedAccountId: string
+) {
+  return resolveDashboardCurrencyCode({
+    isAllAccounts: selectedAccountId === ALL_ACCOUNTS_ID,
+    preferredCurrencyCode: useAccountStore.getState().allAccountsPreferredCurrencyCode,
+    availableCurrencyCodes: getAvailableDashboardCurrencyCodes(accounts),
+    selectedAccountCurrency:
+      accounts.find((account) => account.id === selectedAccountId)?.initialCurrency ??
+      null,
+  });
 }
 
 function syncDashboardStores(
@@ -227,11 +246,16 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
   const visibleRange = rangeState?.visibleRange;
   const calendarFetchRange = rangeState?.calendarFetchRange;
   const hasScopedAccountSelection = selectedAccountId !== ALL_ACCOUNTS_ID;
+  const currencyCode = resolveDashboardWorkspaceCurrencyCode(
+    accounts,
+    selectedAccountId
+  );
 
   const eagerWarmups = [
     queryClient.prefetchQuery({
       ...trpcOptions.accounts.stats.queryOptions({
         accountId: selectedAccountId,
+        currencyCode,
       }),
       staleTime: 30_000,
     }),
@@ -262,6 +286,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
           accountId: selectedAccountId,
           startISO: visibleRange.start.toISOString(),
           endISO: visibleRange.end.toISOString(),
+          currencyCode,
         }),
         staleTime: 30_000,
       }),
@@ -270,6 +295,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
           accountId: selectedAccountId,
           startISO: visibleRange.start.toISOString(),
           endISO: visibleRange.end.toISOString(),
+          currencyCode,
         }),
         staleTime: 30_000,
       })
@@ -283,6 +309,7 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
           accountId: selectedAccountId,
           startISO: calendarFetchRange.start.toISOString(),
           endISO: calendarFetchRange.end.toISOString(),
+          currencyCode,
         }),
         staleTime: 30_000,
       })
@@ -387,14 +414,15 @@ export async function prefetchDashboardWorkspace(targetPath: string) {
 
   if (visibleRange && hasScopedAccountSelection) {
     deferredWarmups.push(() =>
-      queryClient.prefetchQuery({
-        ...trpcOptions.accounts.profitByAssetRange.queryOptions({
-          accountId: selectedAccountId,
-          startISO: visibleRange.start.toISOString(),
-          endISO: visibleRange.end.toISOString(),
-        }),
-        staleTime: 30_000,
-      })
+        queryClient.prefetchQuery({
+          ...trpcOptions.accounts.profitByAssetRange.queryOptions({
+            accountId: selectedAccountId,
+            startISO: visibleRange.start.toISOString(),
+            endISO: visibleRange.end.toISOString(),
+            currencyCode,
+          }),
+          staleTime: 30_000,
+        })
     );
   }
 

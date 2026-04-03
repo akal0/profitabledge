@@ -20,6 +20,15 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { trpcClient } from "@/utils/trpc";
+import {
+  useDashboardTradeFilters,
+} from "@/features/dashboard/filters/dashboard-trade-filters";
+import {
+  buildLossesByAssetFromTrades,
+  buildProfitByAssetFromTrades,
+  buildProfitByDayFromTrades,
+  buildTradeCountsFromTrades,
+} from "@/features/dashboard/filters/dashboard-trade-metrics";
 
 import InfinityIcon from "@/public/icons/infinity.svg";
 
@@ -36,6 +45,17 @@ import {
   type WidgetValueCardProps,
 } from "../lib/widget-shared";
 import { AnimatedNumber } from "@/components/ui/animated-number";
+
+function isUsingFilteredWidgetState(
+  accountId: string | undefined,
+  dashboardTradeFilters: ReturnType<typeof useDashboardTradeFilters>
+) {
+  return Boolean(
+    accountId &&
+      dashboardTradeFilters?.hasActiveFilters &&
+      dashboardTradeFilters.accountId === accountId
+  );
+}
 
 export function TotalLossesCard({
   accountId,
@@ -57,11 +77,26 @@ export function TotalLossesCard({
   const [page, setPage] = useState(0);
   const pageSize = 3;
   const { data: statsData } = useAccountStats(accountId);
+  const dashboardTradeFilters = useDashboardTradeFilters();
+  const isUsingFilteredTrades = isUsingFilteredWidgetState(
+    accountId,
+    dashboardTradeFilters
+  );
   const initialBalance = toNumber(statsData?.initialBalance ?? 0);
   const hasBaseline = initialBalance > 0;
   const riskUnit = getRiskUnitForR(statsData);
 
   useEffect(() => {
+    if (isUsingFilteredTrades) {
+      setRows(
+        buildLossesByAssetFromTrades(
+          dashboardTradeFilters?.filteredTrades ?? []
+        ) as LossRow[]
+      );
+      setLoading(Boolean(dashboardTradeFilters?.isLoading));
+      return;
+    }
+
     (async () => {
       if (!accountId) return;
       setLoading(true);
@@ -74,7 +109,12 @@ export function TotalLossesCard({
         setLoading(false);
       }
     })();
-  }, [accountId]);
+  }, [
+    accountId,
+    dashboardTradeFilters?.filteredTrades,
+    dashboardTradeFilters?.isLoading,
+    isUsingFilteredTrades,
+  ]);
 
   useEffect(() => setPage(0), [rows]);
 
@@ -255,6 +295,11 @@ export function ConsistencyScoreCard({
   isEditing = false,
   className,
 }: WidgetCardProps) {
+  const dashboardTradeFilters = useDashboardTradeFilters();
+  const isUsingFilteredTrades = isUsingFilteredWidgetState(
+    accountId,
+    dashboardTradeFilters
+  );
   const [range, setRange] = useState("all");
   const [byDay, setByDay] = useState<Array<{ dateISO: string; totalProfit: number }>>(
     []
@@ -264,6 +309,20 @@ export function ConsistencyScoreCard({
   >([{ key: "all", label: "All time" }]);
 
   useEffect(() => {
+    if (isUsingFilteredTrades) {
+      const filteredByDay = buildProfitByDayFromTrades(
+        dashboardTradeFilters?.filteredTrades ?? [],
+        dashboardTradeFilters?.filters
+      );
+      setByDay(
+        filteredByDay.map((day) => ({
+          dateISO: day.dateISO,
+          totalProfit: Number(day.totalProfit || 0),
+        }))
+      );
+      return;
+    }
+
     (async () => {
       if (!accountId) return;
       try {
@@ -299,9 +358,18 @@ export function ConsistencyScoreCard({
         setOptions([{ key: "all", label: "All time" }]);
       }
     })();
-  }, [accountId]);
+  }, [
+    accountId,
+    dashboardTradeFilters?.filteredTrades,
+    dashboardTradeFilters?.filters,
+    isUsingFilteredTrades,
+  ]);
 
   useEffect(() => {
+    if (isUsingFilteredTrades) {
+      return;
+    }
+
     (async () => {
       if (!accountId) return;
       try {
@@ -321,7 +389,14 @@ export function ConsistencyScoreCard({
         setByDay([]);
       }
     })();
-  }, [accountId, options, range]);
+  }, [
+    accountId,
+    dashboardTradeFilters?.filteredTrades,
+    dashboardTradeFilters?.filters,
+    isUsingFilteredTrades,
+    options,
+    range,
+  ]);
 
   const totalDays = byDay.length;
   const profitableDays = byDay.filter((day) => day.totalProfit > 0).length;
@@ -337,7 +412,7 @@ export function ConsistencyScoreCard({
       isEditing={isEditing}
       className={className}
       headerRight={
-        !isEditing && !hasNoTrades ? (
+        !isEditing && !hasNoTrades && !isUsingFilteredTrades ? (
           <div
             className="flex items-center gap-2"
             onPointerDown={(event) => event.stopPropagation()}
@@ -401,6 +476,11 @@ export function AssetProfitabilityCard({
   className,
   currencyCode,
 }: WidgetCardProps) {
+  const dashboardTradeFilters = useDashboardTradeFilters();
+  const isUsingFilteredTrades = isUsingFilteredWidgetState(
+    accountId,
+    dashboardTradeFilters
+  );
   const [showWorst, setShowWorst] = useState(false);
   const [rows, setRows] = useState<Array<{ symbol: string; totalProfit: number }>>(
     []
@@ -409,6 +489,12 @@ export function AssetProfitabilityCard({
   const [page, setPage] = useState(0);
 
   useEffect(() => {
+    if (isUsingFilteredTrades) {
+      setRows(buildProfitByAssetFromTrades(dashboardTradeFilters?.filteredTrades ?? []));
+      setLoading(Boolean(dashboardTradeFilters?.isLoading));
+      return;
+    }
+
     (async () => {
       if (!accountId) return;
       setLoading(true);
@@ -421,7 +507,12 @@ export function AssetProfitabilityCard({
         setLoading(false);
       }
     })();
-  }, [accountId]);
+  }, [
+    accountId,
+    dashboardTradeFilters?.filteredTrades,
+    dashboardTradeFilters?.isLoading,
+    isUsingFilteredTrades,
+  ]);
 
   const list = useMemo(() => {
     const filtered = rows.filter((row) => {
@@ -559,6 +650,11 @@ export function TradeCountsCard({
   isEditing = false,
   className,
 }: WidgetCardProps) {
+  const dashboardTradeFilters = useDashboardTradeFilters();
+  const isUsingFilteredTrades = isUsingFilteredWidgetState(
+    accountId,
+    dashboardTradeFilters
+  );
   const [loading, setLoading] = useState(false);
   const [byDay, setByDay] = useState<Array<{ dateISO: string; count: number }>>(
     []
@@ -571,6 +667,18 @@ export function TradeCountsCard({
   );
 
   useEffect(() => {
+    if (isUsingFilteredTrades) {
+      const filteredCounts = buildTradeCountsFromTrades(
+        dashboardTradeFilters?.filteredTrades ?? [],
+        dashboardTradeFilters?.filters
+      );
+      setByDay([...filteredCounts.byDay]);
+      setByWeek([...filteredCounts.byWeek]);
+      setByMonth([...filteredCounts.byMonth]);
+      setLoading(Boolean(dashboardTradeFilters?.isLoading));
+      return;
+    }
+
     (async () => {
       if (!accountId) return;
       setLoading(true);
@@ -585,7 +693,13 @@ export function TradeCountsCard({
         setLoading(false);
       }
     })();
-  }, [accountId]);
+  }, [
+    accountId,
+    dashboardTradeFilters?.filteredTrades,
+    dashboardTradeFilters?.filters,
+    dashboardTradeFilters?.isLoading,
+    isUsingFilteredTrades,
+  ]);
 
   const rows = useMemo(() => {
     const totalTrades = byDay.reduce((sum, item) => sum + (item.count || 0), 0);

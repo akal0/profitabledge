@@ -32,6 +32,10 @@ import { Separator } from "@/components/ui/separator";
 import { UsageMeter } from "@/components/usage-meter";
 import { InvoiceHistoryTable } from "@/features/settings/billing/components/invoice-history-table";
 import {
+  getBillingPlanTitle,
+  getNextBillingPlanKey,
+} from "@/features/settings/billing/lib/plan-labels";
+import {
   formatLiveSyncSlots,
   getPlanFeatureLines,
 } from "@/features/settings/billing/lib/plan-copy";
@@ -849,11 +853,16 @@ export default function BillingSettingsPage() {
           {plans.map((plan) => {
             const isActivePlan = plan.key === activePlanKey;
             const planKey = plan.key as BillingPlanKey;
+            const nextPlanKey = getNextBillingPlanKey(activePlanKey);
             const activePlanTier = BILLING_PLAN_TIER[activePlanKey] ?? 0;
             const planTier = BILLING_PLAN_TIER[planKey] ?? 0;
             const isHigherTierThanActive = planTier > activePlanTier;
             const isLowerPaidTierThanActive =
               !plan.isFree && planTier < activePlanTier;
+            const requiresIntermediateUpgrade =
+              isHigherTierThanActive &&
+              nextPlanKey !== null &&
+              planKey !== nextPlanKey;
             const hasSelectedIntervalConfigured = plan.isFree
               ? true
               : billingInterval === "annual"
@@ -876,7 +885,8 @@ export default function BillingSettingsPage() {
               hasSelectedIntervalConfigured &&
               !canChangeExistingSubscription &&
               isHigherTierThanActive &&
-              !canManageSubscription;
+              !canManageSubscription &&
+              !requiresIntermediateUpgrade;
             const showsMoveToFreeTier =
               plan.isFree &&
               activePlanKey !== "student" &&
@@ -1125,12 +1135,12 @@ export default function BillingSettingsPage() {
                             ctaButtonCn
                           )}
                         >
-                          <Sparkles className="size-3" />
-                          {createCheckout.isPending
-                            ? "Redirecting..."
-                            : billingInterval === "annual"
-                            ? `Switch to ${plan.title} annual`
-                            : `Upgrade to ${plan.title}`}
+                            <Sparkles className="size-3" />
+                            {createCheckout.isPending
+                              ? "Redirecting..."
+                              : billingInterval === "annual"
+                              ? `Switch to ${plan.title} annual`
+                              : `Upgrade to ${plan.title}`}
                         </Button>
                       ) : showsMoveToFreeTier ? (
                         <Button
@@ -1153,6 +1163,8 @@ export default function BillingSettingsPage() {
                         >
                           {plan.isFree
                             ? "Free forever"
+                            : requiresIntermediateUpgrade && nextPlanKey
+                              ? `Upgrade to ${getBillingPlanTitle(nextPlanKey)} first`
                             : !hasSelectedIntervalConfigured
                               ? `${billingInterval} not configured`
                             : isLowerPaidTierThanActive

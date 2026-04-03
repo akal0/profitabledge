@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/utils/trpc";
-import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
+import { useAccountStore } from "@/stores/account";
 import {
   Sheet,
   SheetContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { toast } from "sonner";
 import {
   Lightbulb,
   AlertTriangle,
@@ -83,13 +84,18 @@ function formatInsightTitle(title: string): string {
 
 export function InsightPanel() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
-  const insightAccountId = ALL_ACCOUNTS_ID;
+  const insightAccountId = accountId;
   const [open, setOpen] = useState(false);
 
   const { data: insightsData, refetch } = trpc.ai.getInsights.useQuery(
-    { accountId: insightAccountId, unreadOnly: false, limit: 20 },
-    { enabled: !!accountId && open, refetchInterval: 30_000 }
+    { accountId: insightAccountId || "", unreadOnly: false, limit: 20 },
+    { enabled: !!insightAccountId && open, refetchInterval: 30_000 }
   );
+  const { data: statsData, isLoading: statsLoading } =
+    trpc.accounts.stats.useQuery(
+      { accountId: insightAccountId || "" },
+      { enabled: !!insightAccountId && open, staleTime: 30_000 }
+    );
 
   const markRead = trpc.ai.markInsightRead.useMutation({
     onSuccess: () => refetch(),
@@ -99,11 +105,19 @@ export function InsightPanel() {
   });
   const generate = trpc.ai.generateInsightsManual.useMutation({
     onSuccess: () => refetch(),
+    onError: (error) => {
+      toast.error(error.message || "Unable to generate insights");
+    },
   });
   useTabAttentionActivity("insights", generate.isPending);
 
   const insights = insightsData?.items ?? [];
   const unreadCount = insightsData?.unreadCount ?? 0;
+  const closedTradeCount =
+    Number(statsData?.wins ?? 0) +
+    Number(statsData?.losses ?? 0) +
+    Number(statsData?.breakeven ?? 0);
+  const hasClosedTrades = closedTradeCount > 0;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -130,7 +144,11 @@ export function InsightPanel() {
                   AI Insights
                 </SheetTitle>
                 <p className="text-xs text-white/40">
-                  Proactive insights from your Trading Brain
+                  {statsLoading
+                    ? "Checking closed trades on this account..."
+                    : hasClosedTrades
+                    ? "Proactive insights from your Trading Brain"
+                    : "No closed trades on this account yet."}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -144,9 +162,11 @@ export function InsightPanel() {
                   size="sm"
                   className="h-8 gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-3 text-xs text-white/60 hover:text-white"
                   onClick={() => {
-                    if (accountId) generate.mutate({ accountId: insightAccountId });
+                    if (insightAccountId && hasClosedTrades) {
+                      generate.mutate({ accountId: insightAccountId });
+                    }
                   }}
-                  disabled={generate.isPending}
+                  disabled={generate.isPending || !insightAccountId || statsLoading || !hasClosedTrades}
                 >
                   <RefreshCw
                     className={cn(
@@ -174,22 +194,28 @@ export function InsightPanel() {
               No insights yet
             </p>
             <p className="mt-1 max-w-xs text-xs text-white/30">
-              {generate.data?.count === 0
+              {!hasClosedTrades
+                ? "This account has no closed trades yet. Close a trade first, then come back to generate account-specific insights."
+                : generate.data?.count === 0
                 ? "Not enough trade history to generate insights. Keep trading and try again."
                 : "Keep trading and the AI will generate personalized insights based on your patterns."}
             </p>
-            {accountId && (
+            {insightAccountId && (
               <Button
                 variant="ghost"
                 size="sm"
                 className="mt-4 h-8 gap-1.5 rounded-sm ring ring-white/5 bg-sidebar-accent px-4 text-xs text-white/60 hover:text-white"
                 onClick={() => generate.mutate({ accountId: insightAccountId })}
-                disabled={generate.isPending}
+                disabled={generate.isPending || statsLoading || !hasClosedTrades}
               >
                 <RefreshCw
                   className={cn("size-3", generate.isPending && "animate-spin")}
                 />
-                {generate.isPending ? "Generating…" : "Generate now"}
+                {generate.isPending
+                  ? "Generating…"
+                  : hasClosedTrades
+                  ? "Generate now"
+                  : "No closed trades yet"}
               </Button>
             )}
           </div>
@@ -306,11 +332,11 @@ export function InsightPanel() {
  */
 export function InsightBadge() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
-  const insightAccountId = ALL_ACCOUNTS_ID;
+  const insightAccountId = accountId;
 
   const { data } = trpc.ai.getInsights.useQuery(
-    { accountId: insightAccountId, unreadOnly: true, limit: 1 },
-    { enabled: !!accountId, refetchInterval: 30_000 }
+    { accountId: insightAccountId || "", unreadOnly: true, limit: 1 },
+    { enabled: !!insightAccountId, refetchInterval: 30_000 }
   );
 
   const count = data?.unreadCount ?? 0;

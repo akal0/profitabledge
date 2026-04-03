@@ -4,9 +4,9 @@ import {
   TRADE_IDENTIFIER_TONES,
 } from "@/components/trades/trade-identifier-pill";
 import {
-  formatCurrencyValue,
   formatNumberValue,
 } from "@/lib/trade-formatting";
+import { formatSignedCurrencyValue } from "@/features/dashboard/widgets/lib/widget-shared";
 
 import type {
   CalendarGoal,
@@ -99,17 +99,16 @@ export function clampRange(
   return { start: nextStart, end: nextEnd };
 }
 
-export function formatMoney(value: number) {
-  return formatCurrencyValue(value, {
+export function formatMoney(value: number, currencyCode?: string | null) {
+  return formatSignedCurrencyValue(value, currencyCode, {
     maximumFractionDigits: 0,
-    showPlus: true,
   });
 }
 
-export function formatTradePillMoney(value: number) {
+export function formatTradePillMoney(value: number, currencyCode?: string | null) {
   const abs = Math.abs(value);
   const hasFraction = !Number.isInteger(abs);
-  return formatCurrencyValue(value, {
+  return formatSignedCurrencyValue(value, currencyCode, {
     minimumFractionDigits: hasFraction ? 2 : 0,
     maximumFractionDigits: hasFraction ? 2 : 0,
   });

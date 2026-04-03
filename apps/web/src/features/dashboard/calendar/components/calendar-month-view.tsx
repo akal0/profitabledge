@@ -40,6 +40,7 @@ import {
 type CalendarMonthViewProps = {
   monthGrid: Date[];
   activeMonth: number | null;
+  currencyCode?: string | null;
   showWeekends: boolean;
   dayMap: Map<string, DayRow>;
   goalMap: Map<string, GoalMarker[]>;
@@ -101,6 +102,7 @@ function buildGroupedPreviewRows(rows: TradePreview[]) {
 export function CalendarMonthView({
   monthGrid,
   activeMonth,
+  currencyCode,
   showWeekends,
   dayMap,
   goalMap,
@@ -200,11 +202,11 @@ export function CalendarMonthView({
                     displayProfit === 0 ? "text-white/50" : ""
                   )}
                 >
-                  {formatMoney(displayProfit)}
+                  {formatMoney(displayProfit, currencyCode)}
                 </div>
                 {count > 0 && liveCount > 0 ? (
                   <div className="text-[10px] font-medium text-cyan-200/80">
-                    Live {formatMoney(liveProfit)}
+                    Live {formatMoney(liveProfit, currencyCode)}
                   </div>
                 ) : null}
                 <div className="text-[10px] font-medium text-white/25">
@@ -294,10 +296,11 @@ export function CalendarMonthView({
                                     Number(group.totalProfit || 0)
                                   )
                                 )}
-                              >
-                                {formatTradePillMoney(
-                                  Number(group.totalProfit || 0)
-                                )}
+                                >
+                                  {formatTradePillMoney(
+                                    Number(group.totalProfit || 0),
+                                    currencyCode
+                                  )}
                               </span>
                               {group.items.length > 1 ? (
                                 <GroupedTradeMultiplierChip
@@ -352,7 +355,8 @@ export function CalendarMonthView({
                                           )}
                                         >
                                           {formatTradePillMoney(
-                                            Number(row?.profit || 0)
+                                            Number(row?.profit || 0),
+                                            currencyCode
                                           )}
                                         </span>
                                       </div>

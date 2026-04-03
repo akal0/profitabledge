@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buildNotificationPresentation } from "@profitabledge/platform";
-import { ALL_ACCOUNTS_ID, useAccountStore } from "@/stores/account";
+import { useAccountStore } from "@/stores/account";
 import { trpcClient } from "@/utils/trpc";
 import { toast } from "sonner";
 import { Lightbulb } from "lucide-react";
@@ -77,7 +77,6 @@ export async function showInsightToast(
 
 export function InsightToastTestButton() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
-  const insightAccountId = ALL_ACCOUNTS_ID;
   const [isPending, setIsPending] = useState(false);
 
   const handleClick = async () => {
@@ -85,7 +84,7 @@ export function InsightToastTestButton() {
 
     setIsPending(true);
     try {
-      await showInsightToast(insightAccountId, { recordShownAt: false });
+      await showInsightToast(accountId, { recordShownAt: false });
     } catch (error) {
       console.error("Failed to trigger insight toast:", error);
       toast.error("Failed to trigger insight toast");
@@ -111,7 +110,6 @@ export function InsightToastTestButton() {
 
 export function AIInsightToast() {
   const accountId = useAccountStore((s) => s.selectedAccountId);
-  const insightAccountId = ALL_ACCOUNTS_ID;
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasShownLoginInsight = useRef(false);
 
@@ -119,11 +117,11 @@ export function AIInsightToast() {
     if (!accountId) return;
 
     try {
-      await showInsightToast(insightAccountId);
+      await showInsightToast(accountId);
     } catch (error) {
       console.error("Failed to fetch insight:", error);
     }
-  }, [accountId, insightAccountId]);
+  }, [accountId]);
 
   useEffect(() => {
     if (!accountId) return;

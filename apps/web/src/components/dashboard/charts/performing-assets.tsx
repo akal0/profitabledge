@@ -111,6 +111,7 @@ export function PerformingAssetsBarChart({
       maxDate: max,
     });
   }, [max, min, myMode, resolvedRange]);
+  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -123,6 +124,7 @@ export function PerformingAssetsBarChart({
           accountId,
           startISO: resolvedRange.start.toISOString(),
           endISO: resolvedRange.end.toISOString(),
+          currencyCode: resolvedCurrencyCode,
         }),
         staleTime: 30_000,
       });
@@ -132,6 +134,7 @@ export function PerformingAssetsBarChart({
               accountId,
               startISO: comparisonRange.start.toISOString(),
               endISO: comparisonRange.end.toISOString(),
+              currencyCode: resolvedCurrencyCode,
             }),
             staleTime: 30_000,
           })
@@ -195,14 +198,13 @@ export function PerformingAssetsBarChart({
     return () => {
       cancelled = true;
     };
-  }, [accountId, comparisonRange, resolvedRange, rows]);
+  }, [accountId, comparisonRange, resolvedCurrencyCode, resolvedRange, rows]);
   const [activeIndex, setActiveIndex] = React.useState<number | undefined>(
     undefined
   );
   const [activeDataset, setActiveDataset] = React.useState<
     "profit" | "compare" | undefined
   >(undefined);
-  const resolvedCurrencyCode = useChartCurrencyCode(accountId, currencyCode);
 
   const primarySeries = rows ?? series;
   const secondarySeries = comparisonRows ?? comparisonSeries;

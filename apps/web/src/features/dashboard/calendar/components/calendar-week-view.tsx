@@ -38,6 +38,7 @@ import {
 } from "../lib/calendar-utils";
 
 type CalendarWeekViewProps = {
+  currencyCode?: string | null;
   days: DayRow[];
   goalMap: Map<string, GoalMarker[]>;
   goalOverlay: boolean;
@@ -95,6 +96,7 @@ function buildGroupedPreviewRows(rows: TradePreview[]) {
 }
 
 export function CalendarWeekView({
+  currencyCode,
   days,
   goalMap,
   goalOverlay,
@@ -220,7 +222,10 @@ export function CalendarWeekView({
                               getTradePillProfitTone(Number(group.totalProfit || 0))
                             )}
                           >
-                            {formatTradePillMoney(Number(group.totalProfit || 0))}
+                            {formatTradePillMoney(
+                              Number(group.totalProfit || 0),
+                              currencyCode
+                            )}
                           </span>
                           {group.items.length > 1 ? (
                             <GroupedTradeMultiplierChip
@@ -263,7 +268,8 @@ export function CalendarWeekView({
                                       )}
                                     >
                                       {formatTradePillMoney(
-                                        Number(row?.profit || 0)
+                                        Number(row?.profit || 0),
+                                        currencyCode
                                       )}
                                     </span>
                                   </div>
@@ -322,12 +328,12 @@ export function CalendarWeekView({
                       displayProfit === 0 ? "text-white/50" : ""
                     )}
                   >
-                    {formatMoney(displayProfit)}
+                    {formatMoney(displayProfit, currencyCode)}
                   </div>
                 </div>
                 {dayRow.count > 0 && liveCount > 0 ? (
                   <div className="mt-1 text-[11px] font-medium text-cyan-200/80">
-                    Live {formatMoney(liveProfit)}
+                    Live {formatMoney(liveProfit, currencyCode)}
                   </div>
                 ) : null}
                 <div className="mt-1 text-xs font-medium text-white/25">

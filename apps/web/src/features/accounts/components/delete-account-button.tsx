@@ -59,11 +59,19 @@ export function DeleteAccountButton({
       });
 
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: [["accounts"]] }),
-        queryClient.invalidateQueries({ queryKey: [["connections"]] }),
-        queryClient.invalidateQueries({ queryKey: [["propFirms"]] }),
-        queryClient.invalidateQueries({ queryKey: [["trades"]] }),
-        queryClient.invalidateQueries({ queryKey: [["stats"]] }),
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const key = JSON.stringify(query.queryKey);
+            return (
+              key.includes('"accounts"') ||
+              key.includes('"connections"') ||
+              key.includes('"propFirms"') ||
+              key.includes('"trades"') ||
+              key.includes('"stats"') ||
+              key.includes('"goals"')
+            );
+          },
+        }),
       ]);
 
       toast.success("Account deleted");

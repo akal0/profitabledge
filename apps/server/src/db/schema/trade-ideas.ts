@@ -14,9 +14,10 @@ import {
 
 import type { StoredProfileEffects } from "../../lib/profile-effects";
 import { user } from "./auth";
-import { journalEntry } from "./journal";
+import { journalEntry, type TradePhase } from "./journal";
 
 export type TradeIdeaDirection = "long" | "short";
+export type TradeIdeaPhase = TradePhase;
 
 export const tradeIdeaShare = pgTable(
   "trade_idea_share",
@@ -41,6 +42,7 @@ export const tradeIdeaShare = pgTable(
 
     title: text("title"),
     description: text("description"),
+    tradePhase: varchar("trade_phase", { length: 20 }).$type<TradeIdeaPhase>(),
     strategyName: text("strategy_name"),
     timeframe: varchar("timeframe", { length: 10 }),
     session: varchar("session", { length: 30 }),

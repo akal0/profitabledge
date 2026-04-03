@@ -24,6 +24,7 @@ import {
   formatAccessibleDate,
   formatDuration,
   formatMoney,
+  formatSignedPercentValue,
   formatTooltipDate,
   formatTradeCount,
   formatTradePillMoney,
@@ -127,7 +128,7 @@ export function CalendarWeekView({
           initialBalance && initialBalance > 0
             ? (Number(displayProfit || 0) / initialBalance) * 100
             : 0;
-        const pctLabel = `${pctValue >= 0 ? "+" : ""}${pctValue.toFixed(2)}%`;
+        const pctLabel = formatSignedPercentValue(pctValue);
         const heatBg = heatmapEnabled
           ? getHeatmapBg(displayProfit, totalCount, heatmapMaxAbs)
           : undefined;

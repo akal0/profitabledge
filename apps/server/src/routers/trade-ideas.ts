@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { db } from "../db";
 import { user as userTable } from "../db/schema/auth";
-import { tradeIdeaShare } from "../db/schema/trade-ideas";
+import { tradeIdeaShare, type TradeIdeaPhase } from "../db/schema/trade-ideas";
 import {
   buildTradeIdeaDraft,
   generateTradeIdeaDescription,
@@ -21,6 +21,7 @@ const shareTokenGenerator = customAlphabet(
 );
 
 const directionSchema = z.enum(["long", "short"]);
+const tradeIdeaPhaseSchema = z.enum(["pre-trade", "during-trade", "post-trade"]);
 
 function requireIdeaOwnership(userId: string, ideaId: string) {
   return db
@@ -102,13 +103,6 @@ export const tradeIdeasRouter = router({
         });
       }
 
-      if (draft.tradePhase && draft.tradePhase !== "pre-trade") {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Only pre-trade journal entries can be shared as trade ideas.",
-        });
-      }
-
       if (!draft.direction) {
         throw new TRPCError({
           code: "BAD_REQUEST",
@@ -149,6 +143,7 @@ export const tradeIdeasRouter = router({
           description: generateTradeIdeaDescription(
             input.description ?? draft.description
           ),
+          tradePhase: draft.tradePhase,
           strategyName: draft.strategyName,
           timeframe: normalizeOptionalText(input.timeframe),
           session: normalizeOptionalText(input.session),
@@ -196,6 +191,7 @@ export const tradeIdeasRouter = router({
         riskReward: z.string().optional(),
         title: z.string().trim().max(120).optional(),
         description: z.string().trim().max(500).optional(),
+        tradePhase: tradeIdeaPhaseSchema.default("pre-trade"),
         strategyName: z.string().trim().max(60).optional(),
         timeframe: z.string().trim().max(10).optional(),
         session: z.string().trim().max(30).optional(),
@@ -242,6 +238,7 @@ export const tradeIdeasRouter = router({
             direction: input.direction,
           }),
           description: generateTradeIdeaDescription(input.description),
+          tradePhase: input.tradePhase as TradeIdeaPhase,
           strategyName: normalizeOptionalText(input.strategyName),
           timeframe: normalizeOptionalText(input.timeframe),
           session: normalizeOptionalText(input.session),

@@ -1,5 +1,7 @@
 "use client";
 
+import "@/bones/registry";
+
 import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { QueryClientProvider } from "@tanstack/react-query";

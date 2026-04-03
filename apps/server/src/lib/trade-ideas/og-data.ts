@@ -5,13 +5,14 @@ import { user as userTable } from "../../db/schema/auth";
 import { journalEntry, journalMedia, type JournalBlock } from "../../db/schema/journal";
 import { edge, trade } from "../../db/schema/trading";
 import {
+  type TradeIdeaPhase,
   tradeIdeaShare,
   type TradeIdeaDirection,
 } from "../../db/schema/trade-ideas";
 
 export type TradeIdeaDraft = {
   journalEntryId: string;
-  tradePhase: string | null;
+  tradePhase: TradeIdeaPhase | null;
   symbol: string | null;
   direction: TradeIdeaDirection | null;
   entryPrice: string | null;
@@ -43,6 +44,7 @@ export type PublicTradeIdea = {
   riskReward: string | null;
   title: string | null;
   description: string | null;
+  tradePhase: TradeIdeaPhase | null;
   strategyName: string | null;
   timeframe: string | null;
   session: string | null;
@@ -145,6 +147,18 @@ export function generateTradeIdeaTitle(input: {
 
 export function generateTradeIdeaDescription(value?: string | null) {
   return truncate(stripHtml(value || ""), 500);
+}
+
+export function getTradeIdeaPhaseLabel(phase: TradeIdeaPhase | null | undefined) {
+  switch (phase) {
+    case "during-trade":
+      return "During-trade update";
+    case "post-trade":
+      return "Post-trade review";
+    case "pre-trade":
+    default:
+      return "Pre-trade analysis";
+  }
 }
 
 export function isTradeIdeaExpired(expiresAt: Date | null | undefined) {

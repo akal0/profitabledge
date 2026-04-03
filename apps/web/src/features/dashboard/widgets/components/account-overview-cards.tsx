@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { trpcClient, trpcOptions } from "@/utils/trpc";
 import { useStatsStore } from "@/stores/stats";
 import { ALL_ACCOUNTS_ID } from "@/stores/account";
+import { useDashboardTradeFilters } from "@/features/dashboard/filters/dashboard-trade-filters";
 
 import Bank from "@/public/icons/bank.svg";
 import CircleInfo from "@/public/icons/circle-info.svg";
@@ -47,6 +48,17 @@ import {
   type WidgetValueCardProps,
 } from "../lib/widget-shared";
 
+function useFilteredDateRangeActive(accountId?: string) {
+  const dashboardTradeFilters = useDashboardTradeFilters();
+
+  return Boolean(
+    accountId &&
+      dashboardTradeFilters?.accountId === accountId &&
+      (dashboardTradeFilters.filters.startDate ||
+        dashboardTradeFilters.filters.endDate)
+  );
+}
+
 export function AccountBalanceCard({
   accountId,
   isEditing = false,
@@ -54,6 +66,7 @@ export function AccountBalanceCard({
   currencyCode,
   className,
 }: WidgetValueCardProps) {
+  const hasFilteredDateRange = useFilteredDateRangeActive(accountId);
   const { data } = useAccountStats(accountId);
   const fetchStats = useStatsStore((state) => state.fetchStats);
   const [editingBaseline, setEditingBaseline] = useState(false);
@@ -80,7 +93,7 @@ export function AccountBalanceCard({
   );
   const totalProfit = toNumber(data?.totalProfit ?? 0);
   const closedBalance =
-    data?.accountBalance != null
+    !hasFilteredDateRange && data?.accountBalance != null
       ? toNumber(data.accountBalance)
       : initialBalance + totalProfit;
   const balance =
@@ -224,6 +237,8 @@ export function AccountBalanceCard({
             ? brokerType === "mt5" || brokerType === "mt4"
               ? `Live balance from ${brokerType.toUpperCase()} terminal`
               : "Live balance from Profitabledge"
+            : hasFilteredDateRange
+            ? "Baseline plus the closed P&L from your selected days"
             : "Sum of your all-time profit and initial account balance"}
         </p>
       </div>
@@ -420,6 +435,7 @@ export function WinRateCard({
   isEditing = false,
   className,
 }: WidgetCardProps) {
+  const hasFilteredDateRange = useFilteredDateRangeActive(accountId);
   const { data } = useAccountStats(accountId);
   const wins = Number(data?.wins ?? 0);
   const losses = Number(data?.losses ?? 0);
@@ -480,7 +496,7 @@ export function WinRateCard({
               />
               %
             </span>{" "}
-            All-time win rate
+            {hasFilteredDateRange ? "Selected days win rate" : "All-time win rate"}
           </h1>
 
           {mounted ? (
@@ -655,6 +671,7 @@ export function ProfitFactorCard({
   isEditing = false,
   className,
 }: WidgetCardProps) {
+  const hasFilteredDateRange = useFilteredDateRangeActive(accountId);
   const { data } = useAccountStats(accountId);
   const wins = Number(data?.wins ?? 0);
   const losses = Number(data?.losses ?? 0);
@@ -696,7 +713,9 @@ export function ProfitFactorCard({
 
             <div className="flex items-center gap-2">
               <p className="text-xs font-medium text-secondary">
-                All time profit factor
+                {hasFilteredDateRange
+                  ? "Selected days profit factor"
+                  : "All time profit factor"}
               </p>
             </div>
           </>
@@ -806,6 +825,7 @@ export function HoldTimeCard({
   isEditing = false,
   className,
 }: WidgetCardProps) {
+  const hasFilteredDateRange = useFilteredDateRangeActive(accountId);
   const { data } = useAccountStats(accountId);
   const wins = Number(data?.wins ?? 0);
   const losses = Number(data?.losses ?? 0);
@@ -853,7 +873,9 @@ export function HoldTimeCard({
 
             <div className="flex items-center gap-2">
               <p className="text-xs font-medium text-secondary">
-                This is your average hold time across all trades
+                {hasFilteredDateRange
+                  ? "This is your average hold time across the selected days"
+                  : "This is your average hold time across all trades"}
               </p>
             </div>
           </>

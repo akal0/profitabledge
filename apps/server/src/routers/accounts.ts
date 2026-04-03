@@ -43,6 +43,7 @@ import {
   seedSampleAccount,
 } from "./accounts/demo-sample";
 import { resetDemoWorkspaceForUser } from "./accounts/demo-workspace";
+import { deleteAccountAndRelatedData } from "./accounts/delete-account";
 import {
   metricsProcedure,
   updateBrokerSettingsProcedure,
@@ -233,13 +234,11 @@ export const accountsRouter = router({
         (accountId) => accountId !== input.accountId
       );
 
-      await Promise.all([
-        db.delete(tradingAccount).where(eq(tradingAccount.id, input.accountId)),
-        updateUserWidgetPreferences(
-          ctx.session.user.id,
-          setArchivedAccountIds(currentPreferences, nextArchivedIds)
-        ),
-      ]);
+      await deleteAccountAndRelatedData(input.accountId);
+      await updateUserWidgetPreferences(
+        ctx.session.user.id,
+        setArchivedAccountIds(currentPreferences, nextArchivedIds)
+      );
 
       return { success: true };
     }),

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS "trade_idea_share" (
   "risk_reward" numeric,
   "title" text,
   "description" text,
+  "trade_phase" varchar(20),
   "strategy_name" text,
   "timeframe" varchar(10),
   "session" varchar(30),

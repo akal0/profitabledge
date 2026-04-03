@@ -243,7 +243,7 @@ export default function APISettingsPage() {
 
   const handleGenerateKey = async () => {
     if (!hasLiveSyncAccess) {
-      toast.error("EA sync requires Trader or Elite access");
+      toast.error("Upgrade your plan to Trader or Elite to use EA sync");
       return;
     }
 
@@ -338,7 +338,7 @@ export default function APISettingsPage() {
 
   const handleCreateProviderKey = async () => {
     if (!hasLiveSyncAccess) {
-      toast.error("Broker sync requires Trader or Elite access");
+      toast.error("Upgrade your plan to Trader or Elite to use broker sync");
       return;
     }
 
@@ -480,7 +480,7 @@ export default function APISettingsPage() {
             <p className="mt-0.5 text-xs text-white/40">
               {hasLiveSyncAccess
                 ? "Use these keys for MetaTrader EA integration."
-                : "Trader or Elite access is required for MetaTrader EA integration and MT5 EA sync."}
+                : "Upgrade your plan to Trader or Elite for MetaTrader EA integration and MT5 EA sync."}
             </p>
           </div>
         </div>
@@ -611,7 +611,7 @@ export default function APISettingsPage() {
             <p className="mt-0.5 text-xs text-white/40">
               {hasLiveSyncAccess
                 ? "Store broker or prop-firm API credentials for connection-based sync."
-                : "Trader or Elite access is required for connection-based broker sync."}
+                : "Upgrade your plan to Trader or Elite for connection-based broker sync."}
             </p>
           </div>
           <Button

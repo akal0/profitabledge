@@ -149,6 +149,17 @@ async function maybeTouchApiKeyLastUsed(
   }
 }
 
+async function requireCurrentWebhookAccess(userId: string) {
+  const { hasAccess } = await getLiveSyncAccessState(userId);
+
+  if (!hasAccess) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: EA_SYNC_REQUIRED_PLAN_MESSAGE,
+    });
+  }
+}
+
 export async function verifyApiKey(key: string): Promise<string> {
   const hash = hashApiKey(key);
   const now = Date.now();
@@ -169,12 +180,7 @@ export async function verifyApiKey(key: string): Promise<string> {
       });
     }
 
-    if (!cached.hasEaSyncAccess) {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: EA_SYNC_REQUIRED_PLAN_MESSAGE,
-      });
-    }
+    await requireCurrentWebhookAccess(cached.userId);
 
     const shouldTouchLastUsed =
       !cached.lastUsedAt ||

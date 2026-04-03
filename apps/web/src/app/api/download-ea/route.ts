@@ -65,7 +65,7 @@ async function requireEaSyncPlan(request: NextRequest) {
   const activePlanKey = resolveActivePlanKey(await response.json());
   if (activePlanKey !== "professional" && activePlanKey !== "institutional") {
     return NextResponse.json(
-      { error: "EA sync requires Trader or Elite access" },
+      { error: "Upgrade your plan to Trader or Elite to use EA sync" },
       { status: 403 }
     );
   }

@@ -5,9 +5,9 @@ import { canAccessBillingFeature } from "./feature-gates";
 import { getEffectiveBillingState } from "./growth";
 
 export const EA_SYNC_REQUIRED_PLAN_MESSAGE =
-  `EA sync requires ${getBillingPlanTitle("professional")} or ${getBillingPlanTitle("institutional")} access.`;
+  `Upgrade your plan to ${getBillingPlanTitle("professional")} or ${getBillingPlanTitle("institutional")} to use EA sync.`;
 export const BROKER_SYNC_REQUIRED_PLAN_MESSAGE =
-  `Broker sync requires ${getBillingPlanTitle("professional")} or ${getBillingPlanTitle("institutional")} access.`;
+  `Upgrade your plan to ${getBillingPlanTitle("professional")} or ${getBillingPlanTitle("institutional")} to use broker sync.`;
 
 export async function getLiveSyncAccessState(userId: string) {
   const billing = await getEffectiveBillingState(userId);
